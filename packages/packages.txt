@@ -41,6 +41,7 @@ unp
 # Magic Wormhole (wormhole)
 magic-wormhole
 
-# Optional UIs (may not exist in default repos on all distros; installer includes GitHub fallback)
-lazygit
-lazydocker
+# Optional UIs installed via GitHub fallback (not in default Ubuntu repos)
+# These are installed by install.sh using GitHub releases
+# lazygit - TUI for git
+# lazydocker - TUI for docker

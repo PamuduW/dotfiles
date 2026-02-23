@@ -34,11 +34,13 @@ Upstream note on `fd` naming: the `fd` project recommends adding a link to `fd` 
 
 ## Optional tools that may not be available via default apt repos
 
-Some distros don’t ship `lazygit` / `lazydocker` in their default repositories.
+`lazygit` and `lazydocker` are **not** included in `packages.txt` because they're not available in Ubuntu's default repositories.
 
-The installer attempts `apt-get` first. If the command is still missing, it tries a fallback install using the official GitHub release binaries.
+The installer automatically downloads and installs them from official GitHub releases:
+- **lazygit**: TUI for git operations
+- **lazydocker**: TUI for Docker management
 
-If you prefer not to install from GitHub releases automatically, remove or comment out the fallback blocks in `install.sh`.
+If you prefer not to install from GitHub releases automatically, comment out the fallback installer functions in `install.sh`.
 
 ## Enabling zoxide
 
