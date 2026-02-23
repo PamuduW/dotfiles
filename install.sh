@@ -59,6 +59,7 @@ install_lazygit_from_github() {
   tar -C "$tmp" -xzf "$tmp/lazygit.tar.gz" lazygit
   sudo install -m 0755 "$tmp/lazygit" /usr/local/bin/lazygit
   echo "  ✓ lazygit v${ver} installed successfully"
+  trap - RETURN
 }
 
 install_lazydocker_from_github() {
@@ -87,6 +88,7 @@ install_lazydocker_from_github() {
 
   sudo install -m 0755 "$tmp/lazydocker" /usr/local/bin/lazydocker
   echo "  ✓ lazydocker v${ver} installed successfully"
+  trap - RETURN
 }
 
 install_node_via_nvm() {
