@@ -77,16 +77,14 @@ chmod +x "$HOME/dotfiles/install.sh" "$HOME/dotfiles/bin/bin/ex"
 On Debian/Ubuntu (including WSL Ubuntu/Debian), the script:
 
 1) Enables strict mode: `set -euo pipefail`
-2) Changes directory into the `dotfiles/` folder (where the script lives)
-3) If `apt-get` exists, it runs:
-   - `sudo apt-get update ...`
-   - `sudo apt-get install -y stow git bash-completion ...`
-   Notes:
-   - Output is suppressed to keep the installer quiet.
-   - The `apt-get` commands are followed by `|| true`, so package install errors won’t stop the script immediately.
-   - If Stow is still missing, the script will fail when it tries to run `stow`.
-4) Runs `stow bash bin` to create symlinks (see next section)
-5) Sources `~/.bashrc` in the current shell and prints “Done”.
+2) Reads all packages from `packages/packages.txt` (ignoring comments and blank lines)
+3) Runs package installation:
+   - `sudo apt-get update -qq` (quiet mode)
+   - `sudo apt-get install -y <packages from packages.txt>`
+4) Attempts to install `lazygit` and `lazydocker` from GitHub releases if not available via apt
+5) Creates `~/bin` directory and adds convenience symlinks (e.g., `fd → fdfind`)
+6) Runs `stow bash bin` to create dotfile symlinks
+7) Prints "Done" and reminds you to run `source ~/.bashrc` or open a new terminal
 
 ---
 
