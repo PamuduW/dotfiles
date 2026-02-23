@@ -89,6 +89,39 @@ install_lazydocker_from_github() {
   echo "  ✓ lazydocker v${ver} installed successfully"
 }
 
+install_node_via_nvm() {
+  # Install Node.js via nvm (Node Version Manager)
+  # Required by many modern CLI tools (e.g., Codex CLI)
+  local NVM_DIR="${HOME}/.nvm"
+  local NVM_MIN_NODE="22"
+
+  # Skip if node >= 22 is already available
+  if command -v node >/dev/null 2>&1; then
+    local current_major
+    current_major="$(node --version | grep -oP '^v\K[0-9]+')"
+    if [[ "$current_major" -ge "$NVM_MIN_NODE" ]]; then
+      echo "Node.js v$(node --version | tr -d 'v') already installed. Skipping nvm setup."
+      return 0
+    fi
+  fi
+
+  # Install nvm if not already present
+  if [[ ! -d "$NVM_DIR" ]]; then
+    echo "Installing nvm (Node Version Manager)..."
+    curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | PROFILE=/dev/null bash
+  fi
+
+  # Load nvm into the current shell
+  export NVM_DIR
+  # shellcheck source=/dev/null
+  [[ -s "$NVM_DIR/nvm.sh" ]] && . "$NVM_DIR/nvm.sh"
+
+  echo "Installing Node.js ${NVM_MIN_NODE} via nvm..."
+  nvm install "$NVM_MIN_NODE"
+  nvm alias default "$NVM_MIN_NODE"
+  echo "  ✓ Node.js $(node --version) installed via nvm"
+}
+
 post_install_fixes() {
   # Ensure ~/bin exists (for your stowed commands and convenience links)
   mkdir -p "$HOME/bin"
@@ -182,6 +215,7 @@ main() {
     install_lazydocker_from_github || echo "Warning: lazydocker fallback install failed."
   fi
 
+  install_node_via_nvm
   post_install_fixes
   backup_existing_dotfiles
   
