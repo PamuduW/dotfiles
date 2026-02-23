@@ -125,14 +125,14 @@ backup_existing_dotfiles() {
   if [[ -f "$HOME/.bashrc" && ! -L "$HOME/.bashrc" ]]; then
     mv "$HOME/.bashrc" "$backup_dir/.bashrc"
     echo "  ✓ Backed up .bashrc"
-    ((files_backed_up++))
+    ((++files_backed_up))
   fi
 
   # Backup .bash_aliases if it exists and is not a symlink
   if [[ -f "$HOME/.bash_aliases" && ! -L "$HOME/.bash_aliases" ]]; then
     mv "$HOME/.bash_aliases" "$backup_dir/.bash_aliases"
     echo "  ✓ Backed up .bash_aliases"
-    ((files_backed_up++))
+    ((++files_backed_up))
   fi
 
   # Backup bin/ex if it exists and is not a symlink
@@ -140,7 +140,7 @@ backup_existing_dotfiles() {
     mkdir -p "$backup_dir/bin"
     mv "$HOME/bin/ex" "$backup_dir/bin/ex"
     echo "  ✓ Backed up bin/ex"
-    ((files_backed_up++))
+    ((++files_backed_up))
   fi
 
   if [[ $files_backed_up -gt 0 ]]; then
