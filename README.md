@@ -14,6 +14,8 @@ This repo bootstraps a consistent Bash environment on Debian/Ubuntu (especially 
 - Convenience aliases in `~/.bash_aliases`.
 - A WSL helper command: `ex` to launch **Windows Explorer** from inside Linux.
 
+**Bonus:** See [WSL_COMMANDS.md](WSL_COMMANDS.md) for a comprehensive guide to managing WSL instances (install, backup, clone, etc.).
+
 References:
 - GNU Stow manual: https://www.gnu.org/s/stow/manual/stow.html
 - Stow defaults (`--target` / parent directory): https://man.archlinux.org/man/stow.8
