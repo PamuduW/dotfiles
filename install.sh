@@ -35,7 +35,9 @@ apt_install_packages() {
   sudo apt-get update -qq
 
   echo "Installing packages from $PKG_FILE ..."
-  sudo apt-get install -y "${pkgs[@]}"
+  # Allow this to fail - some packages may not be in default repos
+  # We have GitHub fallback installers for tools like lazygit/lazydocker
+  sudo apt-get install -y "${pkgs[@]}" || true
 }
 
 install_lazygit_from_github() {
