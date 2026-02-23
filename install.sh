@@ -58,6 +58,7 @@ install_lazygit_from_github() {
   curl -fsSL -o "$tmp/lazygit.tar.gz" "https://github.com/jesseduffield/lazygit/releases/download/v${ver}/lazygit_${ver}_Linux_x86_64.tar.gz"
   tar -C "$tmp" -xzf "$tmp/lazygit.tar.gz" lazygit
   sudo install -m 0755 "$tmp/lazygit" /usr/local/bin/lazygit
+  echo "  ✓ lazygit v${ver} installed successfully"
 }
 
 install_lazydocker_from_github() {
@@ -85,6 +86,7 @@ install_lazydocker_from_github() {
   fi
 
   sudo install -m 0755 "$tmp/lazydocker" /usr/local/bin/lazydocker
+  echo "  ✓ lazydocker v${ver} installed successfully"
 }
 
 post_install_fixes() {
@@ -153,7 +155,12 @@ stow_dotfiles() {
   fi
 
   echo "Applying stow packages: bash, bin"
-  stow --dir "$DOTFILES_DIR" --target "$HOME" bash bin
+  if stow --dir "$DOTFILES_DIR" --target "$HOME" bash bin; then
+    echo "  ✓ Dotfiles stowed successfully"
+  else
+    echo "Error: stow failed with exit code $?. See output above." >&2
+    exit 1
+  fi
 }
 
 main() {
@@ -177,8 +184,11 @@ main() {
 
   post_install_fixes
   backup_existing_dotfiles
+  
+  # Stow the dotfiles (create symlinks)
   stow_dotfiles
 
+  echo ""
   echo "Done."
   echo "Open a new terminal, or run: source ~/.bashrc"
 }
