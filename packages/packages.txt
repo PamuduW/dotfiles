@@ -1,0 +1,45 @@
+# packages/packages.txt
+# One package name per line.
+# Lines starting with # are comments.
+
+# Core utilities
+git
+curl
+ca-certificates
+bash-completion
+stow
+
+# Python baseline
+python3
+python3-pip
+python3-venv
+
+# Disk / system visibility
+duf
+ripgrep
+lshw
+mtr-tiny
+glances
+
+# Better find / fuzzy tools
+fd-find
+fzf
+zoxide
+
+# Modern ls replacement (exa successor)
+eza
+
+# Pipe timestamp helper (ts)
+moreutils
+
+# File / network / sync utilities
+lsof
+rsync
+unp
+
+# Magic Wormhole (wormhole)
+magic-wormhole
+
+# Optional UIs (may not exist in default repos on all distros; installer includes GitHub fallback)
+lazygit
+lazydocker
