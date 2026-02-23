@@ -98,6 +98,54 @@ post_install_fixes() {
   fi
 }
 
+backup_existing_dotfiles() {
+  local backup_dir="$DOTFILES_DIR/old_bash"
+  local timestamp
+  timestamp="$(date +%Y%m%d_%H%M%S)"
+  local files_backed_up=0
+
+  # Check if any files need backing up
+  local needs_backup=false
+  [[ -f "$HOME/.bashrc" && ! -L "$HOME/.bashrc" ]] && needs_backup=true
+  [[ -f "$HOME/.bash_aliases" && ! -L "$HOME/.bash_aliases" ]] && needs_backup=true
+  [[ -f "$HOME/bin/ex" && ! -L "$HOME/bin/ex" ]] && needs_backup=true
+
+  if [[ "$needs_backup" == "false" ]]; then
+    return 0
+  fi
+
+  # Create timestamped backup directory
+  backup_dir="${backup_dir}_${timestamp}"
+  mkdir -p "$backup_dir"
+  echo "Backing up existing dotfiles to: $backup_dir"
+
+  # Backup .bashrc if it exists and is not a symlink
+  if [[ -f "$HOME/.bashrc" && ! -L "$HOME/.bashrc" ]]; then
+    mv "$HOME/.bashrc" "$backup_dir/.bashrc"
+    echo "  ✓ Backed up .bashrc"
+    ((files_backed_up++))
+  fi
+
+  # Backup .bash_aliases if it exists and is not a symlink
+  if [[ -f "$HOME/.bash_aliases" && ! -L "$HOME/.bash_aliases" ]]; then
+    mv "$HOME/.bash_aliases" "$backup_dir/.bash_aliases"
+    echo "  ✓ Backed up .bash_aliases"
+    ((files_backed_up++))
+  fi
+
+  # Backup bin/ex if it exists and is not a symlink
+  if [[ -f "$HOME/bin/ex" && ! -L "$HOME/bin/ex" ]]; then
+    mkdir -p "$backup_dir/bin"
+    mv "$HOME/bin/ex" "$backup_dir/bin/ex"
+    echo "  ✓ Backed up bin/ex"
+    ((files_backed_up++))
+  fi
+
+  if [[ $files_backed_up -gt 0 ]]; then
+    echo "Backed up $files_backed_up file(s). Review them later in: $backup_dir"
+  fi
+}
+
 stow_dotfiles() {
   if ! command -v stow >/dev/null 2>&1; then
     echo "Error: 'stow' is not installed. Check packages/packages.txt includes 'stow'." >&2
@@ -128,6 +176,7 @@ main() {
   fi
 
   post_install_fixes
+  backup_existing_dotfiles
   stow_dotfiles
 
   echo "Done."

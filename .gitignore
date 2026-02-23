@@ -45,3 +45,6 @@ npm-debug.log*
 # Test files
 test/
 *.test
+
+# Backup directories created by install.sh
+old_bash*/
