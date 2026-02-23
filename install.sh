@@ -12,10 +12,6 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_DIR="$SCRIPT_DIR"
 PKG_FILE="$DOTFILES_DIR/packages/packages.txt"
 
-# Make sure helper scripts are executable (repo-side)
-chmod +x "$DOTFILES_DIR/install.sh" 2>/dev/null || true
-chmod +x "$DOTFILES_DIR/bin/bin/ex" 2>/dev/null || true
-
 # Read package list (ignoring blank lines and comments)
 read_packages() {
   if [[ ! -f "$PKG_FILE" ]]; then

@@ -28,15 +28,17 @@ References:
 
 ```
 .
-├── dotfiles
-│   ├── bash
-│   │   ├── .bashrc
-│   │   └── .bash_aliases
-│   ├── bin
-│   │   └── bin
-│   │       └── ex
-│   └── install.sh
-└── freeplayground1.rar
+├── bash
+│   ├── .bashrc
+│   └── .bash_aliases
+├── bin
+│   └── bin
+│       └── ex
+├── packages
+│   ├── packages.txt
+│   └── README.md
+├── install.sh
+└── README.md
 ```
 
 There are two Stow “packages”:
@@ -166,7 +168,7 @@ Tip: because the wrapper passes arguments as-is, `ex` with no arguments just cal
 Aliases live in `~/.bash_aliases` and are sourced from `.bashrc`.
 
 Highlights:
-- git shortcuts: `gs`, `ga`, `gc`, `gca`, `gd`, `gl`, etc.
+- git shortcuts: `gitlog`
 - safety flags: `cp -i`, `mv -i`, `rm -i`
 - Docker Portainer helper: `dpot` / `dpotstop`
 - `cleanzone` to remove `Zone.Identifier` files

@@ -1,0 +1,47 @@
+# Editor and IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Temporary files
+*.tmp
+*.bak
+*.log
+
+# System files
+Thumbs.db
+.directory
+
+# Backup files from editors
+*~
+\#*\#
+.\#*
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Archives (example files that shouldn't be in dotfiles)
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Local environment files
+.env
+.env.local
+
+# Test files
+test/
+*.test

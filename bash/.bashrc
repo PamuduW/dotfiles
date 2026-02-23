@@ -1,3 +1,6 @@
+# shellcheck shell=bash
+# shellcheck disable=SC1090,SC1091
+
 # If not running interactively, don't do anything (avoid breaking scripts)
 case "$-" in
   *i*) ;;
@@ -10,6 +13,11 @@ esac
 # Optional: bash-completion (if available)
 if [ -r /etc/bash_completion ]; then
   . /etc/bash_completion
+fi
+
+# Initialize zoxide (smart directory jumping) if installed
+if command -v zoxide >/dev/null 2>&1; then
+  eval "$(zoxide init bash)"
 fi
 
 # --- dotfiles prompt (time + blank line + git symbols + exit code) ---
