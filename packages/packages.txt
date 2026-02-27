@@ -9,6 +9,7 @@ ca-certificates
 bash-completion
 stow
 shellcheck
+shfmt
 
 # Python baseline
 python3
