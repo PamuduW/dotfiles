@@ -32,6 +32,9 @@ zoxide
 # Modern ls replacement (exa successor)
 eza
 
+# Go programming language
+golang-go
+
 # Pipe timestamp helper (ts)
 moreutils
 
