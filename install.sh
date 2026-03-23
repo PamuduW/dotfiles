@@ -23,6 +23,7 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 # Component registry
 # ============================================================
 COMP_KEYS=(
+  git_identity
   system_packages
   python
   go
@@ -41,6 +42,7 @@ COMP_KEYS=(
 )
 
 COMP_LABELS=(
+  "Git identity (global user.name / email)"
   "System packages"
   "Python (python3, pip, venv)"
   "Go (golang-go)"
@@ -59,15 +61,23 @@ COMP_LABELS=(
 )
 
 # Dependency: index of required component, -1 = none
-#              sys py  go  njs doc por lg  ld  cur cdx cla ssh dot wsl gcr
-COMP_DEPS=(    -1  -1  -1  -1  -1  4   -1  4   -1  3   -1  -1  0   -1  -1 )
+#              gid sys py  go  njs doc por lg  ld  cur cdx cla ssh dot wsl gcr
+COMP_DEPS=(    -1  -1  -1  -1  -1  -1  5   -1  5   -1  4   -1  -1  1   -1  -1 )
 
 declare -A COMP_ON
 for _key in "${COMP_KEYS[@]}"; do COMP_ON["$_key"]=1; done
 
+# Auto-detect conditional git includes (multi-identity setup) and default OFF
+if git config --global --list 2>/dev/null | grep -q '^includeif\.'; then
+  COMP_ON[git_identity]=0
+fi
+
 # Git identity (populated by prompt)
 SETUP_GIT_NAME=""
 SETUP_GIT_EMAIL=""
+
+# Status message from toggle_component (avoids echo which breaks in-place redraw)
+TOGGLE_MSG=""
 
 # ============================================================
 # packages.txt parser
@@ -120,9 +130,9 @@ prompt_git_identity() {
 toggle_component() {
   local idx="$1"
   local key="${COMP_KEYS[$idx]}"
+  TOGGLE_MSG=""
 
   if [[ "${COMP_ON[$key]}" -eq 1 ]]; then
-    # Turning OFF: auto-disable anything that depends on this
     COMP_ON["$key"]=0
     local i
     for i in "${!COMP_DEPS[@]}"; do
@@ -130,68 +140,108 @@ toggle_component() {
         local dep_key="${COMP_KEYS[$i]}"
         if [[ "${COMP_ON[$dep_key]}" -eq 1 ]]; then
           COMP_ON["$dep_key"]=0
-          echo "    auto-disabled: ${COMP_LABELS[$i]}"
+          TOGGLE_MSG+="auto-disabled: ${COMP_LABELS[$i]}  "
         fi
       fi
     done
   else
-    # Turning ON: auto-enable its dependency
     COMP_ON["$key"]=1
     local req="${COMP_DEPS[$idx]}"
     if [[ "$req" -ne -1 ]]; then
       local req_key="${COMP_KEYS[$req]}"
       if [[ "${COMP_ON[$req_key]}" -eq 0 ]]; then
         COMP_ON["$req_key"]=1
-        echo "    auto-enabled: ${COMP_LABELS[$req]}"
+        TOGGLE_MSG+="auto-enabled: ${COMP_LABELS[$req]}"
       fi
     fi
   fi
 }
 
+_draw_menu() {
+  local cur=$1 status=$2
+  local count="${#COMP_KEYS[@]}"
+  local i key mark note
+
+  printf "\n  \e[1m=== Select Components ===\e[0m\n"
+  printf "  ↑/↓ navigate   Space toggle   a all   n none   Enter confirm\n\n"
+
+  for i in "${!COMP_KEYS[@]}"; do
+    key="${COMP_KEYS[$i]}"
+    mark="x"; [[ "${COMP_ON[$key]}" -eq 0 ]] && mark=" "
+    note=""
+    [[ "${COMP_DEPS[$i]}" -ne -1 ]] && note="  (requires: ${COMP_LABELS[${COMP_DEPS[$i]}]})"
+
+    if [[ $i -eq $cur ]]; then
+      printf "\e[7m  %2d. [%s] %s%s \e[0m\e[K\n" "$((i + 1))" "$mark" "${COMP_LABELS[$i]}" "$note"
+    else
+      printf "  %2d. [%s] %s%s\e[K\n" "$((i + 1))" "$mark" "${COMP_LABELS[$i]}" "$note"
+    fi
+  done
+
+  printf "\n  \e[2m%s\e[0m\e[K\n" "${status}"
+}
+
 component_menu() {
   local count="${#COMP_KEYS[@]}"
-  while true; do
-    echo ""
-    echo "=== Select Components ==="
-    echo ""
-    local i
-    for i in "${!COMP_KEYS[@]}"; do
-      local key="${COMP_KEYS[$i]}"
-      local mark="x"
-      [[ "${COMP_ON[$key]}" -eq 0 ]] && mark=" "
-      local note=""
-      if [[ "${COMP_DEPS[$i]}" -ne -1 ]]; then
-        note="  (requires: ${COMP_LABELS[${COMP_DEPS[$i]}]})"
-      fi
-      printf "  %2d. [%s] %s%s\n" "$((i + 1))" "$mark" "${COMP_LABELS[$i]}" "$note"
-    done
-    echo ""
-    read -rp "  Toggle [1-${count}], (a)ll on, (n)one, (c)onfirm: " choice < /dev/tty
+  local cursor=0
+  local status_msg=""
+  local menu_lines=$((count + 6))
 
-    case "$choice" in
-      a|A) for k in "${COMP_KEYS[@]}"; do COMP_ON["$k"]=1; done ;;
-      n|N) for k in "${COMP_KEYS[@]}"; do COMP_ON["$k"]=0; done ;;
-      c|C) break ;;
-      *[!0-9]*|'')
-        echo "    Invalid input."
+  tput civis 2>/dev/null || true
+  _draw_menu 0 ""
+
+  while true; do
+    local key seq
+    IFS= read -rsn1 key < /dev/tty
+
+    case "$key" in
+      $'\e')
+        IFS= read -rsn2 -t 0.1 seq < /dev/tty
+        case "$seq" in
+          '[A') [[ $cursor -gt 0 ]] && cursor=$((cursor - 1)) ;;
+          '[B') [[ $cursor -lt $((count - 1)) ]] && cursor=$((cursor + 1)) ;;
+        esac
+        status_msg=""
+        ;;
+      ' ')
+        toggle_component "$cursor"
+        status_msg="$TOGGLE_MSG"
+        ;;
+      '')
+        break
+        ;;
+      a|A)
+        for k in "${COMP_KEYS[@]}"; do COMP_ON["$k"]=1; done
+        status_msg="All components enabled"
+        ;;
+      n|N)
+        for k in "${COMP_KEYS[@]}"; do COMP_ON["$k"]=0; done
+        status_msg="All components disabled"
         ;;
       *)
-        local idx=$((choice - 1))
-        if [[ $idx -ge 0 && $idx -lt $count ]]; then
-          toggle_component "$idx"
-        else
-          echo "    Out of range."
-        fi
+        continue
         ;;
     esac
+
+    printf "\e[%dA" "$menu_lines"
+    _draw_menu "$cursor" "$status_msg"
   done
+
+  tput cnorm 2>/dev/null || true
 }
 
 show_plan() {
   echo ""
   echo "=== Execution Plan ==="
   echo ""
-  printf "  %-18s: %s <%s>\n" "Git identity" "$SETUP_GIT_NAME" "$SETUP_GIT_EMAIL"
+
+  if is_on git_identity; then
+    printf "  %-18s: %s <%s>\n" "Git identity" "$SETUP_GIT_NAME" "$SETUP_GIT_EMAIL"
+  elif git config --global --list 2>/dev/null | grep -q '^includeif\.'; then
+    printf "  %-18s: skip (conditional includes detected)\n" "Git identity"
+  else
+    printf "  %-18s: skip\n" "Git identity"
+  fi
 
   if is_on system_packages; then
     local pkg_count
@@ -293,12 +343,17 @@ show_plan() {
 }
 
 confirm_loop() {
+  local need_git_prompt=true
   while true; do
+    if is_on git_identity && [[ "$need_git_prompt" == "true" ]]; then
+      prompt_git_identity
+      need_git_prompt=false
+    fi
     show_plan
     read -rp "  [c]onfirm  [e]dit  [q]uit: " answer < /dev/tty
     case "$answer" in
       c|C) return 0 ;;
-      e|E) component_menu ;;
+      e|E) component_menu; need_git_prompt=true ;;
       q|Q) echo "Aborted."; exit 0 ;;
       *)   echo "    Invalid choice." ;;
     esac
@@ -460,7 +515,6 @@ install_portainer() {
 apply_git_config() {
   git config --global user.name "$SETUP_GIT_NAME"
   git config --global user.email "$SETUP_GIT_EMAIL"
-  git config --global init.defaultBranch main
   echo "  ✓ Git configured: $SETUP_GIT_NAME <$SETUP_GIT_EMAIL>"
 }
 
@@ -686,21 +740,21 @@ main() {
   echo "=== WSL Dotfiles Setup ==="
   echo "Log file: $LOG_FILE"
 
-  # Phase 1: User input
-  prompt_git_identity
-
-  # Phase 2: Component selection
+  # Phase 1: Component selection
   component_menu
 
-  # Phase 3: Plan preview + confirmation
+  # Phase 2: Plan preview + confirmation (prompts for git identity if enabled)
   confirm_loop
 
   echo ""
   echo "=== Installing ==="
   echo ""
 
-  # Git config (always applied)
-  apply_git_config
+  # Default branch name (always safe regardless of identity setup)
+  git config --global init.defaultBranch main
+
+  # Git identity (only if selected -- skipped when conditional includes are in use)
+  is_on git_identity && apply_git_config
 
   # apt update once if any apt packages are selected
   if is_on system_packages || is_on python || is_on go; then

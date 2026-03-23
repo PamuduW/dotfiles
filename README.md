@@ -54,16 +54,17 @@ chmod +x install.sh bin/bin/ex bin/bin/clip
 
 The installer will:
 
-1. Prompt for **git identity** (name + email, with defaults)
-2. Show a **toggle menu** of all components — flip any on/off
-3. Display the **execution plan** for review
-4. Ask to **confirm, edit, or quit**
+1. Show an **interactive menu** — arrow keys to navigate, space to toggle
+2. Display the **execution plan** for review
+3. Ask to **confirm, edit, or quit**
+4. Prompt for **git identity** only if that component is enabled
 5. Run only the selected components
 
 ### Component menu
 
 | Component | What it does |
 |-----------|-------------|
+| Git identity | Set global `user.name` / `user.email` (auto-disabled if `includeIf` detected) |
 | System packages | Core CLI tools from apt (@core, @cli, @system) |
 | Python | python3, pip, venv |
 | Go | golang-go |
@@ -81,6 +82,8 @@ The installer will:
 | Git credential | Windows Credential Manager for HTTPS auth |
 
 Dependencies are enforced automatically (e.g., disabling Docker also disables Portainer).
+
+**Multi-identity git setups**: If your `~/.gitconfig` uses `includeIf` for per-directory identities, the installer detects this and defaults "Git identity" to OFF so it won't overwrite your configuration.
 
 ---
 
