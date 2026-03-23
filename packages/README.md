@@ -43,12 +43,4 @@ If you prefer not to install from GitHub releases automatically, comment out the
 
 ## Enabling zoxide
 
-Installing `zoxide` is not enough. You must also initialize it in your shell.
-
-Add this to your `.bashrc` (once):
-
-```bash
-eval "$(zoxide init bash)"
-```
-
-Then restart your shell. The `z` command will be available.
+The stowed `.bashrc` already initializes zoxide automatically. After running the installer with both "System packages" and "Apply dotfiles" enabled, the `z` command is available in new shells.
