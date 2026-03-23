@@ -1,2 +1,3 @@
 #!/usr/bin/env bash
-explorer.exe "${1:-.}"
+# Full path so this works even with appendWindowsPath=false in /etc/wsl.conf
+/mnt/c/Windows/explorer.exe "${1:-.}"

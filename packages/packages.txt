@@ -1,8 +1,8 @@
 # packages/packages.txt
-# One package name per line.
-# Lines starting with # are comments.
+# Section headers (# @tag) are used by install.sh to install subsets.
+# Lines starting with # (without @) are plain comments.
 
-# Core utilities
+# @core
 git
 curl
 ca-certificates
@@ -12,41 +12,28 @@ shellcheck
 shfmt
 tree
 
-# Python baseline
+# @python
 python3
 python3-pip
 python3-venv
 
-# Disk / system visibility
+# @cli
 duf
 ripgrep
-lshw
-mtr-tiny
-glances
-
-# Better find / fuzzy tools
 fd-find
 fzf
 zoxide
-
-# Modern ls replacement (exa successor)
 eza
-
-# Go programming language
-golang-go
-
-# Pipe timestamp helper (ts)
 moreutils
 
-# File / network / sync utilities
+# @system
+lshw
+mtr-tiny
+glances
 lsof
 rsync
 unp
-
-# Magic Wormhole (wormhole)
 magic-wormhole
 
-# Optional UIs installed via GitHub fallback (not in default Ubuntu repos)
-# These are installed by install.sh using GitHub releases
-# lazygit - TUI for git
-# lazydocker - TUI for docker
+# @go
+golang-go

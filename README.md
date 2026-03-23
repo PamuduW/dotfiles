@@ -1,28 +1,20 @@
 # WSL Bash dotfiles (GNU Stow)
 
-This repo bootstraps a consistent Bash environment on Debian/Ubuntu (especially WSL distros) using **GNU Stow** symlinks.
+Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interactive installer** and **GNU Stow** symlinks.
 
 ## What you get
 
-- Managed dotfiles via **GNU Stow** (symlink-based “install”).
-- A custom Bash prompt showing:
-  - time (`\t`), `user@host`, working directory
-  - git branch (or short commit hash)
-  - git status markers: staged / modified / untracked
-  - last command exit code when non-zero
-- Cross-terminal history syncing (`history -a; history -n`).
-- Convenience aliases in `~/.bash_aliases`.
-- A WSL helper command: `ex` to launch **Windows Explorer** from inside Linux.
+- **Interactive installer** with toggle menu — pick exactly which components to install
+- Custom Bash prompt: time, user@host, path, git branch + status markers, exit code
+- Cross-terminal history syncing (`history -a; history -n`) with 10k line history
+- Modern CLI tools: `eza`, `fzf` (Ctrl+R/Ctrl+T/Alt+C), `zoxide`, `ripgrep`, `fd`
+- Better readline: case-insensitive completion, arrow-key history search
+- Docker Engine + Portainer CE (with `dpot`/`dpotstop` shortcuts)
+- Node.js via nvm, Python 3, Go
+- SSH key generation with GitHub setup notes
+- WSL-specific config: systemd, clean PATH, Git credential helper, clipboard helper
 
-**Bonus:** See [WSL_COMMANDS.md](WSL_COMMANDS.md) for a comprehensive guide to managing WSL instances (install, backup, clone, etc.).
-
-References:
-- GNU Stow manual: https://www.gnu.org/s/stow/manual/stow.html
-- Stow defaults (`--target` / parent directory): https://man.archlinux.org/man/stow.8
-- Bash `PROMPT_COMMAND`: https://www.gnu.org/software/bash/manual/bash.html
-- Bash prompt escapes (`\t`, `\u`, `\h`, `\w`, `\$`): https://www.gnu.org/software/bash/manual/html_node/Controlling-the-Prompt.html
-- Bash `history` builtin (`-a`, `-n`): https://www.gnu.org/software/bash/manual/html_node/Bash-History-Builtins.html
-- WSL running Windows tools from Linux (`explorer.exe`): https://learn.microsoft.com/en-us/windows/wsl/filesystems
+**Bonus:** See [WSL_COMMANDS.md](WSL_COMMANDS.md) for a guide to managing WSL instances.
 
 ---
 
@@ -30,193 +22,159 @@ References:
 
 ```
 .
-├── bash
+├── bash/
 │   ├── .bashrc
 │   └── .bash_aliases
-├── bin
-│   └── bin
-│       └── ex
-├── packages
-│   ├── packages.txt
-│   └── README.md
+├── bin/
+│   └── bin/
+│       ├── ex          # open Windows Explorer from WSL
+│       └── clip        # copy to Windows clipboard from WSL
+├── readline/
+│   └── .inputrc        # better tab completion + history search
+├── packages/
+│   └── packages.txt    # apt packages with @tag sections
+├── log/                # install logs (gitignored)
 ├── install.sh
 └── README.md
 ```
 
-There are two Stow “packages”:
-- `bash` → installs `~/.bashrc` and `~/.bash_aliases`
-- `bin`  → installs `~/bin/ex`
+Stow packages: `bash`, `bin`, `readline`
 
 ---
 
-## Important assumption about where you place this folder
-
-Your `install.sh` runs `stow bash bin` **without** specifying `--target`.
-
-By default, Stow’s target is the **parent directory of the stow directory** (the directory you run `stow` from). That means:
-
-- If this project is located like: `$HOME/dotfiles/` (i.e., the `dotfiles` directory is directly under your home directory), then Stow will install into `$HOME` and everything works as intended.
-- If the project is located somewhere else (e.g., `$HOME/projects/freeplayground/dotfiles/`), then Stow will install into `$HOME/projects/freeplayground/` instead of `$HOME`.
-
-If you want this to work from anywhere, run Stow with an explicit target (see “Install (robust method)” below).
-
----
-
-## Install (recommended)
-
-### Install (simple method, matches `install.sh`)
-
-1) Place the folder so you have: `$HOME/dotfiles/`  
-2) Run:
+## Install
 
 ```bash
-chmod +x "$HOME/dotfiles/install.sh" "$HOME/dotfiles/bin/bin/ex"
-"$HOME/dotfiles/install.sh"
+git clone <repo-url> ~/dotfiles
+cd ~/dotfiles
+chmod +x install.sh bin/bin/ex bin/bin/clip
+./install.sh
 ```
 
-### What `install.sh` does (step-by-step)
+The installer will:
 
-On Debian/Ubuntu (including WSL Ubuntu/Debian), the script:
+1. Prompt for **git identity** (name + email, with defaults)
+2. Show a **toggle menu** of all components — flip any on/off
+3. Display the **execution plan** for review
+4. Ask to **confirm, edit, or quit**
+5. Run only the selected components
 
-1) Enables strict mode: `set -euo pipefail`
-2) Reads all packages from `packages/packages.txt` (ignoring comments and blank lines)
-3) Runs package installation:
-   - `sudo apt-get update -qq` (quiet mode)
-   - `sudo apt-get install -y <packages from packages.txt>`
-4) Attempts to install `lazygit` and `lazydocker` from GitHub releases if not available via apt
-5) Creates `~/bin` directory and adds convenience symlinks (e.g., `fd → fdfind`)
-6) Runs `stow bash bin` to create dotfile symlinks
-7) Prints "Done" and reminds you to run `source ~/.bashrc` or open a new terminal
+### Component menu
+
+| Component | What it does |
+|-----------|-------------|
+| System packages | Core CLI tools from apt (@core, @cli, @system) |
+| Python | python3, pip, venv |
+| Go | golang-go |
+| Node.js | v22 via nvm |
+| Docker Engine | Docker CE from official repo + docker group |
+| Portainer CE | Docker management UI (requires Docker) |
+| lazygit | Git TUI from GitHub releases |
+| lazydocker | Docker TUI from GitHub releases (requires Docker) |
+| SSH key | ed25519 key + GitHub setup notes in `~/.ssh/github-setup.txt` |
+| Dotfiles | Stow bash, bin, readline into `$HOME` |
+| WSL config | `systemd=true`, `appendWindowsPath=false` in `/etc/wsl.conf` |
+| Git credential | Windows Credential Manager for HTTPS auth |
+
+Dependencies are enforced automatically (e.g., disabling Docker also disables Portainer).
 
 ---
 
 ## What changes in `$HOME`
 
-After stowing into your home directory, you’ll typically have:
+After stowing:
 
-- `~/.bashrc`        → symlink to `dotfiles/bash/.bashrc`
-- `~/.bash_aliases`  → symlink to `dotfiles/bash/.bash_aliases`
-- `~/bin/ex`         → symlink to `dotfiles/bin/bin/ex`
-
-If Stow reports a conflict, it means a real file already exists where it wants to create a symlink (example: a pre-existing `~/.bashrc`). Stow will not overwrite by default.
-
----
-
-## Bash prompt details
-
-The prompt is updated via `PROMPT_COMMAND`:
-
-- `PROMPT_COMMAND="__dotfiles_prompt; history -a; history -n"`
-
-Bash executes `PROMPT_COMMAND` right before printing `PS1`, so it’s the right hook to dynamically compute git status and last-exit-code display.
-
-### What you’ll see
-
-- A blank line before each prompt
-- Time in 24h with seconds (`\t`)
-- `user@host`
-- current working directory (`\w`)
-- git info when inside a repo
-- failure marker when the last command failed: `✗<exit_code>`
-
-### Git marker legend
-
-When you are inside a git repo, the prompt shows:
-
-- `✚` staged changes exist (`git diff --cached` is not clean)
-- `✱` modified tracked files exist (`git diff` is not clean)
-- `?` untracked files exist
-
-Examples:
-- `(main)` clean
-- `(main ✚)` staged only
-- `(main ✱?)` modified + untracked
-- `(main ✚✱?)` everything
+- `~/.bashrc` → `dotfiles/bash/.bashrc`
+- `~/.bash_aliases` → `dotfiles/bash/.bash_aliases`
+- `~/.inputrc` → `dotfiles/readline/.inputrc`
+- `~/bin/ex` → `dotfiles/bin/bin/ex`
+- `~/bin/clip` → `dotfiles/bin/bin/clip`
 
 ---
 
-## History syncing across terminal tabs
+## Bash prompt
 
-After each command, the prompt hook runs:
+Shows on every command:
 
-- `history -a` append new lines from this session to the history file
-- `history -n` read lines appended by other sessions since this session started
+- Blank line separator
+- Time (24h), `user@host`, working directory
+- Git branch + status: `✚` staged, `✱` modified, `?` untracked
+- Exit code on failure: `✗1`
 
-Result: multiple terminal tabs stay much more “in sync” than default Bash history behavior.
-
----
-
-## WSL helper: `ex`
-
-`ex` is a tiny wrapper around:
-
-```bash
-explorer.exe "$@"
-```
-
-Usage:
-- `ex .` → open Windows Explorer in the current directory
-- `ex /mnt/c` → open Explorer at the Windows C: drive mount
-- `ex somefile.pdf` → open the file with Windows default app
-
-Tip: because the wrapper passes arguments as-is, `ex` with no arguments just calls `explorer.exe` with no path (Windows decides what to show). In practice, `ex .` is the most predictable.
+Examples: `(main)` clean, `(main ✚✱?)` everything dirty.
 
 ---
 
-## Aliases
+## Key features
 
-Aliases live in `~/.bash_aliases` and are sourced from `.bashrc`.
+### fzf keybindings
 
-Highlights:
-- git shortcuts: `gitlog`
-- safety flags: `cp -i`, `mv -i`, `rm -i`
-- Docker Portainer helper: `dpot` / `dpotstop`
-- `cleanzone` to remove `Zone.Identifier` files
+- **Ctrl+R** — fuzzy search command history
+- **Ctrl+T** — fuzzy find files
+- **Alt+C** — fuzzy cd into directories
+
+### readline improvements (`.inputrc`)
+
+- Case-insensitive tab completion
+- Up/Down arrow searches history based on what you've typed
+- Colored completions with file type indicators
+- No bell
+
+### WSL helpers
+
+- `ex .` — open Windows Explorer here
+- `echo "text" | clip` — copy to Windows clipboard
+
+Both use full Windows paths, so they work even with `appendWindowsPath=false`.
+
+---
+
+## Aliases highlights
+
+| Alias | Command |
+|-------|---------|
+| `ll` | `eza -alF --git` (detailed list with git status) |
+| `gitlog` | `git log --oneline --graph --decorate --all` |
+| `dpot` | Start Portainer at `https://localhost:9443` |
+| `dpotstop` | Stop Portainer |
+| `reload` | `source ~/.bashrc` |
+| `aptup` | `sudo apt update && sudo apt upgrade -y` |
+| `cleanzone` | Remove Windows `Zone.Identifier` files |
+| `cp`, `mv`, `rm` | Safety wrappers with `-i` |
 
 ---
 
 ## Update / re-apply
 
-If you edit files in this repo, symlinks already point to them, so changes are immediate for new shells.
-
-If you add/remove packages or want to refresh links:
+Symlinks point to repo files, so edits are immediate. To refresh links:
 
 ```bash
-cd "$HOME/dotfiles"
-stow --restow bash bin
+cd ~/dotfiles
+stow --restow bash bin readline
+```
+
+## Uninstall
+
+```bash
+cd ~/dotfiles
+stow -D bash bin readline
 ```
 
 ---
 
-## Uninstall (remove symlinks)
+## Logging
 
-```bash
-cd "$HOME/dotfiles"
-stow -D bash bin
-```
-
-This removes symlinks created by Stow without deleting your repo files.
+Every run of `install.sh` writes a timestamped log to `log/` (gitignored). Useful for debugging failed installs.
 
 ---
 
 ## Troubleshooting
 
-### 1) Stow conflicts
-If you see conflicts, it’s usually because you already have:
-- a real `~/.bashrc`
-- a real `~/.bash_aliases`
-- a real `~/bin/ex`
+### Stow conflicts
+A real file exists where Stow wants a symlink. Back up and remove it, then re-run.
 
-Fix options:
-- back up and remove the existing file, then re-run
-- merge content, then re-run Stow
+### `ex` or `clip` doesn't work
+WSL interop may be disabled. Test with `/mnt/c/Windows/notepad.exe`. If that fails, check [WSL troubleshooting](https://learn.microsoft.com/en-us/windows/wsl/troubleshooting).
 
-### 2) `explorer.exe` doesn’t run
-WSL interop may be disabled or broken. Test with:
-
-```bash
-notepad.exe
-```
-
-If that fails too, check WSL interop settings / troubleshooting:
-- https://learn.microsoft.com/en-us/windows/wsl/troubleshooting
+### Docker permission denied
+Log out and back in (or run `newgrp docker`) after install to activate the docker group.

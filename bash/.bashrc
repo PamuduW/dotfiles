@@ -20,6 +20,15 @@ if command -v zoxide >/dev/null 2>&1; then
   eval "$(zoxide init bash)"
 fi
 
+# Initialize fzf keybindings (Ctrl+R history, Ctrl+T file, Alt+C cd)
+eval "$(fzf --bash 2>/dev/null)" || true
+
+# --- History ---
+HISTSIZE=10000
+HISTFILESIZE=20000
+HISTCONTROL=ignoreboth:erasedups
+shopt -s histappend
+
 # --- dotfiles prompt (time + blank line + git symbols + exit code) ---
 
 # Bright colors (PS1-safe when wrapped in \[ \])

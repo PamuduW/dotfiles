@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Copy stdin to Windows clipboard.  Usage: echo "text" | clip
+# Full path so this works with appendWindowsPath=false in /etc/wsl.conf
+/mnt/c/Windows/System32/clip.exe "$@"

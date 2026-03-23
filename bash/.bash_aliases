@@ -10,16 +10,25 @@ alias c='clear'           # clear the terminal screen
 alias h='history'         # show shell history
 
 # ------------------------------------
-# Improved listing and stats
+# Improved listing and stats (eza)
 # ------------------------------------
-alias ls='ls --color=auto'     # show colors for file types
-alias ll='ls -alF'             # detailed list with types
-alias la='ls -A'               # show all but . and ..
-alias l='ls -CF'               # compact multi-column
-alias dfh='df -h'              # disk usage, human-readable
-alias duh='du -sh *'           # sizes of items here
-alias tree1='tree -L 1'        # tree view, depth 1
-alias tree2='tree -L 2'        # tree view, depth 2
+if command -v eza >/dev/null 2>&1; then
+  alias ls='eza --color=auto'
+  alias ll='eza -alF --git'
+  alias la='eza -a'
+  alias l='eza -F'
+  alias tree1='eza --tree --level=1'
+  alias tree2='eza --tree --level=2'
+else
+  alias ls='ls --color=auto'
+  alias ll='ls -alF'
+  alias la='ls -A'
+  alias l='ls -CF'
+  alias tree1='tree -L 1'
+  alias tree2='tree -L 2'
+fi
+alias dfh='df -h'
+alias duh='du -sh *'
 
 # ------------------------------------
 # Quick system info
@@ -57,8 +66,31 @@ alias shfmt-format='shfmt -i 2 -bn -ci -sr -w .'  # format shell scripts
 # ------------------------------------
 # System maintenance
 # ------------------------------------
-alias aptup='sudo apt update && sudo apt upgrade -y'  # full update
-alias aptclean='sudo apt autoremove -y && sudo apt autoclean'  # cleanup
+alias aptup='sudo apt update && sudo apt upgrade -y'
+alias aptclean='sudo apt autoremove -y && sudo apt autoclean'
+
+# ------------------------------------
+# AI CLI tools
+# ------------------------------------
+alias update-cursor='agent update'
+alias update-codex='npm i -g @openai/codex@latest'
+alias update-claude='claude update'
+
+update-all() {
+  echo "=== Updating system packages ==="
+  sudo apt update && sudo apt upgrade -y
+  echo ""
+  echo "=== Updating Cursor CLI ==="
+  command -v cursor >/dev/null 2>&1 && agent update || echo "  Cursor CLI not installed"
+  echo ""
+  echo "=== Updating Codex CLI ==="
+  command -v codex >/dev/null 2>&1 && npm i -g @openai/codex@latest || echo "  Codex CLI not installed"
+  echo ""
+  echo "=== Updating Claude CLI ==="
+  command -v claude >/dev/null 2>&1 && claude update || echo "  Claude CLI not installed"
+  echo ""
+  echo "Done."
+}
 
 # ------------------------------------
 # Utilities

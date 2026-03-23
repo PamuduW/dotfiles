@@ -1,0 +1,33 @@
+$include /etc/inputrc
+
+# Case-insensitive tab completion
+set completion-ignore-case on
+
+# Treat hyphens and underscores as equivalent when completing
+set completion-map-case on
+
+# Show all matches on first Tab instead of ringing bell
+set show-all-if-ambiguous on
+
+# Show all matches if there are too many to list
+set show-all-if-unmodified on
+
+# Append a slash to completed directory names
+set mark-directories on
+set mark-symlinked-directories on
+
+# Color files by type during completion (like ls)
+set colored-stats on
+
+# Show common prefix in color before cycling through matches
+set colored-completion-prefix on
+
+# Don't ring bell on completion
+set bell-style none
+
+# Show extra file info during completion (like ls -F)
+set visible-stats on
+
+# Up/down search history based on what's already typed
+"\e[A": history-search-backward
+"\e[B": history-search-forward
