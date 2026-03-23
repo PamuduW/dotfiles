@@ -478,6 +478,8 @@ install_lazygit_from_github() {
     "https://github.com/jesseduffield/lazygit/releases/download/v${ver}/lazygit_${ver}_Linux_x86_64.tar.gz"
   tar -C "$tmp" -xzf "$tmp/lazygit.tar.gz" lazygit
   sudo install -m 0755 "$tmp/lazygit" /usr/local/bin/lazygit
+  rm -rf "$tmp"
+  trap - RETURN
   echo "  ✓ lazygit v${ver} installed"
 }
 
@@ -504,6 +506,8 @@ install_lazydocker_from_github() {
   fi
 
   sudo install -m 0755 "$tmp/lazydocker" /usr/local/bin/lazydocker
+  rm -rf "$tmp"
+  trap - RETURN
   echo "  ✓ lazydocker v${ver} installed"
 }
 
