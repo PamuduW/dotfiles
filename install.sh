@@ -35,6 +35,7 @@ COMP_KEYS=(
   cursor_cli
   codex_cli
   claude_cli
+  monaspace_fonts
   ssh_key
   dotfiles
   wsl_conf
@@ -54,6 +55,7 @@ COMP_LABELS=(
   "Cursor CLI"
   "Codex CLI"
   "Claude CLI"
+  "Monaspace fonts (Nerd Fonts)"
   "Generate SSH key"
   "Apply dotfiles (stow)"
   "WSL config (systemd, clean PATH)"
@@ -61,8 +63,8 @@ COMP_LABELS=(
 )
 
 # Dependency: index of required component, -1 = none
-#              gid sys py  go  njs doc por lg  ld  cur cdx cla ssh dot wsl gcr
-COMP_DEPS=(    -1  -1  -1  -1  -1  -1  5   -1  5   -1  4   -1  -1  1   -1  -1 )
+#              gid sys py  go  njs doc por lg  ld  cur cdx cla mon ssh dot wsl gcr
+COMP_DEPS=(    -1  -1  -1  -1  -1  -1  5   -1  5   -1  4   -1  -1  -1  1   -1  -1 )
 
 declare -A COMP_ON
 for _key in "${COMP_KEYS[@]}"; do COMP_ON["$_key"]=1; done
@@ -204,6 +206,10 @@ _comp_description() {
     claude_cli)
       echo "Installs Anthropic Claude CLI from claude.ai."
       echo "Update later with 'update-claude' or 'update-all'."
+      ;;
+    monaspace_fonts)
+      echo "Downloads GitHub Monaspace Nerd Fonts to ~/.local/share/fonts/."
+      echo "Includes all 5 variants with Powerline glyphs and dev icons."
       ;;
     ssh_key)
       echo "Generates an ed25519 SSH key and adds it to ssh-agent."
@@ -396,6 +402,12 @@ show_plan() {
     printf "  %-18s: claude.ai installer\n" "Claude CLI"
   else
     printf "  %-18s: skip\n" "Claude CLI"
+  fi
+
+  if is_on monaspace_fonts; then
+    printf "  %-18s: Monaspace Nerd Fonts -> ~/.local/share/fonts/\n" "Monaspace fonts"
+  else
+    printf "  %-18s: skip\n" "Monaspace fonts"
   fi
 
   if is_on ssh_key; then
@@ -739,6 +751,41 @@ install_claude_cli() {
   echo "  ✓ Claude CLI installed"
 }
 
+install_monaspace_fonts() {
+  local font_dir="$HOME/.local/share/fonts/monaspace"
+
+  if [[ -d "$font_dir" ]] && compgen -G "$font_dir/*.otf" >/dev/null 2>&1; then
+    echo "  Monaspace fonts already installed in $font_dir. Skipping."
+    return 0
+  fi
+
+  command -v curl >/dev/null 2>&1 || { echo "  curl required for Monaspace install." >&2; return 1; }
+  command -v unzip >/dev/null 2>&1 || sudo apt-get install -y unzip
+
+  echo "Installing Monaspace Nerd Fonts from GitHub..."
+  local ver tmp
+  ver="$(curl -fsSL https://api.github.com/repos/githubnext/monaspace/releases/latest \
+    | grep -Po '"tag_name":\s*"\K[^"]*' | head -n1)"
+  [[ -n "$ver" ]] || { echo "  Could not determine Monaspace version." >&2; return 1; }
+
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' RETURN
+  curl -fsSL -o "$tmp/monaspace-nerdfonts.zip" \
+    "https://github.com/githubnext/monaspace/releases/download/${ver}/monaspace-nerdfonts-${ver}.zip"
+  unzip -qo "$tmp/monaspace-nerdfonts.zip" -d "$tmp/monaspace"
+
+  mkdir -p "$font_dir"
+  find "$tmp/monaspace" -name '*.otf' -exec cp {} "$font_dir/" \;
+
+  fc-cache -f 2>/dev/null || true
+
+  local count
+  count="$(find "$font_dir" -name '*.otf' | wc -l)"
+  rm -rf "$tmp"
+  trap - RETURN
+  echo "  ✓ Monaspace Nerd Fonts ${ver} installed (${count} fonts in ${font_dir})"
+}
+
 post_install_fixes() {
   mkdir -p "$HOME/bin"
   if command -v fdfind >/dev/null 2>&1 && [[ ! -e "$HOME/bin/fd" ]]; then
@@ -899,6 +946,11 @@ main() {
   fi
   if is_on claude_cli; then
     install_claude_cli || echo "  Warning: Claude CLI install failed."
+  fi
+
+  # Monaspace fonts
+  if is_on monaspace_fonts; then
+    install_monaspace_fonts || echo "  Warning: Monaspace fonts install failed."
   fi
 
   # SSH key

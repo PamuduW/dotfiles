@@ -76,6 +76,7 @@ The installer will:
 | Cursor CLI | Cursor editor CLI from cursor.com |
 | Codex CLI | OpenAI Codex CLI via npm (requires Node.js) |
 | Claude CLI | Anthropic Claude CLI from claude.ai |
+| Monaspace fonts | GitHub Monaspace Nerd Fonts to `~/.local/share/fonts/` |
 | SSH key | ed25519 key + GitHub setup notes in `~/.ssh/github-setup.txt` |
 | Dotfiles | Stow bash, bin, readline into `$HOME` |
 | WSL config | `systemd=true`, `appendWindowsPath=false` in `/etc/wsl.conf` |
