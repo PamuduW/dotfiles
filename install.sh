@@ -12,6 +12,13 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_DIR="$SCRIPT_DIR"
 PKG_FILE="$DOTFILES_DIR/packages/packages.txt"
 
+# --- Logging: mirror all output to a timestamped log file ---
+LOG_DIR="$DOTFILES_DIR/log"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/$(date '+%Y-%m-%d_%H-%M-%S').log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "Log file: $LOG_FILE"
+
 # Read package list (ignoring blank lines and comments)
 read_packages() {
   if [[ ! -f "$PKG_FILE" ]]; then
@@ -128,6 +135,65 @@ install_node_via_nvm() {
   echo "  ✓ Node.js $(node --version) installed via nvm"
 }
 
+install_docker() {
+  # Skip if Docker is already installed
+  if command -v docker >/dev/null 2>&1; then
+    echo "Docker already installed ($(docker --version)). Skipping."
+  else
+    echo "Installing Docker Engine from official repo..."
+
+    # Prerequisites
+    sudo apt-get install -y ca-certificates curl
+
+    # Add Docker's official GPG key
+    sudo install -m 0755 -d /etc/apt/keyrings
+    sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+    sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+    # Add the Docker apt repository (DEB822 format)
+    # shellcheck disable=SC1091
+    local codename
+    codename="$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")"
+    sudo tee /etc/apt/sources.list.d/docker.sources >/dev/null <<DOCKEREOF
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: ${codename}
+Components: stable
+Signed-By: /etc/apt/keyrings/docker.asc
+DOCKEREOF
+
+    sudo apt-get update -qq
+    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    echo "  ✓ Docker Engine installed"
+  fi
+
+  # Ensure current user can run docker without sudo
+  if ! groups "$USER" | grep -qw docker; then
+    sudo groupadd -f docker
+    sudo usermod -aG docker "$USER"
+    echo "  ✓ Added $USER to docker group (log out/in or run 'newgrp docker' to activate)"
+  fi
+}
+
+install_portainer() {
+  if docker ps -a --format '{{.Names}}' | grep -qw portainer; then
+    echo "Portainer container already exists. Skipping."
+    return 0
+  fi
+
+  echo "Installing Portainer CE..."
+  docker volume create portainer_data
+  docker run -d \
+    -p 8000:8000 \
+    -p 9443:9443 \
+    --name portainer \
+    -v /var/run/docker.sock:/var/run/docker.sock \
+    -v portainer_data:/data \
+    portainer/portainer-ce:sts
+  docker stop portainer
+  echo "  ✓ Portainer installed (stopped — use 'dpot' to start, 'dpotstop' to stop)"
+}
+
 post_install_fixes() {
   # Ensure ~/bin exists (for your stowed commands and convenience links)
   mkdir -p "$HOME/bin"
@@ -221,6 +287,8 @@ main() {
     install_lazydocker_from_github || echo "Warning: lazydocker fallback install failed."
   fi
 
+  install_docker
+  install_portainer
   install_node_via_nvm
   post_install_fixes
   backup_existing_dotfiles

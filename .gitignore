@@ -49,3 +49,6 @@ temp/
 
 # Backup directories created by install.sh
 old_bash*/
+
+# Install logs
+log/
