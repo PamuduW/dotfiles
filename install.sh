@@ -110,7 +110,11 @@ install_node_via_nvm() {
   # Install nvm if not already present
   if [[ ! -d "$NVM_DIR" ]]; then
     echo "Installing nvm (Node Version Manager)..."
-    curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | PROFILE=/dev/null bash
+    # Strip Windows paths from PATH so nvm's installer doesn't invoke Windows npm via WSL interop
+    local wsl_clean_path
+    wsl_clean_path="$(echo "$PATH" | tr ':' '\n' | grep -v '^/mnt/' | tr '\n' ':' | sed 's/:$//')"
+    curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh \
+      | PROFILE=/dev/null PATH="$wsl_clean_path" bash
   fi
 
   # Load nvm into the current shell
