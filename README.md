@@ -11,6 +11,7 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 - Better readline: case-insensitive completion, arrow-key history search
 - Docker Engine + Portainer CE (with `dpot`/`dpotstop` shortcuts)
 - Node.js via nvm, Python 3, Go
+- AI CLI tools: Cursor, Codex, Claude (with `update-all` to keep them current)
 - SSH key generation with GitHub setup notes
 - WSL-specific config: systemd, clean PATH, Git credential helper, clipboard helper
 

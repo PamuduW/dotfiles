@@ -39,7 +39,7 @@ The installer automatically downloads and installs them from official GitHub rel
 - **lazygit**: TUI for git operations
 - **lazydocker**: TUI for Docker management
 
-If you prefer not to install from GitHub releases automatically, comment out the fallback installer functions in `install.sh`.
+If you prefer not to install them, deselect lazygit/lazydocker from the interactive toggle menu when running `install.sh`.
 
 ## Enabling zoxide
 
