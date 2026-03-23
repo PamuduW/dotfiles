@@ -81,13 +81,25 @@ update-all() {
   sudo apt update && sudo apt upgrade -y
   echo ""
   echo "=== Updating Cursor CLI ==="
-  command -v cursor >/dev/null 2>&1 && agent update || echo "  Cursor CLI not installed"
+  if command -v cursor >/dev/null 2>&1; then
+    agent update
+  else
+    echo "  Cursor CLI not installed, skipping"
+  fi
   echo ""
   echo "=== Updating Codex CLI ==="
-  command -v codex >/dev/null 2>&1 && npm i -g @openai/codex@latest || echo "  Codex CLI not installed"
+  if command -v codex >/dev/null 2>&1; then
+    npm i -g @openai/codex@latest
+  else
+    echo "  Codex CLI not installed, skipping"
+  fi
   echo ""
   echo "=== Updating Claude CLI ==="
-  command -v claude >/dev/null 2>&1 && claude update || echo "  Claude CLI not installed"
+  if command -v claude >/dev/null 2>&1; then
+    claude update
+  else
+    echo "  Claude CLI not installed, skipping"
+  fi
   echo ""
   echo "Done."
 }

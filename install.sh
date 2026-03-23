@@ -272,7 +272,7 @@ show_plan() {
   fi
 
   if is_on dotfiles; then
-    printf "  %-18s: stow bash, bin\n" "Dotfiles"
+    printf "  %-18s: stow bash, bin, readline\n" "Dotfiles"
   else
     printf "  %-18s: skip\n" "Dotfiles"
   fi
@@ -576,6 +576,7 @@ install_codex_cli() {
     echo "  Codex CLI already installed. Skipping."
     return 0
   fi
+  command -v npm >/dev/null 2>&1 || { echo "  npm not found. Install Node.js first." >&2; return 1; }
   echo "Installing Codex CLI..."
   npm i -g @openai/codex
   echo "  ✓ Codex CLI installed"
@@ -609,6 +610,7 @@ backup_existing_dotfiles() {
   [[ -f "$HOME/.bash_aliases" && ! -L "$HOME/.bash_aliases" ]] && needs_backup=true
   [[ -f "$HOME/.inputrc" && ! -L "$HOME/.inputrc" ]] && needs_backup=true
   [[ -f "$HOME/bin/ex" && ! -L "$HOME/bin/ex" ]] && needs_backup=true
+  [[ -f "$HOME/bin/clip" && ! -L "$HOME/bin/clip" ]] && needs_backup=true
 
   if [[ "$needs_backup" == "false" ]]; then return 0; fi
 
@@ -638,6 +640,13 @@ backup_existing_dotfiles() {
     mkdir -p "$backup_dir/bin"
     mv "$HOME/bin/ex" "$backup_dir/bin/ex"
     echo "  ✓ Backed up bin/ex"
+    ((++files_backed_up))
+  fi
+
+  if [[ -f "$HOME/bin/clip" && ! -L "$HOME/bin/clip" ]]; then
+    mkdir -p "$backup_dir/bin"
+    mv "$HOME/bin/clip" "$backup_dir/bin/clip"
+    echo "  ✓ Backed up bin/clip"
     ((++files_backed_up))
   fi
 
@@ -735,9 +744,15 @@ main() {
   is_on nodejs && install_node_via_nvm
 
   # AI CLI tools
-  is_on cursor_cli && install_cursor_cli
-  is_on codex_cli  && install_codex_cli
-  is_on claude_cli && install_claude_cli
+  if is_on cursor_cli; then
+    install_cursor_cli || echo "  Warning: Cursor CLI install failed."
+  fi
+  if is_on codex_cli; then
+    install_codex_cli || echo "  Warning: Codex CLI install failed."
+  fi
+  if is_on claude_cli; then
+    install_claude_cli || echo "  Warning: Claude CLI install failed."
+  fi
 
   # SSH key
   is_on ssh_key && generate_ssh_key

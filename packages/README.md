@@ -9,14 +9,13 @@ This folder holds the package list for the WSL/Debian/Ubuntu bootstrap.
 
 ## Installer behavior
 
-When you run `dotfiles/install.sh`, it:
+`packages.txt` uses `# @tag` section headers (e.g. `@core`, `@cli`, `@python`, `@go`).
 
-1. Runs `sudo apt-get update`
-2. Installs everything listed in `packages.txt` using `sudo apt-get install -y ...`
-3. Applies your dotfiles using GNU Stow
-4. Adds small compatibility fixes for Debian/Ubuntu quirks:
-   - `fd-find` installs the `fdfind` binary (because `fd` is already taken)
-   - The installer creates: `~/bin/fd -> /usr/bin/fdfind` if missing
+When you run `dotfiles/install.sh`, the interactive installer lets you toggle which tag groups to install. Only selected groups are passed to `apt-get install`. The installer also:
+
+- Adds small compatibility fixes for Debian/Ubuntu quirks:
+  - `fd-find` installs the `fdfind` binary (because `fd` is already taken)
+  - The installer creates: `~/bin/fd -> /usr/bin/fdfind` if missing
 
 Upstream note on `fd` naming: the `fd` project recommends adding a link to `fd` after installing `fd-find` on Debian-based systems.
 

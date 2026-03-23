@@ -71,6 +71,9 @@ The installer will:
 | Portainer CE | Docker management UI (requires Docker) |
 | lazygit | Git TUI from GitHub releases |
 | lazydocker | Docker TUI from GitHub releases (requires Docker) |
+| Cursor CLI | Cursor editor CLI from cursor.com |
+| Codex CLI | OpenAI Codex CLI via npm (requires Node.js) |
+| Claude CLI | Anthropic Claude CLI from claude.ai |
 | SSH key | ed25519 key + GitHub setup notes in `~/.ssh/github-setup.txt` |
 | Dotfiles | Stow bash, bin, readline into `$HOME` |
 | WSL config | `systemd=true`, `appendWindowsPath=false` in `/etc/wsl.conf` |
@@ -140,6 +143,10 @@ Both use full Windows paths, so they work even with `appendWindowsPath=false`.
 | `reload` | `source ~/.bashrc` |
 | `aptup` | `sudo apt update && sudo apt upgrade -y` |
 | `cleanzone` | Remove Windows `Zone.Identifier` files |
+| `update-cursor` | Update Cursor CLI (`agent update`) |
+| `update-codex` | Update Codex CLI (`npm i -g @openai/codex@latest`) |
+| `update-claude` | Update Claude CLI (`claude update`) |
+| `update-all` | Update system packages + all AI CLI tools |
 | `cp`, `mv`, `rm` | Safety wrappers with `-i` |
 
 ---
