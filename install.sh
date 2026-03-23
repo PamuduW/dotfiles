@@ -337,7 +337,6 @@ install_lazygit_from_github() {
   tar -C "$tmp" -xzf "$tmp/lazygit.tar.gz" lazygit
   sudo install -m 0755 "$tmp/lazygit" /usr/local/bin/lazygit
   echo "  ✓ lazygit v${ver} installed"
-  trap - RETURN
 }
 
 install_lazydocker_from_github() {
@@ -364,7 +363,6 @@ install_lazydocker_from_github() {
 
   sudo install -m 0755 "$tmp/lazydocker" /usr/local/bin/lazydocker
   echo "  ✓ lazydocker v${ver} installed"
-  trap - RETURN
 }
 
 install_node_via_nvm() {
@@ -519,7 +517,9 @@ configure_wsl() {
   [[ -f "$conf" ]] && sudo cp "$conf" "${conf}.bak"
 
   if [[ "$needs_systemd" == "true" ]]; then
-    if [[ -f "$conf" ]] && grep -q '^\[boot\]' "$conf"; then
+    if [[ -f "$conf" ]] && grep -qP '^\s*systemd\s*=' "$conf"; then
+      sudo sed -i 's/^\(\s*\)systemd\s*=.*/\1systemd=true/' "$conf"
+    elif [[ -f "$conf" ]] && grep -q '^\[boot\]' "$conf"; then
       sudo sed -i '/^\[boot\]/a systemd=true' "$conf"
     else
       printf '\n[boot]\nsystemd=true\n' | sudo tee -a "$conf" >/dev/null
@@ -527,7 +527,9 @@ configure_wsl() {
   fi
 
   if [[ "$needs_interop" == "true" ]]; then
-    if [[ -f "$conf" ]] && grep -q '^\[interop\]' "$conf"; then
+    if [[ -f "$conf" ]] && grep -qP '^\s*appendWindowsPath\s*=' "$conf"; then
+      sudo sed -i 's/^\(\s*\)appendWindowsPath\s*=.*/\1appendWindowsPath=false/' "$conf"
+    elif [[ -f "$conf" ]] && grep -q '^\[interop\]' "$conf"; then
       sudo sed -i '/^\[interop\]/a appendWindowsPath=false' "$conf"
     else
       printf '\n[interop]\nappendWindowsPath=false\n' | sudo tee -a "$conf" >/dev/null
