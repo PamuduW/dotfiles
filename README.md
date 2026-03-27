@@ -79,7 +79,7 @@ The installer will:
 | Monaspace fonts | GitHub Monaspace Nerd Fonts to `~/.local/share/fonts/` |
 | SSH key | ed25519 key + GitHub setup notes in `~/.ssh/github-setup.txt` |
 | Dotfiles | Stow bash, bin, readline into `$HOME` |
-| WSL config | `systemd=true`, `appendWindowsPath=false` in `/etc/wsl.conf` |
+| WSL config | `systemd=true`, `appendWindowsPath=true` in `/etc/wsl.conf` |
 | Git credential | Windows Credential Manager for HTTPS auth |
 
 Dependencies are enforced automatically (e.g., disabling Docker also disables Portainer).
@@ -133,7 +133,7 @@ Examples: `(main)` clean, `(main ✚✱?)` everything dirty.
 - `ex .` — open Windows Explorer here
 - `echo "text" | clip` — copy to Windows clipboard
 
-Both use full Windows paths, so they work even with `appendWindowsPath=false`.
+Both use full Windows paths, so they work even with `appendWindowsPath=true`.
 
 ---
 
