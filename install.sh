@@ -28,6 +28,7 @@ COMP_KEYS=(
 	python
 	go
 	nodejs
+	direnv
 	docker
 	portainer
 	lazygit
@@ -48,6 +49,7 @@ COMP_LABELS=(
 	"Python (python3, pip, venv)"
 	"Go (golang-go)"
 	"Node.js 22 (nvm)"
+	"direnv (env loader + shell hook)"
 	"Docker Engine"
 	"Portainer CE"
 	"lazygit (git TUI)"
@@ -63,8 +65,8 @@ COMP_LABELS=(
 )
 
 # Dependency: index of required component, -1 = none
-#              gid sys py  go  njs doc por lg  ld  cur cdx cla mon ssh dot wsl gcr
-COMP_DEPS=(-1 -1 -1 -1 -1 -1 5 -1 5 -1 4 -1 -1 -1 1 -1 -1)
+#              gid sys py  go  njs dir doc por lg  ld  cur cdx cla mon ssh dot wsl gcr
+COMP_DEPS=(-1 -1 -1 -1 -1 -1 -1 6 -1 6 -1 4 -1 -1 -1 1 -1 -1)
 
 declare -A COMP_ON
 for _key in "${COMP_KEYS[@]}"; do COMP_ON["$_key"]=1; done
@@ -183,6 +185,10 @@ _comp_description() {
 	nodejs)
 		echo "Installs Node.js v22 via nvm (Node Version Manager)."
 		echo "Also provides npm for global packages like Codex CLI."
+		;;
+	direnv)
+		echo "Installs or updates direnv to ~/.local/bin via official installer."
+		echo "Adds 'eval \"\$(direnv hook bash)\"' to ~/.bashrc if missing."
 		;;
 	docker)
 		echo "Installs Docker Engine CE from the official Docker apt repo."
@@ -364,6 +370,12 @@ show_plan() {
 		printf "  %-18s: v22 via nvm\n" "Node.js"
 	else
 		printf "  %-18s: skip\n" "Node.js"
+	fi
+
+	if is_on direnv; then
+		printf "  %-18s: install/update + bash hook\n" "direnv"
+	else
+		printf "  %-18s: skip\n" "direnv"
 	fi
 
 	if is_on docker; then
@@ -782,6 +794,49 @@ install_claude_cli() {
 	echo "  ✓ Claude CLI installed"
 }
 
+install_direnv() {
+	command -v curl >/dev/null 2>&1 || {
+		echo "  curl required for direnv install." >&2
+		return 1
+	}
+
+	echo "Installing/updating direnv..."
+	mkdir -p "$HOME/.local/bin"
+	bin_path="$HOME/.local/bin" curl -sfL https://direnv.net/install.sh | bash
+
+	# Keep direnv reachable even in shells where ~/.local/bin is not on PATH.
+	if [[ -x "$HOME/.local/bin/direnv" ]]; then
+		mkdir -p "$HOME/bin"
+		ln -sf "$HOME/.local/bin/direnv" "$HOME/bin/direnv"
+	fi
+
+	if command -v direnv >/dev/null 2>&1; then
+		echo "  ✓ direnv installed: $(direnv version)"
+	else
+		echo "  Warning: direnv installed to ~/.local/bin but is not on PATH yet."
+	fi
+}
+
+ensure_direnv_hook_in_bashrc() {
+	local bashrc="$HOME/.bashrc"
+	local hook='eval "$(direnv hook bash)"'
+
+	touch "$bashrc"
+
+	if grep -Fqx "$hook" "$bashrc"; then
+		echo "  direnv hook already present in ~/.bashrc"
+		return 0
+	fi
+
+	{
+		echo ""
+		echo "# direnv"
+		echo "$hook"
+	} >>"$bashrc"
+
+	echo "  ✓ Added direnv hook to ~/.bashrc"
+}
+
 install_monaspace_fonts() {
 	local font_dir="$HOME/.local/share/fonts/monaspace"
 
@@ -973,6 +1028,12 @@ main() {
 
 	# Node.js
 	is_on nodejs && install_node_via_nvm
+
+	# direnv
+	if is_on direnv; then
+		install_direnv || echo "  Warning: direnv install failed."
+		ensure_direnv_hook_in_bashrc
+	fi
 
 	# AI CLI tools
 	if is_on cursor_cli; then
