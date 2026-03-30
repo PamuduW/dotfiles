@@ -38,11 +38,11 @@ shopt -s histappend
 
 # Bright colors (PS1-safe when wrapped in \[ \])
 c_reset="\[\e[0m\]"
-c_time="\[\e[90m\]"     # gray
-c_user="\[\e[32m\]"     # green
-c_path="\[\e[34m\]"     # cyan
-c_git="\[\e[33m\]"      # yellow
-c_err="\[\e[31m\]"      # red
+c_time="\[\e[90m\]" # gray
+c_user="\[\e[32m\]" # green
+c_path="\[\e[34m\]" # cyan
+c_git="\[\e[33m\]"  # yellow
+c_err="\[\e[31m\]"  # red
 
 __dotfiles_git() {
 	git rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
@@ -65,7 +65,7 @@ __dotfiles_git() {
 }
 
 __dotfiles_prompt() {
-  local exit_code=$?   # MUST be first line
+	local exit_code=$? # MUST be first line
 	local git_part err_part
 
 	git_part="$(__dotfiles_git)"
@@ -98,6 +98,9 @@ fi
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
+
+# --- asdf (version manager) ---
+export PATH="$HOME/.asdf/bin:$HOME/.asdf/shims:$PATH"
 
 if [ -f ~/.bash_aliases ]; then
 	. ~/.bash_aliases

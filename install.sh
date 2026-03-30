@@ -47,7 +47,7 @@ COMP_LABELS=(
 	"Git identity (global user.name / email)"
 	"System packages"
 	"Python (python3, pip, venv)"
-	"Go (golang-go)"
+	"Go (asdf)"
 	"Node.js 22 (nvm)"
 	"direnv (env loader + shell hook)"
 	"Docker Engine"
@@ -180,7 +180,7 @@ _comp_description() {
 		echo "Installs python3, pip, and venv via apt."
 		;;
 	go)
-		echo "Installs golang-go via apt."
+		echo "Installs latest Go via asdf and sets it global."
 		;;
 	nodejs)
 		echo "Installs Node.js v22 via nvm (Node Version Manager)."
@@ -361,7 +361,7 @@ show_plan() {
 	fi
 
 	if is_on go; then
-		printf "  %-18s: golang-go\n" "Go"
+		printf "  %-18s: asdf golang latest\n" "Go"
 	else
 		printf "  %-18s: skip\n" "Go"
 	fi
@@ -592,6 +592,103 @@ install_node_via_nvm() {
 	nvm install "$NVM_MIN_NODE"
 	nvm alias default "$NVM_MIN_NODE"
 	echo "  ✓ Node.js $(node --version) installed via nvm"
+}
+
+ensure_asdf_installed() {
+	local asdf_dir="$HOME/.asdf"
+	local asdf_bin="$asdf_dir/bin/asdf"
+	local needs_install=0
+	if [[ ! -x "$asdf_bin" ]]; then
+		needs_install=1
+	elif head -n 1 "$asdf_bin" 2>/dev/null | grep -q '^#!/usr/bin/env bash'; then
+		# Legacy asdf installs ship a Bash script in bin/asdf; replace with modern binary.
+		needs_install=1
+	fi
+
+	if [[ "$needs_install" -eq 1 ]]; then
+		command -v curl >/dev/null 2>&1 || {
+			echo "  curl is required to install asdf." >&2
+			return 1
+		}
+		command -v tar >/dev/null 2>&1 || {
+			echo "  tar is required to install asdf." >&2
+			return 1
+		}
+
+		local arch
+		case "$(uname -m)" in
+		x86_64 | amd64) arch="amd64" ;;
+		aarch64 | arm64) arch="arm64" ;;
+		i386 | i686) arch="386" ;;
+		*)
+			echo "  Unsupported architecture for asdf: $(uname -m)" >&2
+			return 1
+			;;
+		esac
+
+		echo "Installing asdf..."
+		local tag tmp tarball_url extracted
+		tag="$(curl -fsSL https://api.github.com/repos/asdf-vm/asdf/releases/latest | grep -Po '"tag_name":\s*"\K[^"]+' | head -n1)"
+		[[ -n "$tag" ]] || {
+			echo "  Could not determine latest asdf release." >&2
+			return 1
+		}
+
+		tarball_url="https://github.com/asdf-vm/asdf/releases/download/${tag}/asdf-${tag}-linux-${arch}.tar.gz"
+		tmp="$(mktemp -d)"
+		trap 'rm -rf "$tmp"' RETURN
+		curl -fsSL -o "$tmp/asdf.tar.gz" "$tarball_url"
+
+		mkdir -p "$asdf_dir/bin"
+		rm -f "$asdf_bin"
+		if ! tar -xzf "$tmp/asdf.tar.gz" -C "$asdf_dir/bin" asdf 2>/dev/null; then
+			tar -xzf "$tmp/asdf.tar.gz" -C "$tmp"
+			extracted="$(find "$tmp" -maxdepth 3 -type f -name asdf | head -n1 || true)"
+			[[ -n "$extracted" ]] || {
+				echo "  Failed to extract asdf binary." >&2
+				return 1
+			}
+			install -m 0755 "$extracted" "$asdf_bin"
+		fi
+		chmod +x "$asdf_bin"
+		rm -rf "$tmp"
+		trap - RETURN
+	fi
+
+	export PATH="$asdf_dir/bin:$asdf_dir/shims:$PATH"
+	sed -i '/\.asdf\/asdf\.sh/d; /\.asdf\/completions\/asdf\.bash/d' "$HOME/.bashrc" 2>/dev/null || true
+
+	if ! grep -Fq 'export PATH="$HOME/.asdf/bin:$HOME/.asdf/shims:$PATH"' "$HOME/.bashrc" 2>/dev/null; then
+		{
+			echo ''
+			echo '# asdf'
+			echo 'export PATH="$HOME/.asdf/bin:$HOME/.asdf/shims:$PATH"'
+		} >>"$HOME/.bashrc"
+	fi
+
+	command -v asdf >/dev/null 2>&1 || {
+		echo "  asdf install completed but command is still unavailable." >&2
+		return 1
+	}
+
+	echo "  ✓ asdf ready"
+}
+
+install_go_via_asdf() {
+	if ! ensure_asdf_installed; then
+		echo "  Could not set up asdf for Go installation." >&2
+		return 1
+	fi
+
+	if ! asdf plugin list 2>/dev/null | grep -qx 'golang'; then
+		echo "Adding asdf golang plugin..."
+		asdf plugin add golang
+	fi
+
+	echo "Installing Go latest via asdf..."
+	asdf install golang latest
+	asdf set -u golang latest
+	echo "  ✓ Go installed and set for user via asdf"
 }
 
 # Run docker with sudo fallback if user isn't in the docker group yet
@@ -987,7 +1084,7 @@ main() {
 	is_on git_identity && apply_git_config
 
 	# apt update once if any apt packages are selected
-	if is_on system_packages || is_on python || is_on go; then
+	if is_on system_packages || is_on python; then
 		echo "Updating apt indexes..."
 		sudo apt-get update -qq
 	fi
@@ -995,7 +1092,7 @@ main() {
 	# apt packages by tag
 	is_on system_packages && apt_install_packages core cli system
 	is_on python && apt_install_packages python
-	is_on go && apt_install_packages go
+	is_on go && install_go_via_asdf || echo "  Warning: Go install via asdf failed."
 
 	# GitHub-installed tools
 	if is_on lazygit; then
