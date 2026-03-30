@@ -36,6 +36,7 @@ COMP_KEYS=(
 	cursor_cli
 	codex_cli
 	claude_cli
+	copilot_cli
 	monaspace_fonts
 	ssh_key
 	dotfiles
@@ -57,6 +58,7 @@ COMP_LABELS=(
 	"Cursor CLI"
 	"Codex CLI"
 	"Claude CLI"
+	"Copilot CLI"
 	"Monaspace fonts (Nerd Fonts)"
 	"Generate SSH key"
 	"Apply dotfiles (stow)"
@@ -65,8 +67,8 @@ COMP_LABELS=(
 )
 
 # Dependency: index of required component, -1 = none
-#              gid sys py  go  njs dir doc por lg  ld  cur cdx cla mon ssh dot wsl gcr
-COMP_DEPS=(-1 -1 -1 -1 -1 -1 -1 6 -1 6 -1 4 -1 -1 -1 1 -1 -1)
+#              gid sys py  go  njs dir doc por lg  ld  cur cdx cla cop mon ssh dot wsl gcr
+COMP_DEPS=(-1 -1 -1 -1 -1 -1 -1 6 -1 6 -1 4 -1 -1 -1 -1 1 -1 -1)
 
 declare -A COMP_ON
 for _key in "${COMP_KEYS[@]}"; do COMP_ON["$_key"]=1; done
@@ -215,6 +217,10 @@ _comp_description() {
 	claude_cli)
 		echo "Installs Anthropic Claude CLI from claude.ai."
 		echo "Update later with 'update-claude' or 'update-all'."
+		;;
+	copilot_cli)
+		echo "Installs GitHub Copilot CLI via the official installer script."
+		echo "Runs: curl -fsSL https://gh.io/copilot-install | bash"
 		;;
 	monaspace_fonts)
 		echo "Downloads GitHub Monaspace Nerd Fonts to ~/.local/share/fonts/."
@@ -418,6 +424,12 @@ show_plan() {
 		printf "  %-18s: claude.ai installer\n" "Claude CLI"
 	else
 		printf "  %-18s: skip\n" "Claude CLI"
+	fi
+
+	if is_on copilot_cli; then
+		printf "  %-18s: gh.io/copilot-install\n" "Copilot CLI"
+	else
+		printf "  %-18s: skip\n" "Copilot CLI"
 	fi
 
 	if is_on monaspace_fonts; then
@@ -891,6 +903,16 @@ install_claude_cli() {
 	echo "  ✓ Claude CLI installed"
 }
 
+install_copilot_cli() {
+	if command -v gh >/dev/null 2>&1 && gh copilot --help >/dev/null 2>&1; then
+		echo "  Copilot CLI already installed. Skipping."
+		return 0
+	fi
+	echo "Installing Copilot CLI..."
+	curl -fsSL https://gh.io/copilot-install | bash
+	echo "  ✓ Copilot CLI installed"
+}
+
 install_direnv() {
 	command -v curl >/dev/null 2>&1 || {
 		echo "  curl required for direnv install." >&2
@@ -1141,6 +1163,9 @@ main() {
 	fi
 	if is_on claude_cli; then
 		install_claude_cli || echo "  Warning: Claude CLI install failed."
+	fi
+	if is_on copilot_cli; then
+		install_copilot_cli || echo "  Warning: Copilot CLI install failed."
 	fi
 
 	# Monaspace fonts
