@@ -10,7 +10,7 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 - Modern CLI tools: `eza`, `fzf` (Ctrl+R/Ctrl+T/Alt+C), `zoxide`, `ripgrep`, `fd`
 - Better readline: case-insensitive completion, arrow-key history search
 - Docker Engine + Portainer CE (with `dpot`/`dpotstop` shortcuts)
-- Node.js via nvm, Python 3, Go
+- Node.js via nvm, Python 3, Go, PowerShell
 - AI CLI tools: Cursor, Codex, Claude (with `update-all` to keep them current)
 - SSH key generation with GitHub setup notes
 - WSL-specific config: systemd, clean PATH, Git credential helper, clipboard helper
@@ -62,25 +62,26 @@ The installer will:
 
 ### Component menu
 
-| Component | What it does |
-|-----------|-------------|
-| Git identity | Set global `user.name` / `user.email` (auto-disabled if `includeIf` detected) |
-| System packages | Core CLI tools from apt (@core, @cli, @system) |
-| Python | python3, pip, venv |
-| Go | golang-go |
-| Node.js | v22 via nvm |
-| Docker Engine | Docker CE from official repo + docker group |
-| Portainer CE | Docker management UI (requires Docker) |
-| lazygit | Git TUI from GitHub releases |
-| lazydocker | Docker TUI from GitHub releases (requires Docker) |
-| Cursor CLI | Cursor editor CLI from cursor.com |
-| Codex CLI | OpenAI Codex CLI via npm (requires Node.js) |
-| Claude CLI | Anthropic Claude CLI from claude.ai |
-| Monaspace fonts | GitHub Monaspace Nerd Fonts to `~/.local/share/fonts/` |
-| SSH key | ed25519 key + GitHub setup notes in `~/.ssh/github-setup.txt` |
-| Dotfiles | Stow bash, bin, readline into `$HOME` |
-| WSL config | `systemd=true`, `appendWindowsPath=true` in `/etc/wsl.conf` |
-| Git credential | Windows Credential Manager for HTTPS auth |
+| Component       | What it does                                                                  |
+| --------------- | ----------------------------------------------------------------------------- |
+| Git identity    | Set global `user.name` / `user.email` (auto-disabled if `includeIf` detected) |
+| System packages | Core CLI tools from apt (@core, @cli, @system)                                |
+| Python          | python3, pip, venv                                                            |
+| PowerShell      | Microsoft PowerShell from official Microsoft apt repository                   |
+| Go              | golang-go                                                                     |
+| Node.js         | v22 via nvm                                                                   |
+| Docker Engine   | Docker CE from official repo + docker group                                   |
+| Portainer CE    | Docker management UI (requires Docker)                                        |
+| lazygit         | Git TUI from GitHub releases                                                  |
+| lazydocker      | Docker TUI from GitHub releases (requires Docker)                             |
+| Cursor CLI      | Cursor editor CLI from cursor.com                                             |
+| Codex CLI       | OpenAI Codex CLI via npm (requires Node.js)                                   |
+| Claude CLI      | Anthropic Claude CLI from claude.ai                                           |
+| Monaspace fonts | GitHub Monaspace Nerd Fonts to `~/.local/share/fonts/`                        |
+| SSH key         | ed25519 key + GitHub setup notes in `~/.ssh/github-setup.txt`                 |
+| Dotfiles        | Stow bash, bin, readline into `$HOME`                                         |
+| WSL config      | `systemd=true`, `appendWindowsPath=true` in `/etc/wsl.conf`                   |
+| Git credential  | Windows Credential Manager for HTTPS auth                                     |
 
 Dependencies are enforced automatically (e.g., disabling Docker also disables Portainer).
 
@@ -139,20 +140,20 @@ Both use full Windows paths, so they work even with `appendWindowsPath=true`.
 
 ## Aliases highlights
 
-| Alias | Command |
-|-------|---------|
-| `ll` | `eza -alF --git` (detailed list with git status) |
-| `gitlog` | `git log --oneline --graph --decorate --all` |
-| `dpot` | Start Portainer at `https://localhost:9443` |
-| `dpotstop` | Stop Portainer |
-| `reload` | `source ~/.bashrc` |
-| `aptup` | `sudo apt update && sudo apt upgrade -y` |
-| `cleanzone` | Remove Windows `Zone.Identifier` files |
-| `update-cursor` | Update Cursor CLI (`agent update`) |
-| `update-codex` | Update Codex CLI (`npm i -g @openai/codex@latest`) |
-| `update-claude` | Update Claude CLI (`claude update`) |
-| `update-all` | Update system packages + all AI CLI tools |
-| `cp`, `mv`, `rm` | Safety wrappers with `-i` |
+| Alias            | Command                                            |
+| ---------------- | -------------------------------------------------- |
+| `ll`             | `eza -alF --git` (detailed list with git status)   |
+| `gitlog`         | `git log --oneline --graph --decorate --all`       |
+| `dpot`           | Start Portainer at `https://localhost:9443`        |
+| `dpotstop`       | Stop Portainer                                     |
+| `reload`         | `source ~/.bashrc`                                 |
+| `aptup`          | `sudo apt update && sudo apt upgrade -y`           |
+| `cleanzone`      | Remove Windows `Zone.Identifier` files             |
+| `update-cursor`  | Update Cursor CLI (`agent update`)                 |
+| `update-codex`   | Update Codex CLI (`npm i -g @openai/codex@latest`) |
+| `update-claude`  | Update Claude CLI (`claude update`)                |
+| `update-all`     | Update system packages + all AI CLI tools          |
+| `cp`, `mv`, `rm` | Safety wrappers with `-i`                          |
 
 ---
 
@@ -183,10 +184,13 @@ Every run of `install.sh` writes a timestamped log to `log/` (gitignored). Usefu
 ## Troubleshooting
 
 ### Stow conflicts
+
 A real file exists where Stow wants a symlink. Back up and remove it, then re-run.
 
 ### `ex` or `clip` doesn't work
+
 WSL interop may be disabled. Test with `/mnt/c/Windows/notepad.exe`. If that fails, check [WSL troubleshooting](https://learn.microsoft.com/en-us/windows/wsl/troubleshooting).
 
 ### Docker permission denied
+
 Log out and back in (or run `newgrp docker`) after install to activate the docker group.

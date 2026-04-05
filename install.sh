@@ -26,6 +26,7 @@ COMP_KEYS=(
 	git_identity
 	system_packages
 	python
+	powershell
 	go
 	nodejs
 	direnv
@@ -48,6 +49,7 @@ COMP_LABELS=(
 	"Git identity (global user.name / email)"
 	"System packages"
 	"Python (python3, pip, venv)"
+	"PowerShell (pwsh)"
 	"Go (asdf)"
 	"Node.js 22 (nvm)"
 	"direnv (env loader + shell hook)"
@@ -67,8 +69,8 @@ COMP_LABELS=(
 )
 
 # Dependency: index of required component, -1 = none
-#              gid sys py  go  njs dir doc por lg  ld  cur cdx cla cop mon ssh dot wsl gcr
-COMP_DEPS=(-1 -1 -1 -1 -1 -1 -1 6 -1 6 -1 4 -1 -1 -1 -1 1 -1 -1)
+#              gid sys py  psh go  njs dir doc por lg  ld  cur cdx cla cop mon ssh dot wsl gcr
+COMP_DEPS=(-1 -1 -1 -1 -1 -1 -1 -1 7 -1 7 -1 5 -1 -1 -1 -1 1 -1 -1)
 
 declare -A COMP_ON
 for _key in "${COMP_KEYS[@]}"; do COMP_ON["$_key"]=1; done
@@ -180,6 +182,10 @@ _comp_description() {
 		;;
 	python)
 		echo "Installs python3, pip, and venv via apt."
+		;;
+	powershell)
+		echo "Installs Microsoft PowerShell from packages.microsoft.com."
+		echo "Adds the Microsoft apt repository if missing, then installs 'powershell'."
 		;;
 	go)
 		echo "Installs latest Go via asdf and sets it global."
@@ -364,6 +370,12 @@ show_plan() {
 		printf "  %-18s: python3, pip, venv\n" "Python"
 	else
 		printf "  %-18s: skip\n" "Python"
+	fi
+
+	if is_on powershell; then
+		printf "  %-18s: Microsoft repo + powershell\n" "PowerShell"
+	else
+		printf "  %-18s: skip\n" "PowerShell"
 	fi
 
 	if is_on go; then
@@ -913,6 +925,60 @@ install_copilot_cli() {
 	echo "  ✓ Copilot CLI installed"
 }
 
+install_powershell() {
+	if command -v pwsh >/dev/null 2>&1; then
+		echo "  PowerShell already installed ($(pwsh --version 2>/dev/null || echo 'unknown')). Skipping."
+		return 0
+	fi
+
+	if [[ ! -f /etc/os-release ]]; then
+		echo "  Could not detect OS version (/etc/os-release missing)." >&2
+		return 1
+	fi
+
+	# shellcheck disable=SC1091
+	. /etc/os-release
+
+	local distro="${ID:-}" version_id="${VERSION_ID:-}"
+	case "$distro" in
+	ubuntu | debian) ;;
+	*)
+		echo "  PowerShell install supports Ubuntu/Debian only (detected: ${distro:-unknown})." >&2
+		return 1
+		;;
+	esac
+
+	if [[ -z "$version_id" ]]; then
+		echo "  Could not determine VERSION_ID from /etc/os-release." >&2
+		return 1
+	fi
+
+	echo "Installing PowerShell from Microsoft packages repo..."
+	sudo apt-get update -qq
+	sudo apt-get install -y wget apt-transport-https software-properties-common
+
+	if [[ ! -f /etc/apt/sources.list.d/microsoft-prod.list && ! -f /etc/apt/sources.list.d/microsoft-prod.sources ]]; then
+		local deb_file
+		deb_file="$(mktemp /tmp/packages-microsoft-prod.XXXXXX.deb)"
+		wget -q "https://packages.microsoft.com/config/${distro}/${version_id}/packages-microsoft-prod.deb" -O "$deb_file"
+		sudo dpkg -i "$deb_file"
+		rm -f "$deb_file"
+		echo "  ✓ Added Microsoft apt repository"
+	else
+		echo "  Microsoft apt repository already configured"
+	fi
+
+	sudo apt-get update -qq
+	sudo apt-get install -y powershell
+
+	if command -v pwsh >/dev/null 2>&1; then
+		echo "  ✓ PowerShell installed ($(pwsh --version 2>/dev/null || echo 'unknown'))"
+	else
+		echo "  PowerShell package installed but 'pwsh' was not found on PATH." >&2
+		return 1
+	fi
+}
+
 install_direnv() {
 	command -v curl >/dev/null 2>&1 || {
 		echo "  curl required for direnv install." >&2
@@ -1106,7 +1172,7 @@ main() {
 	is_on git_identity && apply_git_config
 
 	# apt update once if any apt packages are selected
-	if is_on system_packages || is_on python; then
+	if is_on system_packages || is_on python || is_on powershell; then
 		echo "Updating apt indexes..."
 		sudo apt-get update -qq
 	fi
@@ -1114,7 +1180,12 @@ main() {
 	# apt packages by tag
 	is_on system_packages && apt_install_packages core cli system
 	is_on python && apt_install_packages python
-	is_on go && install_go_via_asdf || echo "  Warning: Go install via asdf failed."
+	if is_on powershell; then
+		install_powershell || echo "  Warning: PowerShell install failed."
+	fi
+	if is_on go; then
+		install_go_via_asdf || echo "  Warning: Go install via asdf failed."
+	fi
 
 	# GitHub-installed tools
 	if is_on lazygit; then
