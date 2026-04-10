@@ -734,15 +734,34 @@ _run_quiet_command() {
 	return 1
 }
 
+_log_prefix() {
+	local level="$1"
+	local message="$2"
+	printf '[%s] %s\n' "$level" "$message"
+}
+
+_log_legend_line() {
+	printf '%s\n' '[Legend] STEP=starting  OK=completed  SKIP=already satisfied  WARN=needs attention'
+}
+
+log_step() { _log_prefix STEP "$1"; }
+log_ok() { _log_prefix OK "$1"; }
+log_skip() { _log_prefix SKIP "$1"; }
+log_warn() { _log_prefix WARN "$1"; }
+
 apt_install_packages() {
 	local pkgs
 	mapfile -t pkgs < <(read_packages_by_tags "$@")
 	if [[ ${#pkgs[@]} -eq 0 ]]; then
-		echo "  No packages for tags: $*"
+		log_skip "No packages for tags: $*"
 		return 0
 	fi
-	echo "Installing packages ($*)..."
-	_run_quiet_command "apt packages ($*)" sudo apt-get -qq -o Dpkg::Use-Pty=0 install -y "${pkgs[@]}" || true
+	log_step "Install apt packages: $*"
+	if _run_quiet_command "apt packages ($*)" sudo apt-get -qq -o Dpkg::Use-Pty=0 install -y "${pkgs[@]}"; then
+		log_ok "Apt packages installed: $*"
+	else
+		log_warn "Apt package install failed: $*"
+	fi
 }
 
 install_lazygit_from_github() {
@@ -755,7 +774,7 @@ install_lazygit_from_github() {
 		return 1
 	}
 
-	echo "Installing lazygit from GitHub releases..."
+	log_step "Install lazygit from GitHub releases"
 	local ver tmp
 	ver="$(curl -fsSL https://api.github.com/repos/jesseduffield/lazygit/releases/latest |
 		grep -Po '"tag_name":\s*"v\K[^"]*' | head -n1)"
@@ -772,7 +791,7 @@ install_lazygit_from_github() {
 	sudo install -m 0755 "$tmp/lazygit" /usr/local/bin/lazygit
 	rm -rf "$tmp"
 	trap - RETURN
-	echo "  ✓ lazygit v${ver} installed"
+	log_ok "lazygit v${ver} installed"
 }
 
 install_lazydocker_from_github() {
@@ -785,7 +804,7 @@ install_lazydocker_from_github() {
 		return 1
 	}
 
-	echo "Installing lazydocker from GitHub releases..."
+	log_step "Install lazydocker from GitHub releases"
 	local ver tmp
 	ver="$(curl -fsSL https://api.github.com/repos/jesseduffield/lazydocker/releases/latest |
 		grep -Po '"tag_name":\s*"v\K[^"]*' | head -n1)"
@@ -809,7 +828,7 @@ install_lazydocker_from_github() {
 	sudo install -m 0755 "$tmp/lazydocker" /usr/local/bin/lazydocker
 	rm -rf "$tmp"
 	trap - RETURN
-	echo "  ✓ lazydocker v${ver} installed"
+	log_ok "lazydocker v${ver} installed"
 }
 
 install_node_via_nvm() {
@@ -820,13 +839,13 @@ install_node_via_nvm() {
 		local current_major
 		current_major="$(node --version | grep -oP '^v\K[0-9]+')"
 		if [[ "$current_major" -ge "$NVM_MIN_NODE" ]]; then
-			echo "  Node.js v$(node --version | tr -d 'v') already installed. Skipping."
+			log_skip "Node.js v$(node --version | tr -d 'v') already installed"
 			return 0
 		fi
 	fi
 
 	if [[ ! -d "$NVM_DIR" ]]; then
-		echo "Installing nvm (Node Version Manager)..."
+		log_step "Install nvm"
 		local wsl_clean_path
 		wsl_clean_path="$(echo "$PATH" | tr ':' '\n' | grep -v '^/mnt/' | tr '\n' ':' | sed 's/:$//')"
 		local nvm_tmp
@@ -845,10 +864,10 @@ install_node_via_nvm() {
 	# shellcheck source=/dev/null
 	[[ -s "$NVM_DIR/nvm.sh" ]] && . "$NVM_DIR/nvm.sh"
 
-	echo "Installing Node.js ${NVM_MIN_NODE} via nvm..."
+	log_step "Install Node.js ${NVM_MIN_NODE} via nvm"
 	_run_quiet_command "Node.js install" nvm install "$NVM_MIN_NODE"
 	_run_quiet_command "Node.js default alias" nvm alias default "$NVM_MIN_NODE"
-	echo "  ✓ Node.js $(node --version) installed via nvm"
+	log_ok "Node.js $(node --version) installed via nvm"
 }
 
 ensure_asdf_installed() {
@@ -928,7 +947,7 @@ ensure_asdf_installed() {
 		return 1
 	}
 
-	echo "  ✓ asdf ready"
+	log_ok "asdf available"
 }
 
 install_go_via_asdf() {
@@ -938,14 +957,14 @@ install_go_via_asdf() {
 	fi
 
 	if ! asdf plugin list 2>/dev/null | grep -qx 'golang'; then
-		echo "Adding asdf golang plugin..."
+		log_step "Add asdf golang plugin"
 		asdf plugin add golang
 	fi
 
-	echo "Installing Go latest via asdf..."
+	log_step "Install Go latest via asdf"
 	_run_quiet_command "Go install" asdf install golang latest
 	_run_quiet_command "Go version selection" asdf set -u golang latest
-	echo "  ✓ Go installed and set for user via asdf"
+	log_ok "Go installed and set for user via asdf"
 }
 
 # Run docker with sudo fallback if user isn't in the docker group yet
@@ -959,9 +978,9 @@ run_docker() {
 
 install_docker() {
 	if command -v docker >/dev/null 2>&1; then
-		echo "  Docker already installed ($(docker --version 2>/dev/null || echo 'unknown')). Skipping."
+		log_skip "Docker already installed ($(docker --version 2>/dev/null || echo 'unknown'))"
 	else
-		echo "Installing Docker Engine from official repo..."
+		log_step "Install Docker Engine from official repo"
 		sudo apt-get -o Dpkg::Use-Pty=0 install -y ca-certificates curl
 		sudo install -m 0755 -d /etc/apt/keyrings
 		sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
@@ -980,23 +999,23 @@ DOCKEREOF
 
 		sudo apt-get update -qq
 		sudo apt-get -o Dpkg::Use-Pty=0 install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-		echo "  ✓ Docker Engine installed"
+		log_ok "Docker Engine installed"
 	fi
 
 	if ! groups "$USER" | grep -qw docker; then
 		sudo groupadd -f docker
 		sudo usermod -aG docker "$USER"
-		echo "  ✓ Added $USER to docker group (log out/in or 'newgrp docker' to activate)"
+		log_ok "Added $USER to docker group (log out/in or 'newgrp docker' to activate)"
 	fi
 }
 
 install_portainer() {
 	if run_docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qw portainer; then
-		echo "  Portainer container already exists. Skipping."
+		log_skip "Portainer container already exists"
 		return 0
 	fi
 
-	echo "Installing Portainer CE..."
+	log_step "Install Portainer CE"
 	run_docker volume create portainer_data
 	run_docker run -d \
 		-p 8000:8000 \
@@ -1006,22 +1025,22 @@ install_portainer() {
 		-v portainer_data:/data \
 		portainer/portainer-ce:sts
 	run_docker stop portainer
-	echo "  ✓ Portainer installed (stopped — use 'dpot' to start, 'dpotstop' to stop)"
+	log_ok "Portainer installed (stopped — use 'dpot' to start, 'dpotstop' to stop)"
 }
 
 apply_git_config() {
 	git config --global user.name "$SETUP_GIT_NAME"
 	git config --global user.email "$SETUP_GIT_EMAIL"
-	echo "  ✓ Git configured: $SETUP_GIT_NAME <$SETUP_GIT_EMAIL>"
+	log_ok "Git configured: $SETUP_GIT_NAME <$SETUP_GIT_EMAIL>"
 }
 
 generate_ssh_key() {
 	if [[ -f "$HOME/.ssh/id_ed25519" ]]; then
-		echo "  SSH key ~/.ssh/id_ed25519 already exists. Skipping."
+		log_skip "SSH key ~/.ssh/id_ed25519 already exists"
 		return 0
 	fi
 
-	echo "Generating SSH key (ed25519)..."
+	log_step "Generate SSH key (ed25519)"
 	mkdir -p "$HOME/.ssh"
 	ssh-keygen -t ed25519 -C "$SETUP_GIT_EMAIL" -f "$HOME/.ssh/id_ed25519" -N ""
 	eval "$(ssh-agent -s)" >/dev/null
@@ -1045,8 +1064,8 @@ Next steps:
   5. Test with: ssh -T git@github.com
 EOF
 
-	echo "  ✓ SSH key generated"
-	echo "  ✓ Details saved to ~/.ssh/github-setup.txt"
+	log_ok "SSH key generated"
+	log_ok "Details saved to ~/.ssh/github-setup.txt"
 }
 
 configure_wsl() {
@@ -1060,11 +1079,11 @@ configure_wsl() {
 	fi
 
 	if [[ "$needs_systemd" == "false" && "$needs_interop" == "false" ]]; then
-		echo "  /etc/wsl.conf already configured. Skipping."
+		log_skip "/etc/wsl.conf already configured"
 		return 0
 	fi
 
-	echo "Configuring /etc/wsl.conf..."
+	log_step "Configure /etc/wsl.conf"
 	[[ -f "$conf" ]] && sudo cp "$conf" "${conf}.bak"
 
 	if [[ "$needs_systemd" == "true" ]]; then
@@ -1087,7 +1106,7 @@ configure_wsl() {
 		fi
 	fi
 
-	echo "  ✓ WSL config updated (restart WSL to apply: wsl --shutdown)"
+	log_ok "WSL config updated (restart WSL to apply: wsl --shutdown)"
 }
 
 configure_git_credential_helper() {
@@ -1107,19 +1126,19 @@ configure_git_credential_helper() {
 
 	if [[ -n "$gcm_path" ]]; then
 		git config --global credential.helper "$gcm_path"
-		echo "  ✓ Git credential helper: $gcm_path"
+		log_ok "Git credential helper: $gcm_path"
 	else
-		echo "  Warning: Windows Git Credential Manager not found."
+		log_warn "Windows Git Credential Manager not found"
 		echo "    Install Git for Windows, then re-run or set manually."
 	fi
 }
 
 install_cursor_cli() {
 	if command -v cursor >/dev/null 2>&1; then
-		echo "  Cursor CLI already installed. Skipping."
+		log_skip "Cursor CLI already installed"
 		return 0
 	fi
-	echo "Installing Cursor CLI..."
+	log_step "Install Cursor CLI"
 	local cursor_tmp
 	cursor_tmp="$(mktemp)"
 	if ! { curl -fsSL https://cursor.com/install | bash; } >"$cursor_tmp" 2>&1; then
@@ -1129,29 +1148,29 @@ install_cursor_cli() {
 		return 1
 	fi
 	rm -f "$cursor_tmp"
-	echo "  ✓ Cursor CLI installed"
+	log_ok "Cursor CLI installed"
 }
 
 install_codex_cli() {
 	if command -v codex >/dev/null 2>&1; then
-		echo "  Codex CLI already installed. Skipping."
+		log_skip "Codex CLI already installed"
 		return 0
 	fi
 	command -v npm >/dev/null 2>&1 || {
 		echo "  npm not found. Install Node.js first." >&2
 		return 1
 	}
-	echo "Installing Codex CLI..."
+	log_step "Install Codex CLI"
 	npm i -g @openai/codex
-	echo "  ✓ Codex CLI installed"
+	log_ok "Codex CLI installed"
 }
 
 install_claude_cli() {
 	if command -v claude >/dev/null 2>&1; then
-		echo "  Claude CLI already installed. Skipping."
+		log_skip "Claude CLI already installed"
 		return 0
 	fi
-	echo "Installing Claude CLI..."
+	log_step "Install Claude CLI"
 	local claude_tmp
 	claude_tmp="$(mktemp)"
 	if ! { curl -fsSL https://claude.ai/install.sh | bash; } >"$claude_tmp" 2>&1; then
@@ -1161,15 +1180,15 @@ install_claude_cli() {
 		return 1
 	fi
 	rm -f "$claude_tmp"
-	echo "  ✓ Claude CLI installed"
+	log_ok "Claude CLI installed"
 }
 
 install_copilot_cli() {
 	if command -v gh >/dev/null 2>&1 && gh copilot --help >/dev/null 2>&1; then
-		echo "  Copilot CLI already installed. Skipping."
+		log_skip "Copilot CLI already installed"
 		return 0
 	fi
-	echo "Installing Copilot CLI..."
+	log_step "Install Copilot CLI"
 	local copilot_tmp
 	copilot_tmp="$(mktemp)"
 	if ! { curl -fsSL https://gh.io/copilot-install | bash; } >"$copilot_tmp" 2>&1; then
@@ -1179,12 +1198,12 @@ install_copilot_cli() {
 		return 1
 	fi
 	rm -f "$copilot_tmp"
-	echo "  ✓ Copilot CLI installed"
+	log_ok "Copilot CLI installed"
 }
 
 install_powershell() {
 	if command -v pwsh >/dev/null 2>&1; then
-		echo "  PowerShell already installed ($(pwsh --version 2>/dev/null || echo 'unknown')). Skipping."
+		log_skip "PowerShell already installed ($(pwsh --version 2>/dev/null || echo 'unknown'))"
 		return 0
 	fi
 
@@ -1210,7 +1229,7 @@ install_powershell() {
 		return 1
 	fi
 
-	echo "Installing PowerShell from Microsoft packages repo..."
+	log_step "Install PowerShell from Microsoft packages repo"
 	sudo apt-get update -qq
 	sudo apt-get -o Dpkg::Use-Pty=0 install -y wget apt-transport-https software-properties-common
 
@@ -1220,16 +1239,16 @@ install_powershell() {
 		wget -q "https://packages.microsoft.com/config/${distro}/${version_id}/packages-microsoft-prod.deb" -O "$deb_file"
 		sudo dpkg -i "$deb_file"
 		rm -f "$deb_file"
-		echo "  ✓ Added Microsoft apt repository"
+		log_ok "Added Microsoft apt repository"
 	else
-		echo "  Microsoft apt repository already configured"
+		log_skip "Microsoft apt repository already configured"
 	fi
 
 	sudo apt-get update -qq
 	sudo apt-get -o Dpkg::Use-Pty=0 install -y powershell
 
 	if command -v pwsh >/dev/null 2>&1; then
-		echo "  ✓ PowerShell installed ($(pwsh --version 2>/dev/null || echo 'unknown'))"
+		log_ok "PowerShell installed ($(pwsh --version 2>/dev/null || echo 'unknown'))"
 	else
 		echo "  PowerShell package installed but 'pwsh' was not found on PATH." >&2
 		return 1
@@ -1242,7 +1261,7 @@ install_direnv() {
 		return 1
 	}
 
-	echo "Installing/updating direnv..."
+	log_step "Install/update direnv"
 	mkdir -p "$HOME/.local/bin"
 	local direnv_tmp
 	direnv_tmp="$(mktemp)"
@@ -1261,9 +1280,9 @@ install_direnv() {
 	fi
 
 	if command -v direnv >/dev/null 2>&1; then
-		echo "  ✓ direnv installed: $(direnv version)"
+		log_ok "direnv installed: $(direnv version)"
 	else
-		echo "  Warning: direnv installed to ~/.local/bin but is not on PATH yet."
+		log_warn "direnv installed to ~/.local/bin but is not on PATH yet"
 	fi
 }
 
@@ -1274,7 +1293,7 @@ ensure_direnv_hook_in_bashrc() {
 	touch "$bashrc"
 
 	if grep -Fqx "$hook" "$bashrc"; then
-		echo "  direnv hook already present in ~/.bashrc"
+		log_skip "direnv hook already present in ~/.bashrc"
 		return 0
 	fi
 
@@ -1284,7 +1303,7 @@ ensure_direnv_hook_in_bashrc() {
 		echo "$hook"
 	} >>"$bashrc"
 
-	echo "  ✓ Added direnv hook to ~/.bashrc"
+	log_ok "Added direnv hook to ~/.bashrc"
 }
 
 ensure_wslview_browser_in_bashrc() {
@@ -1292,14 +1311,14 @@ ensure_wslview_browser_in_bashrc() {
 	local export_line='export BROWSER=wslview'
 
 	if ! command -v wslview >/dev/null 2>&1; then
-		echo "  wslview not found; skipping BROWSER export."
+		log_skip "wslview not found; skipping BROWSER export"
 		return 0
 	fi
 
 	touch "$bashrc"
 
 	if grep -Fqx "$export_line" "$bashrc"; then
-		echo "  BROWSER=wslview already present in ~/.bashrc"
+		log_skip "BROWSER=wslview already present in ~/.bashrc"
 		return 0
 	fi
 
@@ -1309,14 +1328,14 @@ ensure_wslview_browser_in_bashrc() {
 		echo "$export_line"
 	} >>"$bashrc"
 
-	echo "  ✓ Added BROWSER=wslview to ~/.bashrc"
+	log_ok "Added BROWSER=wslview to ~/.bashrc"
 }
 
 install_monaspace_fonts() {
 	local font_dir="$HOME/.local/share/fonts/monaspace"
 
 	if [[ -d "$font_dir" ]] && compgen -G "$font_dir/*.otf" >/dev/null 2>&1; then
-		echo "  Monaspace fonts already installed in $font_dir. Skipping."
+		log_skip "Monaspace fonts already installed in $font_dir"
 		return 0
 	fi
 
@@ -1326,7 +1345,7 @@ install_monaspace_fonts() {
 	}
 	command -v unzip >/dev/null 2>&1 || sudo apt-get -o Dpkg::Use-Pty=0 install -y unzip
 
-	echo "Installing Monaspace Nerd Fonts from GitHub..."
+	log_step "Install Monaspace Nerd Fonts from GitHub"
 	local ver tmp
 	ver="$(curl -fsSL https://api.github.com/repos/githubnext/monaspace/releases/latest |
 		grep -Po '"tag_name":\s*"\K[^"]*' | head -n1)"
@@ -1350,7 +1369,7 @@ install_monaspace_fonts() {
 	count="$(find "$font_dir" -name '*.otf' | wc -l)"
 	rm -rf "$tmp"
 	trap - RETURN
-	echo "  ✓ Monaspace Nerd Fonts ${ver} installed (${count} fonts in ${font_dir})"
+	log_ok "Monaspace Nerd Fonts ${ver} installed (${count} fonts in ${font_dir})"
 }
 
 post_install_fixes() {
@@ -1377,42 +1396,42 @@ backup_existing_dotfiles() {
 
 	backup_dir="${backup_dir}_${timestamp}"
 	mkdir -p "$backup_dir"
-	echo "Backing up existing dotfiles to: $backup_dir"
+	log_step "Back up existing dotfiles to: $backup_dir"
 
 	if [[ -f "$HOME/.bashrc" && ! -L "$HOME/.bashrc" ]]; then
 		mv "$HOME/.bashrc" "$backup_dir/.bashrc"
-		echo "  ✓ Backed up .bashrc"
+		log_ok "Backed up .bashrc"
 		((++files_backed_up))
 	fi
 
 	if [[ -f "$HOME/.bash_aliases" && ! -L "$HOME/.bash_aliases" ]]; then
 		mv "$HOME/.bash_aliases" "$backup_dir/.bash_aliases"
-		echo "  ✓ Backed up .bash_aliases"
+		log_ok "Backed up .bash_aliases"
 		((++files_backed_up))
 	fi
 
 	if [[ -f "$HOME/.inputrc" && ! -L "$HOME/.inputrc" ]]; then
 		mv "$HOME/.inputrc" "$backup_dir/.inputrc"
-		echo "  ✓ Backed up .inputrc"
+		log_ok "Backed up .inputrc"
 		((++files_backed_up))
 	fi
 
 	if [[ -f "$HOME/bin/ex" && ! -L "$HOME/bin/ex" ]]; then
 		mkdir -p "$backup_dir/bin"
 		mv "$HOME/bin/ex" "$backup_dir/bin/ex"
-		echo "  ✓ Backed up bin/ex"
+		log_ok "Backed up bin/ex"
 		((++files_backed_up))
 	fi
 
 	if [[ -f "$HOME/bin/clip" && ! -L "$HOME/bin/clip" ]]; then
 		mkdir -p "$backup_dir/bin"
 		mv "$HOME/bin/clip" "$backup_dir/bin/clip"
-		echo "  ✓ Backed up bin/clip"
+		log_ok "Backed up bin/clip"
 		((++files_backed_up))
 	fi
 
 	if [[ $files_backed_up -gt 0 ]]; then
-		echo "Backed up $files_backed_up file(s) in: $backup_dir"
+		log_ok "Backed up $files_backed_up file(s) in: $backup_dir"
 	fi
 }
 
@@ -1422,9 +1441,9 @@ stow_dotfiles() {
 		exit 1
 	fi
 
-	echo "Applying stow packages: bash, bin, readline"
+	log_step "Apply stow packages: bash, bin, readline"
 	if stow --dir "$DOTFILES_DIR" --target "$HOME" bash bin readline; then
-		echo "  ✓ Dotfiles stowed successfully"
+		log_ok "Dotfiles stowed successfully"
 	else
 		echo "Error: stow failed. See output above." >&2
 		exit 1
@@ -1453,6 +1472,7 @@ main() {
 
 	echo ""
 	echo "=== Installing ==="
+	_log_legend_line
 	echo ""
 
 	# Default branch name (always safe regardless of identity setup)
@@ -1463,8 +1483,13 @@ main() {
 
 	# apt update once if any apt packages are selected
 	if is_on system_packages || is_on python || is_on powershell; then
-		echo "Updating apt indexes..."
-		sudo apt-get update -qq
+		log_step "Refresh apt indexes"
+		if _run_quiet_command "apt indexes refresh" sudo apt-get update -qq; then
+			log_ok "apt indexes refreshed"
+		else
+			log_warn "apt indexes refresh failed"
+			exit 1
+		fi
 	fi
 
 	# apt packages by tag
@@ -1480,7 +1505,7 @@ main() {
 	# GitHub-installed tools
 	if is_on lazygit; then
 		if command -v lazygit >/dev/null 2>&1; then
-			echo "  lazygit already installed. Skipping."
+			log_skip "lazygit already installed"
 		else
 			install_lazygit_from_github || echo "  Warning: lazygit install failed."
 		fi
@@ -1488,7 +1513,7 @@ main() {
 
 	if is_on lazydocker; then
 		if command -v lazydocker >/dev/null 2>&1; then
-			echo "  lazydocker already installed. Skipping."
+			log_skip "lazydocker already installed"
 		else
 			install_lazydocker_from_github || echo "  Warning: lazydocker install failed."
 		fi
