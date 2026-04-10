@@ -51,3 +51,6 @@ old_bash*/
 
 # Install logs
 log/
+.cursor/
+CLAUDE.md
+AGENTS.md

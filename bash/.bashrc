@@ -10,6 +10,11 @@ esac
 # Ensure ~/bin is on PATH (for stowed commands like ~/bin/ex)
 [ -d "$HOME/bin" ] && export PATH="$HOME/bin:$PATH"
 
+# Use Windows browser opener from WSL-aware tools when available
+if command -v wslview >/dev/null 2>&1; then
+	export BROWSER=wslview
+fi
+
 # Optional: bash-completion (if available)
 if [ -r /etc/bash_completion ]; then
 	. /etc/bash_completion
@@ -107,3 +112,5 @@ if [ -f ~/.bash_aliases ]; then
 fi
 # direnv
 eval "$(direnv hook bash)"
+
+export AGENT_BOOTSTRAP_HOME="/home/pamudu/Dev/agent_bootstrap" # agent_bootstrap

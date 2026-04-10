@@ -251,98 +251,172 @@ _comp_description() {
 	esac
 }
 
-# Fixed number of description lines rendered (padded/truncated to this)
-_DESC_LINES=2
+# Menu viewport state
+_MENU_TOP=0
 
-_draw_menu() {
+_menu_tty_cols() {
+	local cols size
+	size="$(stty size </dev/tty 2>/dev/null || true)"
+	if [[ -n "$size" ]]; then
+		cols="${size##* }"
+	else
+		cols="$(tput cols 2>/dev/null || echo 120)"
+	fi
+	[[ "$cols" =~ ^[0-9]+$ ]] || cols=120
+	((cols < 20)) && cols=20
+	echo "$cols"
+}
+
+_menu_tty_rows() {
+	local rows size
+	size="$(stty size </dev/tty 2>/dev/null || true)"
+	if [[ -n "$size" ]]; then
+		rows="${size%% *}"
+	else
+		rows="$(tput lines 2>/dev/null || echo 30)"
+	fi
+	[[ "$rows" =~ ^[0-9]+$ ]] || rows=30
+	((rows < 12)) && rows=12
+	echo "$rows"
+}
+
+_fit_menu_line() {
+	local text="$1"
+	local cols="$2"
+	# Keep one-column safety margin to avoid terminal auto-wrap artifacts.
+	local max_cols=$((cols - 1))
+	((max_cols < 1)) && max_cols=1
+
+	if ((${#text} > max_cols)); then
+		if ((max_cols > 3)); then
+			printf '%s' "${text:0:$((max_cols - 3))}..."
+		else
+			printf '%s' "${text:0:$max_cols}"
+		fi
+	else
+		printf '%s' "$text"
+	fi
+}
+
+_draw_component_menu() {
 	local cur=$1 status=$2
+	local rows cols
 	local count="${#COMP_KEYS[@]}"
-	local i key mark note
+	local header_lines=4
+	local footer_lines=2
+	local visible_count start end
+	local i key mark note row prefix
+	local shown=0
 
-	printf "\n  \e[1m=== Select Components ===\e[0m\n"
-	printf "  ↑/↓ navigate   Space toggle   a all   n none   Enter confirm\n\n"
+	rows="$(_menu_tty_rows)"
+	cols="$(_menu_tty_cols)"
 
-	for i in "${!COMP_KEYS[@]}"; do
+	visible_count=$((rows - header_lines - footer_lines))
+	((visible_count < 1)) && visible_count=1
+
+	if ((cur < _MENU_TOP)); then
+		_MENU_TOP=$cur
+	elif ((cur >= _MENU_TOP + visible_count)); then
+		_MENU_TOP=$((cur - visible_count + 1))
+	fi
+	((_MENU_TOP < 0)) && _MENU_TOP=0
+	if ((_MENU_TOP > count - visible_count)); then
+		_MENU_TOP=$((count - visible_count))
+	fi
+	((_MENU_TOP < 0)) && _MENU_TOP=0
+
+	start=$_MENU_TOP
+	end=$((start + visible_count - 1))
+	((end >= count)) && end=$((count - 1))
+
+	printf "  \e[1m%s\e[0m\e[K\n" "$(_fit_menu_line "=== Select Components ===" "$cols")"
+	printf "  %s\e[K\n" "$(_fit_menu_line "Up/Down navigate   Space toggle   a all   n none   Enter confirm" "$cols")"
+	printf "  %s\e[K\n\n" "$(_fit_menu_line "Showing $((start + 1))-$((end + 1)) of $count" "$cols")"
+
+	for ((i = start; i <= end; i++)); do
 		key="${COMP_KEYS[$i]}"
 		mark="x"
 		[[ "${COMP_ON[$key]}" -eq 0 ]] && mark=" "
 		note=""
-		[[ "${COMP_DEPS[$i]}" -ne -1 ]] && note="  (requires: ${COMP_LABELS[${COMP_DEPS[$i]}]})"
-
+		[[ "${COMP_DEPS[$i]}" -ne -1 ]] && note="  (requires #$((COMP_DEPS[$i] + 1)))"
+		prefix=" "
+		[[ $i -eq $cur ]] && prefix=">"
+		row="$(printf "%s %2d. [%s] %s%s" "$prefix" "$((i + 1))" "$mark" "${COMP_LABELS[$i]}" "$note")"
 		if [[ $i -eq $cur ]]; then
-			printf "\e[7m  %2d. [%s] %s%s \e[0m\e[K\n" "$((i + 1))" "$mark" "${COMP_LABELS[$i]}" "$note"
+			printf "\e[7m%s\e[0m\e[K\n" "$(_fit_menu_line "$row" "$cols")"
 		else
-			printf "  %2d. [%s] %s%s\e[K\n" "$((i + 1))" "$mark" "${COMP_LABELS[$i]}" "$note"
+			printf "%s\e[K\n" "$(_fit_menu_line "$row" "$cols")"
 		fi
+		((shown += 1))
 	done
 
-	# Status line (toggle feedback)
+	while ((shown < visible_count)); do
+		printf "\e[K\n"
+		((shown += 1))
+	done
+
 	if [[ -n "$status" ]]; then
-		printf "\n  \e[33m%s\e[0m\e[K\n" "$status"
+		printf "\n  \e[33m%s\e[0m\e[K\n" "$(_fit_menu_line "$status" "$cols")"
 	else
 		printf "\n\e[K\n"
 	fi
+	printf "  %s\e[K\n" "$(_fit_menu_line "Tip: press Enter to confirm selection" "$cols")"
 
-	# Description area for the highlighted component
-	local desc_lines=()
-	mapfile -t desc_lines < <(_comp_description "$cur")
-	for i in $(seq 0 $((_DESC_LINES - 1))); do
-		if [[ $i -lt ${#desc_lines[@]} ]]; then
-			printf "  \e[36m%s\e[0m\e[K\n" "${desc_lines[$i]}"
-		else
-			printf "\e[K\n"
-		fi
-	done
 }
 
 component_menu() {
 	local count="${#COMP_KEYS[@]}"
 	local cursor=0
 	local status_msg=""
-	# 4 header + count items + 2 status + _DESC_LINES description
-	local menu_lines=$((count + 6 + _DESC_LINES))
 
-	tput civis 2>/dev/null || true
-	_draw_menu 0 ""
+	_MENU_TOP=0
 
-	while true; do
-		local key seq
-		IFS= read -rsn1 key </dev/tty
+	{
+		tput civis 2>/dev/null || true
+		tput clear 2>/dev/null || printf "\e[2J\e[H"
+		tput cup 0 0 2>/dev/null || printf "\e[1;1H"
+		_draw_component_menu 0 ""
 
-		case "$key" in
-		$'\e')
-			IFS= read -rsn2 -t 0.1 seq </dev/tty
-			case "$seq" in
-			'[A') [[ $cursor -gt 0 ]] && cursor=$((cursor - 1)) ;;
-			'[B') [[ $cursor -lt $((count - 1)) ]] && cursor=$((cursor + 1)) ;;
+		while true; do
+			local key seq
+			IFS= read -rsn1 key </dev/tty
+
+			case "$key" in
+			$'\e')
+				IFS= read -rsn2 -t 0.1 seq </dev/tty
+				case "$seq" in
+				'[A') [[ $cursor -gt 0 ]] && cursor=$((cursor - 1)) ;;
+				'[B') [[ $cursor -lt $((count - 1)) ]] && cursor=$((cursor + 1)) ;;
+				esac
+				status_msg=""
+				;;
+			' ')
+				toggle_component "$cursor"
+				status_msg="$TOGGLE_MSG"
+				;;
+			'')
+				break
+				;;
+			a | A)
+				for k in "${COMP_KEYS[@]}"; do COMP_ON["$k"]=1; done
+				status_msg="All components enabled"
+				;;
+			n | N)
+				for k in "${COMP_KEYS[@]}"; do COMP_ON["$k"]=0; done
+				status_msg="All components disabled"
+				;;
+			*)
+				continue
+				;;
 			esac
-			status_msg=""
-			;;
-		' ')
-			toggle_component "$cursor"
-			status_msg="$TOGGLE_MSG"
-			;;
-		'')
-			break
-			;;
-		a | A)
-			for k in "${COMP_KEYS[@]}"; do COMP_ON["$k"]=1; done
-			status_msg="All components enabled"
-			;;
-		n | N)
-			for k in "${COMP_KEYS[@]}"; do COMP_ON["$k"]=0; done
-			status_msg="All components disabled"
-			;;
-		*)
-			continue
-			;;
-		esac
 
-		printf "\e[%dA" "$menu_lines"
-		_draw_menu "$cursor" "$status_msg"
-	done
+			tput cup 0 0 2>/dev/null || printf "\e[1;1H"
+			tput ed 2>/dev/null || printf "\e[J"
+			_draw_component_menu "$cursor" "$status_msg"
+		done
 
-	tput cnorm 2>/dev/null || true
+		tput cnorm 2>/dev/null || true
+	} >/dev/tty
 }
 
 show_plan() {
@@ -1022,6 +1096,31 @@ ensure_direnv_hook_in_bashrc() {
 	echo "  ✓ Added direnv hook to ~/.bashrc"
 }
 
+ensure_wslview_browser_in_bashrc() {
+	local bashrc="$HOME/.bashrc"
+	local export_line='export BROWSER=wslview'
+
+	if ! command -v wslview >/dev/null 2>&1; then
+		echo "  wslview not found; skipping BROWSER export."
+		return 0
+	fi
+
+	touch "$bashrc"
+
+	if grep -Fqx "$export_line" "$bashrc"; then
+		echo "  BROWSER=wslview already present in ~/.bashrc"
+		return 0
+	fi
+
+	{
+		echo ""
+		echo "# Use Windows default browser from WSL sessions"
+		echo "$export_line"
+	} >>"$bashrc"
+
+	echo "  ✓ Added BROWSER=wslview to ~/.bashrc"
+}
+
 install_monaspace_fonts() {
 	local font_dir="$HOME/.local/share/fonts/monaspace"
 
@@ -1248,7 +1347,10 @@ main() {
 	is_on ssh_key && generate_ssh_key
 
 	# Post-install fixes (fd symlink, ~/bin)
-	is_on system_packages && post_install_fixes
+	if is_on system_packages; then
+		post_install_fixes
+		ensure_wslview_browser_in_bashrc
+	fi
 
 	# Dotfiles (stow)
 	if is_on dotfiles; then
