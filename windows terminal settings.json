@@ -113,6 +113,6 @@
     "tabSwitcherMode": "inOrder",
     "tabWidthMode": "equal",
     "themes": [],
-    "warning.multiLinePaste": "always",
+    "warning.multiLinePaste": "automatic",
     "windowingBehavior": "useExisting"
 }

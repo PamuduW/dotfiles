@@ -13,11 +13,28 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_DIR="$SCRIPT_DIR"
 PKG_FILE="$DOTFILES_DIR/packages/packages.txt"
 
+_clean_log_stream() {
+	perl -pe '
+		s/\r/\n/g;
+		s/\e\[[0-9;?]*[ -\/]*[@-~]//g;
+		s/\e\][^\a]*(?:\a|\e\\)//g;
+	' | sed -u 's/[[:space:]]*$//'
+}
+
 # --- Logging: mirror all output to a timestamped log file ---
 LOG_DIR="$DOTFILES_DIR/log"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/$(date '+%Y-%m-%d_%H-%M-%S').log"
-exec > >(tee -a "$LOG_FILE") 2>&1
+RAW_LOG_FILE="${LOG_FILE}.raw"
+
+finalize_log_file() {
+	[[ -f "$RAW_LOG_FILE" ]] || return 0
+	_clean_log_stream <"$RAW_LOG_FILE" >"$LOG_FILE"
+	rm -f "$RAW_LOG_FILE"
+}
+
+trap finalize_log_file EXIT
+exec > >(tee -a "$RAW_LOG_FILE") 2>&1
 
 # ============================================================
 # Component registry
@@ -124,6 +141,16 @@ read_packages_by_tags() {
 
 is_on() { [[ "${COMP_ON[$1]}" -eq 1 ]]; }
 
+read_tty_line() {
+	local __var_name="$1"
+	local prompt="$2"
+	local value=""
+
+	printf "%s" "$prompt" >/dev/tty
+	IFS= read -r value </dev/tty
+	printf -v "$__var_name" '%s' "$value"
+}
+
 prompt_git_identity() {
 	local current_name current_email
 	current_name="$(git config --global user.name 2>/dev/null || true)"
@@ -131,10 +158,10 @@ prompt_git_identity() {
 
 	echo ""
 	echo "Git identity (press Enter to keep default):"
-	read -rp "  Name [${current_name:-Pamudu Wijesingha}]: " SETUP_GIT_NAME </dev/tty
+	read_tty_line SETUP_GIT_NAME "  Name [${current_name:-Pamudu Wijesingha}]: "
 	SETUP_GIT_NAME="${SETUP_GIT_NAME:-${current_name:-Pamudu Wijesingha}}"
 
-	read -rp "  Email [${current_email:-pamuduwijesingha2k20@gmail.com}]: " SETUP_GIT_EMAIL </dev/tty
+	read_tty_line SETUP_GIT_EMAIL "  Email [${current_email:-pamuduwijesingha2k20@gmail.com}]: "
 	SETUP_GIT_EMAIL="${SETUP_GIT_EMAIL:-${current_email:-pamuduwijesingha2k20@gmail.com}}"
 }
 
@@ -251,9 +278,6 @@ _comp_description() {
 	esac
 }
 
-# Menu viewport state
-_MENU_TOP=0
-
 _menu_tty_cols() {
 	local cols size
 	size="$(stty size </dev/tty 2>/dev/null || true)"
@@ -298,123 +322,231 @@ _fit_menu_line() {
 	fi
 }
 
-_draw_component_menu() {
-	local cur=$1 status=$2
-	local rows cols
-	local count="${#COMP_KEYS[@]}"
-	local header_lines=4
-	local footer_lines=2
-	local visible_count start end
-	local i key mark note row prefix
-	local shown=0
+_fit_menu_line_with_indent() {
+	local text="$1"
+	local cols="$2"
+	local indent="$3"
+	local usable_cols=$((cols - indent))
 
-	rows="$(_menu_tty_rows)"
-	cols="$(_menu_tty_cols)"
+	((usable_cols < 1)) && usable_cols=1
+	_fit_menu_line "$text" "$usable_cols"
+}
 
-	visible_count=$((rows - header_lines - footer_lines))
-	((visible_count < 1)) && visible_count=1
+_COMP_DESC_LINES=2
 
-	if ((cur < _MENU_TOP)); then
-		_MENU_TOP=$cur
-	elif ((cur >= _MENU_TOP + visible_count)); then
-		_MENU_TOP=$((cur - visible_count + 1))
-	fi
-	((_MENU_TOP < 0)) && _MENU_TOP=0
-	if ((_MENU_TOP > count - visible_count)); then
-		_MENU_TOP=$((count - visible_count))
-	fi
-	((_MENU_TOP < 0)) && _MENU_TOP=0
+_component_menu_page_size() {
+	local rows="$1"
+	local page_size=$((rows - 7))
+	((page_size < 1)) && page_size=1
+	echo "$page_size"
+}
 
-	start=$_MENU_TOP
-	end=$((start + visible_count - 1))
+_component_menu_page_for_cursor() {
+	local cursor="$1"
+	local page_size="$2"
+	echo $((cursor / page_size))
+}
+
+_component_menu_page_count() {
+	local count="$1"
+	local page_size="$2"
+	echo $(((count + page_size - 1) / page_size))
+}
+
+_component_menu_page_range() {
+	local count="$1"
+	local page_size="$2"
+	local page="$3"
+	local start=$((page * page_size))
+	local end=$((start + page_size - 1))
+
 	((end >= count)) && end=$((count - 1))
+	echo "$start $end"
+}
 
-	printf "  \e[1m%s\e[0m\e[K\n" "$(_fit_menu_line "=== Select Components ===" "$cols")"
-	printf "  %s\e[K\n" "$(_fit_menu_line "Up/Down navigate   Space toggle   a all   n none   Enter confirm" "$cols")"
-	printf "  %s\e[K\n\n" "$(_fit_menu_line "Showing $((start + 1))-$((end + 1)) of $count" "$cols")"
+_component_menu_visible_count() {
+	local count="$1"
+	local page_size="$2"
+	local page="$3"
+	local start end
+
+	read -r start end < <(_component_menu_page_range "$count" "$page_size" "$page")
+	echo $((end - start + 1))
+}
+
+_component_menu_render_lines() {
+	local count="$1"
+	local page_size="$2"
+	local page="$3"
+	local visible_count
+
+	visible_count="$(_component_menu_visible_count "$count" "$page_size" "$page")"
+	echo $((visible_count + 7))
+}
+
+_menu_decode_escape_sequence() {
+	local seq="$1"
+
+	case "$seq" in
+	'[A' | 'OA')
+		echo "up"
+		;;
+	'[B' | 'OB')
+		echo "down"
+		;;
+	*)
+		echo "ignore"
+		;;
+	esac
+}
+
+_read_component_menu_key() {
+	local key seq="" next
+
+	IFS= read -rsn1 key </dev/tty || {
+		echo "confirm"
+		return
+	}
+
+	case "$key" in
+	$'\e')
+		while IFS= read -rsn1 -t 0.01 next </dev/tty; do
+			seq+="$next"
+			((${#seq} >= 16)) && break
+		done
+		_menu_decode_escape_sequence "$seq"
+		;;
+	' ')
+		echo "toggle"
+		;;
+	'')
+		echo "confirm"
+		;;
+	a | A)
+		echo "all"
+		;;
+	n | N)
+		echo "none"
+		;;
+	*)
+		echo "ignore"
+		;;
+	esac
+}
+
+_component_menu_description_line() {
+	local idx="$1"
+	local line_index="$2"
+	local line=""
+	local lines=()
+
+	mapfile -t lines < <(_comp_description "$idx")
+	if ((line_index < ${#lines[@]})); then
+		line="${lines[$line_index]}"
+	fi
+	echo "$line"
+}
+
+_draw_component_menu() {
+	local cur=$1
+	local page_size=$2
+	local status=$3
+	local cols=$4
+	local count="${#COMP_KEYS[@]}"
+	local page total_pages start end
+	local i key mark note row prefix
+
+	page="$(_component_menu_page_for_cursor "$cur" "$page_size")"
+	total_pages="$(_component_menu_page_count "$count" "$page_size")"
+	read -r start end < <(_component_menu_page_range "$count" "$page_size" "$page")
+
+	printf "  \e[1m%s\e[0m\e[K\n" "$(_fit_menu_line_with_indent "=== Select Components ===" "$cols" 2)"
+	printf "  %s\e[K\n" "$(_fit_menu_line_with_indent "Up/Down navigate   Space toggle   a all   n none   Enter confirm" "$cols" 2)"
+	printf "  %s\e[K\n\n" "$(_fit_menu_line_with_indent "Page $((page + 1))/$total_pages   Showing $((start + 1))-$((end + 1)) of $count" "$cols" 2)"
 
 	for ((i = start; i <= end; i++)); do
 		key="${COMP_KEYS[$i]}"
 		mark="x"
 		[[ "${COMP_ON[$key]}" -eq 0 ]] && mark=" "
 		note=""
-		[[ "${COMP_DEPS[$i]}" -ne -1 ]] && note="  (requires #$((COMP_DEPS[$i] + 1)))"
+		[[ "${COMP_DEPS[$i]}" -ne -1 ]] && note="  (requires #$((COMP_DEPS[i] + 1)))"
 		prefix=" "
 		[[ $i -eq $cur ]] && prefix=">"
 		row="$(printf "%s %2d. [%s] %s%s" "$prefix" "$((i + 1))" "$mark" "${COMP_LABELS[$i]}" "$note")"
+
 		if [[ $i -eq $cur ]]; then
 			printf "\e[7m%s\e[0m\e[K\n" "$(_fit_menu_line "$row" "$cols")"
 		else
 			printf "%s\e[K\n" "$(_fit_menu_line "$row" "$cols")"
 		fi
-		((shown += 1))
-	done
-
-	while ((shown < visible_count)); do
-		printf "\e[K\n"
-		((shown += 1))
 	done
 
 	if [[ -n "$status" ]]; then
-		printf "\n  \e[33m%s\e[0m\e[K\n" "$(_fit_menu_line "$status" "$cols")"
+		printf "  \e[33m%s\e[0m\e[K\n" "$(_fit_menu_line_with_indent "$status" "$cols" 2)"
 	else
-		printf "\n\e[K\n"
+		printf "\e[K\n"
 	fi
-	printf "  %s\e[K\n" "$(_fit_menu_line "Tip: press Enter to confirm selection" "$cols")"
 
+	local desc_idx
+	for ((desc_idx = 0; desc_idx < _COMP_DESC_LINES; desc_idx++)); do
+		printf "  \e[36m%s\e[0m\e[K\n" \
+			"$(_fit_menu_line_with_indent "$(_component_menu_description_line "$cur" "$desc_idx")" "$cols" 2)"
+	done
 }
 
 component_menu() {
 	local count="${#COMP_KEYS[@]}"
 	local cursor=0
 	local status_msg=""
+	local rows cols page_size menu_lines action page
 
-	_MENU_TOP=0
+	rows="$(_menu_tty_rows)"
+	cols="$(_menu_tty_cols)"
+	page_size="$(_component_menu_page_size "$rows")"
+	page="$(_component_menu_page_for_cursor "$cursor" "$page_size")"
+	menu_lines="$(_component_menu_render_lines "$count" "$page_size" "$page")"
 
 	{
 		tput civis 2>/dev/null || true
-		tput clear 2>/dev/null || printf "\e[2J\e[H"
-		tput cup 0 0 2>/dev/null || printf "\e[1;1H"
-		_draw_component_menu 0 ""
+		_draw_component_menu "$cursor" "$page_size" "" "$cols"
 
 		while true; do
-			local key seq
-			IFS= read -rsn1 key </dev/tty
+			action="$(_read_component_menu_key)"
 
-			case "$key" in
-			$'\e')
-				IFS= read -rsn2 -t 0.1 seq </dev/tty
-				case "$seq" in
-				'[A') [[ $cursor -gt 0 ]] && cursor=$((cursor - 1)) ;;
-				'[B') [[ $cursor -lt $((count - 1)) ]] && cursor=$((cursor + 1)) ;;
-				esac
+			case "$action" in
+			up)
+				[[ $cursor -gt 0 ]] && cursor=$((cursor - 1))
 				status_msg=""
 				;;
-			' ')
+			down)
+				[[ $cursor -lt $((count - 1)) ]] && cursor=$((cursor + 1))
+				status_msg=""
+				;;
+			toggle)
 				toggle_component "$cursor"
 				status_msg="$TOGGLE_MSG"
 				;;
-			'')
+			confirm)
 				break
 				;;
-			a | A)
+			all)
 				for k in "${COMP_KEYS[@]}"; do COMP_ON["$k"]=1; done
 				status_msg="All components enabled"
 				;;
-			n | N)
+			none)
 				for k in "${COMP_KEYS[@]}"; do COMP_ON["$k"]=0; done
 				status_msg="All components disabled"
 				;;
-			*)
+			ignore)
 				continue
 				;;
 			esac
 
-			tput cup 0 0 2>/dev/null || printf "\e[1;1H"
-			tput ed 2>/dev/null || printf "\e[J"
-			_draw_component_menu "$cursor" "$status_msg"
+			printf "\e[%dA" "$menu_lines"
+			_draw_component_menu "$cursor" "$page_size" "$status_msg" "$cols"
+			page="$(_component_menu_page_for_cursor "$cursor" "$page_size")"
+			menu_lines="$(_component_menu_render_lines "$count" "$page_size" "$page")"
 		done
-
 		tput cnorm 2>/dev/null || true
 	} >/dev/tty
 }
@@ -557,13 +689,14 @@ show_plan() {
 
 confirm_loop() {
 	local need_git_prompt=true
+	local answer=""
 	while true; do
 		if is_on git_identity && [[ "$need_git_prompt" == "true" ]]; then
 			prompt_git_identity
 			need_git_prompt=false
 		fi
 		show_plan
-		read -rp "  [c]onfirm  [e]dit  [q]uit: " answer </dev/tty
+		read_tty_line answer "  [c]onfirm  [e]dit  [q]uit: "
 		case "$answer" in
 		c | C) return 0 ;;
 		e | E)
@@ -583,6 +716,24 @@ confirm_loop() {
 # Installer functions
 # ============================================================
 
+_run_quiet_command() {
+	local label="$1"
+	shift
+
+	local tmp
+	tmp="$(mktemp)"
+
+	if "$@" >"$tmp" 2>&1; then
+		rm -f "$tmp"
+		return 0
+	fi
+
+	echo "  Error during ${label}:" >&2
+	cat "$tmp" >&2
+	rm -f "$tmp"
+	return 1
+}
+
 apt_install_packages() {
 	local pkgs
 	mapfile -t pkgs < <(read_packages_by_tags "$@")
@@ -591,7 +742,7 @@ apt_install_packages() {
 		return 0
 	fi
 	echo "Installing packages ($*)..."
-	sudo apt-get install -y "${pkgs[@]}" || true
+	_run_quiet_command "apt packages ($*)" sudo apt-get -qq -o Dpkg::Use-Pty=0 install -y "${pkgs[@]}" || true
 }
 
 install_lazygit_from_github() {
@@ -678,8 +829,16 @@ install_node_via_nvm() {
 		echo "Installing nvm (Node Version Manager)..."
 		local wsl_clean_path
 		wsl_clean_path="$(echo "$PATH" | tr ':' '\n' | grep -v '^/mnt/' | tr '\n' ':' | sed 's/:$//')"
-		curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh |
-			PROFILE=/dev/null PATH="$wsl_clean_path" bash
+		local nvm_tmp
+		nvm_tmp="$(mktemp)"
+		if ! { curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh |
+			PROFILE=/dev/null PATH="$wsl_clean_path" bash; } >"$nvm_tmp" 2>&1; then
+			echo "  Error during nvm install:" >&2
+			cat "$nvm_tmp" >&2
+			rm -f "$nvm_tmp"
+			return 1
+		fi
+		rm -f "$nvm_tmp"
 	fi
 
 	export NVM_DIR
@@ -687,8 +846,8 @@ install_node_via_nvm() {
 	[[ -s "$NVM_DIR/nvm.sh" ]] && . "$NVM_DIR/nvm.sh"
 
 	echo "Installing Node.js ${NVM_MIN_NODE} via nvm..."
-	nvm install "$NVM_MIN_NODE"
-	nvm alias default "$NVM_MIN_NODE"
+	_run_quiet_command "Node.js install" nvm install "$NVM_MIN_NODE"
+	_run_quiet_command "Node.js default alias" nvm alias default "$NVM_MIN_NODE"
 	echo "  ✓ Node.js $(node --version) installed via nvm"
 }
 
@@ -784,8 +943,8 @@ install_go_via_asdf() {
 	fi
 
 	echo "Installing Go latest via asdf..."
-	asdf install golang latest
-	asdf set -u golang latest
+	_run_quiet_command "Go install" asdf install golang latest
+	_run_quiet_command "Go version selection" asdf set -u golang latest
 	echo "  ✓ Go installed and set for user via asdf"
 }
 
@@ -803,7 +962,7 @@ install_docker() {
 		echo "  Docker already installed ($(docker --version 2>/dev/null || echo 'unknown')). Skipping."
 	else
 		echo "Installing Docker Engine from official repo..."
-		sudo apt-get install -y ca-certificates curl
+		sudo apt-get -o Dpkg::Use-Pty=0 install -y ca-certificates curl
 		sudo install -m 0755 -d /etc/apt/keyrings
 		sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
 		sudo chmod a+r /etc/apt/keyrings/docker.asc
@@ -820,7 +979,7 @@ Signed-By: /etc/apt/keyrings/docker.asc
 DOCKEREOF
 
 		sudo apt-get update -qq
-		sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+		sudo apt-get -o Dpkg::Use-Pty=0 install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 		echo "  ✓ Docker Engine installed"
 	fi
 
@@ -961,7 +1120,15 @@ install_cursor_cli() {
 		return 0
 	fi
 	echo "Installing Cursor CLI..."
-	curl -fsSL https://cursor.com/install | bash
+	local cursor_tmp
+	cursor_tmp="$(mktemp)"
+	if ! { curl -fsSL https://cursor.com/install | bash; } >"$cursor_tmp" 2>&1; then
+		echo "  Error during Cursor CLI install:" >&2
+		cat "$cursor_tmp" >&2
+		rm -f "$cursor_tmp"
+		return 1
+	fi
+	rm -f "$cursor_tmp"
 	echo "  ✓ Cursor CLI installed"
 }
 
@@ -985,7 +1152,15 @@ install_claude_cli() {
 		return 0
 	fi
 	echo "Installing Claude CLI..."
-	curl -fsSL https://claude.ai/install.sh | bash
+	local claude_tmp
+	claude_tmp="$(mktemp)"
+	if ! { curl -fsSL https://claude.ai/install.sh | bash; } >"$claude_tmp" 2>&1; then
+		echo "  Error during Claude CLI install:" >&2
+		cat "$claude_tmp" >&2
+		rm -f "$claude_tmp"
+		return 1
+	fi
+	rm -f "$claude_tmp"
 	echo "  ✓ Claude CLI installed"
 }
 
@@ -995,7 +1170,15 @@ install_copilot_cli() {
 		return 0
 	fi
 	echo "Installing Copilot CLI..."
-	curl -fsSL https://gh.io/copilot-install | bash
+	local copilot_tmp
+	copilot_tmp="$(mktemp)"
+	if ! { curl -fsSL https://gh.io/copilot-install | bash; } >"$copilot_tmp" 2>&1; then
+		echo "  Error during Copilot CLI install:" >&2
+		cat "$copilot_tmp" >&2
+		rm -f "$copilot_tmp"
+		return 1
+	fi
+	rm -f "$copilot_tmp"
 	echo "  ✓ Copilot CLI installed"
 }
 
@@ -1029,7 +1212,7 @@ install_powershell() {
 
 	echo "Installing PowerShell from Microsoft packages repo..."
 	sudo apt-get update -qq
-	sudo apt-get install -y wget apt-transport-https software-properties-common
+	sudo apt-get -o Dpkg::Use-Pty=0 install -y wget apt-transport-https software-properties-common
 
 	if [[ ! -f /etc/apt/sources.list.d/microsoft-prod.list && ! -f /etc/apt/sources.list.d/microsoft-prod.sources ]]; then
 		local deb_file
@@ -1043,7 +1226,7 @@ install_powershell() {
 	fi
 
 	sudo apt-get update -qq
-	sudo apt-get install -y powershell
+	sudo apt-get -o Dpkg::Use-Pty=0 install -y powershell
 
 	if command -v pwsh >/dev/null 2>&1; then
 		echo "  ✓ PowerShell installed ($(pwsh --version 2>/dev/null || echo 'unknown'))"
@@ -1061,7 +1244,15 @@ install_direnv() {
 
 	echo "Installing/updating direnv..."
 	mkdir -p "$HOME/.local/bin"
-	bin_path="$HOME/.local/bin" curl -sfL https://direnv.net/install.sh | bash
+	local direnv_tmp
+	direnv_tmp="$(mktemp)"
+	if ! { bin_path="$HOME/.local/bin" curl -sfL https://direnv.net/install.sh | bash; } >"$direnv_tmp" 2>&1; then
+		echo "  Error during direnv install:" >&2
+		cat "$direnv_tmp" >&2
+		rm -f "$direnv_tmp"
+		return 1
+	fi
+	rm -f "$direnv_tmp"
 
 	# Keep direnv reachable even in shells where ~/.local/bin is not on PATH.
 	if [[ -x "$HOME/.local/bin/direnv" ]]; then
@@ -1133,7 +1324,7 @@ install_monaspace_fonts() {
 		echo "  curl required for Monaspace install." >&2
 		return 1
 	}
-	command -v unzip >/dev/null 2>&1 || sudo apt-get install -y unzip
+	command -v unzip >/dev/null 2>&1 || sudo apt-get -o Dpkg::Use-Pty=0 install -y unzip
 
 	echo "Installing Monaspace Nerd Fonts from GitHub..."
 	local ver tmp
