@@ -2,10 +2,17 @@
     "$help": "https://aka.ms/terminal-documentation",
     "$schema": "https://aka.ms/terminal-profiles-schema",
     "actions": [],
+    "compatibility.enableUnfocusedAcrylic": false,
     "copyFormatting": "none",
     "copyOnSelect": true,
     "defaultProfile": "{07cd9293-53d0-54cd-9dc2-af3c0c6ae363}",
-    "disabledProfileSources": [],
+    "disableAnimations": true,
+    "disabledProfileSources": 
+    [
+        "Windows.Terminal.VisualStudio",
+        "Windows.Terminal.Azure"
+    ],
+    "experimental.scrollToChangeOpacity": false,
     "keybindings": 
     [
         {
@@ -21,6 +28,8 @@
             "keys": "alt+shift+d"
         }
     ],
+    "language": "en-US",
+    "launchMode": "default",
     "newTabMenu": 
     [
         {
@@ -31,21 +40,31 @@
     {
         "defaults": 
         {
+            "bellStyle": "audible",
+            "colorScheme": "One Half Dark",
             "cursorShape": "bar",
             "font": 
             {
+                "cellHeight": "1.3",
                 "face": "Monaspace Argon",
                 "features": 
                 {
                     "calt": 1,
-                    "liga": 1,
+                    "liga": 0,
                     "ss01": 1,
                     "ss02": 1,
-                    "ss03": 1,
-                    "ss04": 1
+                    "ss03": 0,
+                    "ss04": 0
                 },
-                "weight": "medium"
-            }
+                "size": 13,
+                "weight": "normal"
+            },
+            "historySize": 30000,
+            "intenseTextStyle": "bold",
+            "padding": "4",
+            "pathTranslationStyle": "wsl",
+            "scrollbarState": "hidden",
+            "suppressApplicationTitle": true
         },
         "list": 
         [
@@ -74,19 +93,26 @@
                 "source": "Windows.Terminal.Azure"
             },
             {
-                "colorScheme": "Tango Dark",
+                "colorScheme": 
+                {
+                    "light": "One Half Dark"
+                },
                 "guid": "{07cd9293-53d0-54cd-9dc2-af3c0c6ae363}",
                 "hidden": false,
                 "icon": "ms-appx:///ProfileIcons/{9acb9455-ca41-5af7-950f-6bca1bc9722f}.png",
-                "name": "WLS",
-                "source": "Microsoft.WSL"
+                "name": "WSL (Ubuntu)",
+                "source": "Microsoft.WSL",
+                "startingDirectory": "\\\\wsl.localhost\\Ubuntu\\home\\pamudu\\Dev"
             }
         ]
     },
     "rendering.graphicsAPI": "direct3d11",
     "schemes": [],
+    "searchWebDefaultQueryUrl": "https://www.google.com/search?q=%22%s%22",
     "showTabsFullscreen": false,
     "tabSwitcherMode": "inOrder",
+    "tabWidthMode": "equal",
     "themes": [],
+    "warning.multiLinePaste": "always",
     "windowingBehavior": "useExisting"
 }
