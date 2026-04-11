@@ -56,6 +56,7 @@ alias gitlog='git log --oneline --graph --decorate --all' # short visual log
 # ------------------------------------
 alias dpot="docker start portainer && echo 'Portainer started at https://localhost:9443'" # start portainer
 alias dpotstop="docker stop portainer && echo 'Portainer stopped'"                        # stop portainer
+alias dclean='docker system prune -a --volumes -f'                                        # remove unused docker data
 
 # ------------------------------------
 # Shell productivity

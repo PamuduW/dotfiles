@@ -1021,9 +1021,10 @@ install_portainer() {
 		-p 8000:8000 \
 		-p 9443:9443 \
 		--name portainer \
+		--restart unless-stopped \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v portainer_data:/data \
-		portainer/portainer-ce:sts
+		portainer/portainer-ce:latest
 	run_docker stop portainer
 	log_ok "Portainer installed (stopped — use 'dpot' to start, 'dpotstop' to stop)"
 }
