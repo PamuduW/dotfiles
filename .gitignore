@@ -55,3 +55,7 @@ log/
 CLAUDE.md
 AGENTS.md
 .codex
+
+.github/copilot-instructions.md
+.cursor/rules/bootstrap-skills.mdc
+.cursor/mcp.json
