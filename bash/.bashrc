@@ -90,6 +90,14 @@ __dotfiles_prompt_command() {
 	history -n
 }
 
+codex-safe() {
+	codex -C "$PWD" -s workspace-write -a on-request "$@"
+}
+
+codex-host() {
+	codex -C "$PWD" -s danger-full-access -a on-request "$@"
+}
+
 # Preserve any existing PROMPT_COMMAND; keep ours first so $? is correct.
 if declare -p PROMPT_COMMAND 2>/dev/null | grep -q 'declare \-a'; then
 	PROMPT_COMMAND=(__dotfiles_prompt_command "${PROMPT_COMMAND[@]}")
@@ -110,7 +118,5 @@ export PATH="$HOME/.asdf/bin:$HOME/.asdf/shims:$PATH"
 if [ -f ~/.bash_aliases ]; then
 	. ~/.bash_aliases
 fi
-# direnv
-eval "$(direnv hook bash)"
 
 export AGENT_BOOTSTRAP_HOME="/home/pamudu/Dev/agent_bootstrap" # agent_bootstrap
