@@ -35,6 +35,7 @@ lsof
 wslu
 rsync
 unp
+poppler-utils
 magic-wormhole
 
 # @go
