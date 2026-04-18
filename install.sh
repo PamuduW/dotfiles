@@ -1414,6 +1414,30 @@ ensure_wslview_browser_in_bashrc() {
 	log_ok "Added BROWSER=wslview to ~/.bashrc"
 }
 
+ensure_bash_profile_sources_bashrc() {
+	local bash_profile="$HOME/.bash_profile"
+
+	touch "$bash_profile"
+
+	if grep -Fq '. "$HOME/.bashrc"' "$bash_profile" ||
+		grep -Fq '. ~/.bashrc' "$bash_profile" ||
+		grep -Fq 'source "$HOME/.bashrc"' "$bash_profile" ||
+		grep -Fq 'source ~/.bashrc' "$bash_profile"; then
+		log_skip "~/.bash_profile already sources ~/.bashrc"
+		return 0
+	fi
+
+	{
+		echo ""
+		echo "# Load interactive bash settings for login shells"
+		echo 'if [ -f "$HOME/.bashrc" ]; then'
+		echo '	. "$HOME/.bashrc"'
+		echo 'fi'
+	} >>"$bash_profile"
+
+	log_ok "Updated ~/.bash_profile to source ~/.bashrc"
+}
+
 install_monaspace_fonts() {
 	local font_dir="$HOME/.local/share/fonts/monaspace"
 
@@ -1655,6 +1679,7 @@ main() {
 	if is_on dotfiles; then
 		backup_existing_dotfiles
 		stow_dotfiles
+		ensure_bash_profile_sources_bashrc
 	fi
 
 	echo ""
