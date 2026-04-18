@@ -1268,6 +1268,7 @@ install_claude_cli() {
 
 install_copilot_cli() {
 	if command -v copilot >/dev/null 2>&1 ||
+		[[ -x "$HOME/.local/bin/copilot" ]] ||
 		(command -v gh >/dev/null 2>&1 && gh copilot --help >/dev/null 2>&1); then
 		log_skip "Copilot CLI already installed"
 		return 0
@@ -1276,7 +1277,7 @@ install_copilot_cli() {
 	local copilot_tmp
 	copilot_tmp="$(mktemp)"
 	# Force install location and PATH so upstream installer does not prompt on /dev/tty.
-	if ! { PREFIX="$HOME/.local" PATH="$HOME/.local/bin:$PATH" curl -fsSL https://gh.io/copilot-install | bash; } >"$copilot_tmp" 2>&1; then
+	if ! { curl -fsSL https://gh.io/copilot-install | PREFIX="$HOME/.local" PATH="$HOME/.local/bin:$PATH" bash; } >"$copilot_tmp" 2>&1; then
 		echo "  Error during Copilot CLI install:" >&2
 		cat "$copilot_tmp" >&2
 		rm -f "$copilot_tmp"
