@@ -69,7 +69,7 @@ The installer will:
 | Python          | python3, pip, venv                                                            |
 | PowerShell      | Microsoft PowerShell from official Microsoft apt repository                   |
 | Go              | golang-go                                                                     |
-| Node.js         | v22 via nvm                                                                   |
+| Node.js         | v24 LTS via nvm                                                               |
 | Docker Engine   | Docker CE from official repo + docker group                                   |
 | Portainer CE    | Docker management UI (requires Docker)                                        |
 | lazygit         | Git TUI from GitHub releases                                                  |

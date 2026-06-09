@@ -68,7 +68,7 @@ COMP_LABELS=(
 	"Python (python3, pip, venv)"
 	"PowerShell (pwsh)"
 	"Go (asdf)"
-	"Node.js 22 (nvm)"
+	"Node.js 24 LTS (nvm)"
 	"direnv (env loader + shell hook)"
 	"Docker Engine"
 	"Portainer CE"
@@ -218,7 +218,7 @@ _comp_description() {
 		echo "Installs latest Go via asdf and sets it global."
 		;;
 	nodejs)
-		echo "Installs Node.js v22 via nvm (Node Version Manager)."
+		echo "Installs Node.js v24 via nvm (Node Version Manager)."
 		echo "Also provides npm for global packages like Codex CLI."
 		;;
 	direnv)
@@ -591,7 +591,7 @@ show_plan() {
 	fi
 
 	if is_on nodejs; then
-		printf "  %-18s: v22 via nvm\n" "Node.js"
+		printf "  %-18s: v24 via nvm\n" "Node.js"
 	else
 		printf "  %-18s: skip\n" "Node.js"
 	fi
@@ -833,7 +833,7 @@ install_lazydocker_from_github() {
 
 install_node_via_nvm() {
 	local NVM_DIR="${HOME}/.nvm"
-	local NVM_MIN_NODE="22"
+	local NVM_MIN_NODE="24"
 
 	if command -v node >/dev/null 2>&1; then
 		local current_major
