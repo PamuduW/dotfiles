@@ -10,6 +10,9 @@ esac
 # Ensure ~/bin is on PATH (for stowed commands like ~/bin/ex)
 [ -d "$HOME/bin" ] && export PATH="$HOME/bin:$PATH"
 
+# Ensure ~/.local/bin is on PATH (for Cursor Agent and other user installs)
+[ -d "$HOME/.local/bin" ] && export PATH="$HOME/.local/bin:$PATH"
+
 # Use Windows browser opener from WSL-aware tools when available
 if command -v wslview >/dev/null 2>&1; then
 	export BROWSER=wslview
