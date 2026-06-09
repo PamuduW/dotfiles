@@ -912,8 +912,11 @@ ensure_asdf_installed() {
 
 		tarball_url="https://github.com/asdf-vm/asdf/releases/download/${tag}/asdf-${tag}-linux-${arch}.tar.gz"
 		tmp="$(mktemp -d)"
-		trap 'rm -rf "$tmp"' RETURN
-		curl -fsSL -o "$tmp/asdf.tar.gz" "$tarball_url"
+		trap '[[ -n "${tmp:-}" ]] && rm -rf -- "$tmp"' RETURN
+		if ! curl -fsSL -o "$tmp/asdf.tar.gz" "$tarball_url"; then
+			echo "  Failed to download asdf. Check TLS trust in WSL or retry after fixing CA certificates." >&2
+			return 1
+		fi
 
 		mkdir -p "$asdf_dir/bin"
 		rm -f "$asdf_bin"
