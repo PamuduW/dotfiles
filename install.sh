@@ -157,6 +157,12 @@ read_tty_line() {
 	printf -v "$__var_name" '%s' "$value"
 }
 
+_menu_clear_screen() {
+	if [[ -t 0 ]]; then
+		tput clear 2>/dev/null || printf '\033[2J\033[H' >/dev/tty
+	fi
+}
+
 prompt_git_identity() {
 	local current_name current_email
 	current_name="$(git config --global user.name 2>/dev/null || true)"
@@ -514,6 +520,7 @@ component_menu() {
 
 	{
 		tput civis 2>/dev/null || true
+		_menu_clear_screen
 		_draw_component_menu "$cursor" "$page_size" "" "$cols"
 
 		while true; do
@@ -1668,6 +1675,7 @@ _draw_boot_menu() {
 			printf "%s\e[K\n" "$(_fit_menu_line "$row" "$cols")"
 		fi
 	done
+	printf '\n'
 }
 
 boot_menu() {
@@ -1676,10 +1684,11 @@ boot_menu() {
 	local cols menu_lines action
 
 	cols="$(_menu_tty_cols)"
-	menu_lines=$((count + 3))
+	menu_lines=$((count + 4))
 
 	{
 		tput civis 2>/dev/null || true
+		_menu_clear_screen
 		_draw_boot_menu "$cursor" "$cols"
 
 		while true; do
@@ -1729,6 +1738,7 @@ _draw_extensions_menu() {
 			printf "%s\e[K\n" "$(_fit_menu_line "$row" "$cols")"
 		fi
 	done
+	printf '\n'
 }
 
 _run_extensions_action() {
@@ -1827,10 +1837,11 @@ extensions_menu() {
 
 	while true; do
 		cols="$(_menu_tty_cols)"
-		menu_lines=$((count + 3))
+		menu_lines=$((count + 4))
 
 		{
 			tput civis 2>/dev/null || true
+			_menu_clear_screen
 			_draw_extensions_menu "$cursor" "$cols"
 
 			while true; do
@@ -2022,6 +2033,7 @@ _draw_agents_menu() {
 			printf "%s\e[K\n" "$(_fit_menu_line "$row" "$cols")"
 		fi
 	done
+	printf '\n'
 }
 
 agents_menu() {
@@ -2032,10 +2044,11 @@ agents_menu() {
 
 	while true; do
 		cols="$(_menu_tty_cols)"
-		menu_lines=$((count + 4))
+		menu_lines=$((count + 5))
 
 		{
 			tput civis 2>/dev/null || true
+			_menu_clear_screen
 			_draw_agents_menu "$cursor" "$cols"
 
 			while true; do

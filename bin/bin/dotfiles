@@ -1137,6 +1137,27 @@ _ext_format_delta() {
 	fi
 }
 
+_ext_extra_samples() {
+	local -n _items=$1
+	local limit="${2:-3}"
+	local n="${#_items[@]}"
+	local samples="" i id
+	if [[ "$n" -eq 0 ]]; then
+		return
+	fi
+	for ((i = 0; i < limit && i < n; i++)); do
+		id="${_items[$i]%%@*}"
+		if [[ -n "$samples" ]]; then
+			samples+=", "
+		fi
+		samples+="$id"
+	done
+	if [[ "$n" -gt "$limit" ]]; then
+		samples+=" (+$((n - limit)) more)"
+	fi
+	printf '%s' "$samples"
+}
+
 _ext_backup_file() {
 	printf '%s/extensions/%s.txt\n' "$DOTFILES_DIR" "$1"
 }
@@ -1352,13 +1373,15 @@ _ext_cmd_restore() {
 }
 
 _ext_cmd_compare() {
-	local target backup_file line key id ver
+	local verbose="${1:-false}"
+	shift
+	local target backup_file line key
 	declare -A backup_ver installed_ver
 	local -a only_backup=() only_installed=() drift=()
 	local -a summary_targets=() summary_manifest=() summary_installed=()
 	local -a summary_missing=() summary_extra=() summary_drift=()
-	local -a diff_rows=()
-	local backup_n installed_n has_diff=false
+	local -a missing_rows=() drift_rows=() extra_rows=()
+	local backup_n installed_n has_diff=false samples
 
 	for target in "$@"; do
 		backup_file="$(_ext_backup_file "$target")"
@@ -1386,16 +1409,15 @@ _ext_cmd_compare() {
 		for key in "${!backup_ver[@]}"; do
 			if [[ -z "${installed_ver[$key]:-}" ]]; then
 				only_backup+=("${key}@${backup_ver[$key]}")
-				diff_rows+=("${target}|missing|${key}|${backup_ver[$key]}|—")
+				missing_rows+=("${target}|${key}|${backup_ver[$key]}")
 			elif [[ "$(_ext_norm_ver "${backup_ver[$key]}")" != "$(_ext_norm_ver "${installed_ver[$key]}")" ]]; then
 				drift+=("${key}")
-				diff_rows+=("${target}|drift|${key}|${backup_ver[$key]}|${installed_ver[$key]}")
+				drift_rows+=("${target}|${key}|${backup_ver[$key]}|${installed_ver[$key]}")
 			fi
 		done
 		for key in "${!installed_ver[@]}"; do
 			if [[ -z "${backup_ver[$key]:-}" ]]; then
 				only_installed+=("${key}@${installed_ver[$key]}")
-				diff_rows+=("${target}|extra|${key}|—|${installed_ver[$key]}")
 			fi
 		done
 
@@ -1420,6 +1442,10 @@ _ext_cmd_compare() {
 		if [[ ${#only_backup[@]} -gt 0 || ${#only_installed[@]} -gt 0 || ${#drift[@]} -gt 0 ]]; then
 			has_diff=true
 		fi
+		if [[ ${#only_installed[@]} -gt 0 ]]; then
+			samples="$(_ext_extra_samples only_installed)"
+			extra_rows+=("${target}|${#only_installed[@]}|${samples}")
+		fi
 	done
 
 	if [[ ${#summary_targets[@]} -eq 0 ]]; then
@@ -1441,19 +1467,71 @@ _ext_cmd_compare() {
 			"${summary_drift[$i]}"
 	done
 
-	if [[ "$has_diff" == true ]]; then
-		mapfile -t diff_rows < <(printf '%s\n' "${diff_rows[@]}" | sort)
-		printf '\n%sDifferences%s\n' "$C_BOLD" "$C_RESET"
-		printf '%-18s | %-8s | %-40s | %-20s | %s\n' "target" "category" "extension" "manifest" "installed"
-		printf '%s\n' "-------------------+----------+------------------------------------------+----------------------+----------------------"
-		local row category ext_id manifest_ver installed_ver_col
-		for row in "${diff_rows[@]}"; do
-			IFS='|' read -r target category ext_id manifest_ver installed_ver_col <<<"$row"
-			printf '%-18s | %-8s | %-40s | %-20s | %s\n' \
-				"$target" "$category" "$ext_id" "$manifest_ver" "$installed_ver_col"
+	if [[ "$has_diff" != true ]]; then
+		printf '\nAll targets match their manifests.\n\n'
+		return
+	fi
+
+	if [[ ${#missing_rows[@]} -gt 0 ]]; then
+		mapfile -t missing_rows < <(printf '%s\n' "${missing_rows[@]}" | sort)
+		printf '\n%sMissing (in manifest, not installed)%s\n' "$C_BOLD" "$C_RESET"
+		printf '%-18s | %-40s | %s\n' "target" "extension" "manifest"
+		printf '%s\n' "-------------------+------------------------------------------+----------------------"
+		local row ext_id manifest_ver
+		for row in "${missing_rows[@]}"; do
+			IFS='|' read -r target ext_id manifest_ver <<<"$row"
+			printf '%-18s | %-40s | %s\n' "$target" "$ext_id" "${manifest_ver:-—}"
 		done
-	else
-		printf '\nAll targets match their manifests.\n'
+	fi
+
+	if [[ ${#drift_rows[@]} -gt 0 ]]; then
+		mapfile -t drift_rows < <(printf '%s\n' "${drift_rows[@]}" | sort)
+		printf '\n%sVersion drift%s\n' "$C_BOLD" "$C_RESET"
+		printf '%-18s | %-40s | %-20s | %s\n' "target" "extension" "manifest" "installed"
+		printf '%s\n' "-------------------+------------------------------------------+----------------------+----------------------"
+		local row ext_id manifest_ver installed_ver_col
+		for row in "${drift_rows[@]}"; do
+			IFS='|' read -r target ext_id manifest_ver installed_ver_col <<<"$row"
+			printf '%-18s | %-40s | %-20s | %s\n' \
+				"$target" "$ext_id" "$manifest_ver" "$installed_ver_col"
+		done
+	fi
+
+	if [[ ${#extra_rows[@]} -gt 0 ]]; then
+		printf '\n%sExtra installed (not in manifest)%s\n' "$C_BOLD" "$C_RESET"
+		printf '%-18s | %5s | %s\n' "target" "count" "examples"
+		printf '%s\n' "-------------------+-------+--------------------------------------------------"
+		local count examples
+		for row in "${extra_rows[@]}"; do
+			IFS='|' read -r target count examples <<<"$row"
+			printf '%-18s | %5s | %s\n' "$target" "$count" "$examples"
+		done
+		printf '\n  prune extras: dotfiles ext restore <target> --prune\n'
+	fi
+
+	if [[ "$verbose" == true && ${#extra_rows[@]} -gt 0 ]]; then
+		printf '\n%sExtra installed (full list)%s\n' "$C_BOLD" "$C_RESET"
+		printf '%-18s | %-40s | %s\n' "target" "extension" "installed"
+		printf '%s\n' "-------------------+------------------------------------------+----------------------"
+		for target in "$@"; do
+			backup_file="$(_ext_backup_file "$target")"
+			[[ -f "$backup_file" ]] || continue
+			backup_ver=()
+			installed_ver=()
+			while IFS= read -r line; do
+				_ext_parse_ext_line "$line"
+				[[ -n "$_EXT_PARSE_ID" ]] && backup_ver["$_EXT_PARSE_ID"]="$_EXT_PARSE_VER"
+			done < <(_ext_read_backup_lines "$backup_file")
+			while IFS= read -r line; do
+				_ext_parse_ext_line "$line"
+				[[ -n "$_EXT_PARSE_ID" ]] && installed_ver["$_EXT_PARSE_ID"]="$_EXT_PARSE_VER"
+			done < <(_ext_list_extensions "$target" | sed '/^[[:space:]]*$/d')
+			for key in "${!installed_ver[@]}"; do
+				if [[ -z "${backup_ver[$key]:-}" ]]; then
+					printf '%-18s | %-40s | %s\n' "$target" "$key" "${installed_ver[$key]}"
+				fi
+			done
+		done
 	fi
 	printf '\n'
 }
@@ -1467,6 +1545,7 @@ Subcommands:
   backup [target]    Write manifests to extensions/<target>.txt + manifest.json
   restore [target]   Install extensions from backup (--prune to uninstall extras)
   compare [target]   Table diff: manifest vs installed (missing, extra, drift)
+                     Use --verbose to list every extra extension
 
 Targets: vscode-wsl, cursor-wsl, vscode-win, cursor-win, all (default: all)
 
@@ -1489,13 +1568,40 @@ cmd_ext() {
 
 	local target="all"
 	local prune=false
+	local compare_verbose=false
 
 	case "$subcmd" in
-	check | backup | compare)
+	check | backup)
 		if [[ $# -gt 0 && "$1" != -* ]]; then
 			target="$1"
 			shift
 		fi
+		;;
+	compare)
+		if [[ $# -gt 0 && "$1" != -* ]]; then
+			target="$1"
+			shift
+		fi
+		while [[ $# -gt 0 ]]; do
+			case "$1" in
+			--verbose) compare_verbose=true ;;
+			-h | --help)
+				cmd_ext_help
+				return 0
+				;;
+			-*)
+				_err "Unknown option: $1"
+				cmd_ext_help
+				return 1
+				;;
+			*)
+				_err "Unexpected argument: $1"
+				cmd_ext_help
+				return 1
+				;;
+			esac
+			shift
+		done
 		;;
 	restore)
 		while [[ $# -gt 0 ]]; do
@@ -1550,7 +1656,7 @@ cmd_ext() {
 	check) _ext_cmd_check "${targets[@]}" ;;
 	backup) _ext_cmd_backup "${targets[@]}" ;;
 	restore) _ext_cmd_restore "$prune" "${targets[@]}" ;;
-	compare) _ext_cmd_compare "${targets[@]}" ;;
+	compare) _ext_cmd_compare "$compare_verbose" "${targets[@]}" ;;
 	esac
 }
 
