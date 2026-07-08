@@ -1784,7 +1784,15 @@ run_update_flow() {
 	read_tty_line answer "Proceed with upgrades? [y/N]: "
 	case "$answer" in
 	y | Y | yes | YES)
-		"$dotfiles_cmd" upgrade
+		read_tty_line answer "Include Node.js, Go, and Monaspace fonts (--all)? [y/N]: "
+		case "$answer" in
+		y | Y | yes | YES)
+			"$dotfiles_cmd" upgrade --all
+			;;
+		*)
+			"$dotfiles_cmd" upgrade
+			;;
+		esac
 		;;
 	*)
 		echo "Skipped upgrades."
