@@ -67,7 +67,9 @@ apt_upgradable_count() {
 		echo 0
 		return
 	fi
-	apt-get -s upgrade 2>/dev/null | grep -c '^Inst' || echo 0
+	local count
+	count="$(apt-get -s upgrade 2>/dev/null | grep -c '^Inst' || true)"
+	echo "${count:-0}"
 }
 
 check_apt() {

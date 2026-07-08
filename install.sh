@@ -1625,7 +1625,7 @@ _agents_menu_labels=(
 	"Run bootstrap (./install.sh)"
 	"Update skills (./install.sh skills update)"
 	"Run doctor (./install.sh doctor)"
-	"agentboot (Stage 6 — not yet available)"
+	"Run agentboot in a repo (scaffold AGENTS.md)"
 	"Back"
 )
 
@@ -1945,9 +1945,30 @@ _run_agents_action() {
 		( cd "$ab_home" && ./install.sh doctor )
 		;;
 	agentboot)
+		_require_agent_bootstrap_installer "$ab_home" || return 1
+		if [[ ! -x "$ab_home/bin/agentboot" ]]; then
+			echo "Error: ${ab_home}/bin/agentboot not found." >&2
+			echo "Run bootstrap first or ensure Stage 6 agentboot is installed." >&2
+			return 1
+		fi
 		echo ""
-		echo "agentboot is planned for Stage 6."
-		echo "See docs/plan/plan6-agentboot-and-templates.md."
+		echo "Scaffolds base AGENTS.md + CLAUDE.md in a target repo."
+		read_tty_line answer "Target directory [$(pwd)]: "
+		local target_dir="${answer:-$(pwd)}"
+		target_dir="$(cd "$target_dir" 2>/dev/null && pwd)" || {
+			echo "Error: not a directory: ${answer:-$(pwd)}" >&2
+			return 1
+		}
+		read_tty_line answer "Also add Copilot/Cursor pointers (--full)? [y/N]: "
+		local agentboot_args=()
+		case "$answer" in
+		y | Y | yes | YES)
+			agentboot_args+=(--full)
+			;;
+		esac
+		echo ""
+		echo "Running agentboot in ${target_dir}..."
+		( cd "$target_dir" && "$ab_home/bin/agentboot" "${agentboot_args[@]}" )
 		;;
 	esac
 }
