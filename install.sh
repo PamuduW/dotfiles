@@ -1597,22 +1597,156 @@ stow_dotfiles() {
 # Main
 # ============================================================
 
-main() {
-	if ! command -v apt-get >/dev/null 2>&1; then
-		echo "Error: apt-get not found. This installer targets Debian/Ubuntu." >&2
-		exit 1
+BOOT_CHOICE=""
+
+_boot_menu_choices=(initial update extensions agents quit)
+_boot_menu_labels=(
+	"Initial setup"
+	"Update"
+	"Extensions"
+	"Agents"
+	"Quit"
+)
+
+_draw_boot_menu() {
+	local cur=$1
+	local cols=$2
+	local count="${#_boot_menu_labels[@]}"
+	local i prefix row
+
+	printf "  \e[1m%s\e[0m\e[K\n" "$(_fit_menu_line_with_indent "=== Dotfiles ===" "$cols" 2)"
+	printf "  %s\e[K\n\n" "$(_fit_menu_line_with_indent "Up/Down navigate   Enter confirm" "$cols" 2)"
+
+	for ((i = 0; i < count; i++)); do
+		prefix=" "
+		[[ $i -eq $cur ]] && prefix=">"
+		row="$(printf "%s %d. %s" "$prefix" "$((i + 1))" "${_boot_menu_labels[$i]}")"
+		if [[ $i -eq $cur ]]; then
+			printf "\e[7m%s\e[0m\e[K\n" "$(_fit_menu_line "$row" "$cols")"
+		else
+			printf "%s\e[K\n" "$(_fit_menu_line "$row" "$cols")"
+		fi
+	done
+}
+
+boot_menu() {
+	local count="${#_boot_menu_labels[@]}"
+	local cursor=0
+	local cols menu_lines action
+
+	cols="$(_menu_tty_cols)"
+	menu_lines=$((count + 3))
+
+	{
+		tput civis 2>/dev/null || true
+		_draw_boot_menu "$cursor" "$cols"
+
+		while true; do
+			action="$(_read_component_menu_key)"
+
+			case "$action" in
+			up)
+				[[ $cursor -gt 0 ]] && cursor=$((cursor - 1))
+				;;
+			down)
+				[[ $cursor -lt $((count - 1)) ]] && cursor=$((cursor + 1))
+				;;
+			confirm)
+				break
+				;;
+			toggle | all | none | ignore)
+				continue
+				;;
+			esac
+
+			printf "\e[%dA" "$menu_lines"
+			_draw_boot_menu "$cursor" "$cols"
+		done
+
+		tput cnorm 2>/dev/null || true
+	} >/dev/tty
+
+	BOOT_CHOICE="${_boot_menu_choices[$cursor]}"
+}
+
+_resolve_dotfiles_cmd() {
+	if [[ -x "$DOTFILES_DIR/bin/bin/dotfiles" ]]; then
+		printf '%s\n' "$DOTFILES_DIR/bin/bin/dotfiles"
+		return 0
 	fi
 
+	local cmd
+	cmd="$(command -v dotfiles 2>/dev/null || true)"
+	if [[ -n "$cmd" ]]; then
+		printf '%s\n' "$cmd"
+		return 0
+	fi
+
+	return 1
+}
+
+run_update_flow() {
+	local dotfiles_cmd answer
+
+	dotfiles_cmd="$(_resolve_dotfiles_cmd)" || {
+		echo "Error: dotfiles command not found." >&2
+		exit 1
+	}
+
 	echo ""
-	echo "=== WSL Dotfiles Setup ==="
-	echo "Log file: $LOG_FILE"
+	echo "=== Dotfiles Update ==="
+	echo ""
+	"$dotfiles_cmd" update
 
-	# Phase 1: Component selection
-	component_menu
+	echo ""
+	read_tty_line answer "Proceed with upgrades? [y/N]: "
+	case "$answer" in
+	y | Y | yes | YES)
+		"$dotfiles_cmd" upgrade
+		;;
+	*)
+		echo "Skipped upgrades."
+		;;
+	esac
+}
 
-	# Phase 2: Plan preview + confirmation (prompts for git identity if enabled)
-	confirm_loop
+extensions_menu() {
+	echo ""
+	echo "=== IDE Extensions ==="
+	echo ""
+	echo "The IDE extensions menu (check / backup / restore / compare)"
+	echo "is planned for Stage 4 — see docs/plan/plan4-ide-extensions.md."
+	echo ""
+	read_tty_line _extensions_return "Press Enter to return: "
+}
 
+agents_menu() {
+	echo ""
+	echo "=== Agents Bootstrap ==="
+	echo ""
+	echo "Agent bootstrap (agent_bootstrap installer, agentboot) is planned"
+	echo "for Stage 5/6."
+	echo ""
+	read_tty_line _agents_return "Press Enter to return: "
+}
+
+print_usage() {
+	cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Options:
+  --initial     Run initial setup (component menu + install)
+  --update      Run dotfiles update/upgrade flow
+  --extensions  Open IDE extensions menu (stub)
+  --agents      Open agents bootstrap menu (stub)
+  --help        Show this help and exit
+
+Without options on a TTY, shows the boot menu.
+Non-TTY runs default to initial setup.
+EOF
+}
+
+run_install() {
 	echo ""
 	echo "=== Installing ==="
 	_log_legend_line
@@ -1721,6 +1855,90 @@ main() {
 	echo ""
 	echo "Done. Log saved to: $LOG_FILE"
 	echo "Open a new terminal, or run: source ~/.bashrc"
+}
+
+run_initial_setup() {
+	echo ""
+	echo "=== WSL Dotfiles Setup ==="
+	echo "Log file: $LOG_FILE"
+
+	# Phase 1: Component selection
+	component_menu
+
+	# Phase 2: Plan preview + confirmation (prompts for git identity if enabled)
+	confirm_loop
+
+	run_install
+}
+
+main() {
+	if ! command -v apt-get >/dev/null 2>&1; then
+		echo "Error: apt-get not found. This installer targets Debian/Ubuntu." >&2
+		exit 1
+	fi
+
+	local mode=""
+
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+		--initial)
+			mode="initial"
+			shift
+			;;
+		--update)
+			mode="update"
+			shift
+			;;
+		--extensions)
+			mode="extensions"
+			shift
+			;;
+		--agents)
+			mode="agents"
+			shift
+			;;
+		--help | -h)
+			print_usage
+			exit 0
+			;;
+		*)
+			echo "Unknown option: $1" >&2
+			print_usage >&2
+			exit 1
+			;;
+		esac
+	done
+
+	if [[ -z "$mode" ]]; then
+		if [[ -t 1 ]]; then
+			boot_menu
+			mode="$BOOT_CHOICE"
+		else
+			mode="initial"
+		fi
+	fi
+
+	case "$mode" in
+	initial)
+		run_initial_setup
+		;;
+	update)
+		run_update_flow
+		;;
+	extensions)
+		extensions_menu
+		;;
+	agents)
+		agents_menu
+		;;
+	quit)
+		exit 0
+		;;
+	*)
+		printf 'unknown choice: %s\n' "$mode" >&2
+		exit 1
+		;;
+	esac
 }
 
 main "$@"

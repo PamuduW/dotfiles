@@ -4,7 +4,7 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 
 ## What you get
 
-- **Interactive installer** with toggle menu — pick exactly which components to install
+- **Interactive boot menu** — choose initial setup, update, extensions, or agents; component toggle menu for installs
 - Custom Bash prompt: time, user@host, path, git branch + status markers, exit code
 - Cross-terminal history syncing (`history -a; history -n`) with 10k line history
 - Modern CLI tools: `eza`, `fzf` (Ctrl+R/Ctrl+T/Alt+C), `zoxide`, `ripgrep`, `fd`
@@ -53,7 +53,44 @@ chmod +x install.sh bin/bin/ex bin/bin/clip bin/bin/dotfiles
 ./install.sh
 ```
 
-The installer will:
+When run **interactively** (stdout is a TTY), `./install.sh` shows a **boot menu** first:
+
+```
+=== Dotfiles ===
+  1. Initial setup   → component install menu + confirm + install
+  2. Update          → dotfiles update report, then optional upgrade
+  3. Extensions      → IDE extensions menu (check / backup / restore / compare)
+  4. Agents          → agentic setup (agent_bootstrap, agentboot)
+  5. Quit
+```
+
+Use arrow keys to navigate and Enter to select (same TUI as the component menu).
+
+### Boot menu
+
+| Option | Action |
+| ------ | ------ |
+| Initial setup | Component toggle menu, confirm loop, then install (same behavior as before Stage 3) |
+| Update | Runs `dotfiles update` (report only), then prompts **Proceed with upgrades? [y/N]** — on yes, runs `dotfiles upgrade` |
+| Extensions | IDE extensions submenu (check / backup / restore / compare) |
+| Agents | Agent bootstrap submenu (clone/run `agent_bootstrap` installer, `agentboot`) |
+| Quit | Exit without changes |
+
+### CLI flags
+
+Skip the boot menu with explicit flags:
+
+```bash
+./install.sh --initial      # Initial setup (component menu)
+./install.sh --update       # Update flow only
+./install.sh --extensions   # Extensions menu
+./install.sh --agents       # Agents menu
+./install.sh --help         # Usage
+```
+
+**Non-interactive** runs (piped input, CI, or stdout not a TTY) skip the boot menu and run the **Initial setup** path directly — equivalent to `./install.sh --initial`.
+
+When you choose **Initial setup** (boot menu option 1, or the non-interactive default), the installer will:
 
 1. Show an **interactive menu** — arrow keys to navigate, space to toggle
 2. Display the **execution plan** for review
