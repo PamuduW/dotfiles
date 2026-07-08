@@ -1504,13 +1504,27 @@ install_monaspace_fonts() {
 	}
 
 	tmp="$(mktemp -d)"
-	trap 'rm -rf "$tmp"' RETURN
-	curl -fsSL -o "$tmp/monaspace-nerdfonts.zip" \
-		"https://github.com/githubnext/monaspace/releases/download/${ver}/monaspace-nerdfonts-${ver}.zip"
-	unzip -qo "$tmp/monaspace-nerdfonts.zip" -d "$tmp/monaspace"
+	trap "rm -rf '${tmp}'" RETURN
+	if ! curl -fsSL -o "$tmp/monaspace-nerdfonts.zip" \
+		"https://github.com/githubnext/monaspace/releases/download/${ver}/monaspace-nerdfonts-${ver}.zip"; then
+		echo "  Monaspace download failed." >&2
+		return 1
+	fi
+	if ! unzip -qo "$tmp/monaspace-nerdfonts.zip" -d "$tmp/monaspace"; then
+		echo "  Monaspace unzip failed." >&2
+		return 1
+	fi
 
 	mkdir -p "$font_dir"
-	find "$tmp/monaspace" -name '*.otf' -exec cp {} "$font_dir/" \;
+	local otf_count=0
+	while IFS= read -r -d '' otf; do
+		cp "$otf" "$font_dir/"
+		otf_count=$((otf_count + 1))
+	done < <(find "$tmp/monaspace" -name '*.otf' -print0)
+	if [[ $otf_count -eq 0 ]]; then
+		echo "  No .otf files found in Monaspace archive." >&2
+		return 1
+	fi
 
 	fc-cache -f 2>/dev/null || true
 
