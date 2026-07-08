@@ -78,38 +78,15 @@ alias aptup='sudo apt update && sudo apt upgrade -y'
 alias aptclean='sudo apt autoremove -y && sudo apt autoclean'
 
 # ------------------------------------
-# AI CLI tools
+# System/CLI updates — see also: dotfiles update | dotfiles upgrade
 # ------------------------------------
 alias update-cursor='agent update'
 alias update-codex='npm i -g @openai/codex@latest'
 alias update-claude='claude update'
+alias update-copilot='copilot update'
 
 update-all() {
-	echo "=== Updating system packages ==="
-	sudo apt update && sudo apt upgrade -y
-	echo ""
-	echo "=== Updating Cursor CLI ==="
-	if command -v cursor >/dev/null 2>&1; then
-		agent update
-	else
-		echo "  Cursor CLI not installed, skipping"
-	fi
-	echo ""
-	echo "=== Updating Codex CLI ==="
-	if command -v codex >/dev/null 2>&1; then
-		npm i -g @openai/codex@latest
-	else
-		echo "  Codex CLI not installed, skipping"
-	fi
-	echo ""
-	echo "=== Updating Claude CLI ==="
-	if command -v claude >/dev/null 2>&1; then
-		claude update
-	else
-		echo "  Claude CLI not installed, skipping"
-	fi
-	echo ""
-	echo "Done."
+	dotfiles upgrade
 }
 
 # ------------------------------------

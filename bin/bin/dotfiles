@@ -1,0 +1,806 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+_script="$(readlink -f "${BASH_SOURCE[0]}")"
+DOTFILES_DIR="$(dirname "$(dirname "$(dirname "$_script")")")"
+
+# --- TTY colors ---
+if [[ -t 1 ]]; then
+	C_RESET=$'\033[0m'
+	C_BOLD=$'\033[1m'
+	C_DIM=$'\033[2m'
+	C_GREEN=$'\033[32m'
+	C_YELLOW=$'\033[33m'
+	C_CYAN=$'\033[36m'
+	C_RED=$'\033[31m'
+else
+	C_RESET=''
+	C_BOLD=''
+	C_DIM=''
+	C_GREEN=''
+	C_YELLOW=''
+	C_CYAN=''
+	C_RED=''
+fi
+
+NOT_INSTALLED='not installed'
+
+# --- Helpers ---
+_msg() { printf '%s\n' "$*"; }
+_warn() { printf '%s%s%s\n' "$C_YELLOW" "$*" "$C_RESET" >&2; }
+_err() { printf '%s%s%s\n' "$C_RED" "$*" "$C_RESET" >&2; }
+
+_run_upgrade_step() {
+	local label="$1"
+	shift
+	printf '\n%s=== %s ===%s\n' "$C_BOLD" "$label" "$C_RESET"
+	set +e
+	"$@"
+	local rc=$?
+	set -e
+	if [[ $rc -ne 0 ]]; then
+		_warn "  ${label} failed (exit ${rc})"
+	fi
+}
+
+_github_latest_version() {
+	local repo="$1"
+	command -v curl >/dev/null 2>&1 || return 1
+	curl -fsSL "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null |
+		grep -Po '"tag_name":\s*"v\K[^"]*' | head -n1
+}
+
+_version_gt() {
+	# Returns 0 if $1 > $2 (sort -V)
+	[[ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | tail -n1)" == "$1" && "$1" != "$2" ]]
+}
+
+_load_nvm() {
+	local nvm_dir="${NVM_DIR:-$HOME/.nvm}"
+	# shellcheck source=/dev/null
+	[[ -s "${nvm_dir}/nvm.sh" ]] && . "${nvm_dir}/nvm.sh"
+}
+
+# --- apt ---
+apt_upgradable_count() {
+	if ! command -v apt-get >/dev/null 2>&1; then
+		echo 0
+		return
+	fi
+	apt-get -s upgrade 2>/dev/null | grep -c '^Inst' || echo 0
+}
+
+check_apt() {
+	local count installed available action upgradable=0
+	count="$(apt_upgradable_count)"
+	if command -v apt-get >/dev/null 2>&1; then
+		installed="system packages"
+	else
+		installed="$NOT_INSTALLED"
+	fi
+	if [[ "$count" -gt 0 ]]; then
+		available="${count} package(s)"
+		action="upgrade"
+		upgradable=1
+	else
+		available="none"
+		action="up to date"
+	fi
+	printf '%s|%s|%s|%s\n' "apt packages" "$installed" "$available" "$action"
+	[[ $upgradable -eq 1 ]]
+}
+
+upgrade_apt() {
+	if ! command -v apt-get >/dev/null 2>&1; then
+		_warn "apt-get not found, skipping apt upgrade"
+		return 0
+	fi
+	sudo apt-get update -qq && sudo apt-get -o Dpkg::Use-Pty=0 upgrade -y
+}
+
+# --- Cursor CLI ---
+cursor_installed_version() {
+	if command -v agent >/dev/null 2>&1; then
+		agent --version 2>/dev/null | head -n1 || echo "installed"
+	elif command -v cursor >/dev/null 2>&1; then
+		cursor --version 2>/dev/null | head -n1 || echo "installed"
+	else
+		echo "$NOT_INSTALLED"
+	fi
+}
+
+cursor_is_installed() {
+	command -v agent >/dev/null 2>&1 || command -v cursor >/dev/null 2>&1
+}
+
+check_cursor_cli() {
+	local installed available action upgradable=0
+	installed="$(cursor_installed_version)"
+	if cursor_is_installed; then
+		available="latest (via agent update)"
+		action="upgrade"
+		upgradable=1
+	else
+		available="—"
+		action="skip"
+	fi
+	printf '%s|%s|%s|%s\n' "Cursor CLI" "$installed" "$available" "$action"
+	[[ $upgradable -eq 1 ]]
+}
+
+upgrade_cursor_cli() {
+	if cursor_is_installed; then
+		agent update
+	else
+		_msg "  Cursor CLI not installed, skipping"
+	fi
+}
+
+# --- Codex CLI ---
+codex_installed_version() {
+	if command -v codex >/dev/null 2>&1; then
+		codex --version 2>/dev/null | head -n1 || echo "installed"
+	else
+		echo "$NOT_INSTALLED"
+	fi
+}
+
+codex_available_version() {
+	if ! command -v npm >/dev/null 2>&1; then
+		echo "—"
+		return
+	fi
+	npm view @openai/codex version 2>/dev/null || echo "—"
+}
+
+check_codex_cli() {
+	local installed available action upgradable=0
+	installed="$(codex_installed_version)"
+	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
+		available="—"
+		action="skip"
+	else
+		available="$(codex_available_version)"
+		if [[ "$available" != "—" && "$installed" != *"${available}"* ]]; then
+			action="upgrade"
+			upgradable=1
+		else
+			action="up to date"
+		fi
+	fi
+	printf '%s|%s|%s|%s\n' "Codex CLI" "$installed" "$available" "$action"
+	[[ $upgradable -eq 1 ]]
+}
+
+upgrade_codex_cli() {
+	if command -v codex >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+		npm i -g @openai/codex@latest
+	else
+		_msg "  Codex CLI or npm not installed, skipping"
+	fi
+}
+
+# --- Claude CLI ---
+claude_installed_version() {
+	if command -v claude >/dev/null 2>&1; then
+		claude --version 2>/dev/null | head -n1 || echo "installed"
+	else
+		echo "$NOT_INSTALLED"
+	fi
+}
+
+check_claude_cli() {
+	local installed available action upgradable=0
+	installed="$(claude_installed_version)"
+	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
+		available="—"
+		action="skip"
+	else
+		available="latest (via claude update)"
+		action="upgrade"
+		upgradable=1
+	fi
+	printf '%s|%s|%s|%s\n' "Claude CLI" "$installed" "$available" "$action"
+	[[ $upgradable -eq 1 ]]
+}
+
+upgrade_claude_cli() {
+	if command -v claude >/dev/null 2>&1; then
+		claude update
+	else
+		_msg "  Claude CLI not installed, skipping"
+	fi
+}
+
+# --- Copilot CLI ---
+copilot_installed_version() {
+	if command -v copilot >/dev/null 2>&1; then
+		copilot --version 2>/dev/null | head -n1 || echo "installed"
+	elif [[ -x "$HOME/.local/bin/copilot" ]]; then
+		"$HOME/.local/bin/copilot" --version 2>/dev/null | head -n1 || echo "installed"
+	else
+		echo "$NOT_INSTALLED"
+	fi
+}
+
+copilot_is_installed() {
+	command -v copilot >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/copilot" ]]
+}
+
+check_copilot_cli() {
+	local installed available action upgradable=0
+	installed="$(copilot_installed_version)"
+	if copilot_is_installed; then
+		available="latest (via copilot update)"
+		action="upgrade"
+		upgradable=1
+	else
+		available="—"
+		action="skip"
+	fi
+	printf '%s|%s|%s|%s\n' "Copilot CLI" "$installed" "$available" "$action"
+	[[ $upgradable -eq 1 ]]
+}
+
+upgrade_copilot_cli() {
+	if copilot_is_installed; then
+		copilot update
+	else
+		_msg "  Copilot CLI not installed, skipping"
+	fi
+}
+
+# --- lazygit ---
+lazygit_installed_version() {
+	if command -v lazygit >/dev/null 2>&1; then
+		lazygit --version 2>/dev/null | grep -oP 'version=\K[0-9.]+' | head -n1 ||
+			lazygit --version 2>/dev/null | head -n1 || echo "installed"
+	else
+		echo "$NOT_INSTALLED"
+	fi
+}
+
+check_lazygit() {
+	local installed latest available action upgradable=0
+	installed="$(lazygit_installed_version)"
+	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
+		available="—"
+		action="skip"
+	else
+		latest="$(_github_latest_version jesseduffield/lazygit || true)"
+		available="${latest:-unknown}"
+		if [[ -n "$latest" ]] && _version_gt "$latest" "$installed"; then
+			action="upgrade"
+			upgradable=1
+		else
+			action="up to date"
+		fi
+	fi
+	printf '%s|%s|%s|%s\n' "lazygit" "$installed" "$available" "$action"
+	[[ $upgradable -eq 1 ]]
+}
+
+install_lazygit_from_github() {
+	command -v curl >/dev/null 2>&1 || {
+		_err "  curl required for lazygit install."
+		return 1
+	}
+	command -v tar >/dev/null 2>&1 || {
+		_err "  tar required for lazygit install."
+		return 1
+	}
+
+	local ver tmp
+	ver="$(_github_latest_version jesseduffield/lazygit)"
+	[[ -n "$ver" ]] || {
+		_err "  Could not determine lazygit version."
+		return 1
+	}
+
+	tmp="$(mktemp -d)"
+	trap 'rm -rf "$tmp"' RETURN
+	local tarball="lazygit_${ver}_Linux_x86_64.tar.gz"
+	curl -fsSL -o "$tmp/$tarball" \
+		"https://github.com/jesseduffield/lazygit/releases/download/v${ver}/${tarball}"
+	curl -fsSL -o "$tmp/checksums.txt" \
+		"https://github.com/jesseduffield/lazygit/releases/download/v${ver}/checksums.txt"
+	if ! (cd "$tmp" && sha256sum --check --ignore-missing checksums.txt); then
+		_err "  lazygit checksum verification failed."
+		return 1
+	fi
+	tar -C "$tmp" -xzf "$tmp/$tarball" lazygit
+	sudo install -m 0755 "$tmp/lazygit" /usr/local/bin/lazygit
+	rm -rf "$tmp"
+	trap - RETURN
+	_msg "  lazygit v${ver} installed"
+}
+
+upgrade_lazygit() {
+	if ! command -v lazygit >/dev/null 2>&1; then
+		_msg "  lazygit not installed, skipping"
+		return 0
+	fi
+	local installed latest
+	installed="$(lazygit_installed_version)"
+	latest="$(_github_latest_version jesseduffield/lazygit || true)"
+	if [[ -n "$latest" && -n "$installed" ]] && _version_gt "$latest" "$installed"; then
+		install_lazygit_from_github
+	else
+		_msg "  lazygit already up to date (${installed})"
+	fi
+}
+
+# --- lazydocker ---
+lazydocker_installed_version() {
+	if command -v lazydocker >/dev/null 2>&1; then
+		lazydocker --version 2>/dev/null | grep -oP 'version=\K[0-9.]+' | head -n1 ||
+			lazydocker --version 2>/dev/null | head -n1 || echo "installed"
+	else
+		echo "$NOT_INSTALLED"
+	fi
+}
+
+check_lazydocker() {
+	local installed latest available action upgradable=0
+	installed="$(lazydocker_installed_version)"
+	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
+		available="—"
+		action="skip"
+	else
+		latest="$(_github_latest_version jesseduffield/lazydocker || true)"
+		available="${latest:-unknown}"
+		if [[ -n "$latest" ]] && _version_gt "$latest" "$installed"; then
+			action="upgrade"
+			upgradable=1
+		else
+			action="up to date"
+		fi
+	fi
+	printf '%s|%s|%s|%s\n' "lazydocker" "$installed" "$available" "$action"
+	[[ $upgradable -eq 1 ]]
+}
+
+install_lazydocker_from_github() {
+	command -v curl >/dev/null 2>&1 || {
+		_err "  curl required for lazydocker install."
+		return 1
+	}
+	command -v tar >/dev/null 2>&1 || {
+		_err "  tar required for lazydocker install."
+		return 1
+	}
+
+	local ver tmp
+	ver="$(_github_latest_version jesseduffield/lazydocker)"
+	[[ -n "$ver" ]] || {
+		_err "  Could not determine lazydocker version."
+		return 1
+	}
+
+	tmp="$(mktemp -d)"
+	trap 'rm -rf "$tmp"' RETURN
+	local tarball="lazydocker_${ver}_Linux_x86_64.tar.gz"
+	curl -fsSL -o "$tmp/$tarball" \
+		"https://github.com/jesseduffield/lazydocker/releases/download/v${ver}/${tarball}"
+	curl -fsSL -o "$tmp/checksums.txt" \
+		"https://github.com/jesseduffield/lazydocker/releases/download/v${ver}/checksums.txt"
+	if ! (cd "$tmp" && sha256sum --check --ignore-missing checksums.txt); then
+		_err "  lazydocker checksum verification failed."
+		return 1
+	fi
+	tar -C "$tmp" -xzf "$tmp/$tarball"
+
+	if [[ ! -f "$tmp/lazydocker" ]]; then
+		local binpath
+		binpath="$(find "$tmp" -maxdepth 3 -type f -name lazydocker | head -n1 || true)"
+		[[ -n "$binpath" ]] && cp "$binpath" "$tmp/lazydocker"
+	fi
+
+	sudo install -m 0755 "$tmp/lazydocker" /usr/local/bin/lazydocker
+	rm -rf "$tmp"
+	trap - RETURN
+	_msg "  lazydocker v${ver} installed"
+}
+
+upgrade_lazydocker() {
+	if ! command -v lazydocker >/dev/null 2>&1; then
+		_msg "  lazydocker not installed, skipping"
+		return 0
+	fi
+	local installed latest
+	installed="$(lazydocker_installed_version)"
+	latest="$(_github_latest_version jesseduffield/lazydocker || true)"
+	if [[ -n "$latest" && -n "$installed" ]] && _version_gt "$latest" "$installed"; then
+		install_lazydocker_from_github
+	else
+		_msg "  lazydocker already up to date (${installed})"
+	fi
+}
+
+# --- Node.js (nvm) — opt-in ---
+node_installed_version() {
+	_load_nvm
+	if command -v node >/dev/null 2>&1; then
+		node --version 2>/dev/null | tr -d 'v'
+	else
+		echo "$NOT_INSTALLED"
+	fi
+}
+
+node_lts_version() {
+	_load_nvm
+	if command -v nvm >/dev/null 2>&1; then
+		nvm version-remote --lts 2>/dev/null | tr -d 'v' || echo "—"
+	else
+		echo "—"
+	fi
+}
+
+check_node() {
+	local installed available action upgradable=0
+	installed="$(node_installed_version)"
+	available="$(node_lts_version)"
+	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
+		action="skip"
+	elif [[ "$available" != "—" ]] && _version_gt "$available" "$installed"; then
+		action="upgrade (--all)"
+		upgradable=1
+	else
+		action="up to date"
+	fi
+	printf '%s|%s|%s|%s\n' "Node.js (nvm)" "$installed" "$available" "$action"
+	[[ $upgradable -eq 1 ]]
+}
+
+upgrade_node() {
+	_load_nvm
+	if ! command -v nvm >/dev/null 2>&1; then
+		_msg "  nvm not installed, skipping Node.js upgrade"
+		return 0
+	fi
+	nvm install --lts
+	nvm alias default 'lts/*'
+}
+
+# --- Go (asdf) — opt-in ---
+go_installed_version() {
+	if command -v asdf >/dev/null 2>&1; then
+		local ver
+		ver="$(asdf current golang 2>/dev/null | awk '$1=="golang" {print $2; exit}')"
+		if [[ -n "$ver" ]]; then
+			echo "$ver"
+		else
+			echo "$NOT_INSTALLED"
+		fi
+	elif command -v go >/dev/null 2>&1; then
+		go version 2>/dev/null | grep -oP 'go\K[0-9.]+' | head -n1 || echo "installed"
+	else
+		echo "$NOT_INSTALLED"
+	fi
+}
+
+go_latest_version() {
+	if command -v asdf >/dev/null 2>&1; then
+		asdf latest golang 2>/dev/null || echo "—"
+	else
+		echo "—"
+	fi
+}
+
+check_go() {
+	local installed available action upgradable=0
+	installed="$(go_installed_version)"
+	available="$(go_latest_version)"
+	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
+		action="skip"
+	elif [[ "$available" != "—" ]] && _version_gt "$available" "$installed"; then
+		action="upgrade (--all)"
+		upgradable=1
+	else
+		action="up to date"
+	fi
+	printf '%s|%s|%s|%s\n' "Go (asdf)" "$installed" "$available" "$action"
+	[[ $upgradable -eq 1 ]]
+}
+
+upgrade_go() {
+	if ! command -v asdf >/dev/null 2>&1; then
+		_msg "  asdf not installed, skipping Go upgrade"
+		return 0
+	fi
+	asdf install golang latest
+	asdf set -u golang latest
+}
+
+# --- Monaspace fonts — opt-in ---
+monaspace_installed_version() {
+	local font_dir="$HOME/.local/share/fonts/monaspace"
+	if [[ -d "$font_dir" ]] && compgen -G "${font_dir}/*.otf" >/dev/null 2>&1; then
+		if [[ -f "${font_dir}/.version" ]]; then
+			cat "${font_dir}/.version"
+		else
+			echo "installed"
+		fi
+	else
+		echo "$NOT_INSTALLED"
+	fi
+}
+
+monaspace_latest_version() {
+	_github_latest_version githubnext/monaspace || echo "—"
+}
+
+check_monaspace() {
+	local installed available action upgradable=0
+	installed="$(monaspace_installed_version)"
+	available="$(monaspace_latest_version)"
+	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
+		action="skip"
+	elif [[ "$available" != "—" && "$installed" != "$available" ]]; then
+		action="upgrade (--all)"
+		upgradable=1
+	else
+		action="up to date"
+	fi
+	printf '%s|%s|%s|%s\n' "Monaspace fonts" "$installed" "$available" "$action"
+	[[ $upgradable -eq 1 ]]
+}
+
+install_monaspace_fonts() {
+	local font_dir="$HOME/.local/share/fonts/monaspace"
+	command -v curl >/dev/null 2>&1 || {
+		_err "  curl required for Monaspace install."
+		return 1
+	}
+	command -v unzip >/dev/null 2>&1 || {
+		_err "  unzip required for Monaspace install."
+		return 1
+	}
+
+	local ver tmp
+	ver="$(monaspace_latest_version)"
+	[[ -n "$ver" && "$ver" != "—" ]] || {
+		_err "  Could not determine Monaspace version."
+		return 1
+	}
+
+	tmp="$(mktemp -d)"
+	trap 'rm -rf "$tmp"' RETURN
+	curl -fsSL -o "$tmp/monaspace-nerdfonts.zip" \
+		"https://github.com/githubnext/monaspace/releases/download/${ver}/monaspace-nerdfonts-${ver}.zip"
+	unzip -qo "$tmp/monaspace-nerdfonts.zip" -d "$tmp/monaspace"
+
+	mkdir -p "$font_dir"
+	find "$tmp/monaspace" -name '*.otf' -exec cp {} "$font_dir/" \;
+	printf '%s\n' "$ver" >"${font_dir}/.version"
+
+	fc-cache -f 2>/dev/null || true
+	rm -rf "$tmp"
+	trap - RETURN
+	_msg "  Monaspace Nerd Fonts ${ver} installed"
+}
+
+upgrade_monaspace() {
+	install_monaspace_fonts
+}
+
+# --- dotfiles repo ---
+dotfiles_repo_status() {
+	if ! command -v git >/dev/null 2>&1; then
+		echo "$NOT_INSTALLED|—|skip"
+		return
+	fi
+	local branch local_rev remote_rev behind=0
+	branch="$(git -C "$DOTFILES_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")"
+	local_rev="$(git -C "$DOTFILES_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+	remote_rev="$(git -C "$DOTFILES_DIR" ls-remote --heads origin "$branch" 2>/dev/null | awk '{print $1}' | head -n1)"
+	local installed="${branch}@${local_rev}"
+	local available="—"
+	local action="up to date"
+	if [[ -n "$remote_rev" && "$remote_rev" != "$(git -C "$DOTFILES_DIR" rev-parse HEAD 2>/dev/null)" ]]; then
+		behind="$(git -C "$DOTFILES_DIR" rev-list --count HEAD.."origin/${branch}" 2>/dev/null || echo "?")"
+		if [[ "$behind" == "?" ]]; then
+			available="update on origin"
+		else
+			available="${behind} commit(s) behind"
+		fi
+		action="pull + restow"
+	fi
+	printf '%s|%s|%s|%s\n' "dotfiles repo" "$installed" "$available" "$action"
+	[[ "$action" != "up to date" ]]
+}
+
+# --- Report helpers ---
+CHECK_FUNCS=(
+	check_apt
+	check_cursor_cli
+	check_codex_cli
+	check_claude_cli
+	check_copilot_cli
+	check_lazygit
+	check_lazydocker
+	check_node
+	check_go
+	check_monaspace
+	dotfiles_repo_status
+)
+
+_color_action() {
+	local action="$1"
+	case "$action" in
+	up\ to\ date | skip) printf '%s%s%s' "$C_GREEN" "$action" "$C_RESET" ;;
+	upgrade*) printf '%s%s%s' "$C_YELLOW" "$action" "$C_RESET" ;;
+	pull*) printf '%s%s%s' "$C_CYAN" "$action" "$C_RESET" ;;
+	*) printf '%s' "$action" ;;
+	esac
+}
+
+print_report_table() {
+	local -a rows=()
+	local fn row component installed available action
+	local upgrade_count=0
+
+	for fn in "${CHECK_FUNCS[@]}"; do
+		row="$("$fn" || true)"
+		rows+=("$row")
+	done
+
+	for row in "${rows[@]}"; do
+		IFS='|' read -r _ _ _ action <<<"$row"
+		case "$action" in
+		upgrade | pull*) ((++upgrade_count)) ;;
+		upgrade*) ((++upgrade_count)) ;;
+		esac
+	done
+
+	printf '\n%sUpgrade report%s\n' "$C_BOLD" "$C_RESET"
+	printf '%-18s | %-28s | %-22s | %s\n' "component" "installed" "available" "action"
+	printf '%s\n' "-------------------+------------------------------+------------------------+----------"
+
+	for row in "${rows[@]}"; do
+		IFS='|' read -r component installed available action <<<"$row"
+		printf '%-18s | %-28s | %-22s | ' "$component" "$installed" "$available"
+		_color_action "$action"
+		printf '\n'
+	done
+
+	printf '\n'
+	if [[ $upgrade_count -eq 0 ]]; then
+		printf '%s0 upgrades available%s — everything looks current.\n' "$C_GREEN" "$C_RESET"
+	else
+		printf '%s%d upgrade%s available%s — run `%sdotfiles upgrade%s` to apply.\n' \
+			"$C_YELLOW" "$upgrade_count" "$([[ $upgrade_count -eq 1 ]] && echo '' || echo 's')" "$C_RESET" \
+			"$C_BOLD" "$C_RESET"
+	fi
+}
+
+# --- Subcommands ---
+cmd_update() {
+	print_report_table
+	exit 0
+}
+
+cmd_upgrade() {
+	local upgrade_all=false
+	local arg
+	for arg in "$@"; do
+		case "$arg" in
+		--all) upgrade_all=true ;;
+		-h | --help)
+			cmd_help
+			return 0
+			;;
+		*)
+			_err "Unknown option: $arg"
+			_msg "Usage: dotfiles upgrade [--all]"
+			return 1
+			;;
+		esac
+	done
+
+	_run_upgrade_step "apt packages" upgrade_apt
+	_run_upgrade_step "Cursor CLI" upgrade_cursor_cli
+	_run_upgrade_step "Codex CLI" upgrade_codex_cli
+	_run_upgrade_step "Claude CLI" upgrade_claude_cli
+	_run_upgrade_step "Copilot CLI" upgrade_copilot_cli
+	_run_upgrade_step "lazygit" upgrade_lazygit
+	_run_upgrade_step "lazydocker" upgrade_lazydocker
+
+	if [[ "$upgrade_all" == true ]]; then
+		_run_upgrade_step "Node.js (nvm)" upgrade_node
+		_run_upgrade_step "Go (asdf)" upgrade_go
+		_run_upgrade_step "Monaspace fonts" upgrade_monaspace
+	else
+		_msg ""
+		_msg "${C_DIM}Skipping opt-in upgrades (Node.js, Go, Monaspace). Use --all to include them.${C_RESET}"
+	fi
+
+	_msg ""
+	_msg "Done."
+}
+
+cmd_status() {
+	printf '%s=== Installed versions ===%s\n\n' "$C_BOLD" "$C_RESET"
+
+	printf '  %-20s %s\n' "apt:" "$(command -v apt-get >/dev/null 2>&1 && echo "available" || echo "$NOT_INSTALLED")"
+	printf '  %-20s %s\n' "Cursor CLI:" "$(cursor_installed_version)"
+	printf '  %-20s %s\n' "Codex CLI:" "$(codex_installed_version)"
+	printf '  %-20s %s\n' "Claude CLI:" "$(claude_installed_version)"
+	printf '  %-20s %s\n' "Copilot CLI:" "$(copilot_installed_version)"
+	printf '  %-20s %s\n' "lazygit:" "$(lazygit_installed_version)"
+	printf '  %-20s %s\n' "lazydocker:" "$(lazydocker_installed_version)"
+	printf '  %-20s %s\n' "Node.js:" "$(node_installed_version)"
+	printf '  %-20s %s\n' "Go:" "$(go_installed_version)"
+	printf '  %-20s %s\n' "Monaspace:" "$(monaspace_installed_version)"
+
+	printf '\n%s=== Dotfiles repo ===%s\n' "$C_BOLD" "$C_RESET"
+	if command -v git >/dev/null 2>&1; then
+		git -C "$DOTFILES_DIR" status -sb
+	else
+		_msg "git $NOT_INSTALLED"
+	fi
+}
+
+cmd_restow() {
+	if ! command -v stow >/dev/null 2>&1; then
+		_err "Error: 'stow' is not installed."
+		exit 1
+	fi
+	stow --dir "$DOTFILES_DIR" --target "$HOME" --restow bash bin readline
+	_msg "Dotfiles restowed."
+}
+
+cmd_self() {
+	if ! command -v git >/dev/null 2>&1; then
+		_err "Error: git is not installed."
+		exit 1
+	fi
+	git -C "$DOTFILES_DIR" pull
+	cmd_restow
+}
+
+cmd_help() {
+	cat <<EOF
+Usage: dotfiles <command> [options]
+
+Commands:
+  update     Dry-run report of upgradable components (no changes)
+  upgrade    Apply upgrades (apt, CLIs, GitHub tools)
+             Use --all to include Node.js, Go, and Monaspace fonts
+  status     Show installed versions and dotfiles git status
+  restow     Re-apply stow for bash, bin, readline
+  self       git pull dotfiles repo, then restow
+  help       Show this help
+
+Examples:
+  dotfiles update
+  dotfiles upgrade
+  dotfiles upgrade --all
+  dotfiles status
+  dotfiles self
+
+Repo: ${DOTFILES_DIR}
+EOF
+}
+
+main() {
+	case "${1:-}" in
+	update) cmd_update ;;
+	upgrade) shift; cmd_upgrade "$@" ;;
+	status) cmd_status ;;
+	restow) cmd_restow ;;
+	self) cmd_self ;;
+	help | -h | --help) cmd_help ;;
+	'')
+		cmd_help
+		;;
+	*)
+		_err "Unknown command: $1"
+		_msg ""
+		cmd_help
+		exit 1
+		;;
+	esac
+}
+
+main "$@"

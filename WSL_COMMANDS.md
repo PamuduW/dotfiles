@@ -196,6 +196,22 @@ sudo nano /etc/wsl.conf
 - **Pin to taskbar**: Right-click WSL in Start menu → Pin to taskbar
 - **Windows Terminal**: Use Windows Terminal for better experience with multiple WSL instances
 
+## Dotfiles maintenance (inside WSL)
+
+```bash
+# Report only — what can be upgraded (no changes)
+dotfiles update
+
+# Apply upgrades (apt, agent CLIs, etc.; sudo only for apt)
+dotfiles upgrade
+
+# Installed versions + repo git status
+dotfiles status
+
+# Pull dotfiles repo and restow symlinks
+dotfiles self
+```
+
 ## Quick Access from PowerShell/CMD
 
 ```powershell

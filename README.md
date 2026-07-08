@@ -11,7 +11,7 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 - Better readline: case-insensitive completion, arrow-key history search
 - Docker Engine + Portainer CE (with `dpot`/`dpotstop` shortcuts)
 - Node.js via nvm, Python 3, Go (asdf), PowerShell, direnv
-- AI CLI tools: Cursor, Codex, Claude, Copilot (with `update-all` to keep them current)
+- AI CLI tools: Cursor, Codex, Claude, Copilot (with `dotfiles upgrade` / `update-all` to keep them current)
 - SSH key generation with GitHub setup notes
 - WSL-specific config: systemd, Windows PATH interop (`appendWindowsPath=true`), Git credential helper, clipboard helper
 
@@ -29,7 +29,8 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 ├── bin/
 │   └── bin/
 │       ├── ex          # open Windows Explorer from WSL
-│       └── clip        # copy to Windows clipboard from WSL
+│       ├── clip        # copy to Windows clipboard from WSL
+│       └── dotfiles    # report/apply upgrades, status, restow, self
 ├── readline/
 │   └── .inputrc        # better tab completion + history search
 ├── packages/
@@ -48,7 +49,7 @@ Stow packages: `bash`, `bin`, `readline`
 ```bash
 git clone <repo-url> ~/dotfiles
 cd ~/dotfiles
-chmod +x install.sh bin/bin/ex bin/bin/clip
+chmod +x install.sh bin/bin/ex bin/bin/clip bin/bin/dotfiles
 ./install.sh
 ```
 
@@ -106,6 +107,23 @@ After stowing:
 - `~/.inputrc` → `dotfiles/readline/.inputrc`
 - `~/bin/ex` → `dotfiles/bin/bin/ex`
 - `~/bin/clip` → `dotfiles/bin/bin/clip`
+- `~/bin/dotfiles` → `dotfiles/bin/bin/dotfiles`
+
+---
+
+## `dotfiles` command
+
+Global command (stowed to `~/bin/dotfiles`, on PATH like `ex` and `clip`):
+
+| Subcommand | Action |
+| ---------- | ------ |
+| `dotfiles update` | **Report only** — check apt, agent CLIs, runtimes, and the dotfiles repo; print what can be upgraded (no changes) |
+| `dotfiles upgrade` | **Apply** — run upgrades (apt, CLIs, etc.); idempotent and safe to re-run |
+| `dotfiles status` | Installed versions + dotfiles repo git status |
+| `dotfiles restow` | `stow --restow bash bin readline` |
+| `dotfiles self` | `git pull` in the dotfiles repo, then restow |
+
+Runs **unprivileged**; only the apt portion invokes `sudo` internally (single prompt). Agent CLI and npm updates stay under your user.
 
 ---
 
@@ -160,18 +178,40 @@ Both use full Windows paths, so they work even with `appendWindowsPath=true`.
 | `update-cursor`  | Update Cursor CLI (`agent update`)                 |
 | `update-codex`   | Update Codex CLI (`npm i -g @openai/codex@latest`) |
 | `update-claude`  | Update Claude CLI (`claude update`)                |
-| `update-all`     | Update system packages + all AI CLI tools          |
+| `update-copilot` | Update Copilot CLI (`copilot update`)              |
+| `update-all`     | Delegates to `dotfiles upgrade` (apt + CLIs)       |
 | `cp`, `mv`, `rm` | Safety wrappers with `-i`                          |
 
 ---
 
 ## Update / re-apply
 
-Symlinks point to repo files, so edits are immediate. To refresh links:
+Check what can be upgraded without changing anything:
 
 ```bash
-cd ~/dotfiles
-stow --restow bash bin readline
+dotfiles update
+```
+
+Apply upgrades (apt, agent CLIs, etc.):
+
+```bash
+dotfiles upgrade
+# or the alias:
+update-all
+```
+
+Pull latest dotfiles and refresh symlinks:
+
+```bash
+dotfiles self
+```
+
+Symlinks point to repo files, so edits are immediate. To refresh links manually:
+
+```bash
+dotfiles restow
+# or:
+cd ~/dotfiles && stow --restow bash bin readline
 ```
 
 ## Uninstall
