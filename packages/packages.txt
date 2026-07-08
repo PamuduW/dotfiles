@@ -37,6 +37,3 @@ rsync
 unp
 poppler-utils
 magic-wormhole
-
-# @go
-golang-go

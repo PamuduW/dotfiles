@@ -81,7 +81,7 @@ COMP_LABELS=(
 	"Monaspace fonts (Nerd Fonts)"
 	"Generate SSH key"
 	"Apply dotfiles (stow)"
-	"WSL config (systemd, clean PATH)"
+	"WSL config (systemd, appendWindowsPath)"
 	"Git credential helper (Windows)"
 )
 
@@ -785,9 +785,16 @@ install_lazygit_from_github() {
 
 	tmp="$(mktemp -d)"
 	trap 'rm -rf "$tmp"' RETURN
-	curl -fsSL -o "$tmp/lazygit.tar.gz" \
-		"https://github.com/jesseduffield/lazygit/releases/download/v${ver}/lazygit_${ver}_Linux_x86_64.tar.gz"
-	tar -C "$tmp" -xzf "$tmp/lazygit.tar.gz" lazygit
+	local tarball="lazygit_${ver}_Linux_x86_64.tar.gz"
+	curl -fsSL -o "$tmp/$tarball" \
+		"https://github.com/jesseduffield/lazygit/releases/download/v${ver}/${tarball}"
+	curl -fsSL -o "$tmp/checksums.txt" \
+		"https://github.com/jesseduffield/lazygit/releases/download/v${ver}/checksums.txt"
+	if ! (cd "$tmp" && sha256sum --check --ignore-missing checksums.txt); then
+		echo "  lazygit checksum verification failed." >&2
+		return 1
+	fi
+	tar -C "$tmp" -xzf "$tmp/$tarball" lazygit
 	sudo install -m 0755 "$tmp/lazygit" /usr/local/bin/lazygit
 	rm -rf "$tmp"
 	trap - RETURN
@@ -815,9 +822,16 @@ install_lazydocker_from_github() {
 
 	tmp="$(mktemp -d)"
 	trap 'rm -rf "$tmp"' RETURN
-	curl -fsSL -o "$tmp/lazydocker.tar.gz" \
-		"https://github.com/jesseduffield/lazydocker/releases/download/v${ver}/lazydocker_${ver}_Linux_x86_64.tar.gz"
-	tar -C "$tmp" -xzf "$tmp/lazydocker.tar.gz"
+	local tarball="lazydocker_${ver}_Linux_x86_64.tar.gz"
+	curl -fsSL -o "$tmp/$tarball" \
+		"https://github.com/jesseduffield/lazydocker/releases/download/v${ver}/${tarball}"
+	curl -fsSL -o "$tmp/checksums.txt" \
+		"https://github.com/jesseduffield/lazydocker/releases/download/v${ver}/checksums.txt"
+	if ! (cd "$tmp" && sha256sum --check --ignore-missing checksums.txt); then
+		echo "  lazydocker checksum verification failed." >&2
+		return 1
+	fi
+	tar -C "$tmp" -xzf "$tmp/$tarball"
 
 	if [[ ! -f "$tmp/lazydocker" ]]; then
 		local binpath
@@ -1128,7 +1142,8 @@ generate_ssh_key() {
 
 	log_step "Generate SSH key (ed25519)"
 	mkdir -p "$HOME/.ssh"
-	ssh-keygen -t ed25519 -C "$SETUP_GIT_EMAIL" -f "$HOME/.ssh/id_ed25519" -N ""
+	echo "  You'll be prompted for a passphrase (press Enter to skip / use no passphrase)."
+	ssh-keygen -t ed25519 -C "$SETUP_GIT_EMAIL" -f "$HOME/.ssh/id_ed25519"
 	eval "$(ssh-agent -s)" >/dev/null
 	ssh-add "$HOME/.ssh/id_ed25519" 2>/dev/null
 

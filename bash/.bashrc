@@ -48,7 +48,7 @@ shopt -s histappend
 c_reset="\[\e[0m\]"
 c_time="\[\e[90m\]" # gray
 c_user="\[\e[32m\]" # green
-c_path="\[\e[34m\]" # cyan
+c_path="\[\e[34m\]" # blue
 c_git="\[\e[33m\]"  # yellow
 c_err="\[\e[31m\]"  # red
 

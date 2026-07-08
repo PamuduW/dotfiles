@@ -10,10 +10,10 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 - Modern CLI tools: `eza`, `fzf` (Ctrl+R/Ctrl+T/Alt+C), `zoxide`, `ripgrep`, `fd`
 - Better readline: case-insensitive completion, arrow-key history search
 - Docker Engine + Portainer CE (with `dpot`/`dpotstop` shortcuts)
-- Node.js via nvm, Python 3, Go, PowerShell
-- AI CLI tools: Cursor, Codex, Claude (with `update-all` to keep them current)
+- Node.js via nvm, Python 3, Go (asdf), PowerShell, direnv
+- AI CLI tools: Cursor, Codex, Claude, Copilot (with `update-all` to keep them current)
 - SSH key generation with GitHub setup notes
-- WSL-specific config: systemd, clean PATH, Git credential helper, clipboard helper
+- WSL-specific config: systemd, Windows PATH interop (`appendWindowsPath=true`), Git credential helper, clipboard helper
 
 **Bonus:** See [WSL_COMMANDS.md](WSL_COMMANDS.md) for a guide to managing WSL instances.
 
@@ -68,8 +68,9 @@ The installer will:
 | System packages | Core CLI tools from apt (@core, @cli, @system)                                |
 | Python          | python3, pip, venv                                                            |
 | PowerShell      | Microsoft PowerShell from official Microsoft apt repository                   |
-| Go              | golang-go                                                                     |
+| Go              | Latest Go via asdf                                                            |
 | Node.js         | v24 LTS via nvm                                                               |
+| direnv          | Directory-based env loader + bash hook                                        |
 | Docker Engine   | Docker CE from official repo + docker group                                   |
 | Portainer CE    | Docker management UI (requires Docker)                                        |
 | lazygit         | Git TUI from GitHub releases                                                  |
@@ -77,6 +78,7 @@ The installer will:
 | Cursor CLI      | Cursor editor CLI from cursor.com                                             |
 | Codex CLI       | OpenAI Codex CLI via npm (requires Node.js)                                   |
 | Claude CLI      | Anthropic Claude CLI from claude.ai                                           |
+| Copilot CLI     | GitHub Copilot CLI via gh.io/copilot-install                                  |
 | Monaspace fonts | GitHub Monaspace Nerd Fonts to `~/.local/share/fonts/`                        |
 | SSH key         | ed25519 key + GitHub setup notes in `~/.ssh/github-setup.txt`                 |
 | Dotfiles        | Stow bash, bin, readline into `$HOME`                                         |
@@ -86,6 +88,12 @@ The installer will:
 Dependencies are enforced automatically (e.g., disabling Docker also disables Portainer).
 
 **Multi-identity git setups**: If your `~/.gitconfig` uses `includeIf` for per-directory identities, the installer detects this and defaults "Git identity" to OFF so it won't overwrite your configuration.
+
+## Security notes
+
+- Some tools are installed via `curl … | bash` from their official vendor channels (Cursor, Claude, Copilot, nvm, direnv). These are not checksum-verified; review the upstream scripts if you need stronger supply-chain guarantees.
+- GitHub-release binaries (lazygit, lazydocker) are checksum-verified during install.
+- The generated SSH key prompts for a passphrase (press Enter to skip).
 
 ---
 

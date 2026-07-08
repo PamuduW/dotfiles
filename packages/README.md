@@ -9,7 +9,7 @@ This folder holds the package list for the WSL/Debian/Ubuntu bootstrap.
 
 ## Installer behavior
 
-`packages.txt` uses `# @tag` section headers (e.g. `@core`, `@cli`, `@python`, `@go`).
+`packages.txt` uses `# @tag` section headers (e.g. `@core`, `@cli`, `@python`, `@system`).
 
 When you run `dotfiles/install.sh`, the interactive installer lets you toggle which tag groups to install. Only selected groups are passed to `apt-get install`. The installer also:
 
