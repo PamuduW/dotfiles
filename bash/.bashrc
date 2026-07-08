@@ -122,4 +122,16 @@ if [ -f ~/.bash_aliases ]; then
 	. ~/.bash_aliases
 fi
 
-export AGENT_BOOTSTRAP_HOME="/home/pamudu/Dev/agent_bootstrap" # agent_bootstrap
+# agent_bootstrap — derive from env, detected clone, or default Dev layout
+if [[ -z "${AGENT_BOOTSTRAP_HOME:-}" ]]; then
+	for _ab_home in \
+		"$HOME/Dev/agent_bootstrap" \
+		"$HOME/Dev/new_setup/agent_bootstrap"; do
+		if [[ -f "$_ab_home/install.sh" ]]; then
+			export AGENT_BOOTSTRAP_HOME="$_ab_home"
+			break
+		fi
+	done
+	unset _ab_home
+fi
+export AGENT_BOOTSTRAP_HOME="${AGENT_BOOTSTRAP_HOME:-$HOME/Dev/agent_bootstrap}"

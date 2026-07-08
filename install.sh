@@ -1617,6 +1617,18 @@ _extensions_menu_labels=(
 	"Back"
 )
 
+AGENT_BOOTSTRAP_REPO_URL="${AGENT_BOOTSTRAP_REPO_URL:-https://github.com/PamuduW/agent_bootstrap.git}"
+
+_agents_menu_choices=(clone bootstrap skills_update doctor agentboot back)
+_agents_menu_labels=(
+	"Clone/update agent_bootstrap repo"
+	"Run bootstrap (./install.sh)"
+	"Update skills (./install.sh skills update)"
+	"Run doctor (./install.sh doctor)"
+	"agentboot (Stage 6 — not yet available)"
+	"Back"
+)
+
 _draw_boot_menu() {
 	local cur=$1
 	local cols=$2
@@ -1829,14 +1841,188 @@ extensions_menu() {
 	done
 }
 
+_resolve_agent_bootstrap_home() {
+	if [[ -n "${AGENT_BOOTSTRAP_HOME:-}" ]]; then
+		printf '%s\n' "$AGENT_BOOTSTRAP_HOME"
+		return 0
+	fi
+
+	local candidate
+	for candidate in \
+		"${HOME}/Dev/agent_bootstrap" \
+		"${HOME}/Dev/new_setup/agent_bootstrap" \
+		"$(dirname "$DOTFILES_DIR")/agent_bootstrap"; do
+		if [[ -f "$candidate/install.sh" ]]; then
+			printf '%s\n' "$candidate"
+			return 0
+		fi
+	done
+
+	printf '%s\n' "${HOME}/Dev/agent_bootstrap"
+}
+
+_clone_or_update_agent_bootstrap() {
+	local ab_home="$1"
+	local parent_dir answer
+
+	parent_dir="$(dirname "$ab_home")"
+	mkdir -p "$parent_dir"
+
+	if [[ -d "$ab_home/.git" ]]; then
+		echo "Fetching agent_bootstrap at ${ab_home}..."
+		git -C "$ab_home" fetch --prune
+		echo ""
+		read_tty_line answer "Proceed with git pull? [y/N]: "
+		case "$answer" in
+		y | Y | yes | YES)
+			git -C "$ab_home" pull --ff-only
+			;;
+		*)
+			echo "Pull skipped."
+			;;
+		esac
+	elif [[ -d "$ab_home" ]]; then
+		echo "Error: ${ab_home} exists but is not a git repository." >&2
+		return 1
+	else
+		echo "Cloning agent_bootstrap to ${ab_home}..."
+		git clone "$AGENT_BOOTSTRAP_REPO_URL" "$ab_home"
+	fi
+}
+
+_require_agent_bootstrap_installer() {
+	local ab_home="$1"
+
+	if [[ -x "$ab_home/install.sh" ]]; then
+		return 0
+	fi
+
+	echo "Error: ${ab_home}/install.sh not found." >&2
+	echo "Run 'Clone/update agent_bootstrap repo' first." >&2
+	return 1
+}
+
+_run_agents_action() {
+	local action="$1"
+	local ab_home answer
+
+	ab_home="$(_resolve_agent_bootstrap_home)"
+
+	case "$action" in
+	clone)
+		_clone_or_update_agent_bootstrap "$ab_home"
+		;;
+	bootstrap)
+		_require_agent_bootstrap_installer "$ab_home" || return 1
+		echo ""
+		echo "Runs skills install, Claude bridge, global render, and doctor."
+		read_tty_line answer "Proceed with full bootstrap? [y/N]: "
+		case "$answer" in
+		y | Y | yes | YES)
+			( cd "$ab_home" && ./install.sh )
+			;;
+		*)
+			echo "Bootstrap cancelled."
+			;;
+		esac
+		;;
+	skills_update)
+		_require_agent_bootstrap_installer "$ab_home" || return 1
+		echo ""
+		echo "Refreshes curated skills from all upstreams in skills.sources.yaml."
+		read_tty_line answer "Proceed with skills update? [y/N]: "
+		case "$answer" in
+		y | Y | yes | YES)
+			( cd "$ab_home" && ./install.sh skills update )
+			;;
+		*)
+			echo "Skills update cancelled."
+			;;
+		esac
+		;;
+	doctor)
+		_require_agent_bootstrap_installer "$ab_home" || return 1
+		( cd "$ab_home" && ./install.sh doctor )
+		;;
+	agentboot)
+		echo ""
+		echo "agentboot is planned for Stage 6."
+		echo "See docs/plan/plan6-agentboot-and-templates.md."
+		;;
+	esac
+}
+
+_draw_agents_menu() {
+	local cur=$1
+	local cols=$2
+	local count="${#_agents_menu_labels[@]}"
+	local i prefix row ab_home
+
+	ab_home="$(_resolve_agent_bootstrap_home)"
+	printf "  \e[1m%s\e[0m\e[K\n" "$(_fit_menu_line_with_indent "=== Agents Bootstrap ===" "$cols" 2)"
+	printf "  %s\e[K\n" "$(_fit_menu_line_with_indent "Repo: ${ab_home}" "$cols" 2)"
+	printf "  %s\e[K\n\n" "$(_fit_menu_line_with_indent "Up/Down navigate   Enter confirm" "$cols" 2)"
+
+	for ((i = 0; i < count; i++)); do
+		prefix=" "
+		[[ $i -eq $cur ]] && prefix=">"
+		row="$(printf "%s %d. %s" "$prefix" "$((i + 1))" "${_agents_menu_labels[$i]}")"
+		if [[ $i -eq $cur ]]; then
+			printf "\e[7m%s\e[0m\e[K\n" "$(_fit_menu_line "$row" "$cols")"
+		else
+			printf "%s\e[K\n" "$(_fit_menu_line "$row" "$cols")"
+		fi
+	done
+}
+
 agents_menu() {
-	echo ""
-	echo "=== Agents Bootstrap ==="
-	echo ""
-	echo "Agent bootstrap (agent_bootstrap installer, agentboot) is planned"
-	echo "for Stage 5/6."
-	echo ""
-	read_tty_line _agents_return "Press Enter to return: "
+	local count cursor cols menu_lines action choice
+
+	count="${#_agents_menu_labels[@]}"
+	cursor=0
+
+	while true; do
+		cols="$(_menu_tty_cols)"
+		menu_lines=$((count + 4))
+
+		{
+			tput civis 2>/dev/null || true
+			_draw_agents_menu "$cursor" "$cols"
+
+			while true; do
+				action="$(_read_component_menu_key)"
+
+				case "$action" in
+				up)
+					[[ $cursor -gt 0 ]] && cursor=$((cursor - 1))
+					;;
+				down)
+					[[ $cursor -lt $((count - 1)) ]] && cursor=$((cursor + 1))
+					;;
+				confirm)
+					break
+					;;
+				toggle | all | none | ignore)
+					continue
+					;;
+				esac
+
+				printf "\e[%dA" "$menu_lines"
+				_draw_agents_menu "$cursor" "$cols"
+			done
+
+			tput cnorm 2>/dev/null || true
+		} >/dev/tty
+
+		choice="${_agents_menu_choices[$cursor]}"
+		[[ "$choice" == "back" ]] && break
+
+		echo ""
+		_run_agents_action "$choice"
+		echo ""
+		read_tty_line _agents_continue "Press Enter to continue: "
+		cursor=0
+	done
 }
 
 print_usage() {
@@ -1847,7 +2033,7 @@ Options:
   --initial     Run initial setup (component menu + install)
   --update      Run dotfiles update/upgrade flow
   --extensions  Open IDE extensions menu
-  --agents      Open agents bootstrap menu (stub)
+  --agents      Open agents bootstrap menu
   --help        Show this help and exit
 
 Without options on a TTY, shows the boot menu.
