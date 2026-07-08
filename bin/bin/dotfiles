@@ -161,6 +161,7 @@ upgrade_cursor_cli() {
 
 # --- Codex CLI ---
 codex_installed_version() {
+	_load_nvm
 	if command -v codex >/dev/null 2>&1; then
 		codex --version 2>/dev/null | head -n1 || echo "installed"
 	else
@@ -196,6 +197,7 @@ check_codex_cli() {
 }
 
 upgrade_codex_cli() {
+	_load_nvm
 	if command -v codex >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
 		npm i -g @openai/codex@latest
 	else
@@ -684,6 +686,7 @@ _color_result() {
 }
 
 _collect_check_rows() {
+	_load_nvm
 	local -a rows=()
 	local fn row
 	for fn in "${CHECK_FUNCS[@]}"; do

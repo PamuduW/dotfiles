@@ -2094,7 +2094,7 @@ _install_short_label() {
 	local label="$1"
 	label="${label%%(*}"
 	label="${label%% }"
-	printf '%.20s' "$label"
+	printf '%.22s' "$label"
 }
 
 _install_summary_probe() {
@@ -2132,6 +2132,10 @@ _install_summary_probe() {
 		fi
 		;;
 	nodejs)
+		if [[ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]]; then
+			# shellcheck source=/dev/null
+			. "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
+		fi
 		if command -v node >/dev/null 2>&1; then
 			printf 'installed|node %s\n' "$(node --version 2>/dev/null)"
 		else
@@ -2262,8 +2266,8 @@ print_install_summary() {
 
 	echo ""
 	echo "=== Install summary ==="
-	printf '%-20s | %-28s | %s\n' "component" "detail" "result"
-	printf '%s\n' "---------------------+----------------------------+-----------"
+	printf '%-22s | %-32s | %s\n' "component" "detail" "result"
+	printf '%s\n' "----------------------+----------------------------------+-----------"
 
 	for i in "${!COMP_KEYS[@]}"; do
 		key="${COMP_KEYS[$i]}"
@@ -2276,7 +2280,7 @@ print_install_summary() {
 		installed | configured) ((++ok_count)) ;;
 		missing | check) ((++miss_count)) ;;
 		esac
-		printf '%-20s | %-28s | %s\n' "$short_label" "${detail:0:28}" "$result"
+		printf '%-22s | %-32s | %s\n' "$short_label" "${detail:0:32}" "$result"
 	done
 
 	echo ""
