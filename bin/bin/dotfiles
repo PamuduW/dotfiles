@@ -30,6 +30,8 @@ _msg() { printf '%s\n' "$*"; }
 _warn() { printf '%s%s%s\n' "$C_YELLOW" "$*" "$C_RESET" >&2; }
 _err() { printf '%s%s%s\n' "$C_RED" "$*" "$C_RESET" >&2; }
 
+declare -A UPGRADE_STEP_RESULT=()
+
 _run_upgrade_step() {
 	local label="$1"
 	shift
@@ -40,6 +42,9 @@ _run_upgrade_step() {
 	set -e
 	if [[ $rc -ne 0 ]]; then
 		_warn "  ${label} failed (exit ${rc})"
+		UPGRADE_STEP_RESULT["$label"]="failed"
+	else
+		UPGRADE_STEP_RESULT["$label"]="ok"
 	fi
 }
 
@@ -668,15 +673,32 @@ _color_action() {
 	esac
 }
 
-print_report_table() {
-	local -a rows=()
-	local fn row component installed available action
-	local upgrade_count=0
+_color_result() {
+	local result="$1"
+	case "$result" in
+	ok | installed | configured) printf '%s%s%s' "$C_GREEN" "$result" "$C_RESET" ;;
+	failed) printf '%s%s%s' "$C_RED" "$result" "$C_RESET" ;;
+	skipped*) printf '%s%s%s' "$C_DIM" "$result" "$C_RESET" ;;
+	*) printf '%s' "$result" ;;
+	esac
+}
 
+_collect_check_rows() {
+	local -a rows=()
+	local fn row
 	for fn in "${CHECK_FUNCS[@]}"; do
 		row="$("$fn" || true)"
 		rows+=("$row")
 	done
+	printf '%s\n' "${rows[@]}"
+}
+
+print_report_table() {
+	local -a rows=()
+	local row component installed available action
+	local upgrade_count=0
+
+	mapfile -t rows < <(_collect_check_rows)
 
 	for row in "${rows[@]}"; do
 		IFS='|' read -r _ _ _ action <<<"$row"
@@ -705,6 +727,72 @@ print_report_table() {
 			"$C_YELLOW" "$upgrade_count" "$([[ $upgrade_count -eq 1 ]] && echo '' || echo 's')" "$C_RESET" \
 			"$C_BOLD" "$C_RESET"
 	fi
+}
+
+print_upgrade_summary() {
+	local upgrade_all="${1:-false}"
+	local -a rows=()
+	local row component installed available _action result
+	local ok_count=0 fail_count=0
+
+	mapfile -t rows < <(_collect_check_rows)
+
+	printf '\n%sUpgrade summary%s\n' "$C_BOLD" "$C_RESET"
+	printf '%-18s | %-28s | %-22s | %s\n' "component" "installed" "available" "result"
+	printf '%s\n' "-------------------+------------------------------+------------------------+----------"
+
+	for row in "${rows[@]}"; do
+		IFS='|' read -r component installed available _action <<<"$row"
+		result="${UPGRADE_STEP_RESULT[$component]:-}"
+		if [[ -z "$result" ]]; then
+			case "$component" in
+			"Node.js (nvm)" | "Go (asdf)" | "Monaspace fonts")
+				if [[ "$upgrade_all" == true ]]; then
+					result="skipped"
+				else
+					result="skipped (--all)"
+				fi
+				;;
+			*) result="—" ;;
+			esac
+		fi
+		case "$result" in
+		ok) ((++ok_count)) ;;
+		failed) ((++fail_count)) ;;
+		esac
+		printf '%-18s | %-28s | %-22s | ' "$component" "$installed" "$available"
+		_color_result "$result"
+		printf '\n'
+	done
+
+	printf '\n'
+	if [[ $fail_count -eq 0 ]]; then
+		printf '%sUpgrade finished%s — %d step(s) ok' "$C_GREEN" "$C_RESET" "$ok_count"
+		[[ "$upgrade_all" != true ]] && printf ' (opt-in components skipped; use --all)'
+		printf '.\n'
+	else
+		printf '%sUpgrade finished with %d failure(s)%s — see log above.\n' "$C_YELLOW" "$fail_count" "$C_RESET"
+	fi
+}
+
+print_status_table() {
+	local title="${1:-Status summary}"
+	local -a rows=()
+	local row component installed available action
+
+	mapfile -t rows < <(_collect_check_rows)
+
+	printf '\n%s%s%s\n' "$C_BOLD" "$title" "$C_RESET"
+	printf '%-18s | %-28s | %-22s | %s\n' "component" "installed" "available" "status"
+	printf '%s\n' "-------------------+------------------------------+------------------------+----------"
+
+	for row in "${rows[@]}"; do
+		IFS='|' read -r component installed available action <<<"$row"
+		printf '%-18s | %-28s | %-22s | ' "$component" "$installed" "$available"
+		_color_action "$action"
+		printf '\n'
+	done
+	printf '\n'
 }
 
 # --- IDE extensions ---
@@ -1407,6 +1495,9 @@ cmd_update() {
 cmd_upgrade() {
 	local upgrade_all=false
 	local arg
+
+	UPGRADE_STEP_RESULT=()
+
 	for arg in "$@"; do
 		case "$arg" in
 		--all) upgrade_all=true ;;
@@ -1439,8 +1530,11 @@ cmd_upgrade() {
 		_msg "${C_DIM}Skipping opt-in upgrades (Node.js, Go, Monaspace). Use --all to include them.${C_RESET}"
 	fi
 
-	_msg ""
-	_msg "Done."
+	print_upgrade_summary "$upgrade_all"
+}
+
+cmd_summary() {
+	print_status_table "Status summary"
 }
 
 cmd_status() {
@@ -1498,6 +1592,7 @@ Usage: dotfiles <command> [options]
 
 Commands:
   menu       Boot menu (initial setup / update / extensions / agents)
+  summary    Post-run status table (installed versions)
   update     Dry-run report of upgradable components (no changes)
   upgrade    Apply upgrades (apt, CLIs, GitHub tools)
              Use --all to include Node.js, Go, and Monaspace fonts
@@ -1509,6 +1604,7 @@ Commands:
 
 Examples:
   dotfiles menu
+  dotfiles summary
   dotfiles update
   dotfiles upgrade
   dotfiles upgrade --all
@@ -1522,6 +1618,7 @@ EOF
 main() {
 	case "${1:-}" in
 	menu) shift; cmd_menu "$@" ;;
+	summary) cmd_summary ;;
 	update) cmd_update ;;
 	upgrade) shift; cmd_upgrade "$@" ;;
 	status) cmd_status ;;

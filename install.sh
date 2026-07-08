@@ -2090,6 +2090,203 @@ Non-interactive runs (no TTY stdin, CI, piped) default to initial setup.
 EOF
 }
 
+_install_short_label() {
+	local label="$1"
+	label="${label%%(*}"
+	label="${label%% }"
+	printf '%.20s' "$label"
+}
+
+_install_summary_probe() {
+	local key="$1"
+	local name email ver count gcm font_dir
+
+	case "$key" in
+	git_identity)
+		name="$(git config --global user.name 2>/dev/null || true)"
+		email="$(git config --global user.email 2>/dev/null || true)"
+		if [[ -n "$name" && -n "$email" ]]; then
+			printf 'configured|%s <%s>' "$name" "$email"
+		else
+			printf 'skipped|not configured'
+		fi
+		;;
+	system_packages) printf 'installed|apt @core @cli @system\n' ;;
+	python) printf 'installed|python3 pip venv\n' ;;
+	powershell)
+		if command -v pwsh >/dev/null 2>&1; then
+			printf 'installed|%s\n' "$(pwsh --version 2>/dev/null | head -n1)"
+		else
+			printf 'missing|pwsh not on PATH'
+		fi
+		;;
+	go)
+		if command -v go >/dev/null 2>&1; then
+			ver="$(go version 2>/dev/null | grep -oE 'go[0-9.]+' | head -n1 || true)"
+			printf 'installed|%s\n' "${ver:-go}"
+		elif command -v asdf >/dev/null 2>&1; then
+			ver="$(asdf current golang 2>/dev/null | awk '$1=="golang" {print $2; exit}')"
+			printf 'installed|%s\n' "${ver:-asdf golang}"
+		else
+			printf 'missing|go not on PATH'
+		fi
+		;;
+	nodejs)
+		if command -v node >/dev/null 2>&1; then
+			printf 'installed|node %s\n' "$(node --version 2>/dev/null)"
+		else
+			printf 'missing|node not on PATH'
+		fi
+		;;
+	direnv)
+		if command -v direnv >/dev/null 2>&1; then
+			printf 'installed|%s\n' "$(direnv version 2>/dev/null | head -n1)"
+		else
+			printf 'missing|direnv not on PATH'
+		fi
+		;;
+	docker)
+		if command -v docker >/dev/null 2>&1; then
+			printf 'installed|%s\n' "$(docker --version 2>/dev/null | head -n1)"
+		else
+			printf 'missing|docker not on PATH'
+		fi
+		;;
+	portainer)
+		if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx portainer; then
+			printf 'installed|container exists (stopped by default)'
+		else
+			printf 'missing|portainer container not found'
+		fi
+		;;
+	lazygit)
+		if command -v lazygit >/dev/null 2>&1; then
+			ver="$(lazygit --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)"
+			printf 'installed|%s\n' "${ver:-lazygit}"
+		else
+			printf 'missing|lazygit not on PATH'
+		fi
+		;;
+	lazydocker)
+		if command -v lazydocker >/dev/null 2>&1; then
+			ver="$(lazydocker --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)"
+			printf 'installed|%s\n' "${ver:-lazydocker}"
+		else
+			printf 'missing|lazydocker not on PATH'
+		fi
+		;;
+	cursor_cli)
+		if command -v agent >/dev/null 2>&1 || command -v cursor >/dev/null 2>&1; then
+			if command -v agent >/dev/null 2>&1; then
+				ver="$(agent --version 2>/dev/null | head -n1 || true)"
+			else
+				ver="$(cursor --version 2>/dev/null | head -n1 || true)"
+			fi
+			printf 'installed|%s\n' "${ver:-cursor cli}"
+		else
+			printf 'missing|cursor/agent not on PATH'
+		fi
+		;;
+	codex_cli)
+		if command -v codex >/dev/null 2>&1; then
+			printf 'installed|%s\n' "$(codex --version 2>/dev/null | head -n1)"
+		else
+			printf 'missing|codex not on PATH'
+		fi
+		;;
+	claude_cli)
+		if command -v claude >/dev/null 2>&1; then
+			printf 'installed|%s\n' "$(claude --version 2>/dev/null | head -n1)"
+		else
+			printf 'missing|claude not on PATH'
+		fi
+		;;
+	copilot_cli)
+		if command -v copilot >/dev/null 2>&1; then
+			printf 'installed|%s\n' "$(copilot --version 2>/dev/null | head -n1)"
+		elif [[ -x "$HOME/.local/bin/copilot" ]]; then
+			printf 'installed|%s\n' "$("$HOME/.local/bin/copilot" --version 2>/dev/null | head -n1)"
+		else
+			printf 'missing|copilot not on PATH'
+		fi
+		;;
+	monaspace_fonts)
+		font_dir="$HOME/.local/share/fonts/monaspace"
+		if [[ -d "$font_dir" ]] && compgen -G "${font_dir}/*.otf" >/dev/null 2>&1; then
+			count="$(find "$font_dir" -maxdepth 1 -name '*.otf' 2>/dev/null | wc -l | tr -d ' ')"
+			ver="installed"
+			[[ -f "${font_dir}/.version" ]] && ver="$(cat "${font_dir}/.version")"
+			printf 'installed|%s (%s fonts)\n' "$ver" "$count"
+		else
+			printf 'missing|fonts not in ~/.local/share/fonts/monaspace'
+		fi
+		;;
+	ssh_key)
+		if [[ -f "$HOME/.ssh/id_ed25519" || -f "$HOME/.ssh/id_rsa" ]]; then
+			printf 'installed|~/.ssh key present'
+		else
+			printf 'skipped|no default key found'
+		fi
+		;;
+	dotfiles)
+		if [[ -e "$HOME/bin/dotfiles" || -e "$HOME/bin/ex" ]]; then
+			printf 'installed|stow bash bin readline'
+		else
+			printf 'check|~/bin symlinks missing'
+		fi
+		;;
+	wsl_conf)
+		if [[ -f /etc/wsl.conf ]] && grep -q '^systemd=true' /etc/wsl.conf 2>/dev/null; then
+			printf 'configured|systemd + appendWindowsPath'
+		else
+			printf 'check|/etc/wsl.conf not as expected'
+		fi
+		;;
+	git_credential)
+		gcm="$(git config --global credential.helper 2>/dev/null || true)"
+		if [[ -n "$gcm" ]]; then
+			printf 'configured|%s\n' "$gcm"
+		else
+			printf 'skipped|no global credential.helper'
+		fi
+		;;
+	*)
+		printf '—|unknown component'
+		;;
+	esac
+}
+
+print_install_summary() {
+	local i key label row result detail short_label
+	local ok_count=0 miss_count=0
+
+	echo ""
+	echo "=== Install summary ==="
+	printf '%-20s | %-28s | %s\n' "component" "detail" "result"
+	printf '%s\n' "---------------------+----------------------------+-----------"
+
+	for i in "${!COMP_KEYS[@]}"; do
+		key="${COMP_KEYS[$i]}"
+		is_on "$key" || continue
+		label="${COMP_LABELS[$i]}"
+		row="$(_install_summary_probe "$key")"
+		IFS='|' read -r result detail <<<"$row"
+		short_label="$(_install_short_label "$label")"
+		case "$result" in
+		installed | configured) ((++ok_count)) ;;
+		missing | check) ((++miss_count)) ;;
+		esac
+		printf '%-20s | %-28s | %s\n' "$short_label" "${detail:0:28}" "$result"
+	done
+
+	echo ""
+	if [[ $miss_count -eq 0 ]]; then
+		echo "Install finished — ${ok_count} component(s) look good."
+	else
+		echo "Install finished — ${ok_count} ok, ${miss_count} need attention (see log above)."
+	fi
+}
+
 run_install() {
 	echo ""
 	echo "=== Installing ==="
@@ -2195,6 +2392,8 @@ run_install() {
 		stow_dotfiles
 		ensure_bash_profile_sources_bashrc
 	fi
+
+	print_install_summary
 
 	echo ""
 	echo "Done. Log saved to: $LOG_FILE"
