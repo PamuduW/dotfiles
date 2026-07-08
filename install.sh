@@ -13,6 +13,12 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DOTFILES_DIR="$SCRIPT_DIR"
 PKG_FILE="$DOTFILES_DIR/packages/packages.txt"
 
+# Capture before logging redirect — exec > >(tee) makes stdout non-TTY.
+DOTFILES_INTERACTIVE_TTY=false
+if [[ -t 0 ]]; then
+	DOTFILES_INTERACTIVE_TTY=true
+fi
+
 _clean_log_stream() {
 	perl -pe '
 		s/\r/\n/g;
@@ -2057,8 +2063,8 @@ Options:
   --agents      Open agents bootstrap menu
   --help        Show this help and exit
 
-Without options on a TTY, shows the boot menu.
-Non-TTY runs default to initial setup.
+Without options on an interactive terminal, shows the boot menu.
+Non-interactive runs (no TTY stdin, CI, piped) default to initial setup.
 EOF
 }
 
@@ -2226,7 +2232,7 @@ main() {
 	done
 
 	if [[ -z "$mode" ]]; then
-		if [[ -t 1 ]]; then
+		if [[ "$DOTFILES_INTERACTIVE_TTY" == true ]]; then
 			boot_menu
 			mode="$BOOT_CHOICE"
 		else
