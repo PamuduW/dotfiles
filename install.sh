@@ -1608,6 +1608,15 @@ _boot_menu_labels=(
 	"Quit"
 )
 
+_extensions_menu_choices=(check backup restore compare back)
+_extensions_menu_labels=(
+	"Check status (all targets)"
+	"Backup"
+	"Restore"
+	"Compare"
+	"Back"
+)
+
 _draw_boot_menu() {
 	local cur=$1
 	local cols=$2
@@ -1669,6 +1678,61 @@ boot_menu() {
 	BOOT_CHOICE="${_boot_menu_choices[$cursor]}"
 }
 
+_draw_extensions_menu() {
+	local cur=$1
+	local cols=$2
+	local count="${#_extensions_menu_labels[@]}"
+	local i prefix row
+
+	printf "  \e[1m%s\e[0m\e[K\n" "$(_fit_menu_line_with_indent "=== IDE Extensions ===" "$cols" 2)"
+	printf "  %s\e[K\n\n" "$(_fit_menu_line_with_indent "Up/Down navigate   Enter confirm" "$cols" 2)"
+
+	for ((i = 0; i < count; i++)); do
+		prefix=" "
+		[[ $i -eq $cur ]] && prefix=">"
+		row="$(printf "%s %d. %s" "$prefix" "$((i + 1))" "${_extensions_menu_labels[$i]}")"
+		if [[ $i -eq $cur ]]; then
+			printf "\e[7m%s\e[0m\e[K\n" "$(_fit_menu_line "$row" "$cols")"
+		else
+			printf "%s\e[K\n" "$(_fit_menu_line "$row" "$cols")"
+		fi
+	done
+}
+
+_run_extensions_action() {
+	local dotfiles_cmd="$1"
+	local action="$2"
+	local answer
+
+	case "$action" in
+	check)
+		"$dotfiles_cmd" ext check all
+		;;
+	backup)
+		"$dotfiles_cmd" ext backup all
+		;;
+	restore)
+		echo ""
+		echo "Warning: restore installs from manifest but does NOT remove"
+		echo "extra installed extensions. Use 'dotfiles ext restore --prune'"
+		echo "separately if you want to uninstall extras."
+		echo ""
+		read_tty_line answer "Proceed with restore? [y/N]: "
+		case "$answer" in
+		y | Y | yes | YES)
+			"$dotfiles_cmd" ext restore all
+			;;
+		*)
+			echo "Restore cancelled."
+			;;
+		esac
+		;;
+	compare)
+		"$dotfiles_cmd" ext compare all
+		;;
+	esac
+}
+
 _resolve_dotfiles_cmd() {
 	if [[ -x "$DOTFILES_DIR/bin/bin/dotfiles" ]]; then
 		printf '%s\n' "$DOTFILES_DIR/bin/bin/dotfiles"
@@ -1711,13 +1775,58 @@ run_update_flow() {
 }
 
 extensions_menu() {
-	echo ""
-	echo "=== IDE Extensions ==="
-	echo ""
-	echo "The IDE extensions menu (check / backup / restore / compare)"
-	echo "is planned for Stage 4 — see docs/plan/plan4-ide-extensions.md."
-	echo ""
-	read_tty_line _extensions_return "Press Enter to return: "
+	local dotfiles_cmd count cursor cols menu_lines action choice
+
+	dotfiles_cmd="$(_resolve_dotfiles_cmd)" || {
+		echo "Error: dotfiles command not found." >&2
+		return 1
+	}
+
+	count="${#_extensions_menu_labels[@]}"
+	cursor=0
+
+	while true; do
+		cols="$(_menu_tty_cols)"
+		menu_lines=$((count + 3))
+
+		{
+			tput civis 2>/dev/null || true
+			_draw_extensions_menu "$cursor" "$cols"
+
+			while true; do
+				action="$(_read_component_menu_key)"
+
+				case "$action" in
+				up)
+					[[ $cursor -gt 0 ]] && cursor=$((cursor - 1))
+					;;
+				down)
+					[[ $cursor -lt $((count - 1)) ]] && cursor=$((cursor + 1))
+					;;
+				confirm)
+					break
+					;;
+				toggle | all | none | ignore)
+					continue
+					;;
+				esac
+
+				printf "\e[%dA" "$menu_lines"
+				_draw_extensions_menu "$cursor" "$cols"
+			done
+
+			tput cnorm 2>/dev/null || true
+		} >/dev/tty
+
+		choice="${_extensions_menu_choices[$cursor]}"
+		[[ "$choice" == "back" ]] && break
+
+		echo ""
+		_run_extensions_action "$dotfiles_cmd" "$choice"
+		echo ""
+		read_tty_line _extensions_continue "Press Enter to continue: "
+		cursor=0
+	done
 }
 
 agents_menu() {
@@ -1737,7 +1846,7 @@ Usage: $(basename "$0") [OPTIONS]
 Options:
   --initial     Run initial setup (component menu + install)
   --update      Run dotfiles update/upgrade flow
-  --extensions  Open IDE extensions menu (stub)
+  --extensions  Open IDE extensions menu
   --agents      Open agents bootstrap menu (stub)
   --help        Show this help and exit
 

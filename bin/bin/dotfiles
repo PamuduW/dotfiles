@@ -674,6 +674,697 @@ print_report_table() {
 	fi
 }
 
+# --- IDE extensions ---
+EXT_ALL_TARGETS=(vscode-wsl cursor-wsl vscode-win cursor-win)
+_EXT_ENUM_METHOD=""
+_EXT_ENUM_DIR=""
+
+_ext_discover_win_user_dir() {
+	local user_dir base
+	for user_dir in /mnt/c/Users/*/; do
+		[[ -d "$user_dir" ]] || continue
+		base="$(basename "$user_dir")"
+		case "$base" in
+		Public | Default | 'Default User' | 'All Users') continue ;;
+		esac
+		if [[ -d "${user_dir}.vscode" || -d "${user_dir}.cursor" ]]; then
+			printf '%s\n' "${user_dir%/}"
+			return 0
+		fi
+	done
+	for user_dir in /mnt/c/Users/*/; do
+		[[ -d "$user_dir" ]] || continue
+		base="$(basename "$user_dir")"
+		case "$base" in
+		Public | Default | 'Default User' | 'All Users') continue ;;
+		esac
+		printf '%s\n' "${user_dir%/}"
+		return 0
+	done
+	return 1
+}
+
+_ext_target_platform() {
+	case "$1" in
+	vscode-wsl | cursor-wsl) printf 'wsl\n' ;;
+	vscode-win | cursor-win) printf 'win\n' ;;
+	esac
+}
+
+_ext_target_label() {
+	case "$1" in
+	vscode-wsl) printf 'VS Code (WSL)\n' ;;
+	cursor-wsl) printf 'Cursor (WSL)\n' ;;
+	vscode-win) printf 'VS Code (Windows)\n' ;;
+	cursor-win) printf 'Cursor (Windows)\n' ;;
+	*) printf '%s\n' "$1" ;;
+	esac
+}
+
+_ext_get_extensions_dir() {
+	local target="$1"
+	local win_user
+	case "$target" in
+	vscode-wsl) printf '%s\n' "${HOME}/.vscode-server/extensions" ;;
+	cursor-wsl) printf '%s\n' "${HOME}/.cursor-server/extensions" ;;
+	vscode-win)
+		win_user="$(_ext_discover_win_user_dir || true)"
+		[[ -n "$win_user" ]] && printf '%s\n' "${win_user}/.vscode/extensions"
+		;;
+	cursor-win)
+		win_user="$(_ext_discover_win_user_dir || true)"
+		[[ -n "$win_user" ]] && printf '%s\n' "${win_user}/.cursor/extensions"
+		;;
+	esac
+}
+
+_ext_find_wsl_cli() {
+	local kind="$1"
+	local bin
+	case "$kind" in
+	code) bin="code" ;;
+	cursor) bin="cursor" ;;
+	*) return 1 ;;
+	esac
+	if command -v "$bin" >/dev/null 2>&1; then
+		command -v "$bin"
+		return 0
+	fi
+	return 1
+}
+
+_ext_find_win_cli() {
+	local kind="$1"
+	local candidate
+	local -a candidates=()
+	case "$kind" in
+	code)
+		candidates=(
+			"/mnt/c/Program Files/Microsoft VS Code/bin/code.cmd"
+			"/mnt/c/Program Files (x86)/Microsoft VS Code/bin/code.cmd"
+		)
+		;;
+	cursor)
+		candidates=(
+			"/mnt/c/Program Files/cursor/resources/app/bin/cursor.cmd"
+			"/mnt/c/Program Files/Cursor/resources/app/bin/cursor.cmd"
+		)
+		;;
+	*) return 1 ;;
+	esac
+	for candidate in "${candidates[@]}"; do
+		[[ -f "$candidate" ]] && {
+			printf '%s\n' "$candidate"
+			return 0
+		}
+	done
+	local win_user local_app
+	win_user="$(_ext_discover_win_user_dir || true)"
+	if [[ -n "$win_user" ]]; then
+		case "$kind" in
+		code)
+			local_app="${win_user}/AppData/Local/Programs/Microsoft VS Code/bin/code.cmd"
+			;;
+		cursor)
+			local_app="${win_user}/AppData/Local/Programs/cursor/resources/app/bin/cursor.cmd"
+			local_app_alt="${win_user}/AppData/Local/Programs/Cursor/resources/app/bin/cursor.cmd"
+			[[ -f "$local_app_alt" ]] && {
+				printf '%s\n' "$local_app_alt"
+				return 0
+			}
+			;;
+		esac
+		[[ -f "$local_app" ]] && {
+			printf '%s\n' "$local_app"
+			return 0
+		}
+	fi
+	return 1
+}
+
+_ext_find_cli() {
+	local target="$1"
+	case "$target" in
+	vscode-wsl) _ext_find_wsl_cli code ;;
+	cursor-wsl) _ext_find_wsl_cli cursor ;;
+	vscode-win) _ext_find_win_cli code ;;
+	cursor-win) _ext_find_win_cli cursor ;;
+	*) return 1 ;;
+	esac
+}
+
+_ext_win_to_ps_path() {
+	local wsl_path="$1"
+	if command -v wslpath >/dev/null 2>&1; then
+		wslpath -w "$wsl_path"
+	else
+		# Fallback: /mnt/c/... -> C:\...
+		local drive rest
+		if [[ "$wsl_path" =~ ^/mnt/([a-zA-Z])/(.*)$ ]]; then
+			drive="$(printf '%s' "${BASH_REMATCH[1]}" | tr '[:lower:]' '[:upper:]')"
+			rest="${BASH_REMATCH[2]//\//\\}"
+			printf '%s:\\%s\n' "$drive" "$rest"
+		else
+			printf '%s\n' "$wsl_path"
+		fi
+	fi
+}
+
+_ext_run_win_cli() {
+	local cli_wsl="$1"
+	shift
+	local ps_cli arg args=()
+	ps_cli="$(_ext_win_to_ps_path "$cli_wsl")"
+	ps_cli="${ps_cli//\'/\'\'}"
+	for arg in "$@"; do
+		args+=("'${arg//\'/\'\'}'")
+	done
+	powershell.exe -NoProfile -Command "& '${ps_cli}' ${args[*]}"
+}
+
+_ext_run_cli() {
+	local target="$1"
+	local cli="$2"
+	shift 2
+	case "$(_ext_target_platform "$target")" in
+	wsl) "$cli" "$@" ;;
+	win) _ext_run_win_cli "$cli" "$@" ;;
+	esac
+}
+
+_ext_strip_platform_suffix() {
+	local name="$1"
+	local suffix changed=true
+	local -a suffixes=(
+		universal linux-x64 linux-arm64 linux-armhf
+		win32-x64 win32-arm64 alpine-x64 alpine-arm64 darwin-x64 darwin-arm64
+	)
+	while [[ "$changed" == true ]]; do
+		changed=false
+		for suffix in "${suffixes[@]}"; do
+			if [[ "$name" == *"-${suffix}" ]]; then
+				name="${name%-"${suffix}"}"
+				changed=true
+			fi
+		done
+	done
+	printf '%s' "$name"
+}
+
+_ext_parse_folder() {
+	local folder="$1"
+	local stripped id ver
+	stripped="$(_ext_strip_platform_suffix "$folder")"
+	if [[ "$stripped" =~ ^(.+)-([0-9].*)$ ]]; then
+		id="${BASH_REMATCH[1]}"
+		ver="${BASH_REMATCH[2]}"
+		printf '%s@%s\n' "$id" "$ver"
+	fi
+}
+
+_ext_disk_list() {
+	local dir="$1"
+	local folder base id_ver id ver
+	declare -A best=()
+	if [[ ! -d "$dir" ]]; then
+		return 0
+	fi
+	for folder in "$dir"/*/; do
+		[[ -d "$folder" ]] || continue
+		base="$(basename "$folder")"
+		[[ "$base" == .* ]] && continue
+		id_ver="$(_ext_parse_folder "$base")"
+		[[ -z "$id_ver" ]] && continue
+		id="${id_ver%%@*}"
+		ver="${id_ver#*@}"
+		if [[ -z "${best[$id]:-}" ]] || _version_gt "$ver" "${best[$id]}"; then
+			best[$id]="$ver"
+		fi
+	done
+	local key
+	for key in "${!best[@]}"; do
+		printf '%s@%s\n' "$key" "${best[$key]}"
+	done | sort
+}
+
+_ext_cli_list() {
+	local target="$1"
+	local cli="$2"
+	local output ext_dir
+	output="$(_ext_run_cli "$target" "$cli" --list-extensions --show-versions 2>/dev/null || true)"
+	if [[ -n "$output" ]]; then
+		printf '%s\n' "$output" | sed '/^[[:space:]]*$/d' | sort -u
+		return 0
+	fi
+	ext_dir="$(_ext_get_extensions_dir "$target")"
+	if [[ -n "$ext_dir" && -d "$ext_dir" ]]; then
+		output="$(_ext_run_cli "$target" "$cli" --extensions-dir "$ext_dir" --list-extensions --show-versions 2>/dev/null || true)"
+		if [[ -n "$output" ]]; then
+			printf '%s\n' "$output" | sed '/^[[:space:]]*$/d' | sort -u
+			return 0
+		fi
+	fi
+	return 1
+}
+
+_ext_list_extensions() {
+	local target="$1"
+	local cli method dir list
+	_EXT_ENUM_DIR="$(_ext_get_extensions_dir "$target")"
+	_EXT_ENUM_METHOD="disk"
+	method="disk"
+
+	if cli="$(_ext_find_cli "$target" 2>/dev/null || true)" && [[ -n "$cli" ]]; then
+		if list="$(_ext_cli_list "$target" "$cli" 2>/dev/null || true)" && [[ -n "$list" ]]; then
+			method="cli"
+			_EXT_ENUM_METHOD="$method"
+			printf '%s\n' "$list"
+			return 0
+		fi
+	fi
+
+	dir="$_EXT_ENUM_DIR"
+	if [[ -z "$dir" || ! -d "$dir" ]]; then
+		_warn "Extensions dir not found for ${target}: ${dir:-unknown}"
+		return 0
+	fi
+	_EXT_ENUM_METHOD="$method"
+	_ext_disk_list "$dir"
+}
+
+_ext_obsolete_note() {
+	local dir="$1"
+	local obsolete_file count
+	if [[ ! -d "$dir" ]]; then
+		printf 'extensions dir missing\n'
+		return
+	fi
+	obsolete_file="${dir}/.obsolete"
+	if [[ -f "$obsolete_file" ]]; then
+		count="$(wc -l <"$obsolete_file" | tr -d ' ')"
+		printf '%s stale entries in .obsolete\n' "$count"
+	else
+		printf 'no .obsolete file\n'
+	fi
+}
+
+_ext_backup_file() {
+	printf '%s/extensions/%s.txt\n' "$DOTFILES_DIR" "$1"
+}
+
+_ext_manifest_file() {
+	printf '%s/extensions/manifest.json\n' "$DOTFILES_DIR"
+}
+
+_ext_write_manifest() {
+	local ts="$1"
+	shift
+	local manifest
+	manifest="$(_ext_manifest_file)"
+	mkdir -p "$(dirname "$manifest")"
+	if ! command -v python3 >/dev/null 2>&1; then
+		_warn "python3 not found; skipping manifest.json update"
+		return 0
+	fi
+	MANIFEST_PATH="$manifest" MANIFEST_TS="$ts" MANIFEST_ENTRIES="$*" python3 - <<'PY'
+import json, os, sys
+from pathlib import Path
+
+manifest_path = Path(os.environ["MANIFEST_PATH"])
+ts = os.environ["MANIFEST_TS"]
+entries_raw = os.environ.get("MANIFEST_ENTRIES", "")
+
+data = {"updated": ts, "targets": {}}
+if manifest_path.is_file():
+    try:
+        data = json.loads(manifest_path.read_text())
+    except json.JSONDecodeError:
+        pass
+data["updated"] = ts
+if "targets" not in data or not isinstance(data["targets"], dict):
+    data["targets"] = {}
+
+for chunk in entries_raw.split("|||"):
+    if not chunk:
+        continue
+    parts = chunk.split("|", 3)
+    if len(parts) < 4:
+        continue
+    target, count, method, ext_file = parts
+    data["targets"][target] = {
+        "count": int(count),
+        "method": method,
+        "file": ext_file,
+    }
+
+manifest_path.parent.mkdir(parents=True, exist_ok=True)
+manifest_path.write_text(json.dumps(data, indent=2) + "\n")
+PY
+}
+
+_ext_resolve_targets() {
+	local arg="${1:-all}"
+	case "$arg" in
+	all) printf '%s\n' "${EXT_ALL_TARGETS[@]}" ;;
+	vscode-wsl | cursor-wsl | vscode-win | cursor-win) printf '%s\n' "$arg" ;;
+	*)
+		_err "Unknown extension target: $arg (expected: vscode-wsl, cursor-wsl, vscode-win, cursor-win, all)"
+		return 1
+		;;
+	esac
+}
+
+_ext_read_backup_lines() {
+	local file="$1"
+	if [[ ! -f "$file" ]]; then
+		return 1
+	fi
+	grep -v '^[[:space:]]*$' "$file" | grep -v '^#' | sort -u
+}
+
+_ext_parse_ext_line() {
+	local line="$1"
+	_EXT_PARSE_ID="${line%%@*}"
+	if [[ "$line" == *@* ]]; then
+		_EXT_PARSE_VER="${line#*@}"
+	else
+		_EXT_PARSE_VER=""
+	fi
+}
+
+_ext_install_extension() {
+	local target="$1"
+	local ext_line="$2"
+	local cli
+	cli="$(_ext_find_cli "$target" 2>/dev/null || true)"
+	if [[ -z "$cli" ]]; then
+		_err "  CLI not found for ${target}; cannot install ${ext_line}"
+		return 1
+	fi
+	_msg "  installing ${ext_line}"
+	_ext_run_cli "$target" "$cli" --install-extension "$ext_line" --force
+}
+
+_ext_uninstall_extension() {
+	local target="$1"
+	local ext_id="$2"
+	local cli
+	cli="$(_ext_find_cli "$target" 2>/dev/null || true)"
+	if [[ -z "$cli" ]]; then
+		_err "  CLI not found for ${target}; cannot uninstall ${ext_id}"
+		return 1
+	fi
+	_msg "  uninstalling ${ext_id}"
+	_ext_run_cli "$target" "$cli" --uninstall-extension "$ext_id"
+}
+
+_ext_cmd_check() {
+	local target label dir method list count obsolete list_file
+	for target in "$@"; do
+		label="$(_ext_target_label "$target")"
+		dir="$(_ext_get_extensions_dir "$target")"
+		list_file="$(mktemp)"
+		_ext_list_extensions "$target" >"$list_file"
+		list="$(<"$list_file")"
+		rm -f "$list_file"
+		method="${_EXT_ENUM_METHOD:-disk}"
+		count="$(printf '%s\n' "$list" | sed '/^[[:space:]]*$/d' | wc -l | tr -d ' ')"
+		obsolete="$(_ext_obsolete_note "${dir:-missing}")"
+		printf '\n%s=== %s (%s) ===%s\n' "$C_BOLD" "$label" "$target" "$C_RESET"
+		printf '  count:      %s\n' "$count"
+		printf '  method:     %s\n' "$method"
+		printf '  extensions: %s\n' "${dir:-not found}"
+		printf '  stale:      %s\n' "$obsolete"
+	done
+	printf '\n'
+}
+
+_ext_cmd_backup() {
+	local target list method dir count outfile manifest_entries="" ts entry list_file
+	local ext_dir="${DOTFILES_DIR}/extensions"
+	mkdir -p "$ext_dir"
+	ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+	for target in "$@"; do
+		list_file="$(mktemp)"
+		_ext_list_extensions "$target" >"$list_file"
+		list="$(<"$list_file")"
+		rm -f "$list_file"
+		method="${_EXT_ENUM_METHOD:-disk}"
+		dir="${_EXT_ENUM_DIR:-$(_ext_get_extensions_dir "$target")}"
+		count="$(printf '%s\n' "$list" | sed '/^[[:space:]]*$/d' | wc -l | tr -d ' ')"
+		outfile="$(_ext_backup_file "$target")"
+		printf '%s\n' "$list" | sed '/^[[:space:]]*$/d' | sort -u >"$outfile"
+		_msg "Backed up ${count} extension(s) for ${target} (${method}) -> ${outfile}"
+		entry="${target}|${count}|${method}|$(basename "$outfile")"
+		if [[ -n "$manifest_entries" ]]; then
+			manifest_entries="${manifest_entries}|||${entry}"
+		else
+			manifest_entries="$entry"
+		fi
+	done
+
+	_ext_write_manifest "$ts" "$manifest_entries"
+	_msg "Updated $(_ext_manifest_file)"
+}
+
+_ext_cmd_restore() {
+	local prune="$1"
+	shift
+	local target backup_file line cli
+	local -a installed_ids=()
+	local -a backup_ids=()
+
+	for target in "$@"; do
+		backup_file="$(_ext_backup_file "$target")"
+		if [[ ! -f "$backup_file" ]]; then
+			_err "No backup file for ${target}: ${backup_file}"
+			continue
+		fi
+		printf '\n%s=== Restoring %s ===%s\n' "$C_BOLD" "$target" "$C_RESET"
+		while IFS= read -r line || [[ -n "$line" ]]; do
+			[[ -z "$line" || "$line" =~ ^# ]] && continue
+			_ext_install_extension "$target" "$line" || true
+		done <"$backup_file"
+
+		if [[ "$prune" == true ]]; then
+			cli="$(_ext_find_cli "$target" 2>/dev/null || true)"
+			if [[ -z "$cli" ]]; then
+				_warn "Cannot prune ${target}: CLI not found"
+				continue
+			fi
+			installed_ids=()
+			backup_ids=()
+			while IFS= read -r line; do
+				_ext_parse_ext_line "$line"
+				[[ -n "$_EXT_PARSE_ID" ]] && installed_ids+=("$_EXT_PARSE_ID")
+			done < <(_ext_list_extensions "$target" | sed '/^[[:space:]]*$/d')
+			while IFS= read -r line; do
+				_ext_parse_ext_line "$line"
+				[[ -n "$_EXT_PARSE_ID" ]] && backup_ids+=("$_EXT_PARSE_ID")
+			done < <(_ext_read_backup_lines "$backup_file")
+
+			local inst_id found
+			for inst_id in "${installed_ids[@]}"; do
+				found=false
+				local bid
+				for bid in "${backup_ids[@]}"; do
+					if [[ "$inst_id" == "$bid" ]]; then
+						found=true
+						break
+					fi
+				done
+				if [[ "$found" == false ]]; then
+					_ext_uninstall_extension "$target" "$inst_id" || true
+				fi
+			done
+		fi
+	done
+}
+
+_ext_cmd_compare() {
+	local target backup_file installed label
+	local line id ver
+	declare -A backup_ver installed_ver
+	local -a only_backup=() only_installed=() drift=()
+
+	for target in "$@"; do
+		backup_file="$(_ext_backup_file "$target")"
+		label="$(_ext_target_label "$target")"
+		backup_ver=()
+		installed_ver=()
+		only_backup=()
+		only_installed=()
+		drift=()
+
+		printf '\n%s=== Compare %s (%s) ===%s\n' "$C_BOLD" "$label" "$target" "$C_RESET"
+
+		if [[ ! -f "$backup_file" ]]; then
+			_warn "No backup file: ${backup_file}"
+			continue
+		fi
+
+		while IFS= read -r line; do
+			_ext_parse_ext_line "$line"
+			[[ -n "$_EXT_PARSE_ID" ]] && backup_ver["$_EXT_PARSE_ID"]="$_EXT_PARSE_VER"
+		done < <(_ext_read_backup_lines "$backup_file")
+
+		while IFS= read -r line; do
+			_ext_parse_ext_line "$line"
+			[[ -n "$_EXT_PARSE_ID" ]] && installed_ver["$_EXT_PARSE_ID"]="$_EXT_PARSE_VER"
+		done < <(_ext_list_extensions "$target" | sed '/^[[:space:]]*$/d')
+
+		local key
+		for key in "${!backup_ver[@]}"; do
+			if [[ -z "${installed_ver[$key]:-}" ]]; then
+				only_backup+=("${key}@${backup_ver[$key]}")
+			elif [[ "${backup_ver[$key]}" != "${installed_ver[$key]}" ]]; then
+				drift+=("${key}: backup=${backup_ver[$key]} installed=${installed_ver[$key]}")
+			fi
+		done
+		for key in "${!installed_ver[@]}"; do
+			if [[ -z "${backup_ver[$key]:-}" ]]; then
+				only_installed+=("${key}@${installed_ver[$key]}")
+			fi
+		done
+
+		if [[ ${#only_backup[@]} -gt 0 ]]; then
+			mapfile -t only_backup < <(printf '%s\n' "${only_backup[@]}" | sort)
+		fi
+		if [[ ${#only_installed[@]} -gt 0 ]]; then
+			mapfile -t only_installed < <(printf '%s\n' "${only_installed[@]}" | sort)
+		fi
+		if [[ ${#drift[@]} -gt 0 ]]; then
+			mapfile -t drift < <(printf '%s\n' "${drift[@]}" | sort)
+		fi
+
+		printf '  only in backup (%d):\n' "${#only_backup[@]}"
+		if [[ ${#only_backup[@]} -eq 0 ]]; then
+			printf '    (none)\n'
+		else
+			local item
+			for item in "${only_backup[@]}"; do
+				printf '    %s\n' "$item"
+			done
+		fi
+
+		printf '  only installed (%d):\n' "${#only_installed[@]}"
+		if [[ ${#only_installed[@]} -eq 0 ]]; then
+			printf '    (none)\n'
+		else
+			for item in "${only_installed[@]}"; do
+				printf '    %s\n' "$item"
+			done
+		fi
+
+		printf '  version drift (%d):\n' "${#drift[@]}"
+		if [[ ${#drift[@]} -eq 0 ]]; then
+			printf '    (none)\n'
+		else
+			for item in "${drift[@]}"; do
+				printf '    %s\n' "$item"
+			done
+		fi
+	done
+	printf '\n'
+}
+
+cmd_ext_help() {
+	cat <<EOF
+Usage: dotfiles ext <subcommand> [target] [options]
+
+Subcommands:
+  check [target]     Report extension inventory per target (count, method, path)
+  backup [target]    Write manifests to extensions/<target>.txt + manifest.json
+  restore [target]   Install extensions from backup (--prune to uninstall extras)
+  compare [target]   Diff installed vs backed-up extensions
+
+Targets: vscode-wsl, cursor-wsl, vscode-win, cursor-win, all (default: all)
+
+Examples:
+  dotfiles ext check
+  dotfiles ext backup cursor-wsl
+  dotfiles ext restore all
+  dotfiles ext restore cursor-wsl --prune
+  dotfiles ext compare vscode-win
+EOF
+}
+
+cmd_ext() {
+	local subcmd="${1:-}"
+	[[ -z "$subcmd" ]] && {
+		cmd_ext_help
+		return 1
+	}
+	shift
+
+	local target="all"
+	local prune=false
+
+	case "$subcmd" in
+	check | backup | compare)
+		if [[ $# -gt 0 && "$1" != -* ]]; then
+			target="$1"
+			shift
+		fi
+		;;
+	restore)
+		while [[ $# -gt 0 ]]; do
+			case "$1" in
+			--prune) prune=true ;;
+			-h | --help)
+				cmd_ext_help
+				return 0
+				;;
+			-*)
+				_err "Unknown option: $1"
+				cmd_ext_help
+				return 1
+				;;
+			*)
+				if [[ "$target" == "all" ]]; then
+					target="$1"
+				else
+					_err "Unexpected argument: $1"
+					cmd_ext_help
+					return 1
+				fi
+				;;
+			esac
+			shift
+		done
+		;;
+	help | -h | --help)
+		cmd_ext_help
+		return 0
+		;;
+	*)
+		_err "Unknown ext subcommand: $subcmd"
+		cmd_ext_help
+		return 1
+		;;
+	esac
+
+	if [[ $# -gt 0 ]]; then
+		_err "Unexpected argument: $1"
+		cmd_ext_help
+		return 1
+	fi
+
+	local -a targets=()
+	local t
+	while IFS= read -r t; do
+		[[ -n "$t" ]] && targets+=("$t")
+	done < <(_ext_resolve_targets "$target" || return 1)
+
+	case "$subcmd" in
+	check) _ext_cmd_check "${targets[@]}" ;;
+	backup) _ext_cmd_backup "${targets[@]}" ;;
+	restore) _ext_cmd_restore "$prune" "${targets[@]}" ;;
+	compare) _ext_cmd_compare "${targets[@]}" ;;
+	esac
+}
+
 # --- Subcommands ---
 cmd_update() {
 	print_report_table
@@ -770,6 +1461,7 @@ Commands:
   status     Show installed versions and dotfiles git status
   restow     Re-apply stow for bash, bin, readline
   self       git pull dotfiles repo, then restow
+  ext        IDE extension backup/restore (see: dotfiles ext help)
   help       Show this help
 
 Examples:
@@ -790,6 +1482,7 @@ main() {
 	status) cmd_status ;;
 	restow) cmd_restow ;;
 	self) cmd_self ;;
+	ext) shift; cmd_ext "$@" ;;
 	help | -h | --help) cmd_help ;;
 	'')
 		cmd_help

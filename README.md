@@ -35,6 +35,16 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 │   └── .inputrc        # better tab completion + history search
 ├── packages/
 │   └── packages.txt    # apt packages with @tag sections
+├── extensions/         # IDE extension manifests (git-tracked)
+│   ├── vscode-wsl.txt
+│   ├── cursor-wsl.txt
+│   ├── vscode-win.txt
+│   ├── cursor-win.txt
+│   ├── cursor-core.txt       # lean Cursor restore target (~39 extensions)
+│   ├── manifest.json         # backup metadata (timestamp, counts)
+│   └── extensions-decisions.md  # prune/add checklist before applying changes
+├── templates/
+│   └── vscode-extensions.json  # lean workspace recommendations template
 ├── log/                # install logs (gitignored)
 ├── install.sh
 └── README.md
@@ -161,6 +171,79 @@ Global command (stowed to `~/bin/dotfiles`, on PATH like `ex` and `clip`):
 | `dotfiles self` | `git pull` in the dotfiles repo, then restow |
 
 Runs **unprivileged**; only the apt portion invokes `sudo` internally (single prompt). Agent CLI and npm updates stay under your user.
+
+### `dotfiles ext` — IDE extensions
+
+Manage VS Code and Cursor extensions across four targets: `vscode-wsl`, `cursor-wsl`, `vscode-win`, `cursor-win`.
+
+| Subcommand | Action |
+| ---------- | ------ |
+| `dotfiles ext check [target\|all]` | Report installed count, CLI vs disk method, stale folders |
+| `dotfiles ext backup [target\|all]` | Export manifests to `extensions/*.txt` + update `manifest.json` |
+| `dotfiles ext restore [target] [manifest]` | Install from manifest (`publisher.ext@version` per line); default manifest matches target name |
+| `dotfiles ext compare [target]` | Diff manifest vs installed: only-in-backup, only-installed, version drift |
+
+**Manifest layout** (`extensions/`):
+
+- `vscode-wsl.txt`, `cursor-wsl.txt`, `vscode-win.txt`, `cursor-win.txt` — lean inventories (one `publisher.ext@version` per line; see **Applying lean set** below)
+- `cursor-core.txt` — lean Cursor restore set (keep list + recommended adds, minus prune candidates)
+- `manifest.json` — `{ "generated": "<ISO>", "targets": { "<name>": { "count", "method" } } }`
+- `extensions-decisions.md` — human checklist to confirm prune/add before applying changes
+
+**Restore examples:**
+
+```bash
+# Restore lean Cursor-WSL set (primary WSL target)
+dotfiles ext restore cursor-wsl extensions/cursor-core.txt
+
+# Backup all targets after manual changes
+dotfiles ext backup all
+
+# Compare drift on Windows VS Code
+dotfiles ext compare vscode-win
+```
+
+**Workspace recommendations:** copy `templates/vscode-extensions.json` to a repo's `.vscode/extensions.json` for lean team recommendations (does not auto-install).
+
+Access via boot menu option **3. Extensions** or `./install.sh --extensions`.
+
+### Applying lean set
+
+Lean manifests were applied on **2026-07-08** per `extensions/extensions-decisions.md` (user confirmed prune/add on all targets). Counts:
+
+| Target | Before | After |
+| ------ | -----: | ----: |
+| `cursor-wsl` | 49 | 39 |
+| `cursor-win` | 96 | 40 |
+| `vscode-wsl` | 82 | 45 |
+| `vscode-win` | 114 | 63 |
+
+**Canonical Cursor set:** `extensions/cursor-core.txt` (~39 extensions). `cursor-wsl.txt` and `cursor-win.txt` match this set (+ `anysphere.remote-wsl` on Windows).
+
+**What was pruned (high confidence):** Flutter/Dart, Azure service sprawl, legacy Docker, Copilot/ChatGPT companions, Java stack, HTML preview cluster, redundant Git/GitLab/bash-pack extensions, web front-end noise, misc low-use tools. VS Code Windows also dropped AKS tools, Jupyter stack, and remote meta-pack.
+
+**What was added:** `hashicorp.terraform`, `amazonwebservices.aws-toolkit-vscode`, `usernamehw.errorlens`, `tamasfe.even-better-toml`, `eamodio.gitlens` (WSL targets; already on vscode-win). GCP Cloud Code was **not** added (not in any prior manifest).
+
+**Apply to live editors** (open the target editor first — restore without a running server may fail on WSL):
+
+```bash
+# Install lean manifest per target
+dotfiles ext restore cursor-wsl
+dotfiles ext restore cursor-win
+dotfiles ext restore vscode-wsl
+dotfiles ext restore vscode-win
+
+# Then prune extras not in manifest (destructive — review with compare first)
+dotfiles ext compare cursor-wsl    # optional: preview drift
+dotfiles ext restore cursor-wsl --prune
+# repeat --prune per target, or:
+dotfiles ext restore all --prune
+
+# Refresh manifests after live changes
+dotfiles ext backup all
+```
+
+Manifest metadata: `extensions/manifest.json` (`note: lean-applied`).
 
 ---
 
