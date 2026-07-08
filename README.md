@@ -166,6 +166,8 @@ Global command (stowed to `~/bin/dotfiles`, on PATH like `ex` and `clip`):
 | ---------- | ------ |
 | `dotfiles update` | **Report only** — check apt, agent CLIs, runtimes, and the dotfiles repo; print what can be upgraded (no changes) |
 | `dotfiles upgrade` | **Apply** — run upgrades (apt, CLIs, etc.); idempotent and safe to re-run |
+| `dotfiles upgrade --all` | Same as `upgrade`, plus opt-in **Node.js** (nvm LTS), **Go** (asdf), and **Monaspace** fonts |
+| `dotfiles upgrade --all` | Same as `upgrade`, plus opt-in: Node.js (nvm LTS), Go (asdf), Monaspace Nerd Fonts |
 | `dotfiles status` | Installed versions + dotfiles repo git status |
 | `dotfiles restow` | `stow --restow bash bin readline` |
 | `dotfiles self` | `git pull` in the dotfiles repo, then restow |
@@ -318,6 +320,12 @@ Apply upgrades (apt, agent CLIs, etc.):
 dotfiles upgrade
 # or the alias:
 update-all
+```
+
+Include opt-in runtime/font upgrades (Node.js via nvm, Go via asdf, Monaspace):
+
+```bash
+dotfiles upgrade --all
 ```
 
 Pull latest dotfiles and refresh symlinks:

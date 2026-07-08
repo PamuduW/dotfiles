@@ -205,6 +205,11 @@ dotfiles update
 # Apply upgrades (apt, agent CLIs, etc.; sudo only for apt)
 dotfiles upgrade
 
+# Include opt-in upgrades: Node.js (nvm), Go (asdf), Monaspace fonts
+dotfiles upgrade --all
+# Include opt-in Node.js, Go, and Monaspace fonts:
+dotfiles upgrade --all
+
 # Installed versions + repo git status
 dotfiles status
 

@@ -117,7 +117,11 @@ check_cursor_cli() {
 	local installed available action upgradable=0
 	installed="$(cursor_installed_version)"
 	if cursor_is_installed; then
-		available="latest (via agent update)"
+		if command -v agent >/dev/null 2>&1; then
+			available="latest (via agent update)"
+		else
+			available="latest (via cursor update)"
+		fi
 		action="upgrade"
 		upgradable=1
 	else
@@ -129,8 +133,10 @@ check_cursor_cli() {
 }
 
 upgrade_cursor_cli() {
-	if cursor_is_installed; then
+	if command -v agent >/dev/null 2>&1; then
 		agent update
+	elif command -v cursor >/dev/null 2>&1; then
+		cursor update
 	else
 		_msg "  Cursor CLI not installed, skipping"
 	fi
