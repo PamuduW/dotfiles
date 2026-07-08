@@ -1458,11 +1458,21 @@ cmd_self() {
 	cmd_restow
 }
 
+cmd_menu() {
+	local installer="${DOTFILES_DIR}/install.sh"
+	if [[ ! -f "$installer" ]]; then
+		_err "Error: install.sh not found at ${installer}"
+		exit 1
+	fi
+	exec bash "$installer" "$@"
+}
+
 cmd_help() {
 	cat <<EOF
 Usage: dotfiles <command> [options]
 
 Commands:
+  menu       Boot menu (initial setup / update / extensions / agents)
   update     Dry-run report of upgradable components (no changes)
   upgrade    Apply upgrades (apt, CLIs, GitHub tools)
              Use --all to include Node.js, Go, and Monaspace fonts
@@ -1473,6 +1483,7 @@ Commands:
   help       Show this help
 
 Examples:
+  dotfiles menu
   dotfiles update
   dotfiles upgrade
   dotfiles upgrade --all
@@ -1485,6 +1496,7 @@ EOF
 
 main() {
 	case "${1:-}" in
+	menu) shift; cmd_menu "$@" ;;
 	update) cmd_update ;;
 	upgrade) shift; cmd_upgrade "$@" ;;
 	status) cmd_status ;;
@@ -1493,7 +1505,11 @@ main() {
 	ext) shift; cmd_ext "$@" ;;
 	help | -h | --help) cmd_help ;;
 	'')
-		cmd_help
+		if [[ -t 1 ]]; then
+			cmd_menu
+		else
+			cmd_help
+		fi
 		;;
 	*)
 		_err "Unknown command: $1"
