@@ -1092,6 +1092,51 @@ _ext_obsolete_note() {
 	fi
 }
 
+_ext_obsolete_count() {
+	local dir="$1"
+	local obsolete_file
+	if [[ ! -d "$dir" ]]; then
+		printf '—\n'
+		return
+	fi
+	obsolete_file="${dir}/.obsolete"
+	if [[ -f "$obsolete_file" ]]; then
+		wc -l <"$obsolete_file" | tr -d ' '
+	else
+		printf '0\n'
+	fi
+}
+
+_ext_backup_count() {
+	local target="$1"
+	local f
+	f="$(_ext_backup_file "$target")"
+	if [[ ! -f "$f" ]]; then
+		printf '0\n'
+		return
+	fi
+	sed '/^[[:space:]]*$/d;/^#/d' "$f" | wc -l | tr -d ' '
+}
+
+_ext_norm_ver() {
+	local ver="${1:-}"
+	[[ -z "$ver" ]] && return
+	ver="${ver%-universal}"
+	printf '%s' "$ver"
+}
+
+_ext_format_delta() {
+	local installed="$1"
+	local manifest="$2"
+	if [[ "$installed" -gt "$manifest" ]]; then
+		printf '+%s' "$((installed - manifest))"
+	elif [[ "$installed" -lt "$manifest" ]]; then
+		printf '-%s' "$((manifest - installed))"
+	else
+		printf '='
+	fi
+}
+
 _ext_backup_file() {
 	printf '%s/extensions/%s.txt\n' "$DOTFILES_DIR" "$1"
 }
@@ -1203,9 +1248,11 @@ _ext_uninstall_extension() {
 }
 
 _ext_cmd_check() {
-	local target label dir method list count obsolete list_file
+	local target dir method list count manifest stale delta list_file
+	printf '\n%sExtensions status%s\n' "$C_BOLD" "$C_RESET"
+	printf '%-18s | %9s | %9s | %6s | %6s | %6s\n' "target" "installed" "manifest" "delta" "stale" "method"
+	printf '%s\n' "-------------------+-----------+-----------+--------+--------+--------"
 	for target in "$@"; do
-		label="$(_ext_target_label "$target")"
 		dir="$(_ext_get_extensions_dir "$target")"
 		list_file="$(mktemp)"
 		_ext_list_extensions "$target" >"$list_file"
@@ -1213,12 +1260,10 @@ _ext_cmd_check() {
 		rm -f "$list_file"
 		method="${_EXT_ENUM_METHOD:-disk}"
 		count="$(printf '%s\n' "$list" | sed '/^[[:space:]]*$/d' | wc -l | tr -d ' ')"
-		obsolete="$(_ext_obsolete_note "${dir:-missing}")"
-		printf '\n%s=== %s (%s) ===%s\n' "$C_BOLD" "$label" "$target" "$C_RESET"
-		printf '  count:      %s\n' "$count"
-		printf '  method:     %s\n' "$method"
-		printf '  extensions: %s\n' "${dir:-not found}"
-		printf '  stale:      %s\n' "$obsolete"
+		manifest="$(_ext_backup_count "$target")"
+		stale="$(_ext_obsolete_count "${dir:-}")"
+		delta="$(_ext_format_delta "$count" "$manifest")"
+		printf '%-18s | %9s | %9s | %6s | %6s | %6s\n' "$target" "$count" "$manifest" "$delta" "$stale" "$method"
 	done
 	printf '\n'
 }
@@ -1307,21 +1352,21 @@ _ext_cmd_restore() {
 }
 
 _ext_cmd_compare() {
-	local target backup_file installed label
-	local line id ver
+	local target backup_file line key id ver
 	declare -A backup_ver installed_ver
 	local -a only_backup=() only_installed=() drift=()
+	local -a summary_targets=() summary_manifest=() summary_installed=()
+	local -a summary_missing=() summary_extra=() summary_drift=()
+	local -a diff_rows=()
+	local backup_n installed_n has_diff=false
 
 	for target in "$@"; do
 		backup_file="$(_ext_backup_file "$target")"
-		label="$(_ext_target_label "$target")"
 		backup_ver=()
 		installed_ver=()
 		only_backup=()
 		only_installed=()
 		drift=()
-
-		printf '\n%s=== Compare %s (%s) ===%s\n' "$C_BOLD" "$label" "$target" "$C_RESET"
 
 		if [[ ! -f "$backup_file" ]]; then
 			_warn "No backup file: ${backup_file}"
@@ -1338,17 +1383,19 @@ _ext_cmd_compare() {
 			[[ -n "$_EXT_PARSE_ID" ]] && installed_ver["$_EXT_PARSE_ID"]="$_EXT_PARSE_VER"
 		done < <(_ext_list_extensions "$target" | sed '/^[[:space:]]*$/d')
 
-		local key
 		for key in "${!backup_ver[@]}"; do
 			if [[ -z "${installed_ver[$key]:-}" ]]; then
 				only_backup+=("${key}@${backup_ver[$key]}")
-			elif [[ "${backup_ver[$key]}" != "${installed_ver[$key]}" ]]; then
-				drift+=("${key}: backup=${backup_ver[$key]} installed=${installed_ver[$key]}")
+				diff_rows+=("${target}|missing|${key}|${backup_ver[$key]}|—")
+			elif [[ "$(_ext_norm_ver "${backup_ver[$key]}")" != "$(_ext_norm_ver "${installed_ver[$key]}")" ]]; then
+				drift+=("${key}")
+				diff_rows+=("${target}|drift|${key}|${backup_ver[$key]}|${installed_ver[$key]}")
 			fi
 		done
 		for key in "${!installed_ver[@]}"; do
 			if [[ -z "${backup_ver[$key]:-}" ]]; then
 				only_installed+=("${key}@${installed_ver[$key]}")
+				diff_rows+=("${target}|extra|${key}|—|${installed_ver[$key]}")
 			fi
 		done
 
@@ -1362,34 +1409,52 @@ _ext_cmd_compare() {
 			mapfile -t drift < <(printf '%s\n' "${drift[@]}" | sort)
 		fi
 
-		printf '  only in backup (%d):\n' "${#only_backup[@]}"
-		if [[ ${#only_backup[@]} -eq 0 ]]; then
-			printf '    (none)\n'
-		else
-			local item
-			for item in "${only_backup[@]}"; do
-				printf '    %s\n' "$item"
-			done
-		fi
-
-		printf '  only installed (%d):\n' "${#only_installed[@]}"
-		if [[ ${#only_installed[@]} -eq 0 ]]; then
-			printf '    (none)\n'
-		else
-			for item in "${only_installed[@]}"; do
-				printf '    %s\n' "$item"
-			done
-		fi
-
-		printf '  version drift (%d):\n' "${#drift[@]}"
-		if [[ ${#drift[@]} -eq 0 ]]; then
-			printf '    (none)\n'
-		else
-			for item in "${drift[@]}"; do
-				printf '    %s\n' "$item"
-			done
+		backup_n="${#backup_ver[@]}"
+		installed_n="${#installed_ver[@]}"
+		summary_targets+=("$target")
+		summary_manifest+=("$backup_n")
+		summary_installed+=("$installed_n")
+		summary_missing+=("${#only_backup[@]}")
+		summary_extra+=("${#only_installed[@]}")
+		summary_drift+=("${#drift[@]}")
+		if [[ ${#only_backup[@]} -gt 0 || ${#only_installed[@]} -gt 0 || ${#drift[@]} -gt 0 ]]; then
+			has_diff=true
 		fi
 	done
+
+	if [[ ${#summary_targets[@]} -eq 0 ]]; then
+		printf '\n'
+		return
+	fi
+
+	printf '\n%sCompare summary (manifest vs installed)%s\n' "$C_BOLD" "$C_RESET"
+	printf '%-18s | %7s | %9s | %7s | %5s | %5s\n' "target" "manifest" "installed" "missing" "extra" "drift"
+	printf '%s\n' "-------------------+---------+-----------+---------+-------+-------"
+	local i
+	for i in "${!summary_targets[@]}"; do
+		printf '%-18s | %7s | %9s | %7s | %5s | %5s\n' \
+			"${summary_targets[$i]}" \
+			"${summary_manifest[$i]}" \
+			"${summary_installed[$i]}" \
+			"${summary_missing[$i]}" \
+			"${summary_extra[$i]}" \
+			"${summary_drift[$i]}"
+	done
+
+	if [[ "$has_diff" == true ]]; then
+		mapfile -t diff_rows < <(printf '%s\n' "${diff_rows[@]}" | sort)
+		printf '\n%sDifferences%s\n' "$C_BOLD" "$C_RESET"
+		printf '%-18s | %-8s | %-40s | %-20s | %s\n' "target" "category" "extension" "manifest" "installed"
+		printf '%s\n' "-------------------+----------+------------------------------------------+----------------------+----------------------"
+		local row category ext_id manifest_ver installed_ver_col
+		for row in "${diff_rows[@]}"; do
+			IFS='|' read -r target category ext_id manifest_ver installed_ver_col <<<"$row"
+			printf '%-18s | %-8s | %-40s | %-20s | %s\n' \
+				"$target" "$category" "$ext_id" "$manifest_ver" "$installed_ver_col"
+		done
+	else
+		printf '\nAll targets match their manifests.\n'
+	fi
 	printf '\n'
 }
 
@@ -1398,10 +1463,10 @@ cmd_ext_help() {
 Usage: dotfiles ext <subcommand> [target] [options]
 
 Subcommands:
-  check [target]     Report extension inventory per target (count, method, path)
+  check [target]     Table of installed vs manifest counts per target
   backup [target]    Write manifests to extensions/<target>.txt + manifest.json
   restore [target]   Install extensions from backup (--prune to uninstall extras)
-  compare [target]   Diff installed vs backed-up extensions
+  compare [target]   Table diff: manifest vs installed (missing, extra, drift)
 
 Targets: vscode-wsl, cursor-wsl, vscode-win, cursor-win, all (default: all)
 
