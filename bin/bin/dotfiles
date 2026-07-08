@@ -55,6 +55,16 @@ _version_gt() {
 	[[ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | tail -n1)" == "$1" && "$1" != "$2" ]]
 }
 
+# Verify tarball SHA256 appears in a GitHub release checksums.txt (filename-agnostic).
+_verify_github_tarball_checksum() {
+	local dir="$1" tarball="$2" checksums_file="$3"
+	local actual
+
+	[[ -f "$dir/$tarball" && -f "$dir/$checksums_file" ]] || return 1
+	actual="$(sha256sum "$dir/$tarball" | awk '{print $1}')"
+	grep -qF "$actual" "$dir/$checksums_file"
+}
+
 _load_nvm() {
 	local nvm_dir="${NVM_DIR:-$HOME/.nvm}"
 	# shellcheck source=/dev/null
@@ -306,13 +316,13 @@ install_lazygit_from_github() {
 	}
 
 	tmp="$(mktemp -d)"
-	trap 'rm -rf "$tmp"' RETURN
+	trap "rm -rf '${tmp}'" RETURN
 	local tarball="lazygit_${ver}_Linux_x86_64.tar.gz"
 	curl -fsSL -o "$tmp/$tarball" \
 		"https://github.com/jesseduffield/lazygit/releases/download/v${ver}/${tarball}"
 	curl -fsSL -o "$tmp/checksums.txt" \
 		"https://github.com/jesseduffield/lazygit/releases/download/v${ver}/checksums.txt"
-	if ! (cd "$tmp" && sha256sum --check --ignore-missing checksums.txt); then
+	if ! _verify_github_tarball_checksum "$tmp" "$tarball" checksums.txt; then
 		_err "  lazygit checksum verification failed."
 		return 1
 	fi
@@ -386,13 +396,13 @@ install_lazydocker_from_github() {
 	}
 
 	tmp="$(mktemp -d)"
-	trap 'rm -rf "$tmp"' RETURN
+	trap "rm -rf '${tmp}'" RETURN
 	local tarball="lazydocker_${ver}_Linux_x86_64.tar.gz"
 	curl -fsSL -o "$tmp/$tarball" \
 		"https://github.com/jesseduffield/lazydocker/releases/download/v${ver}/${tarball}"
 	curl -fsSL -o "$tmp/checksums.txt" \
 		"https://github.com/jesseduffield/lazydocker/releases/download/v${ver}/checksums.txt"
-	if ! (cd "$tmp" && sha256sum --check --ignore-missing checksums.txt); then
+	if ! _verify_github_tarball_checksum "$tmp" "$tarball" checksums.txt; then
 		_err "  lazydocker checksum verification failed."
 		return 1
 	fi
@@ -573,7 +583,7 @@ install_monaspace_fonts() {
 	}
 
 	tmp="$(mktemp -d)"
-	trap 'rm -rf "$tmp"' RETURN
+	trap "rm -rf '${tmp}'" RETURN
 	curl -fsSL -o "$tmp/monaspace-nerdfonts.zip" \
 		"https://github.com/githubnext/monaspace/releases/download/${ver}/monaspace-nerdfonts-${ver}.zip"
 	unzip -qo "$tmp/monaspace-nerdfonts.zip" -d "$tmp/monaspace"
