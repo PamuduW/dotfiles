@@ -94,23 +94,8 @@ Use arrow keys to navigate and Enter to select.
 | Initial setup | **Check status** — component install summary table · **Run setup** — toggle menu, confirm loop, install · **Back** |
 | Update | **Update & upgrade** — `dotfiles update` report, then optional `dotfiles upgrade` (prompts for `--all`) · **Back** |
 | Extensions | **Check status** (`ext compare all`) · **Edit manifest** · **Restore** (missing only) · **Remove** (extras) · **Back** |
-| Agents | Sectioned submenu (see below) |
+| Agents | **Check status** · **Clone/update repo** · **Run bootstrap** · **Update skills** · **Link agentboot** · **Scaffold repo** · **Run doctor** · **Back** |
 | Quit | Exit |
-
-**Agents submenu** (section headers are labels, not actions):
-
-```
-Check status
-── Repo ──
-Clone/update agent_bootstrap repo
-── Setup ──
-Run full bootstrap | Update skills | Link agentboot
-── Workspace ──
-Scaffold repo (agentboot)
-── Health ──
-Run doctor
-Back
-```
 
 ### CLI flags
 

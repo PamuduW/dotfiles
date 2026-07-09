@@ -150,16 +150,111 @@ ui_color_result() {
 	esac
 }
 
-# Two-column status row: label | colored result.
+# Replace $HOME prefix with ~/ for display.
+ui_shorten_path() {
+	local path="$1"
+	local max="${2:-0}"
+	local home="${HOME%/}"
+	local len head tail
+
+	if [[ -z "$path" ]]; then
+		return 0
+	fi
+
+	if [[ "$path" == "$home" ]]; then
+		path='~'
+	elif [[ "$path" == "$home"/* ]]; then
+		path="~${path#$home}"
+	fi
+
+	len=${#path}
+	if ((max > 0 && len > max)); then
+		if ((max <= 3)); then
+			printf '%s' "${path:0:max}"
+		elif ((max <= 8)); then
+			printf '%s...' "${path:0:$((max - 3))}"
+		else
+			head=$((max / 2 - 1))
+			tail=$((max - head - 1))
+			printf '%s…%s' "${path:0:head}" "${path: -tail}"
+		fi
+	else
+		printf '%s' "$path"
+	fi
+}
+
+_ui_status_table_layout() {
+	local cols="$1"
+	local -n _out_label_w="$2"
+	local -n _out_mid_w="$3"
+	local -n _out_path_w="$4"
+
+	_out_label_w=22
+	_out_mid_w=10
+	_out_path_w=$((cols - _out_label_w - _out_mid_w - 9))
+	(( _out_path_w < 28 )) && _out_path_w=28
+}
+
+# Agents / health tables: check | result | path
+ui_print_check_result_path_row() {
+	local label="$1"
+	local result="$2"
+	local path="${3:-}"
+	local cols="${4:-}"
+	local label_w mid_w path_w path_display
+
+	if [[ -z "$cols" ]]; then
+		cols="$(menu_tty_cols)"
+	fi
+	_ui_status_table_layout "$cols" label_w mid_w path_w
+
+	printf '%-*s | ' "$label_w" "$label"
+	ui_color_result "$result"
+	if [[ -n "$path" ]]; then
+		path_display="$(ui_shorten_path "$path" "$path_w")"
+		printf ' | %s' "$path_display"
+	fi
+	printf '\n'
+}
+
+ui_print_check_result_path_header() {
+	local cols="${1:-}"
+	local label_w mid_w path_w
+
+	if [[ -z "$cols" ]]; then
+		cols="$(menu_tty_cols)"
+	fi
+	_ui_status_table_layout "$cols" label_w mid_w path_w
+
+	printf '%-*s | %-*s | %s\n' "$label_w" "check" "$mid_w" "result" "path"
+	printf '%*s-+-%*s-+' "$label_w" '' "$mid_w" ''
+	printf '%*s\n' "$path_w" '' | tr ' ' '-'
+}
+
+# Two-column status row: label | detail | colored result.
 ui_print_status_row() {
 	local label="$1"
 	local result="$2"
 	local detail="${3:-}"
+	local cols="${4:-}"
+	local label_w detail_w detail_display
+
+	if [[ -z "$cols" ]]; then
+		cols="$(menu_tty_cols)"
+	fi
+	label_w=22
+	detail_w=$((cols - label_w - 10 - 9))
+	((detail_w < 28)) && detail_w=28
 
 	if [[ -n "$detail" ]]; then
-		printf '%-24s | %-32s | ' "$label" "${detail:0:32}"
+		if [[ "$detail" == /* || "$detail" == ~* ]]; then
+			detail_display="$(ui_shorten_path "$detail" "$detail_w")"
+		else
+			detail_display="$(menu_fit_line "$detail" "$detail_w")"
+		fi
+		printf '%-*s | %-s | ' "$label_w" "$label" "$detail_display"
 	else
-		printf '%-24s | ' "$label"
+		printf '%-*s | ' "$label_w" "$label"
 	fi
 	ui_color_result "$result"
 	printf '\n'
@@ -169,8 +264,23 @@ ui_print_component_table_row() {
 	local short_label="$1"
 	local detail="$2"
 	local result="$3"
+	local cols="${4:-}"
+	local label_w detail_w detail_display
 
-	printf '%-22s | %-32s | ' "$short_label" "${detail:0:32}"
+	if [[ -z "$cols" ]]; then
+		cols="$(menu_tty_cols)"
+	fi
+	label_w=22
+	detail_w=$((cols - label_w - 10 - 9))
+	((detail_w < 28)) && detail_w=28
+
+	if [[ "$detail" == /* || "$detail" == ~* ]]; then
+		detail_display="$(ui_shorten_path "$detail" "$detail_w")"
+	else
+		detail_display="$(menu_fit_line "$detail" "$detail_w")"
+	fi
+
+	printf '%-*s | %-s | ' "$label_w" "$short_label" "$detail_display"
 	ui_color_result "$result"
 	printf '\n'
 }

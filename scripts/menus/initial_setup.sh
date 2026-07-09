@@ -88,7 +88,7 @@ print_status_summary_all() {
 			installed | configured) ((++ok_count)) ;;
 			missing | check) ((++miss_count)) ;;
 			esac
-			ui_print_component_table_row "$short_label" "$detail" "$result"
+			ui_print_component_table_row "$short_label" "$detail" "$result" "$cols"
 		done
 
 		printf '\n'

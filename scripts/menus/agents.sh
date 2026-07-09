@@ -4,44 +4,15 @@ AGENT_BOOTSTRAP_REPO_URL="${AGENT_BOOTSTRAP_REPO_URL:-https://github.com/PamuduW
 
 _agents_menu_labels=(
 	"Check status"
-	"── Repo ──"
-	"Clone/update agent_bootstrap repo"
-	"── Setup ──"
-	"Run full bootstrap"
+	"Clone/update repo"
+	"Run bootstrap"
 	"Update skills"
 	"Link agentboot"
-	"── Workspace ──"
-	"Scaffold repo (agentboot)"
-	"── Health ──"
+	"Scaffold repo"
 	"Run doctor"
 	"Back"
 )
-_agents_menu_keys=(
-	status header repo header bootstrap skills link header agentboot header doctor back
-)
-_agents_menu_types=(
-	"" header "" header "" "" "" header "" header "" ""
-)
-
-resolve_agent_bootstrap_home() {
-	local candidate
-
-	if [[ -n "${AGENT_BOOTSTRAP_HOME:-}" && -x "${AGENT_BOOTSTRAP_HOME}/install.sh" ]]; then
-		printf '%s\n' "$AGENT_BOOTSTRAP_HOME"
-		return 0
-	fi
-
-	for candidate in \
-		"${HOME}/Dev/agent_bootstrap" \
-		"${HOME}/Dev/new_setup/agent_bootstrap" \
-		"$(dirname "$DOTFILES_DIR")/agent_bootstrap"; do
-		if [[ -x "$candidate/install.sh" ]]; then
-			printf '%s\n' "$candidate"
-			return 0
-		fi
-	done
-	printf '%s\n' "${HOME}/Dev/agent_bootstrap"
-}
+_agents_menu_keys=(status repo bootstrap skills link agentboot doctor back)
 
 clone_or_update_agent_bootstrap() {
 	local ab_home="$1"
@@ -74,76 +45,95 @@ require_agent_bootstrap_installer() {
 		return 0
 	fi
 	echo "Error: ${ab_home}/install.sh not found." >&2
-	echo "Run 'Clone/update agent_bootstrap repo' first." >&2
+	echo "Run 'Clone/update repo' first." >&2
 	return 1
 }
 
 print_agents_status() {
-	local ab_home branch dirty link_target
-	local cols
-	ab_home="$(resolve_agent_bootstrap_home)"
+	local ab_home clone_home branch dirty link_target ab_result cols
+	local install_path agentboot_path dotfiles_root
+
+	ab_home="$(resolve_agent_bootstrap_home || true)"
+	clone_home="$(agent_bootstrap_clone_home)" || clone_home="(unknown — dotfiles root not found)"
+	dotfiles_root="$(dotfiles_repo_root || true)"
 	cols="$(menu_tty_cols)"
 
 	{
 		printf '\n'
 		ui_print_header "Agents status" "Dotfiles › Agents" "$cols"
-		printf '%-24s | %-32s | %s\n' "check" "detail" "result"
-		printf '%s\n' "-------------------------+----------------------------------+----------"
+		ui_print_check_result_path_header "$cols"
 
-		ui_print_status_row "agent_bootstrap" "ok" "$ab_home"
+		if [[ -n "$dotfiles_root" ]]; then
+			ui_print_check_result_path_row "dotfiles repo" ok "$dotfiles_root" "$cols"
+		else
+			ui_print_check_result_path_row "dotfiles repo" check "" "$cols"
+		fi
 
-		if [[ -d "$ab_home/.git" ]]; then
+		if [[ -n "$ab_home" ]]; then
+			ab_result=ok
+		elif [[ -d "$clone_home" ]]; then
+			ab_result=check
+		else
+			ab_result=missing
+		fi
+		ui_print_check_result_path_row "agent_bootstrap" "$ab_result" "${ab_home:-$clone_home}" "$cols"
+
+		if [[ -n "$ab_home" && -d "$ab_home/.git" ]]; then
 			branch="$(git -C "$ab_home" branch --show-current 2>/dev/null || echo '?')"
 			dirty="$(git -C "$ab_home" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
-			ui_print_status_row "git branch" "ok" "$branch"
+			ui_print_check_result_path_row "git branch" ok "$branch" "$cols"
 			if [[ "$dirty" -eq 0 ]]; then
-				ui_print_status_row "dirty files" "ok" "0"
+				ui_print_check_result_path_row "dirty files" ok "0" "$cols"
 			else
-				ui_print_status_row "dirty files" "check" "$dirty"
+				ui_print_check_result_path_row "dirty files" check "$dirty" "$cols"
 			fi
-		else
-			ui_print_status_row "git" "missing" "not a repo"
+		elif [[ -n "$ab_home" ]]; then
+			ui_print_check_result_path_row "git" missing "not a repo" "$cols"
 		fi
 
-		if [[ -x "$ab_home/install.sh" ]]; then
-			ui_print_status_row "install.sh" "ok" "$ab_home/install.sh"
+		install_path="${ab_home:+$ab_home/install.sh}"
+		install_path="${install_path:-$clone_home/install.sh}"
+		if [[ -n "$ab_home" && -x "$ab_home/install.sh" ]]; then
+			ui_print_check_result_path_row "install.sh" ok "$install_path" "$cols"
 		else
-			ui_print_status_row "install.sh" "missing" "$ab_home/install.sh"
+			ui_print_check_result_path_row "install.sh" missing "$install_path" "$cols"
 		fi
 
-		if [[ -x "$ab_home/bin/agentboot" ]]; then
-			ui_print_status_row "agentboot bin" "ok" "$ab_home/bin/agentboot"
+		agentboot_path="${ab_home:+$ab_home/bin/agentboot}"
+		agentboot_path="${agentboot_path:-$clone_home/bin/agentboot}"
+		if [[ -n "$ab_home" && -x "$ab_home/bin/agentboot" ]]; then
+			ui_print_check_result_path_row "agentboot bin" ok "$agentboot_path" "$cols"
 		else
-			ui_print_status_row "agentboot bin" "missing" "$ab_home/bin/agentboot"
+			ui_print_check_result_path_row "agentboot bin" missing "$agentboot_path" "$cols"
 		fi
 
 		if command -v python3 >/dev/null 2>&1; then
-			ui_print_status_row "python3" "ok" "$(command -v python3)"
+			ui_print_check_result_path_row "python3" ok "$(command -v python3)" "$cols"
 		else
-			ui_print_status_row "python3" "missing"
+			ui_print_check_result_path_row "python3" missing "" "$cols"
 		fi
 
 		if command -v node >/dev/null 2>&1; then
-			ui_print_status_row "node" "ok" "$(command -v node)"
+			ui_print_check_result_path_row "node" ok "$(command -v node)" "$cols"
 		else
-			ui_print_status_row "node" "missing"
+			ui_print_check_result_path_row "node" missing "" "$cols"
 		fi
 
 		if command -v npx >/dev/null 2>&1; then
-			ui_print_status_row "npx" "ok" "$(command -v npx)"
+			ui_print_check_result_path_row "npx" ok "$(command -v npx)" "$cols"
 		else
-			ui_print_status_row "npx" "missing"
+			ui_print_check_result_path_row "npx" missing "" "$cols"
 		fi
 
 		if [[ -L "$HOME/bin/agentboot" ]]; then
 			link_target="$(readlink "$HOME/bin/agentboot")"
-			ui_print_status_row "~/bin/agentboot" "ok" "$link_target"
+			ui_print_check_result_path_row "~/bin/agentboot" ok "$link_target" "$cols"
 		else
-			ui_print_status_row "~/bin/agentboot" "missing"
+			ui_print_check_result_path_row "~/bin/agentboot" missing "" "$cols"
 		fi
 	} >/dev/tty
 
-	if [[ -x "$ab_home/install.sh" ]]; then
+	if [[ -n "$ab_home" && -x "$ab_home/install.sh" ]]; then
 		echo ""
 		local status_rc=0
 		( cd "$ab_home" && ./install.sh status ) || status_rc=$?
@@ -155,22 +145,33 @@ print_agents_status() {
 
 _agents_dispatch() {
 	local action="$1"
-	local ab_home answer target_dir agentboot_args=()
+	local ab_home clone_home answer target_dir agentboot_args=()
 
-	ab_home="$(resolve_agent_bootstrap_home)"
+	ab_home="$(resolve_agent_bootstrap_home || true)"
+	clone_home="$(agent_bootstrap_clone_home)" || {
+		echo "Error: cannot resolve dotfiles repo — cannot locate agent_bootstrap sibling path." >&2
+		return 1
+	}
 
 	case "$action" in
 	status)
 		ui_clear
 		print_agents_status
 		;;
-	header) ;;
 	repo)
 		ui_clear
-		clone_or_update_agent_bootstrap "$ab_home"
+		if [[ -n "$ab_home" ]]; then
+			clone_or_update_agent_bootstrap "$ab_home"
+		else
+			clone_or_update_agent_bootstrap "$clone_home"
+		fi
 		;;
 	bootstrap)
-		require_agent_bootstrap_installer "$ab_home" || return 1
+		ab_home="$(resolve_agent_bootstrap_home)" || {
+			echo "Error: agent_bootstrap not installed at ${clone_home}." >&2
+			echo "Run 'Clone/update repo' first." >&2
+			return 1
+		}
 		ui_clear
 		echo "Runs skills install, Claude bridge, global render, and doctor."
 		read_tty_line answer "Proceed with full bootstrap? [y/N]: "
@@ -180,7 +181,10 @@ _agents_dispatch() {
 		esac
 		;;
 	skills)
-		require_agent_bootstrap_installer "$ab_home" || return 1
+		ab_home="$(resolve_agent_bootstrap_home)" || {
+			echo "Error: agent_bootstrap not installed at ${clone_home}." >&2
+			return 1
+		}
 		ui_clear
 		read_tty_line answer "Proceed with skills update? [y/N]: "
 		case "$answer" in
@@ -189,12 +193,18 @@ _agents_dispatch() {
 		esac
 		;;
 	link)
-		require_agent_bootstrap_installer "$ab_home" || return 1
+		ab_home="$(resolve_agent_bootstrap_home)" || {
+			echo "Error: agent_bootstrap not installed at ${clone_home}." >&2
+			return 1
+		}
 		ui_clear
 		( cd "$ab_home" && ./install.sh link-agentboot )
 		;;
 	agentboot)
-		require_agent_bootstrap_installer "$ab_home" || return 1
+		ab_home="$(resolve_agent_bootstrap_home)" || {
+			echo "Error: agent_bootstrap not installed at ${clone_home}." >&2
+			return 1
+		}
 		if [[ ! -x "$ab_home/bin/agentboot" ]]; then
 			echo "Error: ${ab_home}/bin/agentboot not found." >&2
 			return 1
@@ -213,7 +223,10 @@ _agents_dispatch() {
 		( cd "$target_dir" && AGENT_BOOTSTRAP_HOME="$ab_home" "$ab_home/bin/agentboot" "${agentboot_args[@]}" )
 		;;
 	doctor)
-		require_agent_bootstrap_installer "$ab_home" || return 1
+		ab_home="$(resolve_agent_bootstrap_home)" || {
+			echo "Error: agent_bootstrap not installed at ${clone_home}." >&2
+			return 1
+		}
 		ui_clear
 		local doctor_rc=0
 		( cd "$ab_home" && ./install.sh doctor ) || doctor_rc=$?
@@ -225,22 +238,6 @@ _agents_dispatch() {
 }
 
 agents_menu() {
-	while true; do
-		MENU_SIMPLE_TITLE="Agents Bootstrap"
-		MENU_SIMPLE_BREADCRUMB="Dotfiles › Agents"
-		MENU_SIMPLE_HINT="Up/Down navigate   Enter confirm"
-		MENU_SIMPLE_LABELS=("${_agents_menu_labels[@]}")
-		MENU_SIMPLE_KEYS=("${_agents_menu_keys[@]}")
-		MENU_SIMPLE_TYPES=("${_agents_menu_types[@]}")
-
-		local choice=''
-		if ! choice="$(menu_simple_run)"; then
-			return 0
-		fi
-		[[ "$choice" == "back" ]] && return 0
-		[[ "$choice" == "header" ]] && continue
-
-		_agents_dispatch "$choice"
-		ui_pause
-	done
+	menu_submenu_loop "Agents" "Dotfiles › Agents" \
+		_agents_menu_labels _agents_menu_keys _agents_dispatch
 }

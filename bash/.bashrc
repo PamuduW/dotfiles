@@ -122,20 +122,25 @@ if [ -f ~/.bash_aliases ]; then
 	. ~/.bash_aliases
 fi
 
-# agent_bootstrap — export only when install.sh is present and executable
-if [[ -n "${AGENT_BOOTSTRAP_HOME:-}" && ! -x "${AGENT_BOOTSTRAP_HOME}/install.sh" ]]; then
-	unset AGENT_BOOTSTRAP_HOME
+# agent_bootstrap — sibling of dotfiles repo; export only when install.sh exists
+_ab_paths_sh=""
+if [[ -f "${HOME}/.bashrc" ]]; then
+	_ab_bashrc_resolved="$(readlink -f "${HOME}/.bashrc" 2>/dev/null || true)"
+	if [[ -n "$_ab_bashrc_resolved" && -f "$_ab_bashrc_resolved" ]]; then
+		_ab_paths_sh="$(dirname "$(dirname "$_ab_bashrc_resolved")")/scripts/lib/agent_bootstrap_paths.sh"
+	fi
 fi
-if [[ -z "${AGENT_BOOTSTRAP_HOME:-}" ]]; then
-	for _ab_home in \
-		"$HOME/Dev/agent_bootstrap" \
-		"$HOME/Dev/new_setup/agent_bootstrap" \
-		"$(dirname "$HOME/dotfiles")/agent_bootstrap" \
-		"$(dirname "$HOME/Dev/dotfiles")/agent_bootstrap"; do
-		if [[ -x "$_ab_home/install.sh" ]]; then
-			export AGENT_BOOTSTRAP_HOME="$_ab_home"
-			break
+if [[ -f "$_ab_paths_sh" ]]; then
+	# shellcheck source=/dev/null
+	source "$_ab_paths_sh"
+	if [[ -n "${AGENT_BOOTSTRAP_HOME:-}" && ! -x "${AGENT_BOOTSTRAP_HOME}/install.sh" ]]; then
+		unset AGENT_BOOTSTRAP_HOME
+	fi
+	if [[ -z "${AGENT_BOOTSTRAP_HOME:-}" ]]; then
+		AGENT_BOOTSTRAP_HOME="$(resolve_agent_bootstrap_home 2>/dev/null || true)"
+		if [[ -n "$AGENT_BOOTSTRAP_HOME" ]]; then
+			export AGENT_BOOTSTRAP_HOME
 		fi
-	done
-	unset _ab_home
+	fi
+	unset _ab_paths_sh _ab_bashrc_resolved
 fi
