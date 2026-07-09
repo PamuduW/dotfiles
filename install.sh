@@ -1872,9 +1872,9 @@ extensions_menu() {
 		choice="${_extensions_menu_choices[$cursor]}"
 		[[ "$choice" == "back" ]] && break
 
-		echo ""
+		_menu_clear_screen
 		_run_extensions_action "$dotfiles_cmd" "$choice"
-		echo ""
+		printf '\n' >/dev/tty
 		read_tty_line _extensions_continue "Press Enter to continue: "
 		cursor=0
 	done
@@ -2079,9 +2079,9 @@ agents_menu() {
 		choice="${_agents_menu_choices[$cursor]}"
 		[[ "$choice" == "back" ]] && break
 
-		echo ""
+		_menu_clear_screen
 		_run_agents_action "$choice"
-		echo ""
+		printf '\n' >/dev/tty
 		read_tty_line _agents_continue "Press Enter to continue: "
 		cursor=0
 	done
