@@ -69,6 +69,20 @@ menu_redraw_up() {
 	printf '\e[%dA' "$lines"
 }
 
+# Full clear when layout changes (page/line count); otherwise cursor-up in-place redraw.
+menu_redraw_prepare() {
+	local prev_lines="$1"
+	local new_lines="$2"
+	local prev_page="${3:--1}"
+	local new_page="${4:-0}"
+
+	if [[ "$prev_lines" != "$new_lines" || "$prev_page" != "$new_page" ]]; then
+		ui_clear
+	else
+		menu_redraw_up "$prev_lines"
+	fi
+}
+
 menu_count_lines() {
 	local header_rows="$1"
 	local item_count="$2"
