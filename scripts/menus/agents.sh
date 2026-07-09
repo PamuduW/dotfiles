@@ -4,20 +4,15 @@ AGENT_BOOTSTRAP_REPO_URL="${AGENT_BOOTSTRAP_REPO_URL:-git@github.com:PamuduW/age
 
 _agents_menu_labels=(
 	"Check status"
-	"── Repo ──"
 	"Clone/update repo"
-	"── Setup ──"
 	"Run full bootstrap"
 	"Refresh skills only"
 	"Link agentboot"
-	"── Workspace ──"
 	"Scaffold repo (agentboot)"
-	"── Health ──"
 	"Run doctor"
 	"Back"
 )
-_agents_menu_keys=(status _h1 repo _h2 bootstrap skills link _h3 agentboot _h4 doctor back)
-_agents_menu_types=(item header item header item item item header item header item item)
+_agents_menu_keys=(status repo bootstrap skills link agentboot doctor back)
 
 _agent_bootstrap_status_json() {
 	local ab_home="$1"
@@ -364,8 +359,6 @@ _agents_dispatch() {
 }
 
 agents_menu() {
-	MENU_SUBMENU_TYPES=("${_agents_menu_types[@]}")
 	menu_submenu_loop "Agents" "Dotfiles › Agents" \
 		_agents_menu_labels _agents_menu_keys _agents_dispatch
-	unset MENU_SUBMENU_TYPES
 }
