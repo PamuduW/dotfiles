@@ -139,7 +139,8 @@ check_cursor_cli() {
 		else
 			available="latest (via cursor update)"
 		fi
-		action="up to date"
+		action="refresh"
+		upgradable=1
 	else
 		available="—"
 		action="skip"
@@ -186,10 +187,10 @@ check_codex_cli() {
 		available="$(codex_available_version)"
 		if [[ "$available" != "—" && "$installed" != *"${available}"* ]]; then
 			action="upgrade"
-			upgradable=1
 		else
-			action="up to date"
+			action="refresh"
 		fi
+		upgradable=1
 	fi
 	printf '%s|%s|%s|%s\n' "Codex CLI" "$installed" "$available" "$action"
 	[[ $upgradable -eq 1 ]]
@@ -221,7 +222,8 @@ check_claude_cli() {
 		action="skip"
 	else
 		available="latest (via claude update)"
-		action="up to date"
+		action="refresh"
+		upgradable=1
 	fi
 	printf '%s|%s|%s|%s\n' "Claude CLI" "$installed" "$available" "$action"
 	[[ $upgradable -eq 1 ]]
@@ -255,7 +257,8 @@ check_copilot_cli() {
 	installed="$(copilot_installed_version)"
 	if copilot_is_installed; then
 		available="latest (via copilot update)"
-		action="up to date"
+		action="refresh"
+		upgradable=1
 	else
 		available="—"
 		action="skip"
@@ -667,7 +670,7 @@ _color_action() {
 	local action="$1"
 	case "$action" in
 	up\ to\ date | skip) printf '%s%s%s' "$C_GREEN" "$action" "$C_RESET" ;;
-	upgrade*) printf '%s%s%s' "$C_YELLOW" "$action" "$C_RESET" ;;
+	upgrade* | refresh) printf '%s%s%s' "$C_YELLOW" "$action" "$C_RESET" ;;
 	pull*) printf '%s%s%s' "$C_CYAN" "$action" "$C_RESET" ;;
 	*) printf '%s' "$action" ;;
 	esac
@@ -718,6 +721,22 @@ _collect_check_rows() {
 	printf '%s\n' "${rows[@]}"
 }
 
+# Fixed-width table row: truncate text columns so pipes stay aligned; color last column only.
+_print_check_table_row() {
+	local component="$1"
+	local installed="$2"
+	local available="$3"
+	local last_col="$4"
+	local color_fn="$5"
+
+	printf '%-18.18s | %-28.28s | %-22.22s | ' "$component" "$installed" "$available"
+	case "$color_fn" in
+	result) _color_result "$last_col" ;;
+	*) _color_action "$last_col" ;;
+	esac
+	printf '\n'
+}
+
 print_report_table() {
 	local -a rows=()
 	local row component installed available action
@@ -728,7 +747,7 @@ print_report_table() {
 	for row in "${rows[@]}"; do
 		IFS='|' read -r _ _ _ action <<<"$row"
 		case "$action" in
-		upgrade | upgrade*) ((++upgrade_count)) ;;
+		upgrade | upgrade* | refresh) ((++upgrade_count)) ;;
 		esac
 	done
 
@@ -738,9 +757,7 @@ print_report_table() {
 
 	for row in "${rows[@]}"; do
 		IFS='|' read -r component installed available action <<<"$row"
-		printf '%-18s | %-28s | %-22s | ' "$component" "$installed" "$available"
-		_color_action "$action"
-		printf '\n'
+		_print_check_table_row "$component" "$installed" "$available" "$action" action
 	done
 
 	printf '\n'
@@ -784,9 +801,7 @@ print_upgrade_summary() {
 		ok) ((++ok_count)) ;;
 		failed) ((++fail_count)) ;;
 		esac
-		printf '%-18s | %-28s | %-22s | ' "$component" "$installed" "$available"
-		_color_result "$result"
-		printf '\n'
+		_print_check_table_row "$component" "$installed" "$available" "$result" result
 	done
 
 	printf '\n'
@@ -812,9 +827,7 @@ print_status_table() {
 
 	for row in "${rows[@]}"; do
 		IFS='|' read -r component installed available action <<<"$row"
-		printf '%-18s | %-28s | %-22s | ' "$component" "$installed" "$available"
-		_color_action "$action"
-		printf '\n'
+		_print_check_table_row "$component" "$installed" "$available" "$action" action
 	done
 	printf '\n'
 }
