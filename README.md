@@ -69,6 +69,18 @@ chmod +x install.sh bin/bin/ex bin/bin/clip bin/bin/dotfiles
 ./install.sh
 ```
 
+### agent_bootstrap sibling path
+
+The **Agents** submenu expects `agent_bootstrap` as a **sibling** of this repo (not a fixed `~/Dev` path):
+
+```text
+parent/
+├── dotfiles/           # this repo
+└── agent_bootstrap/    # clone target for Agents → Clone/update repo
+```
+
+Clone manually or use **Agents → Clone/update repo**. `AGENT_BOOTSTRAP_HOME` is set from the sibling path when `install.sh` exists there. A standalone `agent_bootstrap` clone elsewhere still works for direct `./install.sh` use; override with `AGENT_BOOTSTRAP_ALLOW_OVERRIDE=1` if dotfiles should point at a non-sibling path.
+
 Entry points (interactive TTY):
 
 - `dotfiles` or `dotfiles menu` — boot menu (after stow)
@@ -109,9 +121,19 @@ Skip the boot menu with explicit flags:
 ./install.sh --help         # Usage
 ```
 
-**Non-interactive** runs (no TTY stdin, CI, piped) skip the boot menu and run **Initial setup → Run setup** directly.
+**Non-interactive** runs (no TTY on stdin — CI, piped, or redirected input) skip the boot menu and component toggle/confirm prompts. Behavior depends on the flag:
 
-When you choose **Run setup** (Initial setup submenu, or the non-interactive default), the installer will:
+| Invocation | Behavior |
+| ---------- | -------- |
+| `./install.sh` (no flag, no TTY) | Runs **Initial setup → Run setup** with all components enabled by default |
+| `./install.sh --initial` (no TTY) | Same as above — prints execution plan to stdout, then installs |
+| `./install.sh --update` | Runs update flow (non-interactive where applicable) |
+| `./install.sh --extensions` | Opens extensions submenu (requires TTY for interactive editor) |
+| `./install.sh --agents` | Opens agents submenu (requires TTY for interactive menu) |
+
+Set `DOTFILES_COMPONENTS` to a comma-separated list of component keys to install only those (e.g. `DOTFILES_COMPONENTS=docker,portainer,lazygit`). When git identity is enabled but not prompted, existing `git config --global` values are used.
+
+When you choose **Run setup** interactively (TTY), the installer will:
 
 1. Show an **interactive menu** — arrow keys to navigate, space to toggle
 2. Display the **execution plan** for review
@@ -237,6 +259,31 @@ dotfiles ext compare all
 **Workspace recommendations:** copy `templates/vscode-extensions.json` to a repo's `.vscode/extensions.json` for lean team recommendations (does not auto-install).
 
 Access via boot menu **Extensions**, `dotfiles menu`, or `./install.sh --extensions`.
+
+### Agents — `agent_bootstrap`
+
+The **Agents** submenu clones and bootstraps [`agent_bootstrap`](https://github.com/PamuduW/agent_bootstrap) as a sibling of this dotfiles repo (e.g. `~/Dev/agent_bootstrap` next to `~/Dev/dotfiles`).
+
+| Action | What it does |
+| ------ | ------------ |
+| Check status | Repo path, git state, skills count, doctor summary |
+| Clone/update repo | `git clone` or `git pull` at the sibling path |
+| Run full bootstrap | `./install.sh` in the clone |
+| Refresh skills only | `./install.sh skills update` |
+| Link agentboot | Symlink `bin/agentboot` → `~/bin/agentboot` |
+| Scaffold repo | Run `agentboot` in a chosen git repo |
+| Run doctor | `./install.sh doctor` |
+
+**Environment overrides (advanced):**
+
+| Variable | Default | Notes |
+| -------- | ------- | ----- |
+| `AGENT_BOOTSTRAP_REPO_URL` | `git@github.com:PamuduW/agent_bootstrap.git` | Clone URL; must match the allowlist unless bypass is set |
+| `AGENT_BOOTSTRAP_REPO_URL_ALLOW_ANY` | unset | Set to `1` to clone any URL (**unsafe** — disables supply-chain guard) |
+| `AGENT_BOOTSTRAP_CLONE_HOME` | sibling of dotfiles | Override clone target directory |
+| `AGENT_BOOTSTRAP_ALLOW_OVERRIDE` | unset | Set to `1` to use a non-canonical `AGENT_BOOTSTRAP_HOME` (**unsafe** — can point bootstrap at an arbitrary tree) |
+
+When `AGENT_BOOTSTRAP_REPO_URL` is overridden, clone is refused unless the URL is `git@github.com:PamuduW/agent_bootstrap.git` or `https://github.com/PamuduW/agent_bootstrap.git`, or `AGENT_BOOTSTRAP_REPO_URL_ALLOW_ANY=1` is set.
 
 ### Applying lean set
 

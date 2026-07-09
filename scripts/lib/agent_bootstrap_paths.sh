@@ -70,6 +70,27 @@ resolve_agent_bootstrap_home() {
 	return 1
 }
 
+# Allowed clone URLs when AGENT_BOOTSTRAP_REPO_URL is overridden (supply-chain guard).
+agent_bootstrap_repo_url_allowed() {
+	local url="${1:-}"
+
+	if [[ "${AGENT_BOOTSTRAP_REPO_URL_ALLOW_ANY:-}" == 1 ]]; then
+		return 0
+	fi
+
+	case "$url" in
+	git@github.com:PamuduW/agent_bootstrap.git | git@github.com:PamuduW/agent_bootstrap | https://github.com/PamuduW/agent_bootstrap.git | https://github.com/PamuduW/agent_bootstrap)
+		return 0
+		;;
+	esac
+
+	echo "Warning: AGENT_BOOTSTRAP_REPO_URL is not on the allowlist: ${url}" >&2
+	echo "  Allowed: git@github.com:PamuduW/agent_bootstrap.git" >&2
+	echo "         or https://github.com/PamuduW/agent_bootstrap.git" >&2
+	echo "  Set AGENT_BOOTSTRAP_REPO_URL_ALLOW_ANY=1 to bypass (unsafe)." >&2
+	return 1
+}
+
 # Re-export AGENT_BOOTSTRAP_HOME only when install.sh exists at the canonical sibling.
 sync_agent_bootstrap_home_env() {
 	local resolved

@@ -10,6 +10,12 @@ if [[ -f "$_REPORT_TABLE_LIB" ]]; then
 	source "$_REPORT_TABLE_LIB"
 fi
 
+_ARCH_LIB="${DOTFILES_DIR}/scripts/lib/arch.sh"
+if [[ -f "$_ARCH_LIB" ]]; then
+	# shellcheck source=/dev/null
+	source "$_ARCH_LIB"
+fi
+
 _dotfiles_tui_mode() {
 	[[ -n "${DOTFILES_TUI:-}" ]]
 }
@@ -334,16 +340,18 @@ install_lazygit_from_github() {
 		return 1
 	}
 
-	local ver tmp
+	local ver tmp arch_suffix
 	ver="$(_github_latest_version jesseduffield/lazygit)"
 	[[ -n "$ver" ]] || {
 		_err "  Could not determine lazygit version."
 		return 1
 	}
 
+	arch_suffix="$(_linux_github_arch_suffix)" || return 1
+
 	tmp="$(mktemp -d)"
 	trap "rm -rf '${tmp}'" RETURN
-	local tarball="lazygit_${ver}_Linux_x86_64.tar.gz"
+	local tarball="lazygit_${ver}_Linux_${arch_suffix}.tar.gz"
 	curl -fsSL -o "$tmp/$tarball" \
 		"https://github.com/jesseduffield/lazygit/releases/download/v${ver}/${tarball}"
 	curl -fsSL -o "$tmp/checksums.txt" \
@@ -414,16 +422,18 @@ install_lazydocker_from_github() {
 		return 1
 	}
 
-	local ver tmp
+	local ver tmp arch_suffix
 	ver="$(_github_latest_version jesseduffield/lazydocker)"
 	[[ -n "$ver" ]] || {
 		_err "  Could not determine lazydocker version."
 		return 1
 	}
 
+	arch_suffix="$(_linux_github_arch_suffix)" || return 1
+
 	tmp="$(mktemp -d)"
 	trap "rm -rf '${tmp}'" RETURN
-	local tarball="lazydocker_${ver}_Linux_x86_64.tar.gz"
+	local tarball="lazydocker_${ver}_Linux_${arch_suffix}.tar.gz"
 	curl -fsSL -o "$tmp/$tarball" \
 		"https://github.com/jesseduffield/lazydocker/releases/download/v${ver}/${tarball}"
 	curl -fsSL -o "$tmp/checksums.txt" \
@@ -621,6 +631,14 @@ install_monaspace_fonts() {
 		_err "  Monaspace unzip failed."
 		return 1
 	fi
+
+	local extracted_path
+	while IFS= read -r -d '' extracted_path; do
+		if [[ "$extracted_path" == *".."* ]]; then
+			_err "  Rejected suspicious path in Monaspace archive."
+			return 1
+		fi
+	done < <(find "$tmp/monaspace" -print0)
 
 	mkdir -p "$font_dir"
 	local otf_count=0

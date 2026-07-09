@@ -124,12 +124,12 @@ wsl --mount \\.\PHYSICALDRIVE1
 ## Troubleshooting
 
 ```powershell
-# Restart WSL service (run in PowerShell as Administrator)
-Restart-Service LxssManager
-
-# Full shutdown and restart
+# Full shutdown and restart (preferred — works on all WSL versions)
 wsl --shutdown
 wsl
+
+# Legacy: restart WSL service (PowerShell as Administrator; older Windows builds)
+Restart-Service LxssManager
 
 # Check which WSL version a distribution is using
 wsl -l -v

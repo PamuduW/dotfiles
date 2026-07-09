@@ -24,11 +24,32 @@ initial_setup_menu() {
 		_initial_labels _initial_keys _initial_dispatch
 }
 
+_apply_noninteractive_git_defaults() {
+	if ! is_on git_identity; then
+		return 0
+	fi
+	SETUP_GIT_NAME="${SETUP_GIT_NAME:-$(git config --global user.name 2>/dev/null || true)}"
+	SETUP_GIT_EMAIL="${SETUP_GIT_EMAIL:-$(git config --global user.email 2>/dev/null || true)}"
+}
+
+_run_setup_header() {
+	printf '\n'
+	ui_print_header "WSL Dotfiles Setup" ""
+	printf 'Log file: %s\n' "$LOG_FILE"
+}
+
 run_initial_setup_flow() {
+	if [[ "$DOTFILES_INTERACTIVE_TTY" != true ]]; then
+		apply_dotfiles_components_env
+		_apply_noninteractive_git_defaults
+		_run_setup_header
+		show_plan
+		run_install
+		return 0
+	fi
+
 	{
-		printf '\n'
-		ui_print_header "WSL Dotfiles Setup" ""
-		printf 'Log file: %s\n' "$LOG_FILE"
+		_run_setup_header
 	} >/dev/tty
 	component_menu || return 0
 	confirm_loop || return 0

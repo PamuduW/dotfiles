@@ -46,36 +46,19 @@ _menu_mx_page_size() {
 }
 
 _menu_mx_page_for_cursor() {
-	local cursor="$1"
-	local page_size="$2"
-
-	printf '%s\n' $((cursor / page_size))
+	menu_page_for_cursor "$@"
 }
 
 _menu_mx_page_count() {
-	local count="$1"
-	local page_size="$2"
-
-	printf '%s\n' $(((count + page_size - 1) / page_size))
+	menu_page_count "$@"
 }
 
 _menu_mx_page_range() {
-	local count="$1"
-	local page_size="$2"
-	local page="$3"
-	local start=$((page * page_size))
-	local end=$((start + page_size - 1))
-
-	((end >= count)) && end=$((count - 1))
-	printf '%s %s\n' "$start" "$end"
+	menu_page_range "$@"
 }
 
 _menu_mx_render_lines() {
-	local count="$1" page_size="$2" page="$3"
-	local start end
-
-	read -r start end < <(_menu_mx_page_range "$count" "$page_size" "$page")
-	printf '%s\n' $((end - start + 1 + _MENU_MX_FIXED_ROWS))
+	menu_page_render_lines "$1" "$2" "$3" "$_MENU_MX_FIXED_ROWS"
 }
 
 _menu_mx_cell_yn() {

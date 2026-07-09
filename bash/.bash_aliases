@@ -54,8 +54,25 @@ alias gitlog='git log --oneline --graph --decorate --all' # short visual log
 # ------------------------------------
 # Docker shortcuts
 # ------------------------------------
-alias dpot="docker start portainer && echo 'Portainer started at https://localhost:9443'" # start portainer
-alias dpotstop="docker stop portainer && echo 'Portainer stopped'"                        # stop portainer
+if [[ -z "${DOTFILES_DIR:-}" ]]; then
+	_dotfiles_aliases="${BASH_SOURCE[0]}"
+	if [[ -L "$_dotfiles_aliases" ]]; then
+		_dotfiles_aliases="$(readlink -f "$_dotfiles_aliases")"
+	fi
+	DOTFILES_DIR="$(cd "$(dirname "$_dotfiles_aliases")/.." && pwd)"
+fi
+# shellcheck source=scripts/lib/docker.sh
+if [[ -f "$DOTFILES_DIR/scripts/lib/docker.sh" ]]; then
+	# shellcheck disable=SC1091
+	source "$DOTFILES_DIR/scripts/lib/docker.sh"
+fi
+
+dpot() {
+	run_docker start portainer && echo 'Portainer started at https://localhost:9443'
+}
+dpotstop() {
+	run_docker stop portainer && echo 'Portainer stopped'
+}
 dclean() {
 	echo "This will remove ALL unused Docker data (images, containers, networks) AND volumes."
 	read -r -p "Are you sure? [y/N] " _reply

@@ -18,6 +18,8 @@ ui_init_colors
 source "$_LIB_DIR/menu_keys.sh"
 # shellcheck source=scripts/lib/menu_simple.sh
 source "$_LIB_DIR/menu_simple.sh"
+# shellcheck source=scripts/lib/menu_paging.sh
+source "$_LIB_DIR/menu_paging.sh"
 # shellcheck source=scripts/lib/menu_checkbox.sh
 source "$_LIB_DIR/menu_checkbox.sh"
 # shellcheck source=scripts/lib/menu_matrix.sh
@@ -26,6 +28,10 @@ source "$_LIB_DIR/menu_matrix.sh"
 source "$_LIB_DIR/agent_bootstrap_paths.sh"
 # shellcheck source=scripts/lib/menu_runner.sh
 source "$_LIB_DIR/menu_runner.sh"
+# shellcheck source=scripts/lib/docker.sh
+source "$_LIB_DIR/docker.sh"
+# shellcheck source=scripts/lib/arch.sh
+source "$_LIB_DIR/arch.sh"
 
 # Legacy aliases for component_menu until migrated to menu_checkbox_run.
 _fit_menu_line() { menu_fit_line "$@"; }
