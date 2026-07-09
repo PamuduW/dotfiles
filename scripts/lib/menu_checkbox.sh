@@ -47,6 +47,13 @@ _menu_cb_visible_count() {
 	printf '%s\n' $((end - start + 1))
 }
 
+_menu_cb_render_lines() {
+	local count="$1" page_size="$2" page="$3"
+	local visible_count
+	visible_count="$(_menu_cb_visible_count "$count" "$page_size" "$page")"
+	printf '%s\n' $((visible_count + _MENU_CB_FIXED_ROWS))
+}
+
 _menu_cb_status_context() {
 	local status="$1"
 

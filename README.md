@@ -4,7 +4,7 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 
 ## What you get
 
-- **Interactive boot menu** — choose initial setup, update, extensions, or agents; component toggle menu for installs
+- **Interactive boot menu** — `dotfiles` / `dotfiles menu` or `./install.sh`; loops through initial setup, update, extensions, and agents
 - Custom Bash prompt: time, user@host, path, git branch + status markers, exit code
 - Cross-terminal history syncing (`history -a; history -n`) with 10k line history
 - Modern CLI tools: `eza`, `fzf` (Ctrl+R/Ctrl+T/Alt+C), `zoxide`, `ripgrep`, `fd`
@@ -46,7 +46,11 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 ├── templates/
 │   └── vscode-extensions.json  # lean workspace recommendations template
 ├── log/                # install logs (gitignored)
-├── install.sh
+├── scripts/
+│   ├── install.sh      # real installer
+│   ├── lib/            # TUI, bootstrap helpers
+│   └── menus/          # main + submenus (plan8)
+├── install.sh          # shim → scripts/install.sh
 └── README.md
 ```
 
@@ -63,44 +67,64 @@ chmod +x install.sh bin/bin/ex bin/bin/clip bin/bin/dotfiles
 ./install.sh
 ```
 
-When run **interactively** (stdout is a TTY), `./install.sh` shows a **boot menu** first:
+Entry points (interactive TTY):
+
+- `dotfiles` or `dotfiles menu` — boot menu (after stow)
+- `./install.sh` — same menu via root shim
+
+The main menu **loops** until you choose Quit:
 
 ```
 === Dotfiles ===
-  1. Initial setup   → component install menu + confirm + install
-  2. Update          → dotfiles update report, then optional upgrade
-  3. Extensions      → IDE extensions menu (check / backup / restore / compare)
-  4. Agents          → agentic setup (agent_bootstrap, agentboot)
-  5. Quit
+  Initial setup
+  Update
+  Extensions
+  Agents
+  Quit
 ```
 
-Use arrow keys to navigate and Enter to select (same TUI as the component menu).
+Use arrow keys to navigate and Enter to select.
 
 ### Boot menu
 
-| Option | Action |
-| ------ | ------ |
-| Initial setup | Component toggle menu, confirm loop, then install (same behavior as before Stage 3) |
-| Update | Runs `dotfiles update` (report only), then prompts **Proceed with upgrades? [y/N]** — on yes, runs `dotfiles upgrade` |
-| Extensions | IDE extensions submenu (check / backup / restore / compare) |
-| Agents | Agent bootstrap submenu (clone/run `agent_bootstrap` installer, `agentboot`) |
-| Quit | Exit without changes |
+| Option | Submenu / action |
+| ------ | ---------------- |
+| Initial setup | **Check status** — component install summary table · **Run setup** — toggle menu, confirm loop, install · **Back** |
+| Update | **Update & upgrade** — `dotfiles update` report, then optional `dotfiles upgrade` (prompts for `--all`) · **Back** |
+| Extensions | **Check status** (`ext compare all`) · **Edit manifest** · **Restore** (missing only) · **Remove** (extras) · **Back** |
+| Agents | Sectioned submenu (see below) |
+| Quit | Exit |
+
+**Agents submenu** (section headers are labels, not actions):
+
+```
+Check status
+── Repo ──
+Clone/update agent_bootstrap repo
+── Setup ──
+Run full bootstrap | Update skills | Link agentboot
+── Workspace ──
+Scaffold repo (agentboot)
+── Health ──
+Run doctor
+Back
+```
 
 ### CLI flags
 
 Skip the boot menu with explicit flags:
 
 ```bash
-./install.sh --initial      # Initial setup (component menu)
-./install.sh --update       # Update flow only
-./install.sh --extensions   # Extensions menu
-./install.sh --agents       # Agents menu
+./install.sh --initial      # Initial setup submenu (or run setup if non-interactive)
+./install.sh --update       # Update submenu
+./install.sh --extensions   # Extensions submenu
+./install.sh --agents       # Agents submenu
 ./install.sh --help         # Usage
 ```
 
-**Non-interactive** runs (piped input, CI, or stdout not a TTY) skip the boot menu and run the **Initial setup** path directly — equivalent to `./install.sh --initial`.
+**Non-interactive** runs (no TTY stdin, CI, piped) skip the boot menu and run **Initial setup → Run setup** directly.
 
-When you choose **Initial setup** (boot menu option 1, or the non-interactive default), the installer will:
+When you choose **Run setup** (Initial setup submenu, or the non-interactive default), the installer will:
 
 1. Show an **interactive menu** — arrow keys to navigate, space to toggle
 2. Display the **execution plan** for review
@@ -164,10 +188,11 @@ Global command (stowed to `~/bin/dotfiles`, on PATH like `ex` and `clip`):
 
 | Subcommand | Action |
 | ---------- | ------ |
+| `dotfiles` | On a TTY, opens the boot menu; otherwise prints help |
+| `dotfiles menu` | Boot menu (same as `./install.sh`) |
 | `dotfiles update` | **Report only** — check apt, agent CLIs, runtimes, and the dotfiles repo; print what can be upgraded (no changes) |
 | `dotfiles upgrade` | **Apply** — run upgrades (apt, CLIs, etc.); idempotent and safe to re-run |
 | `dotfiles upgrade --all` | Same as `upgrade`, plus opt-in **Node.js** (nvm LTS), **Go** (asdf), and **Monaspace** fonts |
-| `dotfiles upgrade --all` | Same as `upgrade`, plus opt-in: Node.js (nvm LTS), Go (asdf), Monaspace Nerd Fonts |
 | `dotfiles status` | Installed versions + dotfiles repo git status |
 | `dotfiles restow` | `stow --restow bash bin readline` |
 | `dotfiles self` | `git pull` in the dotfiles repo, then restow |
@@ -180,10 +205,23 @@ Manage VS Code and Cursor extensions across four targets: `vscode-wsl`, `cursor-
 
 | Subcommand | Action |
 | ---------- | ------ |
-| `dotfiles ext check [target\|all]` | Report installed count, CLI vs disk method, stale folders |
-| `dotfiles ext backup [target\|all]` | Export manifests to `extensions/*.txt` + update `manifest.json` |
-| `dotfiles ext restore [target] [manifest]` | Install from manifest (`publisher.ext@version` per line); default manifest matches target name |
-| `dotfiles ext compare [target]` | Diff manifest vs installed: only-in-backup, only-installed, version drift |
+| `dotfiles ext check [target\|all]` | Table of installed vs manifest counts per target |
+| `dotfiles ext backup [target\|all]` | Export manifests to `extensions/<target>.txt` + update `manifest.json` |
+| `dotfiles ext restore [target\|all]` | Install from `extensions/<target>.txt` (`publisher.ext@version` per line) |
+| `dotfiles ext restore --missing-only` | Install only manifest entries not already installed |
+| `dotfiles ext restore --prune` | Install all manifest entries, then uninstall extras |
+| `dotfiles ext restore --prune-only` | Uninstall extras only (no install pass) |
+| `dotfiles ext compare [target\|all]` | Diff manifest vs installed: missing, extra, version drift |
+| `dotfiles ext sync-manifest <target>` | Write extension lines from stdin to `extensions/<target>.txt` |
+| `dotfiles ext list-edit <target>` | TSV for menu: installed extensions (checked/line/status) |
+| `dotfiles ext list-missing <target>` | TSV for menu: manifest entries not installed |
+| `dotfiles ext list-extra <target>` | TSV for menu: installed extras not in manifest |
+| `dotfiles ext install-lines <target>` | Install extension lines read from stdin |
+| `dotfiles ext remove-lines <target>` | Uninstall extensions (lines or ids) read from stdin |
+
+Restore always reads `extensions/<target>.txt` — there is no custom manifest path argument. Use `sync-manifest` or edit the file to change what gets restored.
+
+`list-*`, `sync-manifest`, `install-lines`, and `remove-lines` require a single target (not `all`).
 
 **Manifest layout** (`extensions/`):
 
@@ -192,22 +230,26 @@ Manage VS Code and Cursor extensions across four targets: `vscode-wsl`, `cursor-
 - `manifest.json` — `{ "generated": "<ISO>", "targets": { "<name>": { "count", "method" } } }`
 - `extensions-decisions.md` — human checklist to confirm prune/add before applying changes
 
-**Restore examples:**
+**CLI examples:**
 
 ```bash
-# Restore lean Cursor-WSL set (primary WSL target)
-dotfiles ext restore cursor-wsl extensions/cursor-core.txt
+# Restore from extensions/cursor-wsl.txt
+dotfiles ext restore cursor-wsl
+
+# Install only missing, then prune extras
+dotfiles ext restore cursor-wsl --missing-only
+dotfiles ext restore cursor-wsl --prune-only
 
 # Backup all targets after manual changes
 dotfiles ext backup all
 
-# Compare drift on Windows VS Code
-dotfiles ext compare vscode-win
+# Compare drift (also used by Extensions → Check status)
+dotfiles ext compare all
 ```
 
 **Workspace recommendations:** copy `templates/vscode-extensions.json` to a repo's `.vscode/extensions.json` for lean team recommendations (does not auto-install).
 
-Access via boot menu option **3. Extensions** or `./install.sh --extensions`.
+Access via boot menu **Extensions**, `dotfiles menu`, or `./install.sh --extensions`.
 
 ### Applying lean set
 

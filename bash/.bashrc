@@ -122,16 +122,20 @@ if [ -f ~/.bash_aliases ]; then
 	. ~/.bash_aliases
 fi
 
-# agent_bootstrap — derive from env, detected clone, or default Dev layout
+# agent_bootstrap — export only when install.sh is present and executable
+if [[ -n "${AGENT_BOOTSTRAP_HOME:-}" && ! -x "${AGENT_BOOTSTRAP_HOME}/install.sh" ]]; then
+	unset AGENT_BOOTSTRAP_HOME
+fi
 if [[ -z "${AGENT_BOOTSTRAP_HOME:-}" ]]; then
 	for _ab_home in \
 		"$HOME/Dev/agent_bootstrap" \
-		"$HOME/Dev/new_setup/agent_bootstrap"; do
-		if [[ -f "$_ab_home/install.sh" ]]; then
+		"$HOME/Dev/new_setup/agent_bootstrap" \
+		"$(dirname "$HOME/dotfiles")/agent_bootstrap" \
+		"$(dirname "$HOME/Dev/dotfiles")/agent_bootstrap"; do
+		if [[ -x "$_ab_home/install.sh" ]]; then
 			export AGENT_BOOTSTRAP_HOME="$_ab_home"
 			break
 		fi
 	done
 	unset _ab_home
 fi
-export AGENT_BOOTSTRAP_HOME="${AGENT_BOOTSTRAP_HOME:-$HOME/Dev/agent_bootstrap}"

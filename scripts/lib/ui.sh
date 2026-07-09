@@ -132,13 +132,13 @@ ui_color_result() {
 	local result="$1"
 
 	case "$result" in
-	installed | configured)
+	ok | installed | configured)
 		printf '%s%s%s' "$C_GREEN" "$result" "$C_RESET"
 		;;
 	missing | failed)
 		printf '%s%s%s' "$C_RED" "$result" "$C_RESET"
 		;;
-	check)
+	check | drift | extra)
 		printf '%s%s%s' "$C_YELLOW" "$result" "$C_RESET"
 		;;
 	skipped*)
@@ -148,6 +148,21 @@ ui_color_result() {
 		printf '%s' "$result"
 		;;
 	esac
+}
+
+# Two-column status row: label | colored result.
+ui_print_status_row() {
+	local label="$1"
+	local result="$2"
+	local detail="${3:-}"
+
+	if [[ -n "$detail" ]]; then
+		printf '%-24s | %-32s | ' "$label" "${detail:0:32}"
+	else
+		printf '%-24s | ' "$label"
+	fi
+	ui_color_result "$result"
+	printf '\n'
 }
 
 ui_print_component_table_row() {

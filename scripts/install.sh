@@ -173,11 +173,11 @@ prompt_git_identity() {
 
 	echo ""
 	echo "Git identity (press Enter to keep default):"
-	read_tty_line SETUP_GIT_NAME "  Name [${current_name:-Pamudu Wijesingha}]: "
-	SETUP_GIT_NAME="${SETUP_GIT_NAME:-${current_name:-Pamudu Wijesingha}}"
+	read_tty_line SETUP_GIT_NAME "  Name [${current_name:-}]: "
+	SETUP_GIT_NAME="${SETUP_GIT_NAME:-$current_name}"
 
-	read_tty_line SETUP_GIT_EMAIL "  Email [${current_email:-pamuduwijesingha2k20@gmail.com}]: "
-	SETUP_GIT_EMAIL="${SETUP_GIT_EMAIL:-${current_email:-pamuduwijesingha2k20@gmail.com}}"
+	read_tty_line SETUP_GIT_EMAIL "  Email [${current_email:-}]: "
+	SETUP_GIT_EMAIL="${SETUP_GIT_EMAIL:-$current_email}"
 }
 
 toggle_component() {
@@ -381,8 +381,6 @@ _draw_component_menu() {
 		[[ "${COMP_ON[$key]}" -eq 0 ]] && mark=" "
 		note=""
 		[[ "${COMP_DEPS[$i]}" -ne -1 ]] && note="  (requires #$((COMP_DEPS[i] + 1)))"
-		prefix=" "
-		[[ $i -eq $cur ]] && prefix=">"
 		row="$(printf " %2d. [%s] %s%s" "$((i + 1))" "$mark" "${COMP_LABELS[$i]}" "$note")"
 
 		if [[ $i -eq $cur ]]; then
@@ -830,15 +828,6 @@ ensure_asdf_installed() {
 	fi
 
 	export PATH="$asdf_dir/bin:$asdf_dir/shims:$PATH"
-	sed -i '/\.asdf\/asdf\.sh/d; /\.asdf\/completions\/asdf\.bash/d' "$HOME/.bashrc" 2>/dev/null || true
-
-	if ! grep -Fq 'export PATH="$HOME/.asdf/bin:$HOME/.asdf/shims:$PATH"' "$HOME/.bashrc" 2>/dev/null; then
-		{
-			echo ''
-			echo '# asdf'
-			echo 'export PATH="$HOME/.asdf/bin:$HOME/.asdf/shims:$PATH"'
-		} >>"$HOME/.bashrc"
-	fi
 
 	command -v asdf >/dev/null 2>&1 || {
 		echo "  asdf install completed but command is still unavailable." >&2
@@ -1288,48 +1277,11 @@ install_direnv() {
 }
 
 ensure_direnv_hook_in_bashrc() {
-	local bashrc="$HOME/.bashrc"
-	local hook='eval "$(direnv hook bash)"'
-
-	touch "$bashrc"
-
-	if grep -Fqx "$hook" "$bashrc"; then
-		log_skip "direnv hook already present in ~/.bashrc"
-		return 0
-	fi
-
-	{
-		echo ""
-		echo "# direnv"
-		echo "$hook"
-	} >>"$bashrc"
-
-	log_ok "Added direnv hook to ~/.bashrc"
+	log_skip "direnv hook lives in stowed .bashrc"
 }
 
 ensure_wslview_browser_in_bashrc() {
-	local bashrc="$HOME/.bashrc"
-	local export_line='export BROWSER=wslview'
-
-	if ! command -v wslview >/dev/null 2>&1; then
-		log_skip "wslview not found; skipping BROWSER export"
-		return 0
-	fi
-
-	touch "$bashrc"
-
-	if grep -Fqx "$export_line" "$bashrc"; then
-		log_skip "BROWSER=wslview already present in ~/.bashrc"
-		return 0
-	fi
-
-	{
-		echo ""
-		echo "# Use Windows default browser from WSL sessions"
-		echo "$export_line"
-	} >>"$bashrc"
-
-	log_ok "Added BROWSER=wslview to ~/.bashrc"
+	log_skip "BROWSER=wslview lives in stowed .bashrc"
 }
 
 ensure_bash_profile_sources_bashrc() {
@@ -1390,6 +1342,14 @@ install_monaspace_fonts() {
 		echo "  Monaspace unzip failed." >&2
 		return 1
 	fi
+
+	local extracted_path
+	while IFS= read -r -d '' extracted_path; do
+		if [[ "$extracted_path" == *".."* ]]; then
+			echo "  Rejected suspicious path in Monaspace archive." >&2
+			return 1
+		fi
+	done < <(find "$tmp/monaspace" -print0)
 
 	mkdir -p "$font_dir"
 	local otf_count=0

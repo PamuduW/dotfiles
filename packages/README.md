@@ -11,7 +11,7 @@ This folder holds the package list for the WSL/Debian/Ubuntu bootstrap.
 
 `packages.txt` uses `# @tag` section headers (e.g. `@core`, `@cli`, `@python`, `@system`).
 
-When you run `dotfiles/install.sh`, the interactive installer lets you toggle which tag groups to install. Only selected groups are passed to `apt-get install`. The installer also:
+When you run `./install.sh` (root shim to `scripts/install.sh`), the interactive installer lets you toggle which tag groups to install. Only selected groups are passed to `apt-get install`. The installer also:
 
 - Adds small compatibility fixes for Debian/Ubuntu quirks:
   - `fd-find` installs the `fdfind` binary (because `fd` is already taken)
@@ -39,7 +39,7 @@ The installer automatically downloads and installs them from official GitHub rel
 - **lazygit**: TUI for git operations
 - **lazydocker**: TUI for Docker management
 
-If you prefer not to install them, deselect lazygit/lazydocker from the interactive toggle menu when running `install.sh`.
+If you prefer not to install them, deselect lazygit/lazydocker from the interactive toggle menu when running `./install.sh`.
 
 ## Enabling zoxide
 

@@ -12,6 +12,8 @@ _ext_menu_dispatch() {
 	case "$action" in
 	status)
 		ui_clear
+		printf '\n' >/dev/tty
+		ui_print_header "Extensions status" "Dotfiles › Extensions" "$(menu_tty_cols)" >/dev/tty
 		"$dotfiles_cmd" ext compare all
 		;;
 	edit)

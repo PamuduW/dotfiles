@@ -24,16 +24,18 @@ _agents_menu_types=(
 )
 
 resolve_agent_bootstrap_home() {
-	if [[ -n "${AGENT_BOOTSTRAP_HOME:-}" ]]; then
+	local candidate
+
+	if [[ -n "${AGENT_BOOTSTRAP_HOME:-}" && -x "${AGENT_BOOTSTRAP_HOME}/install.sh" ]]; then
 		printf '%s\n' "$AGENT_BOOTSTRAP_HOME"
 		return 0
 	fi
-	local candidate
+
 	for candidate in \
 		"${HOME}/Dev/agent_bootstrap" \
 		"${HOME}/Dev/new_setup/agent_bootstrap" \
 		"$(dirname "$DOTFILES_DIR")/agent_bootstrap"; do
-		if [[ -f "$candidate/install.sh" ]]; then
+		if [[ -x "$candidate/install.sh" ]]; then
 			printf '%s\n' "$candidate"
 			return 0
 		fi
@@ -77,32 +79,77 @@ require_agent_bootstrap_installer() {
 }
 
 print_agents_status() {
-	local ab_home answer branch dirty
+	local ab_home branch dirty link_target
+	local cols
 	ab_home="$(resolve_agent_bootstrap_home)"
+	cols="$(menu_tty_cols)"
 
-	echo ""
-	ui_print_header "Agents status" "Dotfiles › Agents" 0
-	printf '%-24s | %s\n' "agent_bootstrap" "$ab_home"
+	{
+		printf '\n'
+		ui_print_header "Agents status" "Dotfiles › Agents" "$cols"
+		printf '%-24s | %-32s | %s\n' "check" "detail" "result"
+		printf '%s\n' "-------------------------+----------------------------------+----------"
 
-	if [[ -d "$ab_home/.git" ]]; then
-		branch="$(git -C "$ab_home" branch --show-current 2>/dev/null || echo '?')"
-		dirty="$(git -C "$ab_home" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
-		printf '%-24s | %s\n' "git branch" "$branch"
-		printf '%-24s | %s\n' "dirty files" "$dirty"
-	else
-		printf '%-24s | %s\n' "git" "not a repo"
-	fi
+		ui_print_status_row "agent_bootstrap" "ok" "$ab_home"
 
-	printf '%-24s | %s\n' "install.sh" "$([[ -x "$ab_home/install.sh" ]] && echo ok || echo missing)"
-	printf '%-24s | %s\n' "agentboot bin" "$([[ -x "$ab_home/bin/agentboot" ]] && echo ok || echo missing)"
-	printf '%-24s | %s\n' "python3" "$(command -v python3 >/dev/null 2>&1 && echo ok || echo missing)"
-	printf '%-24s | %s\n' "node" "$(command -v node >/dev/null 2>&1 && echo ok || echo missing)"
-	printf '%-24s | %s\n' "npx" "$(command -v npx >/dev/null 2>&1 && echo ok || echo missing)"
-	printf '%-24s | %s\n' "~/bin/agentboot" "$([[ -L "$HOME/bin/agentboot" ]] && readlink "$HOME/bin/agentboot" || echo missing)"
+		if [[ -d "$ab_home/.git" ]]; then
+			branch="$(git -C "$ab_home" branch --show-current 2>/dev/null || echo '?')"
+			dirty="$(git -C "$ab_home" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+			ui_print_status_row "git branch" "ok" "$branch"
+			if [[ "$dirty" -eq 0 ]]; then
+				ui_print_status_row "dirty files" "ok" "0"
+			else
+				ui_print_status_row "dirty files" "check" "$dirty"
+			fi
+		else
+			ui_print_status_row "git" "missing" "not a repo"
+		fi
+
+		if [[ -x "$ab_home/install.sh" ]]; then
+			ui_print_status_row "install.sh" "ok" "$ab_home/install.sh"
+		else
+			ui_print_status_row "install.sh" "missing" "$ab_home/install.sh"
+		fi
+
+		if [[ -x "$ab_home/bin/agentboot" ]]; then
+			ui_print_status_row "agentboot bin" "ok" "$ab_home/bin/agentboot"
+		else
+			ui_print_status_row "agentboot bin" "missing" "$ab_home/bin/agentboot"
+		fi
+
+		if command -v python3 >/dev/null 2>&1; then
+			ui_print_status_row "python3" "ok" "$(command -v python3)"
+		else
+			ui_print_status_row "python3" "missing"
+		fi
+
+		if command -v node >/dev/null 2>&1; then
+			ui_print_status_row "node" "ok" "$(command -v node)"
+		else
+			ui_print_status_row "node" "missing"
+		fi
+
+		if command -v npx >/dev/null 2>&1; then
+			ui_print_status_row "npx" "ok" "$(command -v npx)"
+		else
+			ui_print_status_row "npx" "missing"
+		fi
+
+		if [[ -L "$HOME/bin/agentboot" ]]; then
+			link_target="$(readlink "$HOME/bin/agentboot")"
+			ui_print_status_row "~/bin/agentboot" "ok" "$link_target"
+		else
+			ui_print_status_row "~/bin/agentboot" "missing"
+		fi
+	} >/dev/tty
 
 	if [[ -x "$ab_home/install.sh" ]]; then
 		echo ""
-		( cd "$ab_home" && ./install.sh status ) 2>/dev/null || true
+		local status_rc=0
+		( cd "$ab_home" && ./install.sh status ) || status_rc=$?
+		if (( status_rc != 0 )); then
+			echo "Warning: install.sh status failed (exit $status_rc)" >&2
+		fi
 	fi
 }
 
@@ -163,12 +210,16 @@ _agents_dispatch() {
 		case "$answer" in
 		y | Y | yes | YES) agentboot_args+=(--full) ;;
 		esac
-		( cd "$target_dir" && "$ab_home/bin/agentboot" "${agentboot_args[@]}" )
+		( cd "$target_dir" && AGENT_BOOTSTRAP_HOME="$ab_home" "$ab_home/bin/agentboot" "${agentboot_args[@]}" )
 		;;
 	doctor)
 		require_agent_bootstrap_installer "$ab_home" || return 1
 		ui_clear
-		( cd "$ab_home" && ./install.sh doctor ) || true
+		local doctor_rc=0
+		( cd "$ab_home" && ./install.sh doctor ) || doctor_rc=$?
+		if (( doctor_rc != 0 )); then
+			echo "Warning: doctor reported issues (exit $doctor_rc)" >&2
+		fi
 		;;
 	esac
 }

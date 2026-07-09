@@ -207,8 +207,11 @@ dotfiles upgrade
 
 # Include opt-in upgrades: Node.js (nvm), Go (asdf), Monaspace fonts
 dotfiles upgrade --all
-# Include opt-in Node.js, Go, and Monaspace fonts:
-dotfiles upgrade --all
+
+# Boot menu (initial setup / update / extensions / agents)
+dotfiles menu
+# or just:
+dotfiles
 
 # Installed versions + repo git status
 dotfiles status
