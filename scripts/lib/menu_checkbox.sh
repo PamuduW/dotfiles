@@ -1,8 +1,16 @@
 # shellcheck shell=bash
 # Checkbox menu with paging, bulk toggle, and colored status column.
 
-_MENU_CB_STATUS_WIDTH=16
 _MENU_CB_FIXED_ROWS=7
+
+_menu_cb_fill_dots() {
+	local count="$1"
+	local i
+
+	for ((i = 0; i < count; i++)); do
+		printf '.'
+	done
+}
 
 _menu_cb_page_size() {
 	local rows="$1"
@@ -80,48 +88,73 @@ _menu_cb_draw_row() {
 	local cur="$1"
 	local idx="$2"
 	local cols="$3"
-	local mark status status_ctx
-	local status_sep=' · '
-	local status_room label_room
+	local mark status status_ctx prefix head mid_sep label
+	local dots_count max_label checked selected
 
 	mark='x'
 	[[ "${MENU_CB_CHECKED[$idx]:-0}" -eq 0 ]] && mark=' '
 
 	status="${MENU_CB_STATUS[$idx]:-}"
 	status_ctx="$(_menu_cb_status_context "$status")"
-
-	status_room=$((${#status} + ${#status_sep}))
-	((status_room < 8)) && status_room=8
-	label_room=$((cols - status_room - 4))
-	((label_room < 12)) && label_room=12
+	label="${MENU_CB_LABELS[$idx]}"
 
 	prefix=' '
 	[[ $idx -eq $cur ]] && prefix='>'
 
-	printf '  '
-	if [[ "${MENU_CB_CHECKED[$idx]:-0}" -eq 1 ]]; then
-		if [[ $idx -eq $cur ]]; then
-			printf '%s%s%s' "$C_BOLD" \
-				"$(menu_fit_line "$(printf '%s%2d. [%s] %s' "$prefix" "$((idx + 1))" "$mark" "${MENU_CB_LABELS[$idx]}")" "$label_room")" \
-				"$C_RESET"
+	checked="${MENU_CB_CHECKED[$idx]:-0}"
+	selected=0
+	[[ $idx -eq $cur ]] && selected=1
+
+	mid_sep=' · '
+	head="$(printf '  %s%2d. [%s]%s' "$prefix" "$((idx + 1))" "$mark" "$mid_sep")"
+
+	dots_count=$((cols - ${#head} - ${#status} - ${#mid_sep} - ${#label}))
+	if ((dots_count < 0)); then
+		max_label=$((cols - ${#head} - ${#status} - ${#mid_sep} - 3))
+		((max_label < 1)) && max_label=1
+		label="$(menu_fit_line "$label" "$max_label")"
+		dots_count=$((cols - ${#head} - ${#status} - ${#mid_sep} - ${#label}))
+	fi
+	((dots_count < 0)) && dots_count=0
+
+	if [[ "$checked" -eq 1 ]]; then
+		if [[ "$selected" -eq 1 ]]; then
+			printf '%s%s%s' "$C_BOLD" "$head" "$C_RESET"
 		else
-			printf '%s' \
-				"$(menu_fit_line "$(printf '%s%2d. [%s] %s' "$prefix" "$((idx + 1))" "$mark" "${MENU_CB_LABELS[$idx]}")" "$label_room")"
+			printf '%s' "$head"
 		fi
 	else
-		if [[ $idx -eq $cur ]]; then
-			printf '%s%s%s%s' "$C_BOLD" "$C_DIM" \
-				"$(menu_fit_line "$(printf '%s%2d. [%s] %s' "$prefix" "$((idx + 1))" "$mark" "${MENU_CB_LABELS[$idx]}")" "$label_room")" \
-				"$C_RESET"
+		if [[ "$selected" -eq 1 ]]; then
+			printf '%s%s%s%s' "$C_BOLD" "$C_DIM" "$head" "$C_RESET"
 		else
-			printf '%s%s%s' "$C_DIM" \
-				"$(menu_fit_line "$(printf '%s%2d. [%s] %s' "$prefix" "$((idx + 1))" "$mark" "${MENU_CB_LABELS[$idx]}")" "$label_room")" \
-				"$C_RESET"
+			printf '%s%s%s' "$C_DIM" "$head" "$C_RESET"
 		fi
 	fi
-	printf '%s' "$status_sep"
+
 	ui_color_word "$status" "$status_ctx"
-	printf '\e[K\n'
+	printf '%s' "$mid_sep"
+
+	if [[ "$checked" -eq 1 ]]; then
+		if [[ "$selected" -eq 1 ]]; then
+			printf '%s%s%s' "$C_BOLD" "$label" "$C_RESET"
+		else
+			printf '%s' "$label"
+		fi
+	else
+		if [[ "$selected" -eq 1 ]]; then
+			printf '%s%s%s%s' "$C_BOLD" "$C_DIM" "$label" "$C_RESET"
+		else
+			printf '%s%s%s' "$C_DIM" "$label" "$C_RESET"
+		fi
+	fi
+
+	if [[ "$checked" -eq 1 ]]; then
+		[[ "$selected" -eq 1 ]] && printf '%s' "$C_BOLD"
+	else
+		printf '%s' "$C_DIM"
+	fi
+	_menu_cb_fill_dots "$dots_count"
+	printf '%s\e[K\n' "$C_RESET"
 }
 
 _menu_cb_draw() {
