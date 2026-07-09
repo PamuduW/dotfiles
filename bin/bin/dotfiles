@@ -4,6 +4,16 @@ set -euo pipefail
 _script="$(readlink -f "${BASH_SOURCE[0]}")"
 DOTFILES_DIR="$(dirname "$(dirname "$(dirname "$_script")")")"
 
+_REPORT_TABLE_LIB="${DOTFILES_DIR}/scripts/lib/report_table.sh"
+if [[ -f "$_REPORT_TABLE_LIB" ]]; then
+	# shellcheck source=/dev/null
+	source "$_REPORT_TABLE_LIB"
+fi
+
+_dotfiles_tui_mode() {
+	[[ -n "${DOTFILES_TUI:-}" ]]
+}
+
 # --- TTY colors ---
 _dotfiles_use_color() {
 	[[ -n "${NO_COLOR:-}" ]] && return 1
@@ -1897,6 +1907,63 @@ _ext_cmd_compare() {
 
 	if [[ ${#summary_targets[@]} -eq 0 ]]; then
 		printf '\n'
+		return
+	fi
+
+	if _dotfiles_tui_mode && declare -F rt_print_table_row >/dev/null 2>&1; then
+		local i row ext_id manifest_ver installed_ver_col count examples detail result
+		local ok_count=0 check_count=0 miss_count=0
+
+		rt_print_table_columns
+		for i in "${!summary_targets[@]}"; do
+			detail="manifest ${summary_manifest[$i]} · installed ${summary_installed[$i]} · missing ${summary_missing[$i]} · extra ${summary_extra[$i]} · drift ${summary_drift[$i]}"
+			if [[ "${summary_missing[$i]}" -eq 0 && "${summary_extra[$i]}" -eq 0 && "${summary_drift[$i]}" -eq 0 ]]; then
+				result=ok
+				((++ok_count))
+			else
+				result=check
+				((++check_count))
+			fi
+			rt_print_table_row "${summary_targets[$i]}" "$detail" "$result"
+		done
+
+		if [[ "$has_diff" != true ]]; then
+			rt_print_rollup "$ok_count" 0 0
+			return
+		fi
+
+		if [[ ${#missing_rows[@]} -gt 0 ]]; then
+			mapfile -t missing_rows < <(printf '%s\n' "${missing_rows[@]}" | sort)
+			rt_print_section "── Missing (manifest, not installed) ──"
+			for row in "${missing_rows[@]}"; do
+				IFS='|' read -r target ext_id manifest_ver <<<"$row"
+				rt_print_table_row "$target" "${ext_id}@${manifest_ver:-latest}" missing
+				((++miss_count))
+			done
+		fi
+
+		if [[ ${#drift_rows[@]} -gt 0 ]]; then
+			mapfile -t drift_rows < <(printf '%s\n' "${drift_rows[@]}" | sort)
+			rt_print_section "── Version drift ──"
+			for row in "${drift_rows[@]}"; do
+				IFS='|' read -r target ext_id manifest_ver installed_ver_col <<<"$row"
+				rt_print_table_row "$target" \
+					"${ext_id} manifest ${manifest_ver} · installed ${installed_ver_col}" drift
+				((++check_count))
+			done
+		fi
+
+		if [[ ${#extra_rows[@]} -gt 0 ]]; then
+			rt_print_section "── Extra installed (not in manifest) ──"
+			for row in "${extra_rows[@]}"; do
+				IFS='|' read -r target count examples <<<"$row"
+				rt_print_table_row "$target" "${count} extra · ${examples:0:40}" extra
+				((++check_count))
+			done
+			printf '  %sRestore with prune: dotfiles ext restore <target> --prune%s\n' "$C_DIM" "$C_RESET"
+		fi
+
+		rt_print_rollup "$ok_count" "$check_count" "$miss_count"
 		return
 	fi
 

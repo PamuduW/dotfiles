@@ -14,7 +14,7 @@ _ext_menu_dispatch() {
 		ui_clear
 		printf '\n' >/dev/tty
 		ui_print_header "Extensions status" "Dotfiles › Extensions" "$(menu_tty_cols)" >/dev/tty
-		"$dotfiles_cmd" ext compare all
+		DOTFILES_TUI=1 "$dotfiles_cmd" ext compare all
 		;;
 	edit)
 		ui_clear

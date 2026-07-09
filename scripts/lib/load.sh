@@ -9,6 +9,8 @@ source "$_LIB_DIR/bootstrap.sh"
 source "$_LIB_DIR/menu_render.sh"
 # shellcheck source=scripts/lib/tty.sh
 source "$_LIB_DIR/tty.sh"
+# shellcheck source=scripts/lib/report_table.sh
+source "$_LIB_DIR/report_table.sh"
 # shellcheck source=scripts/lib/ui.sh
 source "$_LIB_DIR/ui.sh"
 ui_init_colors

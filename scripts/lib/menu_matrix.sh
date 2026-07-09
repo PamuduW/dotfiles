@@ -9,6 +9,7 @@ _MENU_MX_COL_WIDTH=18
 _MENU_MX_HDR_SEP=$'   ·   '
 _MENU_MX_ROW_GAP=$'       '
 _MENU_MX_FIXED_ROWS=11
+MENU_MX_PAGE_SIZE="${MENU_MX_PAGE_SIZE:-10}"
 
 _menu_mx_row_lead_width() {
 	local count="$1"
@@ -41,11 +42,7 @@ _menu_mx_index_width() {
 }
 
 _menu_mx_page_size() {
-	local rows="$1"
-	local page_size=$((rows - _MENU_MX_FIXED_ROWS))
-
-	((page_size < 1)) && page_size=1
-	printf '%s\n' "$page_size"
+	printf '%s\n' "$MENU_MX_PAGE_SIZE"
 }
 
 _menu_mx_page_for_cursor() {
@@ -318,7 +315,7 @@ menu_matrix_run() {
 
 	rows="$(menu_tty_rows)"
 	cols="$(menu_tty_cols)"
-	page_size="$(_menu_mx_page_size "$rows")"
+	page_size="$(_menu_mx_page_size)"
 
 	{
 		menu_cursor_hide

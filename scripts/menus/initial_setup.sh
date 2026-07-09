@@ -64,7 +64,7 @@ confirm_loop() {
 
 print_status_summary_all() {
 	local i key label row result detail short_label
-	local ok_count=0 miss_count=0
+	local ok_count=0 check_count=0 miss_count=0
 	local cols
 
 	cols="$(menu_tty_cols)"
@@ -73,10 +73,7 @@ print_status_summary_all() {
 		ui_clear
 		printf '\n'
 		ui_print_header "Status summary" "Dotfiles › Initial setup" "$cols"
-		printf '  %s%s%s\e[K\n' "$C_BOLD" "$(menu_fit_indent "component | detail | result" "$cols" 2)" "$C_RESET"
-		printf '  %s%s%s\e[K\n' "$C_DIM" \
-			"$(menu_fit_indent "----------------------+----------------------------------+-----------" "$cols" 2)" \
-			"$C_RESET"
+		ui_print_report_table_columns
 
 		for i in "${!COMP_KEYS[@]}"; do
 			key="${COMP_KEYS[$i]}"
@@ -86,18 +83,19 @@ print_status_summary_all() {
 			short_label="$(_install_short_label "$label")"
 			case "$result" in
 			installed | configured) ((++ok_count)) ;;
-			missing | check) ((++miss_count)) ;;
+			missing) ((++miss_count)) ;;
+			check) ((++check_count)) ;;
 			esac
-			ui_print_component_table_row "$short_label" "$detail" "$result" "$cols"
+			ui_print_report_table_row "$short_label" "$detail" "$result"
 		done
 
 		printf '\n'
-		if [[ $miss_count -eq 0 ]]; then
-			printf '  %sAll %d component(s) look good.%s\n' "$C_GREEN" "$ok_count" "$C_RESET"
+		if [[ $miss_count -eq 0 && $check_count -eq 0 ]]; then
+			ui_print_report_rollup "$ok_count" 0 0
+		elif [[ $miss_count -eq 0 ]]; then
+			ui_print_report_rollup "$ok_count" "$check_count" 0
 		else
-			printf '  %s%d ok%s, %s%d need attention%s.\n' \
-				"$C_GREEN" "$ok_count" "$C_RESET" \
-				"$C_YELLOW" "$miss_count" "$C_RESET"
+			ui_print_report_rollup "$ok_count" "$check_count" "$miss_count"
 		fi
 	} >/dev/tty
 }

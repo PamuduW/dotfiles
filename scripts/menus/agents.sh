@@ -53,13 +53,12 @@ _agents_count_row() {
 }
 
 _agents_print_row() {
-	local label="$1"
-	local result="$2"
-	local path="${3:-}"
-	local cols="$4"
+	local component="$1"
+	local detail="$2"
+	local result="$3"
 
 	_agents_count_row "$result"
-	ui_print_check_result_path_row "$label" "$result" "$path" "$cols"
+	ui_print_report_table_row "$component" "$detail" "$result"
 }
 
 clone_or_update_agent_bootstrap() {
@@ -117,12 +116,13 @@ print_agents_status() {
 	{
 		printf '\n'
 		ui_print_header "Agents status" "Dotfiles › Agents" "$cols"
-		ui_print_check_result_path_header "$cols"
+		ui_print_report_table_columns
 
+		ui_print_report_section "── Repo & paths ──"
 		if [[ -n "$dotfiles_root" ]]; then
-			_agents_print_row "dotfiles repo" ok "$dotfiles_root" "$cols"
+			_agents_print_row "dotfiles repo" "$dotfiles_root" ok
 		else
-			_agents_print_row "dotfiles repo" check "" "$cols"
+			_agents_print_row "dotfiles repo" "not found" check
 		fi
 
 		if [[ -n "$ab_home" ]]; then
@@ -132,87 +132,90 @@ print_agents_status() {
 		else
 			ab_result=missing
 		fi
-		_agents_print_row "agent_bootstrap" "$ab_result" "$clone_home" "$cols"
+		_agents_print_row "agent_bootstrap" "$clone_home" "$ab_result"
 
 		if [[ -n "$foreign_home" && "$foreign_home" != "$clone_home" ]] && \
 			[[ -x "$foreign_home/install.sh" ]]; then
-			_agents_print_row "other install" check "$foreign_home" "$cols"
+			_agents_print_row "other install" "$foreign_home" check
 			printf '  %sUnset AGENT_BOOTSTRAP_HOME or use canonical path %s%s\n' \
 				"$C_DIM" "$clone_home" "$C_RESET"
-		fi
-
-		if [[ -n "$ab_home" && -d "$ab_home/.git" ]]; then
-			branch="$(git -C "$ab_home" branch --show-current 2>/dev/null || echo '?')"
-			sha="$(git -C "$ab_home" rev-parse --short HEAD 2>/dev/null || echo '?')"
-			sync_line="$(git -C "$ab_home" status -sb 2>/dev/null | head -1 || true)"
-			ahead_behind="${sync_line#*${branch} }"
-			[[ "$ahead_behind" == "$sync_line" ]] && ahead_behind=""
-
-			remote="$(git -C "$ab_home" remote get-url origin 2>/dev/null || echo '')"
-			_agents_print_row "git branch" ok "$branch" "$cols"
-			_agents_print_row "git commit" ok "$sha" "$cols"
-			if [[ -n "$remote" ]]; then
-				_agents_print_row "git remote" ok "$remote" "$cols"
-			fi
-			if [[ -n "$ahead_behind" ]]; then
-				_agents_print_row "git sync" check "$ahead_behind" "$cols"
-			else
-				_agents_print_row "git sync" ok "up to date" "$cols"
-			fi
-			dirty="$(git -C "$ab_home" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
-			if [[ "$dirty" -eq 0 ]]; then
-				_agents_print_row "dirty files" ok "0" "$cols"
-			else
-				_agents_print_row "dirty files" check "$dirty" "$cols"
-			fi
-		elif [[ -n "$ab_home" ]]; then
-			_agents_print_row "git" missing "not a repo" "$cols"
 		fi
 
 		install_path="${ab_home:+$ab_home/install.sh}"
 		install_path="${install_path:-$clone_home/install.sh}"
 		if [[ -n "$ab_home" && -x "$ab_home/install.sh" ]]; then
-			_agents_print_row "install.sh" ok "$install_path" "$cols"
+			_agents_print_row "install.sh" "$install_path" ok
 		else
-			_agents_print_row "install.sh" missing "$install_path" "$cols"
+			_agents_print_row "install.sh" "$install_path" missing
 		fi
 
 		agentboot_path="${ab_home:+$ab_home/bin/agentboot}"
 		agentboot_path="${agentboot_path:-$clone_home/bin/agentboot}"
 		if [[ -n "$ab_home" && -x "$ab_home/bin/agentboot" ]]; then
-			_agents_print_row "agentboot bin" ok "$agentboot_path" "$cols"
+			_agents_print_row "agentboot bin" "$agentboot_path" ok
 		else
-			_agents_print_row "agentboot bin" missing "$agentboot_path" "$cols"
-		fi
-
-		if command -v python3 >/dev/null 2>&1; then
-			_agents_print_row "python3" ok "$(command -v python3)" "$cols"
-		else
-			_agents_print_row "python3" missing "" "$cols"
-		fi
-
-		if command -v node >/dev/null 2>&1; then
-			node_ver="$(node --version 2>/dev/null || true)"
-			_agents_print_row "node" ok "${node_ver:+$node_ver — }$(command -v node)" "$cols"
-		else
-			_agents_print_row "node" missing "" "$cols"
-		fi
-
-		if command -v npx >/dev/null 2>&1; then
-			npx_path="$(command -v npx)"
-			_agents_print_row "npx" ok "$npx_path" "$cols"
-		else
-			_agents_print_row "npx" missing "" "$cols"
+			_agents_print_row "agentboot bin" "$agentboot_path" missing
 		fi
 
 		if [[ -L "$HOME/bin/agentboot" ]]; then
 			link_target="$(readlink "$HOME/bin/agentboot")"
-			_agents_print_row "~/bin/agentboot" ok "$link_target" "$cols"
+			_agents_print_row "~/bin/agentboot" "$link_target" ok
 		else
-			_agents_print_row "~/bin/agentboot" missing "" "$cols"
+			_agents_print_row "~/bin/agentboot" "not linked" missing
+		fi
+
+		if [[ -n "$ab_home" && -d "$ab_home/.git" ]]; then
+			ui_print_report_section "── Git ──"
+			branch="$(git -C "$ab_home" branch --show-current 2>/dev/null || echo '?')"
+			sha="$(git -C "$ab_home" rev-parse --short HEAD 2>/dev/null || echo '?')"
+			sync_line="$(git -C "$ab_home" status -sb 2>/dev/null | head -1 || true)"
+			ahead_behind="${sync_line#*${branch} }"
+			[[ "$ahead_behind" == "$sync_line" ]] && ahead_behind=""
+			remote="$(git -C "$ab_home" remote get-url origin 2>/dev/null || echo '')"
+
+			_agents_print_row "git branch" "$branch" ok
+			_agents_print_row "git commit" "$sha" ok
+			if [[ -n "$remote" ]]; then
+				_agents_print_row "git remote" "$remote" ok
+			fi
+			if [[ -n "$ahead_behind" ]]; then
+				_agents_print_row "git sync" "$ahead_behind" check
+			else
+				_agents_print_row "git sync" "up to date" ok
+			fi
+			dirty="$(git -C "$ab_home" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+			if [[ "$dirty" -eq 0 ]]; then
+				_agents_print_row "dirty files" "0" ok
+			else
+				_agents_print_row "dirty files" "$dirty" check
+			fi
+		elif [[ -n "$ab_home" ]]; then
+			ui_print_report_section "── Git ──"
+			_agents_print_row "git" "not a repo" missing
+		fi
+
+		ui_print_report_section "── Toolchain ──"
+		if command -v python3 >/dev/null 2>&1; then
+			_agents_print_row "python3" "$(command -v python3)" ok
+		else
+			_agents_print_row "python3" "not found" missing
+		fi
+
+		if command -v node >/dev/null 2>&1; then
+			node_ver="$(node --version 2>/dev/null || true)"
+			_agents_print_row "node" "${node_ver:+$node_ver — }$(command -v node)" ok
+		else
+			_agents_print_row "node" "not found" missing
+		fi
+
+		if command -v npx >/dev/null 2>&1; then
+			_agents_print_row "npx" "$(command -v npx)" ok
+		else
+			_agents_print_row "npx" "not found" missing
 		fi
 
 		if [[ -n "$ab_home" && -f "$ab_home/skills.sources.yaml" ]]; then
+			ui_print_report_section "── Skills ──"
 			status_json="$(_agent_bootstrap_status_json "$ab_home" || true)"
 			if [[ -n "$status_json" ]]; then
 				installed="$(_agent_json_get "$status_json" installed_skills 2>/dev/null || echo 0)"
@@ -221,47 +224,31 @@ print_agents_status() {
 				bridge="$(_agent_json_get "$status_json" claude_bridge_links 2>/dev/null || echo 0)"
 				doctor_issues="$(_agent_json_get "$status_json" doctor_issue_count 2>/dev/null || echo 0)"
 
-				_agents_print_row "skills manifest" ok "${enabled} enabled source(s)" "$cols"
-				_agents_print_row "installed skills" \
-					"$([[ "$installed" -gt 0 ]] && echo ok || echo check)" \
-					"$installed on disk" "$cols"
+				_agents_print_row "skills manifest" "${enabled} enabled source(s)" ok
+				_agents_print_row "installed skills" "$installed on disk" \
+					"$([[ "$installed" -gt 0 ]] && echo ok || echo check)"
 				if [[ "$lock_skills" -gt 0 ]]; then
-					_agents_print_row "global skill lock" ok \
-						"~/.agents/.skill-lock.json ($lock_skills pinned)" "$cols"
+					_agents_print_row "global skill lock" \
+						"~/.agents/.skill-lock.json ($lock_skills pinned)" ok
 				else
-					_agents_print_row "global skill lock" check \
-						"~/.agents/.skill-lock.json" "$cols"
+					_agents_print_row "global skill lock" "~/.agents/.skill-lock.json" check
 				fi
-				_agents_print_row "claude bridge" \
-					"$([[ "$bridge" -gt 0 ]] && echo ok || echo check)" \
-					"$bridge symlink(s)" "$cols"
+				_agents_print_row "claude bridge" "$bridge symlink(s)" \
+					"$([[ "$bridge" -gt 0 ]] && echo ok || echo check)"
 				if [[ -f "$ab_home/global/AGENTS.md" ]]; then
-					_agents_print_row "global AGENTS.md" ok "global/AGENTS.md" "$cols"
+					_agents_print_row "global AGENTS.md" "global/AGENTS.md" ok
 				else
-					_agents_print_row "global AGENTS.md" missing "global/AGENTS.md" "$cols"
+					_agents_print_row "global AGENTS.md" "global/AGENTS.md" missing
 				fi
 				_agents_print_row "doctor" \
-					"$([[ "$doctor_issues" -eq 0 ]] && echo ok || echo check)" \
 					"$([[ "$doctor_issues" -eq 0 ]] && echo 'no issues' || echo "$doctor_issues issue(s)")" \
-					"$cols"
+					"$([[ "$doctor_issues" -eq 0 ]] && echo ok || echo check)"
 			else
-				_agents_print_row "skills upstreams" check "status --json unavailable" "$cols"
+				_agents_print_row "skills status" "status --json unavailable" check
 			fi
 		fi
 
-		printf '\n'
-		if [[ $_agents_miss_count -eq 0 && $_agents_check_count -eq 0 ]]; then
-			printf '  %sAll %d check(s) look good.%s\n' "$C_GREEN" "$_agents_ok_count" "$C_RESET"
-		elif [[ $_agents_miss_count -eq 0 ]]; then
-			printf '  %s%d ok%s, %s%d need attention%s.\n' \
-				"$C_GREEN" "$_agents_ok_count" "$C_RESET" \
-				"$C_YELLOW" "$_agents_check_count" "$C_RESET"
-		else
-			printf '  %s%d ok%s, %s%d missing%s, %s%d need attention%s.\n' \
-				"$C_GREEN" "$_agents_ok_count" "$C_RESET" \
-				"$C_RED" "$_agents_miss_count" "$C_RESET" \
-				"$C_YELLOW" "$_agents_check_count" "$C_RESET"
-		fi
+		ui_print_report_rollup "$_agents_ok_count" "$_agents_check_count" "$_agents_miss_count"
 	} >/dev/tty
 }
 
@@ -303,7 +290,7 @@ _agents_dispatch() {
 		ui_print_header "Run full bootstrap" "Dotfiles › Agents" "$(menu_tty_cols)"
 		echo "Installs skills from manifest, bridges Claude, renders global AGENTS.md, runs doctor, links agentboot."
 		if ui_confirm_yes_no "Proceed with full bootstrap?"; then
-			( cd "$ab_home" && ./install.sh )
+			( cd "$ab_home" && AGENT_BOOTSTRAP_TUI=1 ./install.sh )
 		else
 			echo "Bootstrap cancelled."
 		fi
@@ -320,7 +307,7 @@ _agents_dispatch() {
 		echo "Re-bridges Claude and updates Codex symlinks. Does not add new manifest sources."
 		echo ""
 		if ui_confirm_yes_no "Proceed with skills refresh?"; then
-			( cd "$ab_home" && ./install.sh skills update )
+			( cd "$ab_home" && AGENT_BOOTSTRAP_TUI=1 ./install.sh skills update )
 		else
 			echo "Skills refresh cancelled."
 		fi
@@ -368,7 +355,7 @@ _agents_dispatch() {
 		ui_clear
 		ui_print_header "Run doctor" "Dotfiles › Agents" "$(menu_tty_cols)"
 		local doctor_rc=0
-		( cd "$ab_home" && ./install.sh doctor ) || doctor_rc=$?
+		( cd "$ab_home" && AGENT_BOOTSTRAP_TUI=1 ./install.sh doctor ) || doctor_rc=$?
 		if (( doctor_rc != 0 )); then
 			echo "Warning: doctor reported issues (exit $doctor_rc)" >&2
 		fi

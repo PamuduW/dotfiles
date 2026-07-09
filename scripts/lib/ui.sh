@@ -316,3 +316,10 @@ ui_print_plan_row() {
 		printf '\n'
 	fi
 }
+
+# Report tables — shared design system (see scripts/lib/report_table.sh).
+ui_print_report_header() { rt_print_header "$@"; }
+ui_print_report_section() { rt_print_section "$@"; }
+ui_print_report_table_columns() { rt_print_table_columns; }
+ui_print_report_table_row() { rt_print_table_row "$@"; }
+ui_print_report_rollup() { rt_print_rollup "$@"; }
