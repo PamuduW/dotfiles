@@ -12,9 +12,7 @@ install_lazygit_from_github() {
 
 	log_step "Install lazygit from GitHub releases"
 	local ver tmp
-	ver="$(curl -fsSL https://api.github.com/repos/jesseduffield/lazygit/releases/latest |
-		grep -Po '"tag_name":\s*"v\K[^"]*' | head -n1)"
-	[[ -n "$ver" ]] || {
+	ver="$(github_latest_release_version jesseduffield/lazygit)" || {
 		echo "  Could not determine lazygit version." >&2
 		return 1
 	}
@@ -51,9 +49,7 @@ install_lazydocker_from_github() {
 
 	log_step "Install lazydocker from GitHub releases"
 	local ver tmp
-	ver="$(curl -fsSL https://api.github.com/repos/jesseduffield/lazydocker/releases/latest |
-		grep -Po '"tag_name":\s*"v\K[^"]*' | head -n1)"
-	[[ -n "$ver" ]] || {
+	ver="$(github_latest_release_version jesseduffield/lazydocker)" || {
 		echo "  Could not determine lazydocker version." >&2
 		return 1
 	}

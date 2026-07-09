@@ -72,8 +72,7 @@ ensure_asdf_installed() {
 
 		echo "Installing asdf..."
 		local tag tmp tarball_url extracted
-		tag="$(curl -fsSL https://api.github.com/repos/asdf-vm/asdf/releases/latest | grep -Po '"tag_name":\s*"\K[^"]+' | head -n1)"
-		[[ -n "$tag" ]] || {
+		tag="$(github_latest_release_version asdf-vm/asdf)" || {
 			echo "  Could not determine latest asdf release." >&2
 			return 1
 		}

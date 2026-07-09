@@ -16,6 +16,12 @@ if [[ -f "$_ARCH_LIB" ]]; then
 	source "$_ARCH_LIB"
 fi
 
+_GITHUB_API_LIB="${DOTFILES_DIR}/scripts/lib/github_api.sh"
+if [[ -f "$_GITHUB_API_LIB" ]]; then
+	# shellcheck source=/dev/null
+	source "$_GITHUB_API_LIB"
+fi
+
 _dotfiles_tui_mode() {
 	[[ -n "${DOTFILES_TUI:-}" ]]
 }
@@ -74,10 +80,7 @@ _run_upgrade_step() {
 }
 
 _github_latest_version() {
-	local repo="$1"
-	command -v curl >/dev/null 2>&1 || return 1
-	curl -fsSL "https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null |
-		grep -Po '"tag_name":\s*"v\K[^"]*' | head -n1
+	github_latest_release_version "$1"
 }
 
 _version_gt() {
@@ -318,7 +321,7 @@ check_lazygit() {
 		action="skip"
 	else
 		latest="$(_github_latest_version jesseduffield/lazygit || true)"
-		available="${latest:-unknown}"
+		available="${latest:-—}"
 		if [[ -n "$latest" ]] && _version_gt "$latest" "$installed"; then
 			action="upgrade"
 			upgradable=1
@@ -400,7 +403,7 @@ check_lazydocker() {
 		action="skip"
 	else
 		latest="$(_github_latest_version jesseduffield/lazydocker || true)"
-		available="${latest:-unknown}"
+		available="${latest:-—}"
 		if [[ -n "$latest" ]] && _version_gt "$latest" "$installed"; then
 			action="upgrade"
 			upgradable=1
@@ -582,13 +585,14 @@ monaspace_installed_version() {
 }
 
 monaspace_latest_version() {
-	_github_latest_version githubnext/monaspace || echo "—"
+	_github_latest_version githubnext/monaspace
 }
 
 check_monaspace() {
 	local installed available action upgradable=0
 	installed="$(monaspace_installed_version)"
-	available="$(monaspace_latest_version)"
+	available="$(monaspace_latest_version 2>/dev/null || true)"
+	[[ -n "$available" ]] || available="—"
 	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
 		action="skip"
 	elif [[ "$available" != "—" && "$installed" != "$available" ]]; then
@@ -613,8 +617,8 @@ install_monaspace_fonts() {
 	}
 
 	local ver tmp
-	ver="$(monaspace_latest_version)"
-	[[ -n "$ver" && "$ver" != "—" ]] || {
+	ver="$(monaspace_latest_version 2>/dev/null || true)"
+	[[ -n "$ver" ]] || {
 		_err "  Could not determine Monaspace version."
 		return 1
 	}
@@ -659,6 +663,21 @@ install_monaspace_fonts() {
 }
 
 upgrade_monaspace() {
+	local installed latest
+	installed="$(monaspace_installed_version)"
+	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
+		install_monaspace_fonts
+		return $?
+	fi
+	latest="$(monaspace_latest_version 2>/dev/null || true)"
+	if [[ -z "$latest" ]]; then
+		_warn "  Could not check Monaspace release (GitHub API); keeping ${installed}"
+		return 0
+	fi
+	if [[ "$installed" == "$latest" ]]; then
+		_msg "  Monaspace fonts already up to date (${installed})"
+		return 0
+	fi
 	install_monaspace_fonts
 }
 

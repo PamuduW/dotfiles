@@ -2,6 +2,9 @@
 
 _INSTALL_LIB_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# shellcheck source=scripts/lib/github_api.sh
+source "$(cd -- "$_INSTALL_LIB_DIR/.." && pwd)/github_api.sh"
+
 # shellcheck source=scripts/lib/installers/logging.sh
 source "$_INSTALL_LIB_DIR/logging.sh"
 # shellcheck source=scripts/lib/installers/apt.sh

@@ -16,9 +16,7 @@ install_monaspace_fonts() {
 
 	log_step "Install Monaspace Nerd Fonts from GitHub"
 	local ver tmp
-	ver="$(curl -fsSL https://api.github.com/repos/githubnext/monaspace/releases/latest |
-		grep -Po '"tag_name":\s*"\K[^"]*' | head -n1)"
-	[[ -n "$ver" ]] || {
+	ver="$(github_latest_release_version githubnext/monaspace)" || {
 		echo "  Could not determine Monaspace version." >&2
 		return 1
 	}
@@ -26,7 +24,7 @@ install_monaspace_fonts() {
 	tmp="$(mktemp -d)"
 	trap "rm -rf '${tmp}'" RETURN
 	if ! curl -fsSL -o "$tmp/monaspace-nerdfonts.zip" \
-		"https://github.com/githubnext/monaspace/releases/download/${ver}/monaspace-nerdfonts-${ver}.zip"; then
+		"https://github.com/githubnext/monaspace/releases/download/v${ver}/monaspace-nerdfonts-v${ver}.zip"; then
 		echo "  Monaspace download failed." >&2
 		return 1
 	fi
