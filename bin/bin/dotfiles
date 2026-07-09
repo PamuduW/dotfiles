@@ -662,6 +662,35 @@ upgrade_monaspace() {
 	install_monaspace_fonts
 }
 
+upgrade_dotfiles_repo() {
+	if ! command -v git >/dev/null 2>&1; then
+		_err "  git not installed"
+		return 1
+	fi
+	local branch local_full remote_rev
+	branch="$(git -C "$DOTFILES_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")"
+	_dotfiles_repo_fetch "$branch"
+	local_full="$(git -C "$DOTFILES_DIR" rev-parse HEAD 2>/dev/null || true)"
+	remote_rev="$(git -C "$DOTFILES_DIR" ls-remote --heads origin "$branch" 2>/dev/null | awk '{print $1}' | head -n1)"
+
+	if [[ -z "$remote_rev" || -z "$local_full" || "$remote_rev" == "$local_full" ]]; then
+		_msg "  dotfiles repo already up to date (${branch}@${local_full:0:7})"
+		return 0
+	fi
+
+	if ! git -C "$DOTFILES_DIR" pull --ff-only; then
+		_err "  git pull failed (non-fast-forward? resolve manually, then restow)"
+		return 1
+	fi
+
+	if ! command -v stow >/dev/null 2>&1; then
+		_warn "  stow not installed — pulled but not restowed"
+		return 1
+	fi
+	stow --dir "$DOTFILES_DIR" --target "$HOME" --restow bash bin readline
+	_msg "  dotfiles pulled and restowed"
+}
+
 # --- dotfiles repo ---
 _dotfiles_repo_fetch() {
 	local branch="${1:-}"
@@ -813,7 +842,7 @@ print_report_table() {
 	for row in "${rows[@]}"; do
 		IFS='|' read -r _ _ _ action <<<"$row"
 		case "$action" in
-		upgrade | upgrade* | refresh) ((++upgrade_count)) ;;
+		upgrade | upgrade* | refresh | pull*) ((++upgrade_count)) ;;
 		esac
 	done
 
@@ -2367,6 +2396,8 @@ cmd_upgrade() {
 		_msg "${C_DIM}Skipping opt-in upgrades (Node.js, Go, Monaspace). Use --all to include them.${C_RESET}"
 	fi
 
+	_run_upgrade_step "dotfiles repo" upgrade_dotfiles_repo
+
 	print_upgrade_summary "$upgrade_all"
 }
 
@@ -2413,7 +2444,7 @@ cmd_self() {
 		_err "Error: git is not installed."
 		exit 1
 	fi
-	git -C "$DOTFILES_DIR" pull
+	git -C "$DOTFILES_DIR" pull --ff-only
 	cmd_restow
 }
 

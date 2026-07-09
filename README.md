@@ -200,7 +200,7 @@ Global command (stowed to `~/bin/dotfiles`, on PATH like `ex` and `clip`):
 | `dotfiles` | On a TTY, opens the boot menu; otherwise prints help |
 | `dotfiles menu` | Boot menu (same as `./install.sh`) |
 | `dotfiles update` | **Report only** — check apt, agent CLIs, runtimes, and the dotfiles repo; print what can be upgraded (no changes) |
-| `dotfiles upgrade` | **Apply** — run upgrades (apt, CLIs, etc.); idempotent and safe to re-run |
+| `dotfiles upgrade` | **Apply** — run upgrades (apt, CLIs, **dotfiles git pull + restow**, etc.); idempotent and safe to re-run |
 | `dotfiles upgrade --all` | Same as `upgrade`, plus opt-in **Node.js** (nvm LTS), **Go** (asdf), and **Monaspace** fonts |
 | `dotfiles status` | Installed versions + dotfiles repo git status |
 | `dotfiles restow` | `stow --restow bash bin readline` |
