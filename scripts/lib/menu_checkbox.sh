@@ -47,16 +47,6 @@ _menu_cb_visible_count() {
 	printf '%s\n' $((end - start + 1))
 }
 
-_menu_cb_render_lines() {
-	local count="$1"
-	local page_size="$2"
-	local page="$3"
-	local visible_count
-
-	visible_count="$(_menu_cb_visible_count "$count" "$page_size" "$page")"
-	menu_count_lines 4 "$visible_count" 1
-}
-
 _menu_cb_status_context() {
 	local status="$1"
 
@@ -67,7 +57,7 @@ _menu_cb_status_context() {
 	*not\ backed* | *upgrade* | *delta* | *warn*)
 		printf '%s\n' 'warn'
 		;;
-	*missing* | *failed* | *error* | *drift*)
+	*missing* | *failed* | *error* | *drift* | *extra*)
 		printf '%s\n' 'err'
 		;;
 	*skipped* | '—' | '-')
@@ -79,16 +69,48 @@ _menu_cb_status_context() {
 	esac
 }
 
+_menu_cb_draw_row() {
+	local cur="$1"
+	local idx="$2"
+	local cols="$3"
+	local mark status status_ctx
+	local status_sep=' · '
+	local status_room label_room
+
+	mark='x'
+	[[ "${MENU_CB_CHECKED[$idx]:-0}" -eq 0 ]] && mark=' '
+
+	status="${MENU_CB_STATUS[$idx]:-}"
+	status_ctx="$(_menu_cb_status_context "$status")"
+
+	status_room=$((${#status} + ${#status_sep}))
+	((status_room < 8)) && status_room=8
+	label_room=$((cols - status_room - 4))
+	((label_room < 12)) && label_room=12
+
+	printf '  '
+	if [[ $idx -eq $cur ]]; then
+		printf '%s>%s ' "$C_GREEN" "$C_RESET"
+		printf '%s' "$C_CYAN"
+	else
+		printf '   %s' "$C_DIM"
+	fi
+	printf '%s' "$(menu_fit_line "$(printf '%2d. [%s] %s' "$((idx + 1))" "$mark" "${MENU_CB_LABELS[$idx]}")" "$label_room")"
+	printf '%s' "$C_RESET"
+	printf '%s' "$status_sep"
+	ui_color_word "$status" "$status_ctx"
+	printf '\e[K\n'
+}
+
 _menu_cb_draw() {
 	local cur="$1"
 	local page_size="$2"
 	local status_msg="$3"
 	local cols="$4"
 	local count="${#MENU_CB_LABELS[@]}"
-	local hint="${MENU_CB_HINT:-Up/Down navigate   Space toggle   a all   n none   Enter confirm}"
+	local hint="${MENU_CB_HINT:-Up/Down navigate   Space toggle   a all   n none   Enter confirm   q back}"
 	local page total_pages start end
-	local i prefix mark label_part status status_ctx
-	local label_width fitted_label fitted_status
+	local i
 
 	page="$(_menu_cb_page_for_cursor "$cur" "$page_size")"
 	read -r start end < <(_menu_cb_page_range "$count" "$page_size" "$page")
@@ -100,31 +122,8 @@ _menu_cb_draw() {
 		"$(menu_fit_indent "Page $((page + 1))/${total_pages}   Showing $((start + 1))-$((end + 1)) of ${count}" "$cols" 2)" \
 		"$C_RESET"
 
-	label_width=$((cols - _MENU_CB_STATUS_WIDTH - 1))
-	((label_width < 1)) && label_width=1
-
 	for ((i = start; i <= end; i++)); do
-		prefix=' '
-		[[ $i -eq $cur ]] && prefix='>'
-		mark='x'
-		[[ "${MENU_CB_CHECKED[$i]:-0}" -eq 0 ]] && mark=' '
-
-		label_part="$(printf '%s %2d. [%s] %s' "$prefix" "$((i + 1))" "$mark" "${MENU_CB_LABELS[$i]}")"
-		status="${MENU_CB_STATUS[$i]:-}"
-		status_ctx="$(_menu_cb_status_context "$status")"
-		fitted_label="$(menu_fit_line "$label_part" "$label_width")"
-		fitted_status="$(menu_fit_line "$status" "$_MENU_CB_STATUS_WIDTH")"
-
-		if [[ $i -eq $cur ]]; then
-			printf '%s%-*s%s' "$C_INVERT" "$label_width" "$fitted_label" "$C_RESET"
-			printf ' '
-			ui_color_word "$fitted_status" "$status_ctx"
-			printf '\e[K\n'
-		else
-			printf '%-*s ' "$label_width" "$fitted_label"
-			ui_color_word "$fitted_status" "$status_ctx"
-			printf '\e[K\n'
-		fi
+		_menu_cb_draw_row "$cur" "$i" "$cols"
 	done
 
 	if [[ -n "$status_msg" ]]; then
@@ -138,7 +137,7 @@ menu_checkbox_run() {
 	local count="${#MENU_CB_LABELS[@]}"
 	local cursor=0
 	local status_msg=''
-	local rows cols page_size page menu_lines action
+	local rows cols page_size page action
 	local i
 
 	if ((count == 0)); then
@@ -148,8 +147,6 @@ menu_checkbox_run() {
 	rows="$(menu_tty_rows)"
 	cols="$(menu_tty_cols)"
 	page_size="$(_menu_cb_page_size "$rows")"
-	page="$(_menu_cb_page_for_cursor "$cursor" "$page_size")"
-	menu_lines="$(_menu_cb_render_lines "$count" "$page_size" "$page")"
 
 	{
 		menu_cursor_hide
@@ -203,8 +200,7 @@ menu_checkbox_run() {
 				status_msg='All items cleared'
 				;;
 			confirm)
-				menu_cursor_show
-				return 0
+				break
 				;;
 			cancel)
 				menu_cursor_show
@@ -215,10 +211,12 @@ menu_checkbox_run() {
 				;;
 			esac
 
-			menu_redraw_up "$menu_lines"
+			ui_clear
 			_menu_cb_draw "$cursor" "$page_size" "$status_msg" "$cols"
-			page="$(_menu_cb_page_for_cursor "$cursor" "$page_size")"
-			menu_lines="$(_menu_cb_render_lines "$count" "$page_size" "$page")"
 		done
+
+		menu_cursor_show
 	} >/dev/tty
+
+	return 0
 }

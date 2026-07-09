@@ -371,9 +371,9 @@ _draw_component_menu() {
 	total_pages="$(_component_menu_page_count "$count" "$page_size")"
 	read -r start end < <(_component_menu_page_range "$count" "$page_size" "$page")
 
-	printf "  \e[1m%s\e[0m\e[K\n" "$(_fit_menu_line_with_indent "=== Select Components ===" "$cols" 2)"
-	printf "  %s\e[K\n" "$(_fit_menu_line_with_indent "Up/Down navigate   Space toggle   a all   n none   Enter confirm   q back" "$cols" 2)"
-	printf "  %s\e[K\n\n" "$(_fit_menu_line_with_indent "Page $((page + 1))/$total_pages   Showing $((start + 1))-$((end + 1)) of $count" "$cols" 2)"
+	ui_print_header "Select Components" "" "$cols"
+	printf '  %s%s%s\e[K\n' "$C_DIM" "$(_fit_menu_line_with_indent "Up/Down navigate   Space toggle   a all   n none   Enter confirm   q back" "$cols" 2)" "$C_RESET"
+	printf '  %s%s%s\e[K\n\n' "$C_DIM" "$(_fit_menu_line_with_indent "Page $((page + 1))/$total_pages   Showing $((start + 1))-$((end + 1)) of $count" "$cols" 2)" "$C_RESET"
 
 	for ((i = start; i <= end; i++)); do
 		key="${COMP_KEYS[$i]}"
@@ -386,22 +386,22 @@ _draw_component_menu() {
 		row="$(printf "%s %2d. [%s] %s%s" "$prefix" "$((i + 1))" "$mark" "${COMP_LABELS[$i]}" "$note")"
 
 		if [[ $i -eq $cur ]]; then
-			printf "\e[7m%s\e[0m\e[K\n" "$(_fit_menu_line "$row" "$cols")"
+			printf '  %s>%s %s%s\e[K\n' "$C_GREEN" "$C_RESET" "$C_CYAN" "$(_fit_menu_line "$(printf '%2d. [%s] %s%s' "$((i + 1))" "$mark" "${COMP_LABELS[$i]}" "$note")" "$((cols - 4))")" "$C_RESET"
 		else
-			printf "%s\e[K\n" "$(_fit_menu_line "$row" "$cols")"
+			printf '  %s%s%s\e[K\n' "$C_DIM" "$(_fit_menu_line "$row" "$((cols - 2))")" "$C_RESET"
 		fi
 	done
 
 	if [[ -n "$status" ]]; then
-		printf "  \e[33m%s\e[0m\e[K\n" "$(_fit_menu_line_with_indent "$status" "$cols" 2)"
+		printf '  %s%s%s\e[K\n' "$C_YELLOW" "$(_fit_menu_line_with_indent "$status" "$cols" 2)" "$C_RESET"
 	else
-		printf "\e[K\n"
+		printf '\e[K\n'
 	fi
 
 	local desc_idx
 	for ((desc_idx = 0; desc_idx < _COMP_DESC_LINES; desc_idx++)); do
-		printf "  \e[36m%s\e[0m\e[K\n" \
-			"$(_fit_menu_line_with_indent "$(_component_menu_description_line "$cur" "$desc_idx")" "$cols" 2)"
+		printf '  %s%s%s\e[K\n' "$C_CYAN" \
+			"$(_fit_menu_line_with_indent "$(_component_menu_description_line "$cur" "$desc_idx")" "$cols" 2)" "$C_RESET"
 	done
 }
 
@@ -459,7 +459,7 @@ component_menu() {
 				;;
 			esac
 
-			printf "\e[%dA" "$menu_lines"
+			_menu_clear_screen
 			_draw_component_menu "$cursor" "$page_size" "$status_msg" "$cols"
 			page="$(_component_menu_page_for_cursor "$cursor" "$page_size")"
 			menu_lines="$(_component_menu_render_lines "$count" "$page_size" "$page")"

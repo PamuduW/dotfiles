@@ -23,7 +23,7 @@ _ext_menu_dispatch() {
 		fi
 		MENU_CB_TITLE="Edit manifest"
 		MENU_CB_BREADCRUMB="Dotfiles › Extensions › ${target}"
-		MENU_CB_HINT="Up/Down navigate   Space toggle   a all   n none   Enter confirm"
+		MENU_CB_HINT="Up/Down navigate   Space toggle   a all   n none   Enter confirm   q back"
 		if ! menu_checkbox_run; then
 			return 0
 		fi
@@ -44,7 +44,7 @@ _ext_menu_dispatch() {
 		fi
 		MENU_CB_TITLE="Restore missing"
 		MENU_CB_BREADCRUMB="Dotfiles › Extensions › ${target}"
-		MENU_CB_HINT="Up/Down navigate   Space toggle   a all   n none   Enter confirm"
+		MENU_CB_HINT="Up/Down navigate   Space toggle   a all   n none   Enter confirm   q back"
 		if ! menu_checkbox_run; then
 			return 0
 		fi
@@ -66,7 +66,7 @@ _ext_menu_dispatch() {
 		fi
 		MENU_CB_TITLE="Remove extras"
 		MENU_CB_BREADCRUMB="Dotfiles › Extensions › ${target}"
-		MENU_CB_HINT="Up/Down navigate   Space toggle   a all   n none   Enter confirm"
+		MENU_CB_HINT="Up/Down navigate   Space toggle   a all   n none   Enter confirm   q back"
 		if ! menu_checkbox_run; then
 			return 0
 		fi

@@ -72,9 +72,11 @@ _menu_simple_draw() {
 		row="$(printf '%s %d. %s' "$prefix" "$item_num" "${MENU_SIMPLE_LABELS[$i]}")"
 
 		if [[ $i -eq $cur ]]; then
-			printf '%s%s%s\e[K\n' "$C_INVERT" "$(menu_fit_line "$row" "$cols")" "$C_RESET"
+			printf '  %s%s%s%s%s\e[K\n' \
+				"$C_GREEN" "$prefix" "$C_RESET" \
+				"$C_CYAN" "$(menu_fit_line "${item_num}. ${MENU_SIMPLE_LABELS[$i]}" "$((cols - 4))")" "$C_RESET"
 		else
-			printf '%s\e[K\n' "$(menu_fit_line "$row" "$cols")"
+			printf '  %s%s%s\e[K\n' "$C_DIM" "$(menu_fit_line "$row" "$((cols - 2))")" "$C_RESET"
 		fi
 	done
 	printf '\e[K\n'
@@ -125,7 +127,7 @@ menu_simple_run() {
 				;;
 			esac
 
-			menu_redraw_up "$menu_lines"
+			ui_clear
 			_menu_simple_draw "$cursor" "$cols"
 		done
 

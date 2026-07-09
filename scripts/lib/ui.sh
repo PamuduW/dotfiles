@@ -85,7 +85,7 @@ ui_print_header() {
 		cols="$(menu_tty_cols)"
 	fi
 
-	printf '  %s%s%s\e[K\n' "$C_BOLD" "$(menu_fit_indent "=== ${title} ===" "$cols" 2)" "$C_RESET"
+	printf '  %s%s%s%s\e[K\n' "$C_BOLD" "$C_CYAN" "$(menu_fit_indent "=== ${title} ===" "$cols" 2)" "$C_RESET"
 	if [[ -n "$breadcrumb" ]]; then
 		printf '  %s%s%s\e[K\n' "$C_DIM" "$(menu_fit_indent "$breadcrumb" "$cols" 2)" "$C_RESET"
 	fi

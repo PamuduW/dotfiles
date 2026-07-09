@@ -69,10 +69,10 @@ ext_checkbox_from_tsv() {
 			MENU_CB_LABELS+=("$ext_line")
 			if [[ "$subcmd" == "list-missing" ]]; then
 				MENU_CB_CHECKED+=(1)
-				MENU_CB_STATUS+=("missing")
+				MENU_CB_STATUS+=("not installed")
 			else
 				MENU_CB_CHECKED+=(0)
-				MENU_CB_STATUS+=("extra")
+				MENU_CB_STATUS+=("not in manifest")
 			fi
 			;;
 		esac
