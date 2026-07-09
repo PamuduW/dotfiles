@@ -45,6 +45,8 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 │   └── extensions-decisions.md  # prune/add checklist before applying changes
 ├── templates/
 │   └── vscode-extensions.json  # lean workspace recommendations template
+├── windows/
+│   └── terminal-settings.json  # Windows Terminal profile export (manual import)
 ├── log/                # install logs (gitignored)
 ├── scripts/
 │   ├── install.sh      # real installer
