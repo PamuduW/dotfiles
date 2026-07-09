@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 
-AGENT_BOOTSTRAP_REPO_URL="${AGENT_BOOTSTRAP_REPO_URL:-https://github.com/PamuduW/agent_bootstrap.git}"
+AGENT_BOOTSTRAP_REPO_URL="${AGENT_BOOTSTRAP_REPO_URL:-git@github.com:PamuduW/agent_bootstrap.git}"
 
 _agents_menu_labels=(
 	"Check status"
