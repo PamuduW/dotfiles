@@ -5,7 +5,6 @@ AGENT_BOOTSTRAP_REPO_URL="${AGENT_BOOTSTRAP_REPO_URL:-git@github.com:PamuduW/age
 _agents_menu_labels=(
 	"Check status"
 	"Clone/update repo"
-	"Sync skills fork (legacy)"
 	"Run bootstrap"
 	"Update skills"
 	"Link agentboot"
@@ -13,7 +12,7 @@ _agents_menu_labels=(
 	"Run doctor"
 	"Back"
 )
-_agents_menu_keys=(status repo fork bootstrap skills link agentboot doctor back)
+_agents_menu_keys=(status repo bootstrap skills link agentboot doctor back)
 
 clone_or_update_agent_bootstrap() {
 	local ab_home="$1"
@@ -53,8 +52,6 @@ require_agent_bootstrap_installer() {
 print_agents_status() {
 	local ab_home clone_home branch dirty link_target ab_result cols
 	local install_path agentboot_path dotfiles_root foreign_home=''
-	local fork_home fork_result fork_sync_result fork_sync_detail=''
-	local fork_upstream_branch fork_upstream_ref fork_behind fork_ahead
 
 	clone_home="$(agent_bootstrap_clone_home)" || clone_home="(unknown — dotfiles root not found)"
 	if [[ -n "${AGENT_BOOTSTRAP_HOME:-}" && "$AGENT_BOOTSTRAP_HOME" != "$clone_home" && \
@@ -145,45 +142,6 @@ print_agents_status() {
 			ui_print_check_result_path_row "~/bin/agentboot" missing "" "$cols"
 		fi
 
-		fork_home="$(agent_skills_fork_clone_home 2>/dev/null || true)"
-		if [[ -n "$fork_home" && -d "$fork_home/.git" ]]; then
-			fork_result=ok
-			if git -C "$fork_home" rev-parse --verify refs/remotes/upstream/HEAD >/dev/null 2>&1 || \
-				git -C "$fork_home" remote get-url upstream >/dev/null 2>&1; then
-				fork_upstream_branch="$(agent_skills_fork_upstream_branch "$fork_home")"
-				fork_upstream_ref="upstream/${fork_upstream_branch}"
-				if git -C "$fork_home" rev-parse --verify "$fork_upstream_ref" >/dev/null 2>&1; then
-					read -r fork_behind fork_ahead < <(agent_skills_fork_counts "$fork_home" "$fork_upstream_ref")
-					if [[ "$fork_behind" == "0" ]]; then
-						fork_sync_result=ok
-						fork_sync_detail="up to date"
-					else
-						fork_sync_result=check
-						fork_sync_detail="${fork_behind} behind upstream"
-					fi
-				else
-					fork_sync_result=check
-					fork_sync_detail="fetch pending"
-				fi
-			else
-				fork_sync_result=check
-				fork_sync_detail="upstream not configured"
-			fi
-		elif [[ -n "$fork_home" && -d "$fork_home" ]]; then
-			fork_result=check
-			fork_sync_result=missing
-			fork_sync_detail="not a git repo"
-		else
-			fork_result=missing
-			fork_sync_result=missing
-			fork_sync_detail="not cloned"
-			fork_home="${fork_home:-$(dirname "${dotfiles_root:-$HOME/dotfiles}")/my-agent-skills}"
-		fi
-		ui_print_check_result_path_row "skills fork" "$fork_result" "$fork_home" "$cols"
-		if [[ -n "$fork_sync_detail" ]]; then
-			ui_print_check_result_path_row "fork upstream" "$fork_sync_result" "$fork_sync_detail" "$cols"
-		fi
-
 		if [[ -n "$ab_home" && -f "$ab_home/skills.sources.yaml" ]]; then
 			ui_print_check_result_path_row "skills upstreams" ok "skills.sources.yaml (Update skills)" "$cols"
 		fi
@@ -222,19 +180,6 @@ _agents_dispatch() {
 		else
 			clone_or_update_agent_bootstrap "$clone_home"
 		fi
-		;;
-	fork)
-		ui_clear
-		ui_print_header "Sync skills fork (legacy)" "Dotfiles › Agents" "$(menu_tty_cols)"
-		echo "Legacy fork workflow — checks PamuduW/my-agent-skills against Akindu23/my-agent-skills upstream."
-		echo "Preferred: use 'Update skills' (agent_bootstrap install.sh skills update from skills.sources.yaml)."
-		echo "Clone path: sibling of dotfiles (~/my-agent-skills when dotfiles is ~/dotfiles)."
-		echo ""
-		read_tty_line answer "Proceed with legacy fork sync anyway? [y/N]: "
-		case "$answer" in
-		y | Y | yes | YES) sync_agent_skills_fork ;;
-		*) echo "Fork sync cancelled." ;;
-		esac
 		;;
 	bootstrap)
 		ab_home="$(resolve_agent_bootstrap_home)" || {
