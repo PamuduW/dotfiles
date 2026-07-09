@@ -1318,57 +1318,221 @@ _ext_cmd_backup() {
 	_msg "Updated $(_ext_manifest_file)"
 }
 
+_ext_prune_extras() {
+	local target="$1"
+	local backup_file="$2"
+	local cli line
+	local -a installed_ids=() backup_ids=()
+
+	cli="$(_ext_find_cli "$target" 2>/dev/null || true)"
+	if [[ -z "$cli" ]]; then
+		_warn "Cannot prune ${target}: CLI not found"
+		return 1
+	fi
+	while IFS= read -r line; do
+		_ext_parse_ext_line "$line"
+		[[ -n "$_EXT_PARSE_ID" ]] && installed_ids+=("$_EXT_PARSE_ID")
+	done < <(_ext_list_extensions "$target" | sed '/^[[:space:]]*$/d')
+	while IFS= read -r line; do
+		_ext_parse_ext_line "$line"
+		[[ -n "$_EXT_PARSE_ID" ]] && backup_ids+=("$_EXT_PARSE_ID")
+	done < <(_ext_read_backup_lines "$backup_file")
+
+	local inst_id found bid
+	for inst_id in "${installed_ids[@]}"; do
+		found=false
+		for bid in "${backup_ids[@]}"; do
+			if [[ "$inst_id" == "$bid" ]]; then
+				found=true
+				break
+			fi
+		done
+		if [[ "$found" == false ]]; then
+			_ext_uninstall_extension "$target" "$inst_id" || true
+		fi
+	done
+}
+
 _ext_cmd_restore() {
-	local prune="$1"
+	local mode="$1"
 	shift
-	local target backup_file line cli
-	local -a installed_ids=()
-	local -a backup_ids=()
+	local target backup_file line
+	declare -A installed_ver=()
 
 	for target in "$@"; do
 		backup_file="$(_ext_backup_file "$target")"
 		if [[ ! -f "$backup_file" ]]; then
-			_err "No backup file for ${target}: ${backup_file}"
+			if [[ "$mode" == "prune-only" ]]; then
+				_warn "No backup file for ${target}: ${backup_file} (nothing to prune against)"
+			else
+				_err "No backup file for ${target}: ${backup_file}"
+			fi
 			continue
 		fi
-		printf '\n%s=== Restoring %s ===%s\n' "$C_BOLD" "$target" "$C_RESET"
-		while IFS= read -r line || [[ -n "$line" ]]; do
-			[[ -z "$line" || "$line" =~ ^# ]] && continue
-			_ext_install_extension "$target" "$line" || true
-		done <"$backup_file"
+		printf '\n%s=== Restoring %s (%s) ===%s\n' "$C_BOLD" "$target" "$mode" "$C_RESET"
 
-		if [[ "$prune" == true ]]; then
-			cli="$(_ext_find_cli "$target" 2>/dev/null || true)"
-			if [[ -z "$cli" ]]; then
-				_warn "Cannot prune ${target}: CLI not found"
-				continue
+		if [[ "$mode" == "all" || "$mode" == "prune" || "$mode" == "missing-only" ]]; then
+			installed_ver=()
+			if [[ "$mode" == "missing-only" ]]; then
+				while IFS= read -r line; do
+					_ext_parse_ext_line "$line"
+					[[ -n "$_EXT_PARSE_ID" ]] && installed_ver["$_EXT_PARSE_ID"]=1
+				done < <(_ext_list_extensions "$target" | sed '/^[[:space:]]*$/d')
 			fi
-			installed_ids=()
-			backup_ids=()
-			while IFS= read -r line; do
-				_ext_parse_ext_line "$line"
-				[[ -n "$_EXT_PARSE_ID" ]] && installed_ids+=("$_EXT_PARSE_ID")
-			done < <(_ext_list_extensions "$target" | sed '/^[[:space:]]*$/d')
-			while IFS= read -r line; do
-				_ext_parse_ext_line "$line"
-				[[ -n "$_EXT_PARSE_ID" ]] && backup_ids+=("$_EXT_PARSE_ID")
-			done < <(_ext_read_backup_lines "$backup_file")
-
-			local inst_id found
-			for inst_id in "${installed_ids[@]}"; do
-				found=false
-				local bid
-				for bid in "${backup_ids[@]}"; do
-					if [[ "$inst_id" == "$bid" ]]; then
-						found=true
-						break
+			while IFS= read -r line || [[ -n "$line" ]]; do
+				[[ -z "$line" || "$line" =~ ^# ]] && continue
+				if [[ "$mode" == "missing-only" ]]; then
+					_ext_parse_ext_line "$line"
+					if [[ -n "${installed_ver[$_EXT_PARSE_ID]:-}" ]]; then
+						continue
 					fi
-				done
-				if [[ "$found" == false ]]; then
-					_ext_uninstall_extension "$target" "$inst_id" || true
 				fi
-			done
+				_ext_install_extension "$target" "$line" || true
+			done <"$backup_file"
 		fi
+
+		if [[ "$mode" == "prune" || "$mode" == "prune-only" ]]; then
+			_ext_prune_extras "$target" "$backup_file" || true
+		fi
+	done
+}
+
+_ext_collect_missing_rows() {
+	local target="$1"
+	local backup_file line key
+	declare -A backup_ver=() installed_ver=()
+
+	backup_file="$(_ext_backup_file "$target")"
+	[[ -f "$backup_file" ]] || return 0
+
+	while IFS= read -r line; do
+		_ext_parse_ext_line "$line"
+		[[ -n "$_EXT_PARSE_ID" ]] && backup_ver["$_EXT_PARSE_ID"]="$_EXT_PARSE_VER"
+	done < <(_ext_read_backup_lines "$backup_file")
+
+	while IFS= read -r line; do
+		_ext_parse_ext_line "$line"
+		[[ -n "$_EXT_PARSE_ID" ]] && installed_ver["$_EXT_PARSE_ID"]="$_EXT_PARSE_VER"
+	done < <(_ext_list_extensions "$target" | sed '/^[[:space:]]*$/d')
+
+	for key in "${!backup_ver[@]}"; do
+		if [[ -z "${installed_ver[$key]:-}" ]]; then
+			printf '%s|%s|%s\n' "${key}@${backup_ver[$key]}" "$key" "${backup_ver[$key]}"
+		fi
+	done | sort
+}
+
+_ext_collect_extra_rows() {
+	local target="$1"
+	local backup_file line key
+	declare -A backup_ver=() installed_ver=()
+
+	backup_file="$(_ext_backup_file "$target")"
+	if [[ -f "$backup_file" ]]; then
+		while IFS= read -r line; do
+			_ext_parse_ext_line "$line"
+			[[ -n "$_EXT_PARSE_ID" ]] && backup_ver["$_EXT_PARSE_ID"]="$_EXT_PARSE_VER"
+		done < <(_ext_read_backup_lines "$backup_file")
+	fi
+
+	while IFS= read -r line; do
+		_ext_parse_ext_line "$line"
+		[[ -n "$_EXT_PARSE_ID" ]] && installed_ver["$_EXT_PARSE_ID"]="$_EXT_PARSE_VER"
+	done < <(_ext_list_extensions "$target" | sed '/^[[:space:]]*$/d')
+
+	for key in "${!installed_ver[@]}"; do
+		if [[ -z "${backup_ver[$key]:-}" ]]; then
+			printf '%s|%s|%s\n' "${key}@${installed_ver[$key]}" "$key" "${installed_ver[$key]}"
+		fi
+	done | sort
+}
+
+_ext_collect_edit_rows() {
+	local target="$1"
+	local backup_file line
+	declare -A backup_ids=()
+
+	backup_file="$(_ext_backup_file "$target")"
+	if [[ -f "$backup_file" ]]; then
+		while IFS= read -r line; do
+			_ext_parse_ext_line "$line"
+			[[ -n "$_EXT_PARSE_ID" ]] && backup_ids["$_EXT_PARSE_ID"]=1
+		done < <(_ext_read_backup_lines "$backup_file")
+	fi
+
+	while IFS= read -r line; do
+		[[ -z "$line" ]] && continue
+		_ext_parse_ext_line "$line"
+		if [[ -n "${backup_ids[$_EXT_PARSE_ID]:-}" ]]; then
+			printf '1|%s|backed up\n' "$line"
+		else
+			printf '0|%s|not backed up\n' "$line"
+		fi
+	done < <(_ext_list_extensions "$target" | sed '/^[[:space:]]*$/d' | sort)
+}
+
+_ext_cmd_sync_manifest() {
+	local target="$1"
+	local outfile ts count entry kept removed=0 line key
+	local -a new_lines=()
+	declare -A old_ids=() new_ids=()
+
+	outfile="$(_ext_backup_file "$target")"
+	mkdir -p "$(dirname "$outfile")"
+
+	if [[ -f "$outfile" ]]; then
+		while IFS= read -r line; do
+			_ext_parse_ext_line "$line"
+			[[ -n "$_EXT_PARSE_ID" ]] && old_ids["$_EXT_PARSE_ID"]=1
+		done < <(_ext_read_backup_lines "$outfile")
+	fi
+
+	while IFS= read -r line; do
+		[[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+		new_lines+=("$line")
+		_ext_parse_ext_line "$line"
+		[[ -n "$_EXT_PARSE_ID" ]] && new_ids["$_EXT_PARSE_ID"]=1
+	done
+
+	for key in "${!old_ids[@]}"; do
+		if [[ -z "${new_ids[$key]:-}" ]]; then
+			removed=$((removed + 1))
+		fi
+	done
+
+	if [[ ${#new_lines[@]} -gt 0 ]]; then
+		printf '%s\n' "${new_lines[@]}" | sort -u >"$outfile"
+		kept="$(wc -l <"$outfile" | tr -d ' ')"
+	else
+		: >"$outfile"
+		kept=0
+	fi
+
+	ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+	count="$kept"
+	entry="${target}|${count}|manifest-sync|$(basename "$outfile")"
+	_ext_write_manifest "$ts" "$entry"
+	_msg "kept ${kept}, removed ${removed} from manifest"
+}
+
+_ext_cmd_install_lines() {
+	local target="$1"
+	local line
+
+	while IFS= read -r line; do
+		[[ -z "$line" || "$line" =~ ^# ]] && continue
+		_ext_install_extension "$target" "$line" || true
+	done
+}
+
+_ext_cmd_remove_lines() {
+	local target="$1"
+	local line
+
+	while IFS= read -r line; do
+		[[ -z "$line" ]] && continue
+		_ext_parse_ext_line "$line"
+		[[ -n "$_EXT_PARSE_ID" ]] && _ext_uninstall_extension "$target" "$_EXT_PARSE_ID" || true
 	done
 }
 
@@ -1541,20 +1705,34 @@ cmd_ext_help() {
 Usage: dotfiles ext <subcommand> [target] [options]
 
 Subcommands:
-  check [target]     Table of installed vs manifest counts per target
-  backup [target]    Write manifests to extensions/<target>.txt + manifest.json
-  restore [target]   Install extensions from backup (--prune to uninstall extras)
-  compare [target]   Table diff: manifest vs installed (missing, extra, drift)
-                     Use --verbose to list every extra extension
+  check [target]           Table of installed vs manifest counts per target
+  backup [target]          Write manifests to extensions/<target>.txt + manifest.json
+  restore [target]         Install extensions from manifest
+                           --missing-only  install only manifest entries not installed
+                           --prune-only    uninstall extras only (no install pass)
+                           --prune         install all then uninstall extras
+  compare [target]         Table diff: manifest vs installed (missing, extra, drift)
+                           Use --verbose to list every extra extension
+  sync-manifest <target>   Write extension lines from stdin to manifest (manifest-sync)
+  list-edit <target>       TSV: checked|line|status for installed extensions
+  list-missing <target>    TSV: line|id|version for manifest entries not installed
+  list-extra <target>      TSV: line|id|version for installed extras not in manifest
+  install-lines <target>   Install extension lines read from stdin
+  remove-lines <target>    Uninstall extensions (lines or ids) read from stdin
 
 Targets: vscode-wsl, cursor-wsl, vscode-win, cursor-win, all (default: all)
+         list-* and sync-manifest require a single target (not all)
 
 Examples:
   dotfiles ext check
   dotfiles ext backup cursor-wsl
   dotfiles ext restore all
   dotfiles ext restore cursor-wsl --prune
+  dotfiles ext restore cursor-wsl --missing-only
+  dotfiles ext restore cursor-wsl --prune-only
   dotfiles ext compare vscode-win
+  dotfiles ext list-edit cursor-wsl
+  printf '%s\n' 'publisher.ext@1.0' | dotfiles ext sync-manifest cursor-wsl
 EOF
 }
 
@@ -1567,8 +1745,42 @@ cmd_ext() {
 	shift
 
 	local target="all"
-	local prune=false
+	local restore_mode="all"
 	local compare_verbose=false
+
+	case "$subcmd" in
+	sync-manifest | list-edit | list-missing | list-extra | install-lines | remove-lines)
+		if [[ $# -lt 1 || "$1" == -* ]]; then
+			_err "${subcmd} requires a target (vscode-wsl, cursor-wsl, vscode-win, cursor-win)"
+			cmd_ext_help
+			return 1
+		fi
+		target="$1"
+		shift
+		if [[ $# -gt 0 ]]; then
+			_err "Unexpected argument: $1"
+			cmd_ext_help
+			return 1
+		fi
+		case "$target" in
+		vscode-wsl | cursor-wsl | vscode-win | cursor-win) ;;
+		*)
+			_err "Unknown extension target: $target"
+			cmd_ext_help
+			return 1
+			;;
+		esac
+		case "$subcmd" in
+		sync-manifest) _ext_cmd_sync_manifest "$target" ;;
+		list-edit) _ext_collect_edit_rows "$target" ;;
+		list-missing) _ext_collect_missing_rows "$target" ;;
+		list-extra) _ext_collect_extra_rows "$target" ;;
+		install-lines) _ext_cmd_install_lines "$target" ;;
+		remove-lines) _ext_cmd_remove_lines "$target" ;;
+		esac
+		return 0
+		;;
+	esac
 
 	case "$subcmd" in
 	check | backup)
@@ -1606,7 +1818,9 @@ cmd_ext() {
 	restore)
 		while [[ $# -gt 0 ]]; do
 			case "$1" in
-			--prune) prune=true ;;
+			--prune) restore_mode="prune" ;;
+			--missing-only) restore_mode="missing-only" ;;
+			--prune-only) restore_mode="prune-only" ;;
 			-h | --help)
 				cmd_ext_help
 				return 0
@@ -1655,7 +1869,7 @@ cmd_ext() {
 	case "$subcmd" in
 	check) _ext_cmd_check "${targets[@]}" ;;
 	backup) _ext_cmd_backup "${targets[@]}" ;;
-	restore) _ext_cmd_restore "$prune" "${targets[@]}" ;;
+	restore) _ext_cmd_restore "$restore_mode" "${targets[@]}" ;;
 	compare) _ext_cmd_compare "$compare_verbose" "${targets[@]}" ;;
 	esac
 }
