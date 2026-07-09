@@ -5,8 +5,9 @@ MENU_MX_COL_KEYS=(vscode-wsl vscode-win cursor-wsl cursor-win)
 MENU_MX_COL_LABELS=(vscode-wsl vscode-win cursor-wsl cursor-win)
 
 _MENU_MX_COL_COUNT=4
-_MENU_MX_COL_WIDTH=14
-_MENU_MX_CELL_SEP=$' · '
+_MENU_MX_COL_WIDTH=18
+_MENU_MX_HDR_SEP=$'   ·   '
+_MENU_MX_ROW_GAP=$'       '
 _MENU_MX_FIXED_ROWS=11
 
 _menu_mx_row_lead_width() {
@@ -18,7 +19,12 @@ _menu_mx_row_lead_width() {
 }
 
 _menu_mx_matrix_width() {
-	printf '%s\n' $(( _MENU_MX_COL_COUNT * _MENU_MX_COL_WIDTH + (_MENU_MX_COL_COUNT - 1) * 3 ))
+	printf '%s\n' $(( _MENU_MX_COL_COUNT * _MENU_MX_COL_WIDTH + (_MENU_MX_COL_COUNT - 1) * ${#_MENU_MX_ROW_GAP} + ${#_MENU_MX_HDR_SEP} ))
+}
+
+_menu_mx_ext_column_start() {
+	local lead_w="$1"
+	printf '%s\n' $((2 + lead_w + _MENU_MX_COL_COUNT * _MENU_MX_COL_WIDTH + (_MENU_MX_COL_COUNT - 1) * ${#_MENU_MX_ROW_GAP} + ${#_MENU_MX_HDR_SEP}))
 }
 
 _menu_mx_idx() {
@@ -148,9 +154,9 @@ _menu_mx_cell_color() {
 }
 
 _menu_mx_draw_cell() {
-	local row="$1" col="$2" cur_row="$3" cur_col="$4"
+	local row="$1" col="$2" cur_row="$3" cur_col="$4" row_inverted="$5"
 	local idx m i chk store_ok glyph mark mode="${MENU_MX_MODE:-edit}"
-	local focused=0
+	local cell_body
 
 	idx="$(_menu_mx_idx "$row" "$col")"
 	m="${MENU_MX_MANIFEST[$idx]:-0}"
@@ -161,17 +167,15 @@ _menu_mx_draw_cell() {
 	mark=' '
 	[[ "$chk" -eq 1 && "$store_ok" -eq 1 ]] && mark='x'
 
-	[[ "$row" -eq "$cur_row" && "$col" -eq "$cur_col" ]] && focused=1
-	if [[ "$focused" -eq 1 ]]; then
-		printf '%s' "$C_INVERT"
+	cell_body="$(printf '%s  [%s]' "$glyph" "$mark")"
+	if [[ "$row_inverted" -eq 1 ]]; then
+		printf '%-*s' "$_MENU_MX_COL_WIDTH" "$cell_body"
+	else
+		_menu_mx_cell_color "$mode" "$glyph" 0
+		printf '  [%s]' "$mark"
+		printf '%*s' $((_MENU_MX_COL_WIDTH - 6)) ''
 	fi
-	_menu_mx_cell_color "$mode" "$glyph" "$focused"
-	printf '  [%s]' "$mark"
-	if [[ "$focused" -eq 1 ]]; then
-		printf '%s' "$C_RESET"
-	fi
-	printf '%*s' $((_MENU_MX_COL_WIDTH - 6)) ''
-	[[ "$col" -lt $((_MENU_MX_COL_COUNT - 1)) ]] && printf '%s' "$_MENU_MX_CELL_SEP"
+	[[ "$col" -lt $((_MENU_MX_COL_COUNT - 1)) ]] && printf '%s' "$_MENU_MX_ROW_GAP"
 }
 
 _menu_mx_print_glyph_key() {
@@ -210,7 +214,7 @@ _menu_mx_draw_col_header() {
 	else
 		printf '%s%-*s%s' "$C_BLUE" "$_MENU_MX_COL_WIDTH" "$label" "$C_RESET"
 	fi
-	[[ "$c" -lt $((_MENU_MX_COL_COUNT - 1)) ]] && printf '%s' "$_MENU_MX_CELL_SEP"
+	[[ "$c" -lt $((_MENU_MX_COL_COUNT - 1)) ]] && printf '%s' "$_MENU_MX_HDR_SEP"
 }
 
 _menu_mx_draw_headers() {
@@ -221,35 +225,51 @@ _menu_mx_draw_headers() {
 	for ((c = 0; c < _MENU_MX_COL_COUNT; c++)); do
 		_menu_mx_draw_col_header "$c" "$cur_col"
 	done
-	printf '  extension\e[K\n'
+	printf '%s' "$_MENU_MX_HDR_SEP"
+	printf '%s%sextension%s' "$C_BLUE" '' "$C_RESET"
+	printf '\e[K\n'
 }
 
 _menu_mx_draw_row() {
 	local cur_row="$1" cur_col="$2" idx="$3" cols="$4"
-	local prefix index_w label max_label c matrix_w
+	local prefix index_w label max_label c lead_w ext_start row_inverted=0
+	local row_prefix_len printed_len
 
 	prefix='  '
 	[[ "$idx" -eq "$cur_row" ]] && prefix='> '
+	[[ "$idx" -eq "$cur_row" ]] && row_inverted=1
 
 	index_w="$(_menu_mx_index_width "${#MENU_MX_ROWS[@]}")"
+	lead_w="$(_menu_mx_row_lead_width "${#MENU_MX_ROWS[@]}")"
+	ext_start="$(_menu_mx_ext_column_start "$lead_w")"
+
+	if [[ "$row_inverted" -eq 1 ]]; then
+		printf '%s' "$C_INVERT"
+	fi
+
+	printf '  '
 	printf '%s%*d. ' "$prefix" "$index_w" "$((idx + 1))"
 
 	for ((c = 0; c < _MENU_MX_COL_COUNT; c++)); do
-		_menu_mx_draw_cell "$idx" "$c" "$cur_row" "$cur_col"
+		_menu_mx_draw_cell "$idx" "$c" "$cur_row" "$cur_col" "$row_inverted"
 	done
 
-	matrix_w="$(_menu_mx_matrix_width)"
 	label="${MENU_MX_LABELS[$idx]}"
-	max_label=$((cols - $(_menu_mx_row_lead_width "${#MENU_MX_ROWS[@]}") - matrix_w - 2))
+	row_prefix_len=$((2 + ${#prefix} + index_w + 2 + _MENU_MX_COL_COUNT * _MENU_MX_COL_WIDTH + (_MENU_MX_COL_COUNT - 1) * ${#_MENU_MX_ROW_GAP}))
+	max_label=$((cols - ext_start - 2))
 	((max_label < 12)) && max_label=12
 	if ((${#label} > max_label)); then
 		label="$(menu_fit_line "$label" "$max_label")"
 	fi
-	printf '  '
-	if [[ "$idx" -eq "$cur_row" ]]; then
-		printf '%s%s%s' "$C_BOLD" "$label" "$C_RESET"
-	else
-		printf '%s' "$label"
+
+	printed_len=$row_prefix_len
+	if ((printed_len < ext_start)); then
+		printf '%*s' $((ext_start - printed_len)) ''
+	fi
+	printf '%s' "$label"
+
+	if [[ "$row_inverted" -eq 1 ]]; then
+		printf '%s' "$C_RESET"
 	fi
 	printf '\e[K\n'
 }
