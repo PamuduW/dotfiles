@@ -154,7 +154,8 @@ _agents_git_upstream_counts() {
 	local behind=0 ahead=0
 
 	if git -C "$ab_home" rev-parse --verify '@{upstream}' >/dev/null 2>&1; then
-		read -r behind ahead < <(
+		# rev-list prints: <ahead> <behind> (left=HEAD-only, right=upstream-only)
+		read -r ahead behind < <(
 			git -C "$ab_home" rev-list --left-right --count HEAD...'@{upstream}' 2>/dev/null || echo '0 0'
 		)
 	fi
@@ -202,7 +203,7 @@ clone_or_update_agent_bootstrap() {
 			upstream_sha="$(git -C "$ab_home" rev-parse --short '@{upstream}' 2>/dev/null || echo '?')"
 
 			if [[ "$behind" -gt 0 ]]; then
-				fetch_detail="${behind} commit(s) on origin · ${before_sha} → ${upstream_sha}"
+				fetch_detail="${behind} commit(s) behind origin · ${before_sha} → ${upstream_sha}"
 				_agents_print_row "fetch" "$fetch_detail" check
 			elif [[ -n "$fetch_lines" ]]; then
 				fetch_detail="$(_agents_git_one_line_summary "$fetch_lines")"
@@ -245,7 +246,12 @@ clone_or_update_agent_bootstrap() {
 					_agents_print_row "pull" "skipped by user" skipped
 				fi
 			else
-				printf '  %sNo pull needed — already up to date with origin.%s\n' "$C_GREEN" "$C_RESET"
+				if [[ "$ahead" -gt 0 ]]; then
+					printf '  %sLocal branch is %s commit(s) ahead of origin (pull not required).%s\n' \
+						"$C_YELLOW" "$ahead" "$C_RESET"
+				else
+					printf '  %sNo pull needed — already up to date with origin.%s\n' "$C_GREEN" "$C_RESET"
+				fi
 			fi
 		elif [[ -d "$ab_home" ]]; then
 			_agents_print_row "git repo" "path exists but is not a git repo" missing
