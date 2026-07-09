@@ -1,6 +1,9 @@
 # shellcheck shell=bash
 # Interactive component selection menu (dependency-aware toggles).
 
+# Non-item rows: ui_print_header(2) + nav hint(1) + page line(2) + status(1) + descriptions.
+_COMP_MENU_FIXED_ROWS=$((6 + _COMP_DESC_LINES))
+
 _draw_component_menu() {
 	local cur=$1
 	local page_size=$2

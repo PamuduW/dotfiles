@@ -1,8 +1,6 @@
 # shellcheck shell=bash
 # Per-component install dispatch (_comp_install_<id>) and run_install orchestration.
 
-_COMP_MENU_FIXED_ROWS=7
-
 _comp_install_git_identity() {
 	apply_git_config
 }
