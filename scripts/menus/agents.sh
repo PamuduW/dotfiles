@@ -5,7 +5,7 @@ AGENT_BOOTSTRAP_REPO_URL="${AGENT_BOOTSTRAP_REPO_URL:-git@github.com:PamuduW/age
 _agents_menu_labels=(
 	"Check status"
 	"Clone/update repo"
-	"Sync skills fork"
+	"Sync skills fork (legacy)"
 	"Run bootstrap"
 	"Update skills"
 	"Link agentboot"
@@ -183,6 +183,10 @@ print_agents_status() {
 		if [[ -n "$fork_sync_detail" ]]; then
 			ui_print_check_result_path_row "fork upstream" "$fork_sync_result" "$fork_sync_detail" "$cols"
 		fi
+
+		if [[ -n "$ab_home" && -f "$ab_home/skills.sources.yaml" ]]; then
+			ui_print_check_result_path_row "skills upstreams" ok "skills.sources.yaml (Update skills)" "$cols"
+		fi
 	} >/dev/tty
 
 	if [[ -n "$ab_home" && -x "$ab_home/install.sh" ]]; then
@@ -221,11 +225,12 @@ _agents_dispatch() {
 		;;
 	fork)
 		ui_clear
-		ui_print_header "Sync skills fork" "Dotfiles › Agents" "$(menu_tty_cols)"
-		echo "Checks PamuduW/my-agent-skills against Akindu23/my-agent-skills upstream."
+		ui_print_header "Sync skills fork (legacy)" "Dotfiles › Agents" "$(menu_tty_cols)"
+		echo "Legacy fork workflow — checks PamuduW/my-agent-skills against Akindu23/my-agent-skills upstream."
+		echo "Preferred: use 'Update skills' (agent_bootstrap install.sh skills update from skills.sources.yaml)."
 		echo "Clone path: sibling of dotfiles (~/my-agent-skills when dotfiles is ~/dotfiles)."
 		echo ""
-		read_tty_line answer "Proceed with fork sync? [y/N]: "
+		read_tty_line answer "Proceed with legacy fork sync anyway? [y/N]: "
 		case "$answer" in
 		y | Y | yes | YES) sync_agent_skills_fork ;;
 		*) echo "Fork sync cancelled." ;;
