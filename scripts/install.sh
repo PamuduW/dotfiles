@@ -372,7 +372,7 @@ _draw_component_menu() {
 	read -r start end < <(_component_menu_page_range "$count" "$page_size" "$page")
 
 	printf "  \e[1m%s\e[0m\e[K\n" "$(_fit_menu_line_with_indent "=== Select Components ===" "$cols" 2)"
-	printf "  %s\e[K\n" "$(_fit_menu_line_with_indent "Up/Down navigate   Space toggle   a all   n none   Enter confirm" "$cols" 2)"
+	printf "  %s\e[K\n" "$(_fit_menu_line_with_indent "Up/Down navigate   Space toggle   a all   n none   Enter confirm   q back" "$cols" 2)"
 	printf "  %s\e[K\n\n" "$(_fit_menu_line_with_indent "Page $((page + 1))/$total_pages   Showing $((start + 1))-$((end + 1)) of $count" "$cols" 2)"
 
 	for ((i = start; i <= end; i++)); do
@@ -410,6 +410,7 @@ component_menu() {
 	local cursor=0
 	local status_msg=""
 	local rows cols page_size menu_lines action page
+	local cancelled=false
 
 	rows="$(_menu_tty_rows)"
 	cols="$(_menu_tty_cols)"
@@ -441,6 +442,10 @@ component_menu() {
 			confirm)
 				break
 				;;
+			cancel)
+				cancelled=true
+				break
+				;;
 			all)
 				for k in "${COMP_KEYS[@]}"; do COMP_ON["$k"]=1; done
 				status_msg="All components enabled"
@@ -461,6 +466,9 @@ component_menu() {
 		done
 		tput cnorm 2>/dev/null || true
 	} >/dev/tty
+
+	[[ "$cancelled" == true ]] && return 1
+	return 0
 }
 
 show_plan() {

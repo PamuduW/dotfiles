@@ -29,7 +29,7 @@ run_initial_setup_flow() {
 	echo ""
 	ui_print_header "WSL Dotfiles Setup" "" 0
 	echo "Log file: $LOG_FILE"
-	component_menu
+	component_menu || return 0
 	confirm_loop || return 0
 	run_install
 }
@@ -43,15 +43,15 @@ confirm_loop() {
 			need_git_prompt=false
 		fi
 		show_plan
-		read_tty_line answer "  [c]onfirm  [e]dit  [q]uit: "
+		read_tty_line answer "  [c]onfirm  [e]dit  [q]ack to menu: "
 		case "$answer" in
 		c | C) return 0 ;;
 		e | E)
-			component_menu
+			component_menu || return 1
 			need_git_prompt=true
 			;;
 		q | Q)
-			echo "Aborted."
+			echo "Returning to Initial setup menu."
 			return 1
 			;;
 		*) echo "    Invalid choice." ;;

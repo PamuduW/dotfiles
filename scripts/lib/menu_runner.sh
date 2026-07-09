@@ -35,6 +35,7 @@ menu_submenu_loop() {
 			return 0
 		fi
 
+		ui_clear
 		"$dispatch_fn" "$choice"
 		ui_pause
 	done

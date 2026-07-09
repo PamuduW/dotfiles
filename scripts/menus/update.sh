@@ -25,9 +25,6 @@ run_update_flow() {
 		return 1
 	}
 
-	echo ""
-	ui_print_header "Dotfiles Update" "Dotfiles › Update" 0
-	echo ""
 	"$dotfiles_cmd" update
 
 	echo ""
