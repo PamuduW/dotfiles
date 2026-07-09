@@ -2,6 +2,14 @@
 # Checkbox menu with paging, bulk toggle, and colored status column.
 
 _MENU_CB_FIXED_ROWS=8
+
+_menu_cb_fixed_rows() {
+	local rows=$_MENU_CB_FIXED_ROWS
+	local desc
+	desc="$(menu_desc_footer_rows MENU_CB)"
+	rows=$((rows + desc))
+	printf '%s\n' "$rows"
+}
 _MENU_CB_STATUS_COL_WIDTH=16
 
 _menu_cb_index_width() {
@@ -24,7 +32,7 @@ _menu_cb_status_col_width() {
 }
 
 _menu_cb_page_size() {
-	menu_page_size "$1" "$_MENU_CB_FIXED_ROWS"
+	menu_page_size "$1" "$(_menu_cb_fixed_rows)"
 }
 
 _menu_cb_page_for_cursor() {
@@ -44,7 +52,7 @@ _menu_cb_visible_count() {
 }
 
 _menu_cb_render_lines() {
-	menu_page_render_lines "$1" "$2" "$3" "$_MENU_CB_FIXED_ROWS"
+	menu_page_render_lines "$1" "$2" "$3" "$(_menu_cb_fixed_rows)"
 }
 
 _menu_cb_status_context() {
@@ -169,6 +177,8 @@ _menu_cb_draw() {
 	else
 		printf '\e[K\n'
 	fi
+
+	menu_desc_print_footer MENU_CB "$cur" "$cols"
 }
 
 menu_checkbox_run() {

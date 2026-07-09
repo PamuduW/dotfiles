@@ -7,6 +7,22 @@ _initial_labels=(
 )
 _initial_keys=(status run back)
 
+_initial_desc_fn() {
+	case "$1" in
+	0)
+		echo "Show install status for every setup component (installed / missing / check)."
+		echo "Read-only summary table with rollup counts."
+		;;
+	1)
+		echo "Open the component picker, confirm plan, then run the install."
+		echo "Prompts for git identity when that component is enabled."
+		;;
+	2)
+		echo "Return to the main Dotfiles menu."
+		;;
+	esac
+}
+
 _initial_dispatch() {
 	case "$1" in
 	status)
@@ -20,6 +36,7 @@ _initial_dispatch() {
 }
 
 initial_setup_menu() {
+	MENU_SUBMENU_DESC_FN=_initial_desc_fn
 	menu_submenu_loop "Initial setup" "Dotfiles › Initial setup" \
 		_initial_labels _initial_keys _initial_dispatch
 }

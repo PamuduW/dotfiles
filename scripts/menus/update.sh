@@ -6,6 +6,18 @@ _update_labels=(
 )
 _update_keys=(run back)
 
+_update_desc_fn() {
+	case "$1" in
+	0)
+		echo "Run dotfiles update to sync the repo and refresh stowed configs."
+		echo "Optionally run dotfiles upgrade (with or without --all)."
+		;;
+	1)
+		echo "Return to the main Dotfiles menu."
+		;;
+	esac
+}
+
 _update_dispatch() {
 	case "$1" in
 	run) run_update_flow ;;
@@ -13,6 +25,7 @@ _update_dispatch() {
 }
 
 update_menu() {
+	MENU_SUBMENU_DESC_FN=_update_desc_fn
 	menu_submenu_loop "Update & upgrade" "" \
 		_update_labels _update_keys _update_dispatch
 }

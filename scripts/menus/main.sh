@@ -1,5 +1,29 @@
 # shellcheck shell=bash
 
+_main_menu_desc_fn() {
+	case "$1" in
+	0)
+		echo "First-time WSL dotfiles install: pick components and run setup."
+		echo "Check status first to see what is already installed."
+		;;
+	1)
+		echo "Pull latest dotfiles repo and optionally run package upgrades."
+		echo "Prompts before upgrading Node, Go, fonts, and other tools."
+		;;
+	2)
+		echo "Manage IDE extension manifests across VS Code and Cursor."
+		echo "Compare, edit, restore missing, or remove extras."
+		;;
+	3)
+		echo "Install and maintain agent_bootstrap (skills, links, doctor)."
+		echo "Clone repo, run bootstrap, or scaffold a new project."
+		;;
+	4)
+		echo "Exit the dotfiles menu."
+		;;
+	esac
+}
+
 _main_menu_labels=(
 	"Initial setup"
 	"Update"
@@ -19,6 +43,7 @@ main_menu_loop() {
 		MENU_SIMPLE_LABELS=("${_main_menu_labels[@]}")
 		MENU_SIMPLE_KEYS=("${_main_menu_keys[@]}")
 		MENU_SIMPLE_TYPES=()
+		MENU_SIMPLE_DESC_FN=_main_menu_desc_fn
 
 		if ! choice="$(menu_simple_run)"; then
 			continue

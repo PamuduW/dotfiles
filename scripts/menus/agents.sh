@@ -20,6 +20,42 @@ _agents_menu_labels=(
 )
 _agents_menu_keys=(status repo bootstrap skills link agentboot doctor back)
 
+_agents_menu_desc_fn() {
+	case "$1" in
+	0)
+		echo "Show agent_bootstrap install state, paths, and sync summary."
+		echo "Read-only report; no changes made."
+		;;
+	1)
+		echo "Clone or pull agent_bootstrap to the configured home path."
+		echo "Required before bootstrap, skills refresh, or doctor."
+		;;
+	2)
+		echo "Run full install.sh: skills, Claude bridge, AGENTS.md, doctor, link."
+		echo "Confirms before proceeding."
+		;;
+	3)
+		echo "Update globally installed skills from ~/.agents/.skill-lock.json."
+		echo "Re-bridges Claude and refreshes Codex symlinks; no new manifest sources."
+		;;
+	4)
+		echo "Symlink agentboot into your PATH via install.sh link-agentboot."
+		echo "Use after bootstrap to run agentboot from any directory."
+		;;
+	5)
+		echo "Run agentboot in a target directory to scaffold agent config."
+		echo "Optionally add Copilot/Cursor pointers with --full."
+		;;
+	6)
+		echo "Run install.sh doctor to verify install health."
+		echo "Reports issues; non-zero exit if problems found."
+		;;
+	7)
+		echo "Return to the main Dotfiles menu."
+		;;
+	esac
+}
+
 require_agent_bootstrap_installer() {
 	local ab_home="$1"
 	if [[ -x "$ab_home/install.sh" ]]; then
@@ -139,6 +175,7 @@ _agents_dispatch() {
 }
 
 agents_menu() {
+	MENU_SUBMENU_DESC_FN=_agents_menu_desc_fn
 	menu_submenu_loop "Agents" "Dotfiles › Agents" \
 		_agents_menu_labels _agents_menu_keys _agents_dispatch
 }

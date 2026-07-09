@@ -26,6 +26,17 @@ menu_submenu_loop() {
 			MENU_SIMPLE_TYPES=()
 		fi
 
+		if [[ -v MENU_SUBMENU_DESCS ]]; then
+			MENU_SIMPLE_DESCS=("${MENU_SUBMENU_DESCS[@]}")
+		else
+			unset MENU_SIMPLE_DESCS
+		fi
+		if [[ -n "${MENU_SUBMENU_DESC_FN:-}" ]]; then
+			MENU_SIMPLE_DESC_FN="$MENU_SUBMENU_DESC_FN"
+		else
+			unset MENU_SIMPLE_DESC_FN
+		fi
+
 		if ! choice="$(menu_simple_run)"; then
 			return 0
 		fi

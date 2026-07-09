@@ -84,7 +84,32 @@ _ext_menu_labels=(
 )
 _ext_menu_keys=(status edit restore remove back)
 
+_ext_menu_desc_fn() {
+	case "$1" in
+	0)
+		echo "Compare manifest vs installed extensions on all four targets."
+		echo "Runs dotfiles ext compare all; read-only."
+		;;
+	1)
+		echo "Matrix editor: toggle which extensions belong in each target manifest."
+		echo "Saves via ext sync-manifest; warns on manifest-only entries."
+		;;
+	2)
+		echo "Install extensions that are in the manifest but missing locally."
+		echo "Matrix picker across vscode-wsl, vscode-win, cursor-wsl, cursor-win."
+		;;
+	3)
+		echo "Uninstall extensions installed locally but not in the manifest."
+		echo "Destructive; confirms before uninstalling selected cells."
+		;;
+	4)
+		echo "Return to the main Dotfiles menu."
+		;;
+	esac
+}
+
 extensions_menu() {
+	MENU_SUBMENU_DESC_FN=_ext_menu_desc_fn
 	menu_submenu_loop "IDE Extensions" "Dotfiles › Extensions" \
 		_ext_menu_labels _ext_menu_keys _ext_menu_dispatch
 }

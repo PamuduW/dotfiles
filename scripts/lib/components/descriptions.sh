@@ -100,15 +100,10 @@ _comp_desc_git_credential() {
 	echo "Searches common install paths for git-credential-manager.exe."
 }
 
-_comp_description_line() {
-	local idx="$1"
-	local line_index="$2"
-	local line=""
-	local -a lines=()
+_comp_menu_desc_fn() {
+	comp_description "${COMP_KEYS[$1]}"
+}
 
-	mapfile -t lines < <(comp_description "${COMP_KEYS[$idx]}")
-	if ((line_index < ${#lines[@]})); then
-		line="${lines[$line_index]}"
-	fi
-	echo "$line"
+_comp_description_line() {
+	menu_desc_nth_line_fn comp_description "${COMP_KEYS[$1]}" "$2"
 }

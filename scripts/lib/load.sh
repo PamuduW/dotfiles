@@ -14,6 +14,8 @@ source "$_LIB_DIR/report_table.sh"
 # shellcheck source=scripts/lib/ui.sh
 source "$_LIB_DIR/ui.sh"
 ui_init_colors
+# shellcheck source=scripts/lib/menu_descriptions.sh
+source "$_LIB_DIR/menu_descriptions.sh"
 # shellcheck source=scripts/lib/menu_keys.sh
 source "$_LIB_DIR/menu_keys.sh"
 # shellcheck source=scripts/lib/menu_simple.sh

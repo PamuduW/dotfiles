@@ -52,11 +52,8 @@ _draw_component_menu() {
 		printf '\e[K\n'
 	fi
 
-	local desc_idx
-	for ((desc_idx = 0; desc_idx < _COMP_DESC_LINES; desc_idx++)); do
-		printf '  %s%s%s\e[K\n' "$C_DIM" \
-			"$(_fit_menu_line_with_indent "$(_comp_description_line "$cur" "$desc_idx")" "$cols" 2)" "$C_RESET"
-	done
+	COMP_DESC_FN=_comp_menu_desc_fn
+	menu_desc_print_footer COMP "$cur" "$cols"
 }
 
 component_menu() {

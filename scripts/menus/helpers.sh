@@ -14,6 +14,30 @@ resolve_dotfiles_cmd() {
 	return 1
 }
 
+_ext_pick_target_desc_fn() {
+	case "$1" in
+	0)
+		echo "Target VS Code extensions running inside WSL."
+		echo "Uses the WSL extension store path."
+		;;
+	1)
+		echo "Target Cursor extensions running inside WSL."
+		echo "Uses the WSL Cursor extension store path."
+		;;
+	2)
+		echo "Target VS Code extensions on the Windows host."
+		echo "Uses the Windows-side VS Code extension store."
+		;;
+	3)
+		echo "Target Cursor extensions on the Windows host."
+		echo "Uses the Windows-side Cursor extension store."
+		;;
+	4)
+		echo "Cancel target selection and return to the caller."
+		;;
+	esac
+}
+
 ext_pick_target() {
 	local -a _ext_pick_labels=(
 		"VS Code (WSL)"
@@ -31,6 +55,7 @@ ext_pick_target() {
 	MENU_SIMPLE_LABELS=("${_ext_pick_labels[@]}")
 	MENU_SIMPLE_KEYS=("${_ext_pick_keys[@]}")
 	MENU_SIMPLE_TYPES=()
+	MENU_SIMPLE_DESC_FN=_ext_pick_target_desc_fn
 
 	if ! choice="$(menu_simple_run)"; then
 		return 1
@@ -78,7 +103,65 @@ ext_checkbox_from_tsv() {
 		esac
 	done
 
+	MENU_CB_DESC_FN=_menu_cb_row_desc_fn
 	((${#MENU_CB_IDS[@]} > 0))
+}
+
+_menu_cb_row_desc_fn() {
+	local idx="$1"
+	local label="${MENU_CB_LABELS[$idx]:-}"
+	local status="${MENU_CB_STATUS[$idx]:-}"
+
+	printf '%s\n' "${MENU_CB_IDS[$idx]:-$label}"
+	printf '%s\n' "$status"
+}
+
+_menu_mx_row_desc_fn() {
+	local idx="$1"
+	local ext_id="${MENU_MX_ROWS[$idx]:-}"
+	local label="${MENU_MX_LABELS[$idx]:-}"
+	local mode="${MENU_MX_MODE:-edit}"
+	local c idx2 m i store_ok target
+	local -a parts=()
+	local joined
+
+	printf '%s\n' "$ext_id"
+	for c in 0 1 2 3; do
+		idx2=$((idx * 4 + c))
+		m="${MENU_MX_MANIFEST[$idx2]:-0}"
+		i="${MENU_MX_INSTALLED[$idx2]:-0}"
+		store_ok="${MENU_MX_STORE_OK[$idx2]:-1}"
+		[[ "$store_ok" -eq 0 ]] && continue
+		target="${MENU_MX_COL_KEYS[$c]}"
+		case "$mode" in
+		edit)
+			if [[ "$m" -eq 1 || "$i" -eq 1 ]]; then
+				parts+=("${target}: m=${m} i=${i}")
+			fi
+			;;
+		restore)
+			if [[ "$m" -eq 1 && "$i" -eq 0 ]]; then
+				parts+=("${target}: missing")
+			elif [[ "$m" -eq 1 && "$i" -eq 1 ]]; then
+				parts+=("${target}: installed")
+			fi
+			;;
+		remove)
+			if [[ "$m" -eq 0 && "$i" -eq 1 ]]; then
+				parts+=("${target}: extra")
+			fi
+			;;
+		esac
+	done
+
+	if ((${#parts[@]} > 0)); then
+		joined="$(IFS=' · '; echo "${parts[*]}")"
+		printf '%s\n' "$joined"
+	elif [[ -n "$label" && "$label" != "$ext_id" ]]; then
+		printf '%s\n' "$label"
+	else
+		printf '%s\n' "Tab switches column; Space toggles the highlighted cell."
+	fi
 }
 
 ext_matrix_from_tsv() {
@@ -166,6 +249,7 @@ ext_matrix_from_tsv() {
 		done
 	done
 
+	MENU_MX_DESC_FN=_menu_mx_row_desc_fn
 	((${#MENU_MX_ROWS[@]} > 0))
 }
 

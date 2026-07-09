@@ -9,6 +9,14 @@ _MENU_MX_COL_WIDTH=18
 _MENU_MX_HDR_SEP=$'   ·   '
 _MENU_MX_ROW_GAP=$'       '
 _MENU_MX_FIXED_ROWS=12
+
+_menu_mx_fixed_rows() {
+	local rows=$_MENU_MX_FIXED_ROWS
+	local desc
+	desc="$(menu_desc_footer_rows MENU_MX)"
+	rows=$((rows + desc))
+	printf '%s\n' "$rows"
+}
 MENU_MX_PAGE_SIZE="${MENU_MX_PAGE_SIZE:-10}"
 
 _menu_mx_row_lead_width() {
@@ -58,7 +66,7 @@ _menu_mx_page_range() {
 }
 
 _menu_mx_render_lines() {
-	menu_page_render_lines "$1" "$2" "$3" "$_MENU_MX_FIXED_ROWS"
+	menu_page_render_lines "$1" "$2" "$3" "$(_menu_mx_fixed_rows)"
 }
 
 _menu_mx_cell_yn() {
@@ -285,6 +293,8 @@ _menu_mx_draw() {
 	else
 		printf '\e[K\n'
 	fi
+
+	menu_desc_print_footer MENU_MX "$cur_row" "$cols"
 }
 
 menu_matrix_run() {

@@ -40,11 +40,18 @@ _menu_simple_move_cursor() {
 
 _menu_simple_menu_lines() {
 	local count="$1"
+	local desc_rows footer_rows
 	# header (title + trailing blank) + hint + spacer + items + footer blank
 	local lines=$((count + 5))
 
 	if [[ -n "${MENU_SIMPLE_BREADCRUMB:-}" ]]; then
 		lines=$((count + 6))
+	fi
+
+	desc_rows="$(menu_desc_footer_rows MENU_SIMPLE)"
+	if ((desc_rows > 0)); then
+		footer_rows=1
+		lines=$((lines - footer_rows + desc_rows))
 	fi
 	printf '%s\n' "$lines"
 }
@@ -78,7 +85,12 @@ _menu_simple_draw() {
 			printf '  %s\e[K\n' "$(menu_fit_line "$row" "$((cols - 2))")"
 		fi
 	done
-	printf '\e[K\n'
+
+	if menu_desc_configured MENU_SIMPLE; then
+		menu_desc_print_footer MENU_SIMPLE "$cur" "$cols"
+	else
+		printf '\e[K\n'
+	fi
 }
 
 menu_simple_run() {
