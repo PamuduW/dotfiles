@@ -2,6 +2,26 @@
 # Checkbox menu with paging, bulk toggle, and colored status column.
 
 _MENU_CB_FIXED_ROWS=7
+_MENU_CB_STATUS_COL_WIDTH=16
+
+_menu_cb_index_width() {
+	local count="$1"
+	local width=2
+
+	((count >= 100)) && width=3
+	((count >= 1000)) && width=4
+	printf '%s\n' "$width"
+}
+
+_menu_cb_status_col_width() {
+	local max="${_MENU_CB_STATUS_COL_WIDTH}" len i
+
+	for i in "${!MENU_CB_STATUS[@]}"; do
+		len=${#MENU_CB_STATUS[$i]}
+		((len > max)) && max=$len
+	done
+	printf '%s\n' "$max"
+}
 
 _menu_cb_fill_dots() {
 	local count="$1"
@@ -88,8 +108,8 @@ _menu_cb_draw_row() {
 	local cur="$1"
 	local idx="$2"
 	local cols="$3"
-	local mark status status_ctx prefix head mid_sep label
-	local dots_count max_label checked selected
+	local mark status status_ctx cursor_col mid_sep label
+	local index_w status_w head status_pad dots_count max_label checked selected
 
 	mark='x'
 	[[ "${MENU_CB_CHECKED[$idx]:-0}" -eq 0 ]] && mark=' '
@@ -98,22 +118,26 @@ _menu_cb_draw_row() {
 	status_ctx="$(_menu_cb_status_context "$status")"
 	label="${MENU_CB_LABELS[$idx]}"
 
-	prefix=' '
-	[[ $idx -eq $cur ]] && prefix='>'
+	cursor_col='  '
+	[[ $idx -eq $cur ]] && cursor_col='> '
 
 	checked="${MENU_CB_CHECKED[$idx]:-0}"
 	selected=0
 	[[ $idx -eq $cur ]] && selected=1
 
+	index_w="$(_menu_cb_index_width "${#MENU_CB_LABELS[@]}")"
+	status_w="$(_menu_cb_status_col_width)"
 	mid_sep=' · '
-	head="$(printf '  %s%2d. [%s]%s' "$prefix" "$((idx + 1))" "$mark" "$mid_sep")"
+	head="$(printf '  %s%*d. [%s]%s' "$cursor_col" "$index_w" "$((idx + 1))" "$mark" "$mid_sep")"
+	status_pad=$((status_w - ${#status}))
+	((status_pad < 0)) && status_pad=0
 
-	dots_count=$((cols - ${#head} - ${#status} - ${#mid_sep} - ${#label}))
+	dots_count=$((cols - ${#head} - status_w - ${#mid_sep} - ${#label}))
 	if ((dots_count < 0)); then
-		max_label=$((cols - ${#head} - ${#status} - ${#mid_sep} - 3))
+		max_label=$((cols - ${#head} - status_w - ${#mid_sep} - 3))
 		((max_label < 1)) && max_label=1
 		label="$(menu_fit_line "$label" "$max_label")"
-		dots_count=$((cols - ${#head} - ${#status} - ${#mid_sep} - ${#label}))
+		dots_count=$((cols - ${#head} - status_w - ${#mid_sep} - ${#label}))
 	fi
 	((dots_count < 0)) && dots_count=0
 
@@ -132,6 +156,7 @@ _menu_cb_draw_row() {
 	fi
 
 	ui_color_word "$status" "$status_ctx"
+	printf '%*s' "$status_pad" ''
 	printf '%s' "$mid_sep"
 
 	if [[ "$checked" -eq 1 ]]; then
