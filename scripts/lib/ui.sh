@@ -192,7 +192,9 @@ _ui_status_table_layout() {
 	_out_label_w=22
 	_out_mid_w=10
 	_out_path_w=$((cols - _out_label_w - _out_mid_w - 9))
-	(( _out_path_w < 28 )) && _out_path_w=28
+	if (( _out_path_w < 28 )); then
+		_out_path_w=28
+	fi
 }
 
 # Agents / health tables: check | result | path
@@ -244,7 +246,9 @@ ui_print_status_row() {
 	fi
 	label_w=22
 	detail_w=$((cols - label_w - 10 - 9))
-	((detail_w < 28)) && detail_w=28
+	if ((detail_w < 28)); then
+		detail_w=28
+	fi
 
 	if [[ -n "$detail" ]]; then
 		if [[ "$detail" == /* || "$detail" == ~* ]]; then
@@ -272,7 +276,9 @@ ui_print_component_table_row() {
 	fi
 	label_w=22
 	detail_w=$((cols - label_w - 10 - 9))
-	((detail_w < 28)) && detail_w=28
+	if ((detail_w < 28)); then
+		detail_w=28
+	fi
 
 	if [[ "$detail" == /* || "$detail" == ~* ]]; then
 		detail_display="$(ui_shorten_path "$detail" "$detail_w")"
