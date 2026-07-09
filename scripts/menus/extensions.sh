@@ -25,7 +25,6 @@ _ext_menu_dispatch() {
 		MENU_MX_TITLE="Edit manifest"
 		MENU_MX_BREADCRUMB="Dotfiles › Extensions"
 		MENU_MX_HINT="↑↓ row   Tab column   Space toggle   Enter save manifest   q back"
-		MENU_MX_LEGEND="Y in manifest   N installed only   ? add to manifest (may fail on restore)   × wrong IDE store"
 		if ! menu_matrix_run; then
 			return 0
 		fi
@@ -40,7 +39,6 @@ _ext_menu_dispatch() {
 		MENU_MX_TITLE="Restore missing"
 		MENU_MX_BREADCRUMB="Dotfiles › Extensions"
 		MENU_MX_HINT="↑↓ row   Tab column   Space toggle   Enter install   q back"
-		MENU_MX_LEGEND="N missing   × wrong IDE store (skipped on install)"
 		if ! menu_matrix_run; then
 			return 0
 		fi
@@ -62,7 +60,6 @@ _ext_menu_dispatch() {
 		MENU_MX_TITLE="Remove extras"
 		MENU_MX_BREADCRUMB="Dotfiles › Extensions"
 		MENU_MX_HINT="↑↓ row   Tab column   Space toggle   Enter confirm   q back"
-		MENU_MX_LEGEND=""
 		if ! menu_matrix_run; then
 			return 0
 		fi

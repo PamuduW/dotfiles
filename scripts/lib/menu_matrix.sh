@@ -5,8 +5,21 @@ MENU_MX_COL_KEYS=(vscode-wsl vscode-win cursor-wsl cursor-win)
 MENU_MX_COL_LABELS=(vscode-wsl vscode-win cursor-wsl cursor-win)
 
 _MENU_MX_COL_COUNT=4
-_MENU_MX_FIXED_ROWS=9
+_MENU_MX_COL_WIDTH=14
 _MENU_MX_CELL_SEP=$' · '
+_MENU_MX_FIXED_ROWS=11
+
+_menu_mx_row_lead_width() {
+	local count="$1"
+	local index_w
+
+	index_w="$(_menu_mx_index_width "$count")"
+	printf '%s\n' $((4 + index_w))
+}
+
+_menu_mx_matrix_width() {
+	printf '%s\n' $(( _MENU_MX_COL_COUNT * _MENU_MX_COL_WIDTH + (_MENU_MX_COL_COUNT - 1) * 3 ))
+}
 
 _menu_mx_idx() {
 	printf '%s\n' $(( $1 * _MENU_MX_COL_COUNT + $2 ))
@@ -157,32 +170,63 @@ _menu_mx_draw_cell() {
 	if [[ "$focused" -eq 1 ]]; then
 		printf '%s' "$C_RESET"
 	fi
+	printf '%*s' $((_MENU_MX_COL_WIDTH - 6)) ''
 	[[ "$col" -lt $((_MENU_MX_COL_COUNT - 1)) ]] && printf '%s' "$_MENU_MX_CELL_SEP"
 }
 
-_menu_mx_draw_headers() {
-	local cur_col="$1" cols="$2" c label prefix_w
+_menu_mx_print_glyph_key() {
+	local cols="$1"
+	local mode="${MENU_MX_MODE:-edit}"
 
-	prefix_w="$(_menu_mx_index_width "${#MENU_MX_ROWS[@]}")"
-	prefix_w=$((prefix_w + 5))
-	printf '  %*s' "$prefix_w" ''
+	case "$mode" in
+	edit)
+		printf '  %s%s%s\e[K\n' "$C_DIM" \
+			"$(menu_fit_indent "Y in manifest   N installed, not backed up   — not present" "$cols" 2)" \
+			"$C_RESET"
+		printf '  %s%s%s\e[K\n' "$C_DIM" \
+			"$(menu_fit_indent "? add to manifest (may fail on restore)   × wrong IDE store" "$cols" 2)" \
+			"$C_RESET"
+		;;
+	restore)
+		printf '  %s%s%s\e[K\n' "$C_DIM" \
+			"$(menu_fit_indent "Y installed   N missing (in manifest, will install)   — n/a   × wrong IDE store (skipped)" "$cols" 2)" \
+			"$C_RESET"
+		;;
+	remove)
+		printf '  %s%s%s\e[K\n' "$C_DIM" \
+			"$(menu_fit_indent "Y extra installed (not in manifest)   — not an extra here   × wrong IDE store" "$cols" 2)" \
+			"$C_RESET"
+		;;
+	esac
+}
+
+_menu_mx_draw_col_header() {
+	local c="$1" cur_col="$2"
+	local label
+
+	label="${MENU_MX_COL_LABELS[$c]:-${MENU_MX_COL_KEYS[$c]}}"
+	if [[ "$c" -eq "$cur_col" ]]; then
+		printf '%s%s%-*s%s' "$C_INVERT" "$C_BLUE" "$_MENU_MX_COL_WIDTH" "$label" "$C_RESET"
+	else
+		printf '%s%-*s%s' "$C_BLUE" "$_MENU_MX_COL_WIDTH" "$label" "$C_RESET"
+	fi
+	[[ "$c" -lt $((_MENU_MX_COL_COUNT - 1)) ]] && printf '%s' "$_MENU_MX_CELL_SEP"
+}
+
+_menu_mx_draw_headers() {
+	local cur_col="$1" cols="$2" c lead_w
+
+	lead_w="$(_menu_mx_row_lead_width "${#MENU_MX_ROWS[@]}")"
+	printf '  %*s' "$lead_w" ''
 	for ((c = 0; c < _MENU_MX_COL_COUNT; c++)); do
-		label="${MENU_MX_COL_LABELS[$c]:-${MENU_MX_COL_KEYS[$c]}}"
-		if [[ "$c" -eq "$cur_col" ]]; then
-			printf '%s%s%s' "$C_INVERT" "$C_BLUE" "$label"
-			printf '%s' "$C_RESET"
-		else
-			printf '%s%s%s' "$C_BLUE" "$label" "$C_RESET"
-		fi
-		printf '%*s' $((10 - ${#label})) ''
-		[[ "$c" -lt $((_MENU_MX_COL_COUNT - 1)) ]] && printf '%s' "$_MENU_MX_CELL_SEP"
+		_menu_mx_draw_col_header "$c" "$cur_col"
 	done
 	printf '  extension\e[K\n'
 }
 
 _menu_mx_draw_row() {
 	local cur_row="$1" cur_col="$2" idx="$3" cols="$4"
-	local prefix index_w label max_label c
+	local prefix index_w label max_label c matrix_w
 
 	prefix='  '
 	[[ "$idx" -eq "$cur_row" ]] && prefix='> '
@@ -194,8 +238,9 @@ _menu_mx_draw_row() {
 		_menu_mx_draw_cell "$idx" "$c" "$cur_row" "$cur_col"
 	done
 
+	matrix_w="$(_menu_mx_matrix_width)"
 	label="${MENU_MX_LABELS[$idx]}"
-	max_label=$((cols - 52))
+	max_label=$((cols - $(_menu_mx_row_lead_width "${#MENU_MX_ROWS[@]}") - matrix_w - 2))
 	((max_label < 12)) && max_label=12
 	if ((${#label} > max_label)); then
 		label="$(menu_fit_line "$label" "$max_label")"
@@ -225,9 +270,7 @@ _menu_mx_draw() {
 
 	ui_print_header "${MENU_MX_TITLE}" "${MENU_MX_BREADCRUMB:-}" "$cols"
 	printf '  %s%s%s\e[K\n' "$C_DIM" "$(menu_fit_indent "$hint" "$cols" 2)" "$C_RESET"
-	if [[ -n "${MENU_MX_LEGEND:-}" ]]; then
-		printf '  %s%s%s\e[K\n' "$C_DIM" "$(menu_fit_indent "$MENU_MX_LEGEND" "$cols" 2)" "$C_RESET"
-	fi
+	_menu_mx_print_glyph_key "$cols"
 	printf '  %s%s%s\e[K\n\n' "$C_DIM" \
 		"$(menu_fit_indent "Page $((page + 1))/${total_pages}   Showing $((start + 1))-$((end + 1)) of ${count}" "$cols" 2)" \
 		"$C_RESET"
