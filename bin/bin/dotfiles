@@ -1914,7 +1914,7 @@ _ext_cmd_compare() {
 		local i row ext_id manifest_ver installed_ver_col count examples detail result
 		local ok_count=0 check_count=0 miss_count=0
 
-		rt_print_table_columns
+		rt_print_section_block "── Compare summary ──"
 		for i in "${!summary_targets[@]}"; do
 			detail="manifest ${summary_manifest[$i]} · installed ${summary_installed[$i]} · missing ${summary_missing[$i]} · extra ${summary_extra[$i]} · drift ${summary_drift[$i]}"
 			if [[ "${summary_missing[$i]}" -eq 0 && "${summary_extra[$i]}" -eq 0 && "${summary_drift[$i]}" -eq 0 ]]; then
@@ -1934,7 +1934,7 @@ _ext_cmd_compare() {
 
 		if [[ ${#missing_rows[@]} -gt 0 ]]; then
 			mapfile -t missing_rows < <(printf '%s\n' "${missing_rows[@]}" | sort)
-			rt_print_section "── Missing (manifest, not installed) ──"
+			rt_print_section_block "── Missing (manifest, not installed) ──"
 			for row in "${missing_rows[@]}"; do
 				IFS='|' read -r target ext_id manifest_ver <<<"$row"
 				rt_print_table_row "$target" "${ext_id}@${manifest_ver:-latest}" missing
@@ -1944,7 +1944,7 @@ _ext_cmd_compare() {
 
 		if [[ ${#drift_rows[@]} -gt 0 ]]; then
 			mapfile -t drift_rows < <(printf '%s\n' "${drift_rows[@]}" | sort)
-			rt_print_section "── Version drift ──"
+			rt_print_section_block "── Version drift ──"
 			for row in "${drift_rows[@]}"; do
 				IFS='|' read -r target ext_id manifest_ver installed_ver_col <<<"$row"
 				rt_print_table_row "$target" \
@@ -1954,7 +1954,7 @@ _ext_cmd_compare() {
 		fi
 
 		if [[ ${#extra_rows[@]} -gt 0 ]]; then
-			rt_print_section "── Extra installed (not in manifest) ──"
+			rt_print_section_block "── Extra installed (not in manifest) ──"
 			for row in "${extra_rows[@]}"; do
 				IFS='|' read -r target count examples <<<"$row"
 				rt_print_table_row "$target" "${count} extra · ${examples:0:40}" extra

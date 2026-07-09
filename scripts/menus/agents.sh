@@ -16,8 +16,100 @@ _agents_menu_keys=(status repo bootstrap skills link agentboot doctor back)
 
 _agent_bootstrap_status_json() {
 	local ab_home="$1"
-	[[ -x "$ab_home/install.sh" ]] || return 1
-	( cd "$ab_home" && ./install.sh status --json 2>/dev/null )
+
+	[[ -d "$ab_home/src/agent_bootstrap" ]] || return 1
+
+	(
+		cd "$ab_home" || exit 1
+		python3 -m src.agent_bootstrap.cli --root "$ab_home" status --json 2>/dev/null
+	) || (
+		cd "$ab_home" || exit 1
+		./install.sh status --json 2>/dev/null
+	)
+}
+
+_agent_bootstrap_skills_fallback() {
+	local ab_home="$1"
+	local installed=0 enabled=0 lock_skills=0 bridge=0 doctor_issues=0
+	local lock_file="$HOME/.agents/.skill-lock.json"
+
+	if [[ -d "$HOME/.agents/skills" ]]; then
+		installed="$(find "$HOME/.agents/skills" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')"
+	fi
+	if [[ -f "$ab_home/skills.sources.yaml" ]]; then
+		enabled="$(python3 - "$ab_home/skills.sources.yaml" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+current = None
+count = 0
+
+def flush():
+    global count, current
+    if current and current.get("enabled", True) and current.get("repo") and current.get("skills"):
+        count += 1
+    current = None
+
+for raw in path.read_text(encoding="utf-8").splitlines():
+    line = raw.split("#", 1)[0].rstrip()
+    if not line.strip():
+        continue
+    if m := re.match(r"^\s*-\s+id:\s+(.+)$", line):
+        flush()
+        current = {"enabled": True, "repo": None, "skills": []}
+        continue
+    if not current:
+        continue
+    if m := re.match(r"^\s+repo:\s+(.+)$", line):
+        value = m.group(1).strip()
+        current["repo"] = None if value == "null" else value
+    elif re.match(r"^\s+enabled:\s+false\s*$", line):
+        current["enabled"] = False
+    elif m := re.match(r"^\s+-\s+(.+)$", line):
+        current["skills"].append(m.group(1).strip())
+
+flush()
+print(count)
+PY
+)"
+	fi
+	if [[ -f "$lock_file" ]]; then
+		lock_skills="$(python3 - "$lock_file" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+try:
+    data = json.loads(path.read_text(encoding="utf-8"))
+except (OSError, json.JSONDecodeError):
+    print(-1)
+    raise SystemExit(0)
+skills = data.get("skills")
+if isinstance(skills, dict):
+    print(len(skills))
+elif isinstance(skills, list):
+    print(len(skills))
+else:
+    print(0)
+PY
+)"
+	fi
+	if [[ -d "$HOME/.claude/skills" ]]; then
+		bridge="$(find "$HOME/.claude/skills" -mindepth 1 -maxdepth 1 -type l 2>/dev/null | wc -l | tr -d ' ')"
+	fi
+	if [[ ! -f "$ab_home/global/AGENTS.md" ]]; then
+		doctor_issues=1
+	fi
+
+	printf '%s\n' \
+		"installed=${installed}" \
+		"enabled=${enabled}" \
+		"lock_skills=${lock_skills}" \
+		"bridge=${bridge}" \
+		"doctor_issues=${doctor_issues}"
 }
 
 _agent_json_get() {
@@ -95,7 +187,7 @@ print_agents_status() {
 	local ab_home clone_home branch dirty link_target ab_result cols
 	local install_path agentboot_path dotfiles_root foreign_home=''
 	local remote sha sync_line ahead_behind node_ver npx_path
-	local status_json installed enabled lock_skills bridge doctor_issues
+	local status_json installed enabled lock_skills bridge doctor_issues fallback_line
 	local _agents_ok_count=0 _agents_check_count=0 _agents_miss_count=0
 
 	clone_home="$(agent_bootstrap_clone_home)" || clone_home="(unknown — dotfiles root not found)"
@@ -109,11 +201,9 @@ print_agents_status() {
 	cols="$(menu_tty_cols)"
 
 	{
-		printf '\n'
 		ui_print_header "Agents status" "Dotfiles › Agents" "$cols"
-		ui_print_report_table_columns
 
-		ui_print_report_section "── Repo & paths ──"
+		ui_print_report_section_block "── Repo & paths ──"
 		if [[ -n "$dotfiles_root" ]]; then
 			_agents_print_row "dotfiles repo" "$dotfiles_root" ok
 		else
@@ -160,7 +250,7 @@ print_agents_status() {
 		fi
 
 		if [[ -n "$ab_home" && -d "$ab_home/.git" ]]; then
-			ui_print_report_section "── Git ──"
+			ui_print_report_section_block "── Git ──"
 			branch="$(git -C "$ab_home" branch --show-current 2>/dev/null || echo '?')"
 			sha="$(git -C "$ab_home" rev-parse --short HEAD 2>/dev/null || echo '?')"
 			sync_line="$(git -C "$ab_home" status -sb 2>/dev/null | head -1 || true)"
@@ -185,11 +275,11 @@ print_agents_status() {
 				_agents_print_row "dirty files" "$dirty" check
 			fi
 		elif [[ -n "$ab_home" ]]; then
-			ui_print_report_section "── Git ──"
+			ui_print_report_section_block "── Git ──"
 			_agents_print_row "git" "not a repo" missing
 		fi
 
-		ui_print_report_section "── Toolchain ──"
+		ui_print_report_section_block "── Toolchain ──"
 		if command -v python3 >/dev/null 2>&1; then
 			_agents_print_row "python3" "$(command -v python3)" ok
 		else
@@ -210,37 +300,45 @@ print_agents_status() {
 		fi
 
 		if [[ -n "$ab_home" && -f "$ab_home/skills.sources.yaml" ]]; then
-			ui_print_report_section "── Skills ──"
-			status_json="$(_agent_bootstrap_status_json "$ab_home" || true)"
+			ui_print_report_section_block "── Skills ──"
+			status_json="$(_agent_bootstrap_status_json "$ab_home" 2>/dev/null || true)"
 			if [[ -n "$status_json" ]]; then
 				installed="$(_agent_json_get "$status_json" installed_skills 2>/dev/null || echo 0)"
 				enabled="$(_agent_json_get "$status_json" enabled_sources 2>/dev/null || echo 0)"
 				lock_skills="$(_agent_json_get "$status_json" global_lock_skills 2>/dev/null || echo 0)"
 				bridge="$(_agent_json_get "$status_json" claude_bridge_links 2>/dev/null || echo 0)"
 				doctor_issues="$(_agent_json_get "$status_json" doctor_issue_count 2>/dev/null || echo 0)"
-
-				_agents_print_row "skills manifest" "${enabled} enabled source(s)" ok
-				_agents_print_row "installed skills" "$installed on disk" \
-					"$([[ "$installed" -gt 0 ]] && echo ok || echo check)"
-				if [[ "$lock_skills" -gt 0 ]]; then
-					_agents_print_row "global skill lock" \
-						"~/.agents/.skill-lock.json ($lock_skills pinned)" ok
-				else
-					_agents_print_row "global skill lock" "~/.agents/.skill-lock.json" check
-				fi
-				_agents_print_row "claude bridge" "$bridge symlink(s)" \
-					"$([[ "$bridge" -gt 0 ]] && echo ok || echo check)"
-				if [[ -f "$ab_home/global/AGENTS.md" ]]; then
-					_agents_print_row "global AGENTS.md" "global/AGENTS.md" ok
-				else
-					_agents_print_row "global AGENTS.md" "global/AGENTS.md" missing
-				fi
-				_agents_print_row "doctor" \
-					"$([[ "$doctor_issues" -eq 0 ]] && echo 'no issues' || echo "$doctor_issues issue(s)")" \
-					"$([[ "$doctor_issues" -eq 0 ]] && echo ok || echo check)"
 			else
-				_agents_print_row "skills status" "status --json unavailable" check
+				while IFS= read -r fallback_line; do
+					case "$fallback_line" in
+					installed=*) installed="${fallback_line#installed=}" ;;
+					enabled=*) enabled="${fallback_line#enabled=}" ;;
+					lock_skills=*) lock_skills="${fallback_line#lock_skills=}" ;;
+					bridge=*) bridge="${fallback_line#bridge=}" ;;
+					doctor_issues=*) doctor_issues="${fallback_line#doctor_issues=}" ;;
+					esac
+				done < <(_agent_bootstrap_skills_fallback "$ab_home")
 			fi
+
+			_agents_print_row "skills manifest" "${enabled} enabled source(s)" ok
+			_agents_print_row "installed skills" "$installed on disk" \
+				"$([[ "$installed" -gt 0 ]] && echo ok || echo check)"
+			if [[ "$lock_skills" -gt 0 ]]; then
+				_agents_print_row "global skill lock" \
+					"~/.agents/.skill-lock.json ($lock_skills pinned)" ok
+			else
+				_agents_print_row "global skill lock" "~/.agents/.skill-lock.json" check
+			fi
+			_agents_print_row "claude bridge" "$bridge symlink(s)" \
+				"$([[ "$bridge" -gt 0 ]] && echo ok || echo check)"
+			if [[ -f "$ab_home/global/AGENTS.md" ]]; then
+				_agents_print_row "global AGENTS.md" "global/AGENTS.md" ok
+			else
+				_agents_print_row "global AGENTS.md" "global/AGENTS.md" missing
+			fi
+			_agents_print_row "doctor" \
+				"$([[ "$doctor_issues" -eq 0 ]] && echo 'no issues' || echo "$doctor_issues issue(s)")" \
+				"$([[ "$doctor_issues" -eq 0 ]] && echo ok || echo check)"
 		fi
 
 		ui_print_report_rollup "$_agents_ok_count" "$_agents_check_count" "$_agents_miss_count"

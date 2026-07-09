@@ -3,7 +3,7 @@
 # Safe to source from dotfiles menus (via ui.sh) or bin/dotfiles standalone.
 
 _RT_LABEL_W=22
-_RT_DETAIL_W=28
+_RT_DETAIL_W=40
 _RT_RESULT_W=10
 
 _rt_ensure_colors() {
@@ -103,6 +103,7 @@ rt_print_header() {
 	if [[ -n "$breadcrumb" ]]; then
 		printf '  %s%s%s\n' "$C_DIM" "$breadcrumb" "$C_RESET"
 	fi
+	printf '\n'
 }
 
 rt_print_section() {
@@ -110,6 +111,16 @@ rt_print_section() {
 
 	_rt_ensure_colors
 	printf '  %s%s%s\n' "$C_DIM" "$label" "$C_RESET"
+}
+
+# Blank line, section title, blank line, then column header — easier to scan than one long table.
+rt_print_section_block() {
+	local label="$1"
+
+	printf '\n'
+	rt_print_section "$label"
+	printf '\n'
+	rt_print_table_columns
 }
 
 rt_print_table_columns() {

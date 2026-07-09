@@ -89,6 +89,7 @@ ui_print_header() {
 	if [[ -n "$breadcrumb" ]]; then
 		printf '  %s%s%s\e[K\n' "$C_DIM" "$(menu_fit_indent "$breadcrumb" "$cols" 2)" "$C_RESET"
 	fi
+	printf '\e[K\n'
 }
 
 ui_print_section() {
@@ -320,6 +321,7 @@ ui_print_plan_row() {
 # Report tables — shared design system (see scripts/lib/report_table.sh).
 ui_print_report_header() { rt_print_header "$@"; }
 ui_print_report_section() { rt_print_section "$@"; }
+ui_print_report_section_block() { rt_print_section_block "$@"; }
 ui_print_report_table_columns() { rt_print_table_columns; }
 ui_print_report_table_row() { rt_print_table_row "$@"; }
 ui_print_report_rollup() { rt_print_rollup "$@"; }
