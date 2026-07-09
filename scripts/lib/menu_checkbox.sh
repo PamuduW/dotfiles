@@ -95,18 +95,29 @@ _menu_cb_draw_row() {
 	label_room=$((cols - status_room - 4))
 	((label_room < 12)) && label_room=12
 
+	prefix=' '
+	[[ $idx -eq $cur ]] && prefix='>'
+
 	printf '  '
-	if [[ $idx -eq $cur ]]; then
-		printf '%s>%s ' "$C_BOLD" "$C_RESET"
-	else
-		printf '   '
-	fi
 	if [[ "${MENU_CB_CHECKED[$idx]:-0}" -eq 1 ]]; then
-		printf '%s' "$(menu_fit_line "$(printf '%2d. [%s] %s' "$((idx + 1))" "$mark" "${MENU_CB_LABELS[$idx]}")" "$label_room")"
+		if [[ $idx -eq $cur ]]; then
+			printf '%s%s%s' "$C_BOLD" \
+				"$(menu_fit_line "$(printf '%s%2d. [%s] %s' "$prefix" "$((idx + 1))" "$mark" "${MENU_CB_LABELS[$idx]}")" "$label_room")" \
+				"$C_RESET"
+		else
+			printf '%s' \
+				"$(menu_fit_line "$(printf '%s%2d. [%s] %s' "$prefix" "$((idx + 1))" "$mark" "${MENU_CB_LABELS[$idx]}")" "$label_room")"
+		fi
 	else
-		printf '%s%s%s' "$C_DIM" \
-			"$(menu_fit_line "$(printf '%2d. [%s] %s' "$((idx + 1))" "$mark" "${MENU_CB_LABELS[$idx]}")" "$label_room")" \
-			"$C_RESET"
+		if [[ $idx -eq $cur ]]; then
+			printf '%s%s%s%s' "$C_BOLD" "$C_DIM" \
+				"$(menu_fit_line "$(printf '%s%2d. [%s] %s' "$prefix" "$((idx + 1))" "$mark" "${MENU_CB_LABELS[$idx]}")" "$label_room")" \
+				"$C_RESET"
+		else
+			printf '%s%s%s' "$C_DIM" \
+				"$(menu_fit_line "$(printf '%s%2d. [%s] %s' "$prefix" "$((idx + 1))" "$mark" "${MENU_CB_LABELS[$idx]}")" "$label_room")" \
+				"$C_RESET"
+		fi
 	fi
 	printf '%s' "$status_sep"
 	ui_color_word "$status" "$status_ctx"

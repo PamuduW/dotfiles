@@ -381,14 +381,15 @@ _draw_component_menu() {
 		[[ "${COMP_ON[$key]}" -eq 0 ]] && mark=" "
 		note=""
 		[[ "${COMP_DEPS[$i]}" -ne -1 ]] && note="  (requires #$((COMP_DEPS[i] + 1)))"
-		row="$(printf " %2d. [%s] %s%s" "$((i + 1))" "$mark" "${COMP_LABELS[$i]}" "$note")"
+		prefix=' '
+		[[ $i -eq $cur ]] && prefix='>'
+		row="$(printf '%s%2d. [%s] %s%s' "$prefix" "$((i + 1))" "$mark" "${COMP_LABELS[$i]}" "$note")"
 
 		if [[ $i -eq $cur ]]; then
-			printf '  %s>%s ' "$C_BOLD" "$C_RESET"
 			if [[ "${COMP_ON[$key]}" -eq 1 ]]; then
-				printf '%s\e[K\n' "$(_fit_menu_line "$row" "$((cols - 4))")"
+				printf '  %s%s%s\e[K\n' "$C_BOLD" "$(_fit_menu_line "$row" "$((cols - 2))")" "$C_RESET"
 			else
-				printf '%s%s%s\e[K\n' "$C_DIM" "$(_fit_menu_line "$row" "$((cols - 4))")" "$C_RESET"
+				printf '  %s%s%s%s\e[K\n' "$C_BOLD" "$C_DIM" "$(_fit_menu_line "$row" "$((cols - 2))")" "$C_RESET"
 			fi
 		else
 			if [[ "${COMP_ON[$key]}" -eq 1 ]]; then
