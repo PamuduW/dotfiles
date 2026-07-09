@@ -85,7 +85,7 @@ ui_print_header() {
 		cols="$(menu_tty_cols)"
 	fi
 
-	printf '  %s%s%s%s\e[K\n' "$C_BOLD" "$C_CYAN" "$(menu_fit_indent "=== ${title} ===" "$cols" 2)" "$C_RESET"
+	printf '  %s%s%s\e[K\n' "$C_BOLD" "$(menu_fit_indent "=== ${title} ===" "$cols" 2)" "$C_RESET"
 	if [[ -n "$breadcrumb" ]]; then
 		printf '  %s%s%s\e[K\n' "$C_DIM" "$(menu_fit_indent "$breadcrumb" "$cols" 2)" "$C_RESET"
 	fi
@@ -99,7 +99,7 @@ ui_print_section() {
 		cols="$(menu_tty_cols)"
 	fi
 
-	printf '  %s%s%s%s\e[K\n' "$C_DIM" "$C_MAGENTA" "$(menu_fit_indent "$label" "$cols" 2)" "$C_RESET"
+	printf '  %s%s%s\e[K\n' "$C_DIM" "$(menu_fit_indent "$label" "$cols" 2)" "$C_RESET"
 }
 
 ui_color_word() {
@@ -126,4 +126,51 @@ ui_color_word() {
 		printf '%s' "$word"
 		;;
 	esac
+}
+
+ui_color_result() {
+	local result="$1"
+
+	case "$result" in
+	installed | configured)
+		printf '%s%s%s' "$C_GREEN" "$result" "$C_RESET"
+		;;
+	missing | failed)
+		printf '%s%s%s' "$C_RED" "$result" "$C_RESET"
+		;;
+	check)
+		printf '%s%s%s' "$C_YELLOW" "$result" "$C_RESET"
+		;;
+	skipped*)
+		printf '%s%s%s' "$C_DIM" "$result" "$C_RESET"
+		;;
+	*)
+		printf '%s' "$result"
+		;;
+	esac
+}
+
+ui_print_component_table_row() {
+	local short_label="$1"
+	local detail="$2"
+	local result="$3"
+
+	printf '%-22s | %-32s | ' "$short_label" "${detail:0:32}"
+	ui_color_result "$result"
+	printf '\n'
+}
+
+# Execution plan row: enabled components in normal text, skipped in dim.
+ui_print_plan_row() {
+	local label="$1"
+	local detail="$2"
+	local active="$3"
+
+	printf '  %-18s: ' "$label"
+	if [[ "$active" -eq 1 ]]; then
+		printf '%s\n' "$detail"
+	else
+		ui_color_word "$detail" "dim"
+		printf '\n'
+	fi
 }

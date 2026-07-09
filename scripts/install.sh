@@ -365,7 +365,7 @@ _draw_component_menu() {
 	local cols=$4
 	local count="${#COMP_KEYS[@]}"
 	local page total_pages start end
-	local i key mark note row prefix
+	local i key mark note row
 
 	page="$(_component_menu_page_for_cursor "$cur" "$page_size")"
 	total_pages="$(_component_menu_page_count "$count" "$page_size")"
@@ -383,12 +383,21 @@ _draw_component_menu() {
 		[[ "${COMP_DEPS[$i]}" -ne -1 ]] && note="  (requires #$((COMP_DEPS[i] + 1)))"
 		prefix=" "
 		[[ $i -eq $cur ]] && prefix=">"
-		row="$(printf "%s %2d. [%s] %s%s" "$prefix" "$((i + 1))" "$mark" "${COMP_LABELS[$i]}" "$note")"
+		row="$(printf " %2d. [%s] %s%s" "$((i + 1))" "$mark" "${COMP_LABELS[$i]}" "$note")"
 
 		if [[ $i -eq $cur ]]; then
-			printf '  %s>%s %s%s\e[K\n' "$C_GREEN" "$C_RESET" "$C_CYAN" "$(_fit_menu_line "$(printf '%2d. [%s] %s%s' "$((i + 1))" "$mark" "${COMP_LABELS[$i]}" "$note")" "$((cols - 4))")" "$C_RESET"
+			printf '  %s>%s ' "$C_BOLD" "$C_RESET"
+			if [[ "${COMP_ON[$key]}" -eq 1 ]]; then
+				printf '%s\e[K\n' "$(_fit_menu_line "$row" "$((cols - 4))")"
+			else
+				printf '%s%s%s\e[K\n' "$C_DIM" "$(_fit_menu_line "$row" "$((cols - 4))")" "$C_RESET"
+			fi
 		else
-			printf '  %s%s%s\e[K\n' "$C_DIM" "$(_fit_menu_line "$row" "$((cols - 2))")" "$C_RESET"
+			if [[ "${COMP_ON[$key]}" -eq 1 ]]; then
+				printf '  %s\e[K\n' "$(_fit_menu_line "$row" "$((cols - 2))")"
+			else
+				printf '  %s%s%s\e[K\n' "$C_DIM" "$(_fit_menu_line "$row" "$((cols - 2))")" "$C_RESET"
+			fi
 		fi
 	done
 
@@ -400,7 +409,7 @@ _draw_component_menu() {
 
 	local desc_idx
 	for ((desc_idx = 0; desc_idx < _COMP_DESC_LINES; desc_idx++)); do
-		printf '  %s%s%s\e[K\n' "$C_CYAN" \
+		printf '  %s%s%s\e[K\n' "$C_DIM" \
 			"$(_fit_menu_line_with_indent "$(_component_menu_description_line "$cur" "$desc_idx")" "$cols" 2)" "$C_RESET"
 	done
 }
@@ -411,6 +420,7 @@ component_menu() {
 	local status_msg=""
 	local rows cols page_size menu_lines action page
 	local cancelled=false
+	local prev_page=-1 prev_lines=0
 
 	rows="$(_menu_tty_rows)"
 	cols="$(_menu_tty_cols)"
@@ -422,6 +432,8 @@ component_menu() {
 		tput civis 2>/dev/null || true
 		_menu_clear_screen
 		_draw_component_menu "$cursor" "$page_size" "" "$cols"
+		prev_page="$page"
+		prev_lines="$menu_lines"
 
 		while true; do
 			action="$(_read_component_menu_key)"
@@ -459,10 +471,12 @@ component_menu() {
 				;;
 			esac
 
-			_menu_clear_screen
-			_draw_component_menu "$cursor" "$page_size" "$status_msg" "$cols"
+			prev_page="$page"
+			prev_lines="$menu_lines"
 			page="$(_component_menu_page_for_cursor "$cursor" "$page_size")"
 			menu_lines="$(_component_menu_render_lines "$count" "$page_size" "$page")"
+			menu_redraw_prepare "$prev_lines" "$menu_lines" "$prev_page" "$page"
+			_draw_component_menu "$cursor" "$page_size" "$status_msg" "$cols"
 		done
 		tput cnorm 2>/dev/null || true
 	} >/dev/tty
@@ -472,139 +486,109 @@ component_menu() {
 }
 
 show_plan() {
-	echo ""
-	echo "=== Execution Plan ==="
-	echo ""
+	local cols pkg_count
+	cols="$(menu_tty_cols)"
 
-	if is_on git_identity; then
-		printf "  %-18s: %s <%s>\n" "Git identity" "$SETUP_GIT_NAME" "$SETUP_GIT_EMAIL"
-	elif git config --global --list 2>/dev/null | grep -q '^includeif\.'; then
-		printf "  %-18s: skip (conditional includes detected)\n" "Git identity"
-	else
-		printf "  %-18s: skip\n" "Git identity"
-	fi
+	{
+		ui_clear
+		ui_print_header "Execution Plan" "" "$cols"
+		printf '\n'
 
-	if is_on system_packages; then
-		local pkg_count
-		pkg_count="$(read_packages_by_tags core cli system | wc -l)"
-		printf "  %-18s: %d packages (@core @cli @system)\n" "System packages" "$pkg_count"
-	else
-		printf "  %-18s: skip\n" "System packages"
-	fi
-
-	if is_on python; then
-		printf "  %-18s: python3, pip, venv\n" "Python"
-	else
-		printf "  %-18s: skip\n" "Python"
-	fi
-
-	if is_on powershell; then
-		printf "  %-18s: Microsoft repo + powershell\n" "PowerShell"
-	else
-		printf "  %-18s: skip\n" "PowerShell"
-	fi
-
-	if is_on go; then
-		printf "  %-18s: asdf golang latest\n" "Go"
-	else
-		printf "  %-18s: skip\n" "Go"
-	fi
-
-	if is_on nodejs; then
-		printf "  %-18s: v24 via nvm\n" "Node.js"
-	else
-		printf "  %-18s: skip\n" "Node.js"
-	fi
-
-	if is_on direnv; then
-		printf "  %-18s: install/update + bash hook\n" "direnv"
-	else
-		printf "  %-18s: skip\n" "direnv"
-	fi
-
-	if is_on docker; then
-		printf "  %-18s: Docker Engine CE + docker group\n" "Docker"
-	else
-		printf "  %-18s: skip\n" "Docker"
-	fi
-
-	if is_on portainer; then
-		printf "  %-18s: Portainer CE (stopped by default)\n" "Portainer"
-	else
-		printf "  %-18s: skip\n" "Portainer"
-	fi
-
-	if is_on lazygit; then
-		printf "  %-18s: latest from GitHub\n" "lazygit"
-	else
-		printf "  %-18s: skip\n" "lazygit"
-	fi
-
-	if is_on lazydocker; then
-		printf "  %-18s: latest from GitHub\n" "lazydocker"
-	else
-		printf "  %-18s: skip\n" "lazydocker"
-	fi
-
-	if is_on cursor_cli; then
-		printf "  %-18s: cursor.com installer\n" "Cursor CLI"
-	else
-		printf "  %-18s: skip\n" "Cursor CLI"
-	fi
-
-	if is_on codex_cli; then
-		printf "  %-18s: npm @openai/codex\n" "Codex CLI"
-	else
-		printf "  %-18s: skip\n" "Codex CLI"
-	fi
-
-	if is_on claude_cli; then
-		printf "  %-18s: claude.ai installer\n" "Claude CLI"
-	else
-		printf "  %-18s: skip\n" "Claude CLI"
-	fi
-
-	if is_on copilot_cli; then
-		printf "  %-18s: gh.io/copilot-install\n" "Copilot CLI"
-	else
-		printf "  %-18s: skip\n" "Copilot CLI"
-	fi
-
-	if is_on monaspace_fonts; then
-		printf "  %-18s: Monaspace Nerd Fonts -> ~/.local/share/fonts/\n" "Monaspace fonts"
-	else
-		printf "  %-18s: skip\n" "Monaspace fonts"
-	fi
-
-	if is_on ssh_key; then
-		if [[ -f "$HOME/.ssh/id_ed25519" ]]; then
-			printf "  %-18s: already exists, will skip\n" "SSH key"
+		if is_on git_identity; then
+			ui_print_plan_row "Git identity" "$SETUP_GIT_NAME <$SETUP_GIT_EMAIL>" 1
+		elif git config --global --list 2>/dev/null | grep -q '^includeif\.'; then
+			ui_print_plan_row "Git identity" "skip (conditional includes detected)" 0
 		else
-			printf "  %-18s: generate ed25519 -> ~/.ssh/github-setup.txt\n" "SSH key"
+			ui_print_plan_row "Git identity" "skip" 0
 		fi
-	else
-		printf "  %-18s: skip\n" "SSH key"
-	fi
 
-	if is_on dotfiles; then
-		printf "  %-18s: stow bash, bin, readline\n" "Dotfiles"
-	else
-		printf "  %-18s: skip\n" "Dotfiles"
-	fi
+		if is_on system_packages; then
+			pkg_count="$(read_packages_by_tags core cli system | wc -l)"
+			ui_print_plan_row "System packages" "${pkg_count} packages (@core @cli @system)" 1
+		else
+			ui_print_plan_row "System packages" "skip" 0
+		fi
 
-	if is_on wsl_conf; then
-		printf "  %-18s: systemd=true, appendWindowsPath=true\n" "WSL config"
-	else
-		printf "  %-18s: skip\n" "WSL config"
-	fi
+		is_on python \
+			&& ui_print_plan_row "Python" "python3, pip, venv" 1 \
+			|| ui_print_plan_row "Python" "skip" 0
 
-	if is_on git_credential; then
-		printf "  %-18s: Windows Credential Manager\n" "Git credential"
-	else
-		printf "  %-18s: skip\n" "Git credential"
-	fi
+		is_on powershell \
+			&& ui_print_plan_row "PowerShell" "Microsoft repo + powershell" 1 \
+			|| ui_print_plan_row "PowerShell" "skip" 0
 
-	echo ""
+		is_on go \
+			&& ui_print_plan_row "Go" "asdf golang latest" 1 \
+			|| ui_print_plan_row "Go" "skip" 0
+
+		is_on nodejs \
+			&& ui_print_plan_row "Node.js" "v24 via nvm" 1 \
+			|| ui_print_plan_row "Node.js" "skip" 0
+
+		is_on direnv \
+			&& ui_print_plan_row "direnv" "install/update + bash hook" 1 \
+			|| ui_print_plan_row "direnv" "skip" 0
+
+		is_on docker \
+			&& ui_print_plan_row "Docker" "Docker Engine CE + docker group" 1 \
+			|| ui_print_plan_row "Docker" "skip" 0
+
+		is_on portainer \
+			&& ui_print_plan_row "Portainer" "Portainer CE (stopped by default)" 1 \
+			|| ui_print_plan_row "Portainer" "skip" 0
+
+		is_on lazygit \
+			&& ui_print_plan_row "lazygit" "latest from GitHub" 1 \
+			|| ui_print_plan_row "lazygit" "skip" 0
+
+		is_on lazydocker \
+			&& ui_print_plan_row "lazydocker" "latest from GitHub" 1 \
+			|| ui_print_plan_row "lazydocker" "skip" 0
+
+		is_on cursor_cli \
+			&& ui_print_plan_row "Cursor CLI" "cursor.com installer" 1 \
+			|| ui_print_plan_row "Cursor CLI" "skip" 0
+
+		is_on codex_cli \
+			&& ui_print_plan_row "Codex CLI" "npm @openai/codex" 1 \
+			|| ui_print_plan_row "Codex CLI" "skip" 0
+
+		is_on claude_cli \
+			&& ui_print_plan_row "Claude CLI" "claude.ai installer" 1 \
+			|| ui_print_plan_row "Claude CLI" "skip" 0
+
+		is_on copilot_cli \
+			&& ui_print_plan_row "Copilot CLI" "gh.io/copilot-install" 1 \
+			|| ui_print_plan_row "Copilot CLI" "skip" 0
+
+		is_on monaspace_fonts \
+			&& ui_print_plan_row "Monaspace fonts" "Monaspace Nerd Fonts -> ~/.local/share/fonts/" 1 \
+			|| ui_print_plan_row "Monaspace fonts" "skip" 0
+
+		if is_on ssh_key; then
+			if [[ -f "$HOME/.ssh/id_ed25519" ]]; then
+				ui_print_plan_row "SSH key" "already exists, will skip" 1
+			else
+				ui_print_plan_row "SSH key" "generate ed25519 -> ~/.ssh/github-setup.txt" 1
+			fi
+		else
+			ui_print_plan_row "SSH key" "skip" 0
+		fi
+
+		is_on dotfiles \
+			&& ui_print_plan_row "Dotfiles" "stow bash, bin, readline" 1 \
+			|| ui_print_plan_row "Dotfiles" "skip" 0
+
+		is_on wsl_conf \
+			&& ui_print_plan_row "WSL config" "systemd=true, appendWindowsPath=true" 1 \
+			|| ui_print_plan_row "WSL config" "skip" 0
+
+		is_on git_credential \
+			&& ui_print_plan_row "Git credential" "Windows Credential Manager" 1 \
+			|| ui_print_plan_row "Git credential" "skip" 0
+
+		printf '\n'
+	} >/dev/tty
 }
 
 # confirm_loop and run_initial_setup_flow live in scripts/menus/initial_setup.sh
@@ -878,6 +862,7 @@ install_go_via_asdf() {
 	log_step "Install Go latest via asdf"
 	_run_quiet_command "Go install" asdf install golang latest
 	_run_quiet_command "Go version selection" asdf set -u golang latest
+	asdf reshim golang 2>/dev/null || true
 	log_ok "Go installed and set for user via asdf"
 }
 
@@ -1714,7 +1699,7 @@ print_install_summary() {
 		installed | configured) ((++ok_count)) ;;
 		missing | check) ((++miss_count)) ;;
 		esac
-		printf '%-22s | %-32s | %s\n' "$short_label" "${detail:0:32}" "$result"
+		ui_print_component_table_row "$short_label" "$detail" "$result"
 	done
 
 	echo ""

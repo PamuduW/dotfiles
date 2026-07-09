@@ -90,13 +90,17 @@ _menu_cb_draw_row() {
 
 	printf '  '
 	if [[ $idx -eq $cur ]]; then
-		printf '%s>%s ' "$C_GREEN" "$C_RESET"
-		printf '%s' "$C_CYAN"
+		printf '%s>%s ' "$C_BOLD" "$C_RESET"
 	else
-		printf '   %s' "$C_DIM"
+		printf '   '
 	fi
-	printf '%s' "$(menu_fit_line "$(printf '%2d. [%s] %s' "$((idx + 1))" "$mark" "${MENU_CB_LABELS[$idx]}")" "$label_room")"
-	printf '%s' "$C_RESET"
+	if [[ "${MENU_CB_CHECKED[$idx]:-0}" -eq 1 ]]; then
+		printf '%s' "$(menu_fit_line "$(printf '%2d. [%s] %s' "$((idx + 1))" "$mark" "${MENU_CB_LABELS[$idx]}")" "$label_room")"
+	else
+		printf '%s%s%s' "$C_DIM" \
+			"$(menu_fit_line "$(printf '%2d. [%s] %s' "$((idx + 1))" "$mark" "${MENU_CB_LABELS[$idx]}")" "$label_room")" \
+			"$C_RESET"
+	fi
 	printf '%s' "$status_sep"
 	ui_color_word "$status" "$status_ctx"
 	printf '\e[K\n'
@@ -137,8 +141,8 @@ menu_checkbox_run() {
 	local count="${#MENU_CB_LABELS[@]}"
 	local cursor=0
 	local status_msg=''
-	local rows cols page_size page action
-	local i
+	local rows cols page_size page menu_lines action
+	local i prev_page=-1 prev_lines=0
 
 	if ((count == 0)); then
 		return 1
@@ -151,7 +155,11 @@ menu_checkbox_run() {
 	{
 		menu_cursor_hide
 		ui_clear
+		page="$(_menu_cb_page_for_cursor "$cursor" "$page_size")"
+		menu_lines="$(_menu_cb_render_lines "$count" "$page_size" "$page")"
 		_menu_cb_draw "$cursor" "$page_size" "" "$cols"
+		prev_page="$page"
+		prev_lines="$menu_lines"
 
 		while true; do
 			action="$(menu_read_key)"
@@ -211,7 +219,11 @@ menu_checkbox_run() {
 				;;
 			esac
 
-			ui_clear
+			prev_page="$page"
+			prev_lines="$menu_lines"
+			page="$(_menu_cb_page_for_cursor "$cursor" "$page_size")"
+			menu_lines="$(_menu_cb_render_lines "$count" "$page_size" "$page")"
+			menu_redraw_prepare "$prev_lines" "$menu_lines" "$prev_page" "$page"
 			_menu_cb_draw "$cursor" "$page_size" "$status_msg" "$cols"
 		done
 
