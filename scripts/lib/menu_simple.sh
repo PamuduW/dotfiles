@@ -40,10 +40,11 @@ _menu_simple_move_cursor() {
 
 _menu_simple_menu_lines() {
 	local count="$1"
-	local lines=$((count + 4))
+	# header (title + trailing blank) + hint + spacer + items + footer blank
+	local lines=$((count + 5))
 
 	if [[ -n "${MENU_SIMPLE_BREADCRUMB:-}" ]]; then
-		lines=$((count + 5))
+		lines=$((count + 6))
 	fi
 	printf '%s\n' "$lines"
 }

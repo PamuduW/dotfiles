@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Checkbox menu with paging, bulk toggle, and colored status column.
 
-_MENU_CB_FIXED_ROWS=7
+_MENU_CB_FIXED_ROWS=8
 _MENU_CB_STATUS_COL_WIDTH=16
 
 _menu_cb_index_width() {
