@@ -111,6 +111,8 @@ apt_upgradable_count() {
 		return
 	fi
 	local count
+	# Refresh indices so the report matches what upgrade_apt will apply.
+	sudo apt-get update -qq 2>/dev/null || true
 	count="$(apt-get -s upgrade 2>/dev/null | grep -c '^Inst' || true)"
 	echo "${count:-0}"
 }
@@ -162,13 +164,8 @@ check_cursor_cli() {
 	local installed available action upgradable=0
 	installed="$(cursor_installed_version)"
 	if cursor_is_installed; then
-		if command -v agent >/dev/null 2>&1; then
-			available="latest (via agent update)"
-		else
-			available="latest (via cursor update)"
-		fi
-		action="refresh"
-		upgradable=1
+		available="—"
+		action="up to date"
 	else
 		available="—"
 		action="skip"
@@ -215,10 +212,11 @@ check_codex_cli() {
 		available="$(codex_available_version)"
 		if [[ "$available" != "—" && "$installed" != *"${available}"* ]]; then
 			action="upgrade"
+			upgradable=1
 		else
-			action="refresh"
+			available="${available:-—}"
+			action="up to date"
 		fi
-		upgradable=1
 	fi
 	printf '%s|%s|%s|%s\n' "Codex CLI" "$installed" "$available" "$action"
 	[[ $upgradable -eq 1 ]]
@@ -249,9 +247,8 @@ check_claude_cli() {
 		available="—"
 		action="skip"
 	else
-		available="latest (via claude update)"
-		action="refresh"
-		upgradable=1
+		available="—"
+		action="up to date"
 	fi
 	printf '%s|%s|%s|%s\n' "Claude CLI" "$installed" "$available" "$action"
 	[[ $upgradable -eq 1 ]]
@@ -284,9 +281,8 @@ check_copilot_cli() {
 	local installed available action upgradable=0
 	installed="$(copilot_installed_version)"
 	if copilot_is_installed; then
-		available="latest (via copilot update)"
-		action="refresh"
-		upgradable=1
+		available="—"
+		action="up to date"
 	else
 		available="—"
 		action="skip"
@@ -861,7 +857,8 @@ print_report_table() {
 	for row in "${rows[@]}"; do
 		IFS='|' read -r _ _ _ action <<<"$row"
 		case "$action" in
-		upgrade | upgrade* | refresh | pull*) ((++upgrade_count)) ;;
+		upgrade | upgrade*) ((++upgrade_count)) ;;
+		pull*) ((++upgrade_count)) ;;
 		esac
 	done
 
