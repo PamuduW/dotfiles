@@ -51,10 +51,15 @@ require_agent_bootstrap_installer() {
 
 print_agents_status() {
 	local ab_home clone_home branch dirty link_target ab_result cols
-	local install_path agentboot_path dotfiles_root
+	local install_path agentboot_path dotfiles_root foreign_home=''
 
-	ab_home="$(resolve_agent_bootstrap_home || true)"
 	clone_home="$(agent_bootstrap_clone_home)" || clone_home="(unknown — dotfiles root not found)"
+	if [[ -n "${AGENT_BOOTSTRAP_HOME:-}" && "$AGENT_BOOTSTRAP_HOME" != "$clone_home" && \
+		-x "${AGENT_BOOTSTRAP_HOME}/install.sh" ]]; then
+		foreign_home="$AGENT_BOOTSTRAP_HOME"
+	fi
+	sync_agent_bootstrap_home_env || true
+	ab_home="$(resolve_agent_bootstrap_home || true)"
 	dotfiles_root="$(dotfiles_repo_root || true)"
 	cols="$(menu_tty_cols)"
 
@@ -76,7 +81,12 @@ print_agents_status() {
 		else
 			ab_result=missing
 		fi
-		ui_print_check_result_path_row "agent_bootstrap" "$ab_result" "${ab_home:-$clone_home}" "$cols"
+		ui_print_check_result_path_row "agent_bootstrap" "$ab_result" "$clone_home" "$cols"
+
+		if [[ -n "$foreign_home" && "$foreign_home" != "$clone_home" ]] && \
+			[[ -x "$foreign_home/install.sh" ]]; then
+			ui_print_check_result_path_row "other install" check "$foreign_home" "$cols"
+		fi
 
 		if [[ -n "$ab_home" && -d "$ab_home/.git" ]]; then
 			branch="$(git -C "$ab_home" branch --show-current 2>/dev/null || echo '?')"
@@ -147,6 +157,7 @@ _agents_dispatch() {
 	local action="$1"
 	local ab_home clone_home answer target_dir agentboot_args=()
 
+	sync_agent_bootstrap_home_env || true
 	ab_home="$(resolve_agent_bootstrap_home || true)"
 	clone_home="$(agent_bootstrap_clone_home)" || {
 		echo "Error: cannot resolve dotfiles repo — cannot locate agent_bootstrap sibling path." >&2

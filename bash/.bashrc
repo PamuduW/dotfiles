@@ -133,14 +133,6 @@ fi
 if [[ -f "$_ab_paths_sh" ]]; then
 	# shellcheck source=/dev/null
 	source "$_ab_paths_sh"
-	if [[ -n "${AGENT_BOOTSTRAP_HOME:-}" && ! -x "${AGENT_BOOTSTRAP_HOME}/install.sh" ]]; then
-		unset AGENT_BOOTSTRAP_HOME
-	fi
-	if [[ -z "${AGENT_BOOTSTRAP_HOME:-}" ]]; then
-		AGENT_BOOTSTRAP_HOME="$(resolve_agent_bootstrap_home 2>/dev/null || true)"
-		if [[ -n "$AGENT_BOOTSTRAP_HOME" ]]; then
-			export AGENT_BOOTSTRAP_HOME
-		fi
-	fi
+	sync_agent_bootstrap_home_env || true
 	unset _ab_paths_sh _ab_bashrc_resolved
 fi

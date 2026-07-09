@@ -25,7 +25,7 @@ dotfiles_repo_root() {
 	return 1
 }
 
-# Default clone/install location: immediate parent of dotfiles + agent_bootstrap.
+# Canonical location: immediate parent of dotfiles + agent_bootstrap.
 agent_bootstrap_sibling_home() {
 	local dotfiles_root="${1:-}"
 	local sibling
@@ -41,7 +41,7 @@ agent_bootstrap_sibling_home() {
 	printf '%s\n' "$sibling"
 }
 
-# Optional override for non-default layouts; otherwise same as sibling.
+# Where clone/update should target.
 agent_bootstrap_clone_home() {
 	if [[ -n "${AGENT_BOOTSTRAP_CLONE_HOME:-}" ]]; then
 		printf '%s\n' "$AGENT_BOOTSTRAP_CLONE_HOME"
@@ -50,19 +50,36 @@ agent_bootstrap_clone_home() {
 	agent_bootstrap_sibling_home
 }
 
-# Installed repo: explicit AGENT_BOOTSTRAP_HOME, else sibling when install.sh exists.
+# Installed repo: only the canonical sibling (ignore stale AGENT_BOOTSTRAP_HOME elsewhere).
 resolve_agent_bootstrap_home() {
-	local sibling
+	local canonical
 
-	if [[ -n "${AGENT_BOOTSTRAP_HOME:-}" && -x "${AGENT_BOOTSTRAP_HOME}/install.sh" ]]; then
-		printf '%s\n' "$AGENT_BOOTSTRAP_HOME"
+	canonical="$(agent_bootstrap_sibling_home)" || return 1
+
+	if [[ -n "${AGENT_BOOTSTRAP_HOME:-}" && "$AGENT_BOOTSTRAP_HOME" != "$canonical" ]]; then
+		if [[ "${AGENT_BOOTSTRAP_ALLOW_OVERRIDE:-}" == 1 && -x "${AGENT_BOOTSTRAP_HOME}/install.sh" ]]; then
+			printf '%s\n' "$AGENT_BOOTSTRAP_HOME"
+			return 0
+		fi
+	fi
+
+	if [[ -x "$canonical/install.sh" ]]; then
+		printf '%s\n' "$canonical"
+		return 0
+	fi
+	return 1
+}
+
+# Re-export AGENT_BOOTSTRAP_HOME only when install.sh exists at the canonical sibling.
+sync_agent_bootstrap_home_env() {
+	local resolved
+
+	resolved="$(resolve_agent_bootstrap_home 2>/dev/null || true)"
+	if [[ -n "$resolved" ]]; then
+		export AGENT_BOOTSTRAP_HOME="$resolved"
 		return 0
 	fi
 
-	sibling="$(agent_bootstrap_sibling_home)" || return 1
-	if [[ -x "$sibling/install.sh" ]]; then
-		printf '%s\n' "$sibling"
-		return 0
-	fi
+	unset AGENT_BOOTSTRAP_HOME
 	return 1
 }

@@ -189,11 +189,18 @@ _ui_status_table_layout() {
 	local -n _out_mid_w="$3"
 	local -n _out_path_w="$4"
 
+	if ((cols > 100)); then
+		cols=100
+	fi
+
 	_out_label_w=22
 	_out_mid_w=10
 	_out_path_w=$((cols - _out_label_w - _out_mid_w - 9))
 	if (( _out_path_w < 28 )); then
 		_out_path_w=28
+	fi
+	if (( _out_path_w > 48 )); then
+		_out_path_w=48
 	fi
 }
 
@@ -203,7 +210,7 @@ ui_print_check_result_path_row() {
 	local result="$2"
 	local path="${3:-}"
 	local cols="${4:-}"
-	local label_w mid_w path_w path_display
+	local label_w mid_w path_w path_display result_len pad
 
 	if [[ -z "$cols" ]]; then
 		cols="$(menu_tty_cols)"
@@ -212,6 +219,11 @@ ui_print_check_result_path_row() {
 
 	printf '%-*s | ' "$label_w" "$label"
 	ui_color_result "$result"
+	result_len=${#result}
+	pad=$((mid_w - result_len))
+	if ((pad > 0)); then
+		printf '%*s' "$pad" ''
+	fi
 	if [[ -n "$path" ]]; then
 		path_display="$(ui_shorten_path "$path" "$path_w")"
 		printf ' | %s' "$path_display"
