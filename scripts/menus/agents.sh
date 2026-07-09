@@ -184,7 +184,8 @@ _agents_dispatch() {
 			return 1
 		}
 		ui_clear
-		echo "Runs skills install, Claude bridge, global render, and doctor."
+		ui_print_header "Run bootstrap" "Dotfiles › Agents" "$(menu_tty_cols)"
+		echo "Installs skills, bridges Claude, renders global AGENTS.md, runs doctor."
 		read_tty_line answer "Proceed with full bootstrap? [y/N]: "
 		case "$answer" in
 		y | Y | yes | YES) ( cd "$ab_home" && ./install.sh ) ;;
