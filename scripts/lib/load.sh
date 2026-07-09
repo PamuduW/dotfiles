@@ -22,6 +22,8 @@ source "$_LIB_DIR/menu_checkbox.sh"
 source "$_LIB_DIR/menu_matrix.sh"
 # shellcheck source=scripts/lib/agent_bootstrap_paths.sh
 source "$_LIB_DIR/agent_bootstrap_paths.sh"
+# shellcheck source=scripts/lib/agent_skills_fork.sh
+source "$_LIB_DIR/agent_skills_fork.sh"
 # shellcheck source=scripts/lib/menu_runner.sh
 source "$_LIB_DIR/menu_runner.sh"
 
