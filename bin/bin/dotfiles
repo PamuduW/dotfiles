@@ -5,7 +5,16 @@ _script="$(readlink -f "${BASH_SOURCE[0]}")"
 DOTFILES_DIR="$(dirname "$(dirname "$(dirname "$_script")")")"
 
 # --- TTY colors ---
-if [[ -t 1 ]]; then
+_dotfiles_use_color() {
+	[[ -n "${NO_COLOR:-}" ]] && return 1
+	[[ -n "${FORCE_COLOR:-}" ]] && return 0
+	[[ -t 1 ]] && return 0
+	# install.sh tees stdout to a log; stdin stays on the real terminal.
+	[[ -t 0 ]] && return 0
+	return 1
+}
+
+if _dotfiles_use_color; then
 	C_RESET=$'\033[0m'
 	C_BOLD=$'\033[1m'
 	C_DIM=$'\033[2m'
