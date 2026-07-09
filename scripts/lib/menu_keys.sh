@@ -17,6 +17,9 @@ _menu_keys_decode_escape_sequence() {
 	'[D' | 'OD')
 		printf '%s\n' 'left'
 		;;
+	'[Z')
+		printf '%s\n' 'shift_tab'
+		;;
 	'[5~')
 		printf '%s\n' 'page_up'
 		;;
@@ -63,6 +66,9 @@ menu_read_key() {
 		;;
 	q | Q | $'\003')
 		printf '%s\n' 'cancel'
+		;;
+	$'\t')
+		printf '%s\n' 'tab'
 		;;
 	*)
 		printf '%s\n' 'ignore'

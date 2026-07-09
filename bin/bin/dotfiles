@@ -1523,6 +1523,237 @@ _ext_collect_edit_rows() {
 	done < <(_ext_list_extensions "$target" | sed '/^[[:space:]]*$/d' | sort)
 }
 
+# Matrix UI targets (column order matches menu_matrix.sh).
+EXT_MATRIX_TARGETS=(vscode-wsl vscode-win cursor-wsl cursor-win)
+
+_ext_compat_file() {
+	printf '%s/extensions/ext-compat.tsv\n' "$DOTFILES_DIR"
+}
+
+declare -gA _EXT_COMPAT_EXACT=()
+declare -ga _EXT_COMPAT_GLOB_PATTERNS=() _EXT_COMPAT_GLOB_FAMILIES=()
+declare -g _EXT_COMPAT_LOADED=0
+
+_ext_compat_load() {
+	[[ $_EXT_COMPAT_LOADED -eq 1 ]] && return 0
+	local f line pattern family
+	f="$(_ext_compat_file)"
+	_EXT_COMPAT_EXACT=()
+	_EXT_COMPAT_GLOB_PATTERNS=()
+	_EXT_COMPAT_GLOB_FAMILIES=()
+	if [[ -f "$f" ]]; then
+		while IFS= read -r line || [[ -n "$line" ]]; do
+			[[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+			pattern="${line%%$'\t'*}"
+			family="${line#*$'\t'}"
+			family="${family%%[[:space:]]*}"
+			case "$family" in
+			vscode | cursor | both) ;;
+			*) continue ;;
+			esac
+			if [[ "$pattern" == *'*'* || "$pattern" == *'?'* ]]; then
+				_EXT_COMPAT_GLOB_PATTERNS+=("$pattern")
+				_EXT_COMPAT_GLOB_FAMILIES+=("$family")
+			else
+				_EXT_COMPAT_EXACT["$pattern"]="$family"
+			fi
+		done <"$f"
+	fi
+	_EXT_COMPAT_LOADED=1
+}
+
+_ext_target_family() {
+	case "$1" in
+	vscode-wsl | vscode-win) printf 'vscode\n' ;;
+	cursor-wsl | cursor-win) printf 'cursor\n' ;;
+	*)
+		_err "Unknown extension target: $1"
+		return 1
+		;;
+	esac
+}
+
+_ext_compat_extension_family() {
+	local ext_id="$1" i pattern
+	_ext_compat_load
+	if [[ -n "${_EXT_COMPAT_EXACT[$ext_id]:-}" ]]; then
+		printf '%s\n' "${_EXT_COMPAT_EXACT[$ext_id]}"
+		return 0
+	fi
+	for i in "${!_EXT_COMPAT_GLOB_PATTERNS[@]}"; do
+		pattern="${_EXT_COMPAT_GLOB_PATTERNS[$i]}"
+		[[ "$ext_id" == $pattern ]] || continue
+		printf '%s\n' "${_EXT_COMPAT_GLOB_FAMILIES[$i]}"
+		return 0
+	done
+	printf 'both\n'
+}
+
+_ext_compat_allowed() {
+	local ext_id="$1" target="$2" tf ef
+	tf="$(_ext_target_family "$target")" || return 1
+	ef="$(_ext_compat_extension_family "$ext_id")"
+	case "$ef" in
+	both) return 0 ;;
+	vscode | cursor)
+		[[ "$ef" == "$tf" ]]
+		;;
+	esac
+}
+
+_ext_matrix_load_maps() {
+	local target="$1"
+	local -n _out_manifest="$2"
+	local -n _out_installed="$3"
+	local backup_file line
+
+	_out_manifest=()
+	_out_installed=()
+	backup_file="$(_ext_backup_file "$target")"
+	if [[ -f "$backup_file" ]]; then
+		while IFS= read -r line; do
+			_ext_parse_ext_line "$line"
+			[[ -n "$_EXT_PARSE_ID" ]] && _out_manifest["$_EXT_PARSE_ID"]="$_EXT_PARSE_VER"
+		done < <(_ext_read_backup_lines "$backup_file")
+	fi
+
+	while IFS= read -r line; do
+		_ext_parse_ext_line "$line"
+		[[ -n "$_EXT_PARSE_ID" ]] && _out_installed["$_EXT_PARSE_ID"]="$_EXT_PARSE_VER"
+	done < <(_ext_list_extensions "$target" | sed '/^[[:space:]]*$/d')
+}
+
+_ext_matrix_line_for() {
+	local ext_id="$1"
+	local ver="$2"
+	if [[ -n "$ver" ]]; then
+		printf '%s@%s\n' "$ext_id" "$ver"
+	else
+		printf '%s\n' "$ext_id"
+	fi
+}
+
+_ext_matrix_union_keys() {
+	local mode="$1"
+	declare -A union=() filtered=()
+	local ext_id
+
+	for ext_id in "${!_MX_m0[@]}" "${!_MX_i0[@]}" \
+		"${!_MX_m1[@]}" "${!_MX_i1[@]}" \
+		"${!_MX_m2[@]}" "${!_MX_i2[@]}" \
+		"${!_MX_m3[@]}" "${!_MX_i3[@]}"; do
+		union["$ext_id"]=1
+	done
+
+	case "$mode" in
+	edit)
+		printf '%s\n' "${!union[@]}"
+		return 0
+		;;
+	missing)
+		for ext_id in "${!union[@]}"; do
+			if { [[ -n "${_MX_m0[$ext_id]:-}" ]] && [[ -z "${_MX_i0[$ext_id]:-}" ]]; } \
+				|| { [[ -n "${_MX_m1[$ext_id]:-}" ]] && [[ -z "${_MX_i1[$ext_id]:-}" ]]; } \
+				|| { [[ -n "${_MX_m2[$ext_id]:-}" ]] && [[ -z "${_MX_i2[$ext_id]:-}" ]]; } \
+				|| { [[ -n "${_MX_m3[$ext_id]:-}" ]] && [[ -z "${_MX_i3[$ext_id]:-}" ]]; }; then
+				filtered["$ext_id"]=1
+			fi
+		done
+		printf '%s\n' "${!filtered[@]}"
+		;;
+	extra)
+		for ext_id in "${!union[@]}"; do
+			if { [[ -n "${_MX_i0[$ext_id]:-}" ]] && [[ -z "${_MX_m0[$ext_id]:-}" ]]; } \
+				|| { [[ -n "${_MX_i1[$ext_id]:-}" ]] && [[ -z "${_MX_m1[$ext_id]:-}" ]]; } \
+				|| { [[ -n "${_MX_i2[$ext_id]:-}" ]] && [[ -z "${_MX_m2[$ext_id]:-}" ]]; } \
+				|| { [[ -n "${_MX_i3[$ext_id]:-}" ]] && [[ -z "${_MX_m3[$ext_id]:-}" ]]; }; then
+				filtered["$ext_id"]=1
+			fi
+		done
+		printf '%s\n' "${!filtered[@]}"
+		;;
+	esac
+}
+
+_ext_matrix_cell_fields() {
+	local ext_id="$1"
+	local -n _mf="$2"
+	local -n _inf="$3"
+	local -n _line_out="$4"
+	local -n _m_out="$5"
+	local -n _i_out="$6"
+
+	_line_out=""
+	_m_out=0
+	_i_out=0
+	[[ -n "${_mf[$ext_id]:-}" ]] && _m_out=1
+	[[ -n "${_inf[$ext_id]:-}" ]] && _i_out=1
+	if [[ "$_i_out" -eq 1 ]]; then
+		_line_out="$(_ext_matrix_line_for "$ext_id" "${_inf[$ext_id]}")"
+	elif [[ "$_m_out" -eq 1 ]]; then
+		_line_out="$(_ext_matrix_line_for "$ext_id" "${_mf[$ext_id]}")"
+	fi
+}
+
+_ext_matrix_emit_rows() {
+	local mode="$1"
+	local -a ids=() row_parts=()
+	local ext_id display line m_flag i_flag
+
+	declare -gA _MX_m0=() _MX_i0=()
+	declare -gA _MX_m1=() _MX_i1=()
+	declare -gA _MX_m2=() _MX_i2=()
+	declare -gA _MX_m3=() _MX_i3=()
+
+	_ext_matrix_load_maps "${EXT_MATRIX_TARGETS[0]}" _MX_m0 _MX_i0
+	_ext_matrix_load_maps "${EXT_MATRIX_TARGETS[1]}" _MX_m1 _MX_i1
+	_ext_matrix_load_maps "${EXT_MATRIX_TARGETS[2]}" _MX_m2 _MX_i2
+	_ext_matrix_load_maps "${EXT_MATRIX_TARGETS[3]}" _MX_m3 _MX_i3
+
+	mapfile -t ids < <(_ext_matrix_union_keys "$mode" | sort)
+	((${#ids[@]} == 0)) && return 0
+
+	for ext_id in "${ids[@]}"; do
+		display=""
+		row_parts=("$ext_id" "")
+		_ext_matrix_cell_fields "$ext_id" _MX_m0 _MX_i0 line m_flag i_flag
+		[[ -z "$display" && -n "$line" ]] && display="$line"
+		row_parts+=("$line" "$m_flag" "$i_flag")
+		_ext_matrix_cell_fields "$ext_id" _MX_m1 _MX_i1 line m_flag i_flag
+		[[ -z "$display" && -n "$line" ]] && display="$line"
+		row_parts+=("$line" "$m_flag" "$i_flag")
+		_ext_matrix_cell_fields "$ext_id" _MX_m2 _MX_i2 line m_flag i_flag
+		[[ -z "$display" && -n "$line" ]] && display="$line"
+		row_parts+=("$line" "$m_flag" "$i_flag")
+		_ext_matrix_cell_fields "$ext_id" _MX_m3 _MX_i3 line m_flag i_flag
+		[[ -z "$display" && -n "$line" ]] && display="$line"
+		row_parts+=("$line" "$m_flag" "$i_flag")
+		[[ -z "$display" ]] && display="$ext_id"
+		row_parts[1]="$display"
+		for c in 0 1 2 3; do
+			if _ext_compat_allowed "$ext_id" "${EXT_MATRIX_TARGETS[$c]}"; then
+				row_parts+=("1")
+			else
+				row_parts+=("0")
+			fi
+		done
+		local IFS='|'
+		printf '%s\n' "${row_parts[*]}"
+	done
+}
+
+_ext_collect_edit_rows_all() {
+	_ext_matrix_emit_rows edit
+}
+
+_ext_collect_missing_rows_all() {
+	_ext_matrix_emit_rows missing
+}
+
+_ext_collect_extra_rows_all() {
+	_ext_matrix_emit_rows extra
+}
+
 _ext_cmd_sync_manifest() {
 	local target="$1"
 	local outfile ts count entry kept removed=0 line key
@@ -1779,8 +2010,11 @@ Subcommands:
                            Use --verbose to list every extra extension
   sync-manifest <target>   Write extension lines from stdin to manifest (manifest-sync)
   list-edit <target>       TSV: checked|line|status for installed extensions
+  list-edit-all            Matrix TSV: all targets (vscode-wsl, vscode-win, cursor-wsl, cursor-win)
   list-missing <target>    TSV: line|id|version for manifest entries not installed
+  list-missing-all         Matrix TSV: missing cells across all targets
   list-extra <target>      TSV: line|id|version for installed extras not in manifest
+  list-extra-all           Matrix TSV: extra cells across all targets
   install-lines <target>   Install extension lines read from stdin
   remove-lines <target>    Uninstall extensions (lines or ids) read from stdin
 
@@ -1814,6 +2048,18 @@ cmd_ext() {
 	local compare_verbose=false
 
 	case "$subcmd" in
+	list-edit-all)
+		_ext_collect_edit_rows_all
+		return 0
+		;;
+	list-missing-all)
+		_ext_collect_missing_rows_all
+		return 0
+		;;
+	list-extra-all)
+		_ext_collect_extra_rows_all
+		return 0
+		;;
 	sync-manifest | list-edit | list-missing | list-extra | install-lines | remove-lines)
 		if [[ $# -lt 1 || "$1" == -* ]]; then
 			_err "${subcmd} requires a target (vscode-wsl, cursor-wsl, vscode-win, cursor-win)"

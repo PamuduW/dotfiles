@@ -18,6 +18,8 @@ source "$_LIB_DIR/menu_keys.sh"
 source "$_LIB_DIR/menu_simple.sh"
 # shellcheck source=scripts/lib/menu_checkbox.sh
 source "$_LIB_DIR/menu_checkbox.sh"
+# shellcheck source=scripts/lib/menu_matrix.sh
+source "$_LIB_DIR/menu_matrix.sh"
 # shellcheck source=scripts/lib/menu_runner.sh
 source "$_LIB_DIR/menu_runner.sh"
 

@@ -2,7 +2,7 @@
 
 _ext_menu_dispatch() {
 	local action="$1"
-	local dotfiles_cmd target tmpfile
+	local dotfiles_cmd checked_count
 
 	dotfiles_cmd="$(resolve_dotfiles_cmd)" || {
 		echo "Error: dotfiles command not found." >&2
@@ -17,77 +17,63 @@ _ext_menu_dispatch() {
 		"$dotfiles_cmd" ext compare all
 		;;
 	edit)
-		target="$(ext_pick_target)" || return 0
 		ui_clear
-		if ! ext_checkbox_from_tsv "$dotfiles_cmd" list-edit "$target"; then
-			echo "No installed extensions for ${target}."
+		if ! ext_matrix_from_tsv "$dotfiles_cmd" list-edit-all; then
+			echo "No extensions found across any target."
 			return 0
 		fi
-		MENU_CB_TITLE="Edit manifest > ${target}"
-		MENU_CB_BREADCRUMB="Dotfiles › Extensions › ${target}"
-		MENU_CB_HINT="Up/Down navigate   Space toggle   a all   n none   Enter confirm   q back"
-		if ! menu_checkbox_run; then
+		MENU_MX_TITLE="Edit manifest"
+		MENU_MX_BREADCRUMB="Dotfiles › Extensions"
+		MENU_MX_HINT="↑↓ row   Tab column   Space toggle   Enter save manifest   q back"
+		MENU_MX_LEGEND="Y in manifest   N installed only   ? add to manifest (may fail on restore)   × wrong IDE store"
+		if ! menu_matrix_run; then
 			return 0
 		fi
-		tmpfile="$(mktemp)"
-		local i
-		for i in "${!MENU_CB_IDS[@]}"; do
-			[[ "${MENU_CB_CHECKED[$i]}" -eq 1 ]] && printf '%s\n' "${MENU_CB_IDS[$i]}"
-		done >"$tmpfile"
-		"$dotfiles_cmd" ext sync-manifest "$target" <"$tmpfile"
-		rm -f "$tmpfile"
+		ext_matrix_apply_edit "$dotfiles_cmd" || echo "Manifest save cancelled."
 		;;
 	restore)
-		target="$(ext_pick_target)" || return 0
 		ui_clear
-		if ! ext_checkbox_from_tsv "$dotfiles_cmd" list-missing "$target"; then
-			echo "Nothing to restore — all manifest extensions are installed."
+		if ! ext_matrix_from_tsv "$dotfiles_cmd" list-missing-all; then
+			echo "Nothing to restore — all manifest extensions are installed on every target."
 			return 0
 		fi
-		MENU_CB_TITLE="Restore missing > ${target}"
-		MENU_CB_BREADCRUMB="Dotfiles › Extensions › ${target}"
-		MENU_CB_HINT="Up/Down navigate   Space toggle   a all   n none   Enter confirm   q back"
-		if ! menu_checkbox_run; then
+		MENU_MX_TITLE="Restore missing"
+		MENU_MX_BREADCRUMB="Dotfiles › Extensions"
+		MENU_MX_HINT="↑↓ row   Tab column   Space toggle   Enter install   q back"
+		MENU_MX_LEGEND="N missing   × wrong IDE store (skipped on install)"
+		if ! menu_matrix_run; then
 			return 0
 		fi
-		tmpfile="$(mktemp)"
-		for i in "${!MENU_CB_IDS[@]}"; do
-			[[ "${MENU_CB_CHECKED[$i]}" -eq 1 ]] && printf '%s\n' "${MENU_CB_IDS[$i]}"
-		done >"$tmpfile"
-		if ui_confirm_yes_no "Install selected extensions for ${target}?"; then
-			"$dotfiles_cmd" ext install-lines "$target" <"$tmpfile"
-		fi
-		rm -f "$tmpfile"
-		;;
-	remove)
-		target="$(ext_pick_target)" || return 0
-		ui_clear
-		if ! ext_checkbox_from_tsv "$dotfiles_cmd" list-extra "$target"; then
-			echo "Nothing to remove — no extras outside manifest."
-			return 0
-		fi
-		MENU_CB_TITLE="Remove extras > ${target}"
-		MENU_CB_BREADCRUMB="Dotfiles › Extensions › ${target}"
-		MENU_CB_HINT="Up/Down navigate   Space toggle   a all   n none   Enter confirm   q back"
-		if ! menu_checkbox_run; then
-			return 0
-		fi
-		local count=0
-		for i in "${!MENU_CB_CHECKED[@]}"; do
-			[[ "${MENU_CB_CHECKED[$i]}" -eq 1 ]] && count=$((count + 1))
-		done
-		if [[ "$count" -eq 0 ]]; then
+		checked_count="$(ext_matrix_count_checked)"
+		if [[ "$checked_count" -eq 0 ]]; then
 			echo "No extensions selected."
 			return 0
 		fi
-		tmpfile="$(mktemp)"
-		for i in "${!MENU_CB_IDS[@]}"; do
-			[[ "${MENU_CB_CHECKED[$i]}" -eq 1 ]] && printf '%s\n' "${MENU_CB_IDS[$i]}"
-		done >"$tmpfile"
-		if ui_confirm_destructive "Uninstall ${count} extension(s) from ${target}?"; then
-			"$dotfiles_cmd" ext remove-lines "$target" <"$tmpfile"
+		if ui_confirm_yes_no "Install ${checked_count} extension cell(s) across targets?"; then
+			ext_matrix_apply_restore "$dotfiles_cmd"
 		fi
-		rm -f "$tmpfile"
+		;;
+	remove)
+		ui_clear
+		if ! ext_matrix_from_tsv "$dotfiles_cmd" list-extra-all; then
+			echo "Nothing to remove — no extras outside manifests on any target."
+			return 0
+		fi
+		MENU_MX_TITLE="Remove extras"
+		MENU_MX_BREADCRUMB="Dotfiles › Extensions"
+		MENU_MX_HINT="↑↓ row   Tab column   Space toggle   Enter confirm   q back"
+		MENU_MX_LEGEND=""
+		if ! menu_matrix_run; then
+			return 0
+		fi
+		checked_count="$(ext_matrix_count_checked)"
+		if [[ "$checked_count" -eq 0 ]]; then
+			echo "No extensions selected."
+			return 0
+		fi
+		if ui_confirm_destructive "Uninstall ${checked_count} extension cell(s) across targets?"; then
+			ext_matrix_apply_remove "$dotfiles_cmd"
+		fi
 		;;
 	esac
 }
