@@ -210,20 +210,19 @@ ui_print_check_result_path_row() {
 	local result="$2"
 	local path="${3:-}"
 	local cols="${4:-}"
-	local label_w mid_w path_w path_display result_len pad
+	local label_w mid_w path_w path_display result_pad
 
 	if [[ -z "$cols" ]]; then
 		cols="$(menu_tty_cols)"
 	fi
 	_ui_status_table_layout "$cols" label_w mid_w path_w
 
-	printf '%-*s | ' "$label_w" "$label"
-	ui_color_result "$result"
-	result_len=${#result}
-	pad=$((mid_w - result_len))
-	if ((pad > 0)); then
-		printf '%*s' "$pad" ''
+	printf '  %-*s | ' "$label_w" "$label"
+	result_pad=$((mid_w - ${#result}))
+	if ((result_pad > 0)); then
+		printf '%*s' "$result_pad" ''
 	fi
+	ui_color_result "$result"
 	if [[ -n "$path" ]]; then
 		path_display="$(ui_shorten_path "$path" "$path_w")"
 		printf ' | %s' "$path_display"
@@ -240,9 +239,9 @@ ui_print_check_result_path_header() {
 	fi
 	_ui_status_table_layout "$cols" label_w mid_w path_w
 
-	printf '%-*s | %-*s | %s\n' "$label_w" "check" "$mid_w" "result" "path"
-	printf '%*s-+-%*s-+' "$label_w" '' "$mid_w" ''
-	printf '%*s\n' "$path_w" '' | tr ' ' '-'
+	printf '  %-*s | %-*s | %s\n' "$label_w" "check" "$mid_w" "result" "path"
+	printf '  %*s-+-%*s-+-%s\n' \
+		"$label_w" '' "$mid_w" '' "$path_w" '' | tr ' ' '-'
 }
 
 # Two-column status row: label | detail | colored result.

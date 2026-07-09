@@ -94,7 +94,7 @@ Use arrow keys to navigate and Enter to select.
 | Initial setup | **Check status** — component install summary table · **Run setup** — toggle menu, confirm loop, install · **Back** |
 | Update | **Update & upgrade** — `dotfiles update` report, then optional `dotfiles upgrade` (prompts for `--all`) · **Back** |
 | Extensions | **Check status** (`ext compare all`) · **Edit manifest** · **Restore** (missing only) · **Remove** (extras) · **Back** |
-| Agents | **Check status** · **Clone/update repo** · **Run bootstrap** · **Update skills** · **Link agentboot** · **Scaffold repo** · **Run doctor** · **Back** |
+| Agents | **Check status** · **Clone/update repo** · **Run full bootstrap** · **Refresh skills only** · **Link agentboot** · **Scaffold repo (agentboot)** · **Run doctor** · **Back** |
 | Quit | Exit |
 
 ### CLI flags
