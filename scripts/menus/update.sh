@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 
 _update_labels=(
-	"Update & upgrade"
+	"Run"
 	"Back"
 )
 _update_keys=(run back)
@@ -13,7 +13,7 @@ _update_dispatch() {
 }
 
 update_menu() {
-	menu_submenu_loop "Update" "Dotfiles › Update" \
+	menu_submenu_loop "Update & upgrade" "" \
 		_update_labels _update_keys _update_dispatch
 }
 
@@ -24,6 +24,12 @@ run_update_flow() {
 		echo "Error: dotfiles command not found." >&2
 		return 1
 	}
+
+	{
+		printf '\n'
+		ui_print_header "Update & upgrade" ""
+		printf '\n'
+	} >/dev/tty
 
 	"$dotfiles_cmd" update
 

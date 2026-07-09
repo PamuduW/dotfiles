@@ -23,7 +23,7 @@ _ext_menu_dispatch() {
 			echo "No installed extensions for ${target}."
 			return 0
 		fi
-		MENU_CB_TITLE="Edit manifest"
+		MENU_CB_TITLE="Edit manifest > ${target}"
 		MENU_CB_BREADCRUMB="Dotfiles › Extensions › ${target}"
 		MENU_CB_HINT="Up/Down navigate   Space toggle   a all   n none   Enter confirm   q back"
 		if ! menu_checkbox_run; then
@@ -44,7 +44,7 @@ _ext_menu_dispatch() {
 			echo "Nothing to restore — all manifest extensions are installed."
 			return 0
 		fi
-		MENU_CB_TITLE="Restore missing"
+		MENU_CB_TITLE="Restore missing > ${target}"
 		MENU_CB_BREADCRUMB="Dotfiles › Extensions › ${target}"
 		MENU_CB_HINT="Up/Down navigate   Space toggle   a all   n none   Enter confirm   q back"
 		if ! menu_checkbox_run; then
@@ -66,7 +66,7 @@ _ext_menu_dispatch() {
 			echo "Nothing to remove — no extras outside manifest."
 			return 0
 		fi
-		MENU_CB_TITLE="Remove extras"
+		MENU_CB_TITLE="Remove extras > ${target}"
 		MENU_CB_BREADCRUMB="Dotfiles › Extensions › ${target}"
 		MENU_CB_HINT="Up/Down navigate   Space toggle   a all   n none   Enter confirm   q back"
 		if ! menu_checkbox_run; then
