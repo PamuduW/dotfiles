@@ -23,15 +23,6 @@ _menu_cb_status_col_width() {
 	printf '%s\n' "$max"
 }
 
-_menu_cb_fill_dots() {
-	local count="$1"
-	local i
-
-	for ((i = 0; i < count; i++)); do
-		printf '.'
-	done
-}
-
 _menu_cb_page_size() {
 	local rows="$1"
 	local page_size=$((rows - _MENU_CB_FIXED_ROWS))
@@ -109,7 +100,7 @@ _menu_cb_draw_row() {
 	local idx="$2"
 	local cols="$3"
 	local mark status status_ctx cursor_col mid_sep label
-	local index_w status_w head status_pad dots_count max_label checked selected
+	local index_w status_w head status_pad max_label checked selected
 
 	mark='x'
 	[[ "${MENU_CB_CHECKED[$idx]:-0}" -eq 0 ]] && mark=' '
@@ -132,14 +123,13 @@ _menu_cb_draw_row() {
 	status_pad=$((status_w - ${#status}))
 	((status_pad < 0)) && status_pad=0
 
-	dots_count=$((cols - ${#head} - status_w - ${#mid_sep} - ${#label}))
-	if ((dots_count < 0)); then
-		max_label=$((cols - ${#head} - status_w - ${#mid_sep} - 3))
-		((max_label < 1)) && max_label=1
-		label="$(menu_fit_line "$label" "$max_label")"
-		dots_count=$((cols - ${#head} - status_w - ${#mid_sep} - ${#label}))
+	max_label=$((cols - ${#head} - status_w - ${#mid_sep}))
+	if ((max_label < 1)); then
+		max_label=1
 	fi
-	((dots_count < 0)) && dots_count=0
+	if ((${#label} > max_label)); then
+		label="$(menu_fit_line "$label" "$max_label")"
+	fi
 
 	if [[ "$checked" -eq 1 ]]; then
 		if [[ "$selected" -eq 1 ]]; then
@@ -173,13 +163,7 @@ _menu_cb_draw_row() {
 		fi
 	fi
 
-	if [[ "$checked" -eq 1 ]]; then
-		[[ "$selected" -eq 1 ]] && printf '%s' "$C_BOLD"
-	else
-		printf '%s' "$C_DIM"
-	fi
-	_menu_cb_fill_dots "$dots_count"
-	printf '%s\e[K\n' "$C_RESET"
+	printf '\e[K\n'
 }
 
 _menu_cb_draw() {
