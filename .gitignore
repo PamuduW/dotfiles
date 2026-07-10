@@ -52,8 +52,6 @@ old_bash*/
 # Install logs
 log/
 .cursor/
-CLAUDE.md
-AGENTS.md
 .codex
 
 .github/copilot-instructions.md
