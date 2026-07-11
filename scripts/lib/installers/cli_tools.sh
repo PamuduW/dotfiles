@@ -71,17 +71,31 @@ ensure_asdf_installed() {
 		esac
 
 		echo "Installing asdf..."
-		local tag tmp tarball_url extracted
+		local tag tmp tarball_url tarball_name expected_sha256 actual_sha256 extracted
 		tag="$(github_latest_release_version asdf-vm/asdf)" || {
 			echo "  Could not determine latest asdf release." >&2
 			return 1
 		}
 
-		tarball_url="https://github.com/asdf-vm/asdf/releases/download/${tag}/asdf-${tag}-linux-${arch}.tar.gz"
+		tarball_name="asdf-v${tag}-linux-${arch}.tar.gz"
+		tarball_url="https://github.com/asdf-vm/asdf/releases/download/v${tag}/${tarball_name}"
+		command -v sha256sum >/dev/null 2>&1 || {
+			echo "  sha256sum is required to verify the asdf release." >&2
+			return 1
+		}
+		expected_sha256="$(github_release_asset_sha256 asdf-vm/asdf "$tarball_name")" || {
+			echo "  Could not obtain the published SHA-256 digest for ${tarball_name}; refusing unchecked download." >&2
+			return 1
+		}
 		tmp="$(mktemp -d)"
 		trap '[[ -n "${tmp:-}" ]] && rm -rf -- "$tmp"' RETURN
 		if ! curl -fsSL -o "$tmp/asdf.tar.gz" "$tarball_url"; then
 			echo "  Failed to download asdf. Check TLS trust in WSL or retry after fixing CA certificates." >&2
+			return 1
+		fi
+		actual_sha256="$(sha256sum "$tmp/asdf.tar.gz" | awk '{print $1}')"
+		if [[ "$actual_sha256" != "$expected_sha256" ]]; then
+			echo "  asdf SHA-256 verification failed; refusing to install the downloaded binary." >&2
 			return 1
 		fi
 
@@ -241,7 +255,9 @@ install_powershell() {
 
 	log_step "Install PowerShell from Microsoft packages repo"
 	sudo apt-get update -qq
-	sudo apt-get -o Dpkg::Use-Pty=0 install -y wget apt-transport-https software-properties-common
+	# HTTPS transport is built into supported modern apt releases; the legacy
+	# apt-transport-https package is unnecessary and may not exist on newer systems.
+	sudo apt-get -o Dpkg::Use-Pty=0 install -y wget software-properties-common
 
 	if [[ ! -f /etc/apt/sources.list.d/microsoft-prod.list && ! -f /etc/apt/sources.list.d/microsoft-prod.sources ]]; then
 		local deb_file

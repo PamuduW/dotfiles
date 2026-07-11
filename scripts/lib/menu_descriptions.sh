@@ -37,10 +37,10 @@ menu_desc_nth_line_fn() {
 	local line=''
 	local -a lines=()
 
-	[[ -n "$fn" ]] && declare -f "$fn" >/dev/null 2>&1 || {
+	if [[ -z "$fn" ]] || ! declare -f "$fn" >/dev/null 2>&1; then
 		printf '\n'
 		return 0
-	}
+	fi
 
 	mapfile -t lines < <("$fn" "$arg")
 	if ((line_index < ${#lines[@]})); then

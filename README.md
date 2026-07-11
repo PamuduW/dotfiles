@@ -204,7 +204,7 @@ Global command (stowed to `~/bin/dotfiles`, on PATH like `ex` and `clip`):
 | `dotfiles upgrade --all` | Same as `upgrade`, plus opt-in **Node.js** (nvm LTS), **Go** (asdf), and **Monaspace** fonts |
 | `dotfiles status` | Installed versions + dotfiles repo git status |
 | `dotfiles restow` | `stow --restow bash bin readline` |
-| `dotfiles self` | `git pull` in the dotfiles repo, then restow |
+| `dotfiles self` | Fast-forward pull in a **clean** dotfiles worktree, then restow; commit or stash local changes first |
 
 Runs **unprivileged**; only the apt portion invokes `sudo` internally (single prompt). Agent CLI and npm updates stay under your user.
 

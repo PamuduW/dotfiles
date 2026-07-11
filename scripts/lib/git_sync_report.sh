@@ -112,7 +112,9 @@ clone_or_update_agent_bootstrap() {
 			_agents_print_row "git repo" "path exists but is not a git repo" missing
 		else
 			ui_print_report_section_block "── Clone ──"
-			if clone_detail="$(git clone "$AGENT_BOOTSTRAP_REPO_URL" "$ab_home" 2>&1)"; then
+			if ! agent_bootstrap_repo_url_allowed "$AGENT_BOOTSTRAP_REPO_URL"; then
+				_agents_print_row "clone" "blocked: unapproved repository URL" failed
+			elif clone_detail="$(git clone "$AGENT_BOOTSTRAP_REPO_URL" "$ab_home" 2>&1)"; then
 				after_sha="$(git -C "$ab_home" rev-parse --short HEAD 2>/dev/null || echo '?')"
 				remote="$(git -C "$ab_home" remote get-url origin 2>/dev/null || echo "$AGENT_BOOTSTRAP_REPO_URL")"
 				_agents_print_row "clone" "repository created" ok

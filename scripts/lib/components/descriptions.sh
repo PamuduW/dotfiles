@@ -38,7 +38,7 @@ _comp_desc_direnv() {
 }
 
 _comp_desc_docker() {
-	echo "Installs Docker Engine CE from the official Docker apt repo."
+	echo "Installs Docker Engine CE from the official Docker apt repo and safely merges logging defaults into daemon.json."
 	echo "Adds your user to the docker group for rootless access."
 }
 

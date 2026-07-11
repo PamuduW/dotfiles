@@ -165,7 +165,7 @@ ui_shorten_path() {
 	if [[ "$path" == "$home" ]]; then
 		path='~'
 	elif [[ "$path" == "$home"/* ]]; then
-		path="~${path#$home}"
+		path="~${path#"$home"}"
 	fi
 
 	len=${#path}
@@ -242,7 +242,7 @@ ui_print_check_result_path_header() {
 
 	printf '  %-*s | %-*s | %s\n' "$label_w" "check" "$mid_w" "result" "path"
 	printf '  %*s-+-%*s-+-%s\n' \
-		"$label_w" '' "$mid_w" '' "$path_w" '' | tr ' ' '-'
+		"$label_w" '' "$mid_w" '' "$path_w" | tr ' ' '-'
 }
 
 # Two-column status row: label | detail | colored result.

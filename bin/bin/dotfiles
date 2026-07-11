@@ -349,7 +349,7 @@ install_lazygit_from_github() {
 	arch_suffix="$(_linux_github_arch_suffix)" || return 1
 
 	tmp="$(mktemp -d)"
-	trap "rm -rf '${tmp}'" RETURN
+	trap 'rm -rf "$tmp"' RETURN
 	local tarball="lazygit_${ver}_Linux_${arch_suffix}.tar.gz"
 	curl -fsSL -o "$tmp/$tarball" \
 		"https://github.com/jesseduffield/lazygit/releases/download/v${ver}/${tarball}"
@@ -431,7 +431,7 @@ install_lazydocker_from_github() {
 	arch_suffix="$(_linux_github_arch_suffix)" || return 1
 
 	tmp="$(mktemp -d)"
-	trap "rm -rf '${tmp}'" RETURN
+	trap 'rm -rf "$tmp"' RETURN
 	local tarball="lazydocker_${ver}_Linux_${arch_suffix}.tar.gz"
 	curl -fsSL -o "$tmp/$tarball" \
 		"https://github.com/jesseduffield/lazydocker/releases/download/v${ver}/${tarball}"
@@ -620,7 +620,7 @@ install_monaspace_fonts() {
 	}
 
 	tmp="$(mktemp -d)"
-	trap "rm -rf '${tmp}'" RETURN
+	trap 'rm -rf "$tmp"' RETURN
 	local zip="monaspace-nerdfonts-v${ver}.zip"
 	local url="https://github.com/githubnext/monaspace/releases/download/v${ver}/${zip}"
 	if ! curl -fsSL -o "$tmp/monaspace-nerdfonts.zip" "$url"; then
@@ -682,7 +682,13 @@ upgrade_dotfiles_repo() {
 		_err "  git not installed"
 		return 1
 	fi
-	local branch local_full remote_rev
+	local branch local_full remote_rev dirty
+	dirty="$(git -C "$DOTFILES_DIR" status --porcelain --untracked-files=all 2>/dev/null || true)"
+	if [[ -n "$dirty" ]]; then
+		_err "  dotfiles repository has uncommitted changes; refusing to pull or restow"
+		_err "  Commit, stash, or discard them first, then run dotfiles self again."
+		return 1
+	fi
 	branch="$(git -C "$DOTFILES_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")"
 	_dotfiles_repo_fetch "$branch"
 	local_full="$(git -C "$DOTFILES_DIR" rev-parse HEAD 2>/dev/null || true)"
@@ -1429,7 +1435,7 @@ _ext_cmd_check() {
 		manifest="$(_ext_backup_count "$target")"
 		stale="$(_ext_obsolete_count "${dir:-}")"
 		delta="$(_ext_format_delta "$count" "$manifest")"
-		printf '%-18s | %9s | %9s | %6s | ' "$target" "$count" "$manifest"
+		printf '%-18s | %9s | %9s | ' "$target" "$count" "$manifest"
 		# delta: match green; nonzero yellow (informational mismatch)
 		if [[ "$delta" == "0" || "$delta" == "+0" || "$delta" == "-0" || "$delta" == "=" ]]; then
 			printf '%s%s%s' "$C_GREEN" "$delta" "$C_RESET"
@@ -1475,7 +1481,7 @@ _ext_cmd_backup() {
 _ext_prune_extras() {
 	local target="$1"
 	local backup_file="$2"
-	local cli line
+	local cli line failures=0
 	local -a installed_ids=() backup_ids=()
 
 	cli="$(_ext_find_cli "$target" 2>/dev/null || true)"
@@ -1502,15 +1508,21 @@ _ext_prune_extras() {
 			fi
 		done
 		if [[ "$found" == false ]]; then
-			_ext_uninstall_extension "$target" "$inst_id" || true
+			if ! _ext_uninstall_extension "$target" "$inst_id"; then
+				failures=$((failures + 1))
+			fi
 		fi
 	done
+	if ((failures > 0)); then
+		_err "  Failed to prune ${failures} extension(s) from ${target}"
+		return 1
+	fi
 }
 
 _ext_cmd_restore() {
 	local mode="$1"
 	shift
-	local target backup_file line
+	local target backup_file line failures=0
 	declare -A installed_ver=()
 
 	for target in "$@"; do
@@ -1541,14 +1553,22 @@ _ext_cmd_restore() {
 						continue
 					fi
 				fi
-				_ext_install_extension "$target" "$line" || true
+				if ! _ext_install_extension "$target" "$line"; then
+					failures=$((failures + 1))
+				fi
 			done <"$backup_file"
 		fi
 
 		if [[ "$mode" == "prune" || "$mode" == "prune-only" ]]; then
-			_ext_prune_extras "$target" "$backup_file" || true
+			if ! _ext_prune_extras "$target" "$backup_file"; then
+				failures=$((failures + 1))
+			fi
 		fi
 	done
+	if ((failures > 0)); then
+		_err "  Extension restore completed with ${failures} failure(s)"
+		return 1
+	fi
 }
 
 _ext_collect_missing_rows() {
@@ -1902,23 +1922,37 @@ _ext_cmd_sync_manifest() {
 
 _ext_cmd_install_lines() {
 	local target="$1"
-	local line
+	local line failures=0
 
 	while IFS= read -r line; do
 		[[ -z "$line" || "$line" =~ ^# ]] && continue
-		_ext_install_extension "$target" "$line" || true
+		if ! _ext_install_extension "$target" "$line"; then
+			failures=$((failures + 1))
+		fi
 	done
+	if ((failures > 0)); then
+		_err "  Failed to install ${failures} extension(s) for ${target}"
+		return 1
+	fi
 }
 
 _ext_cmd_remove_lines() {
 	local target="$1"
-	local line
+	local line failures=0
 
 	while IFS= read -r line; do
 		[[ -z "$line" ]] && continue
 		_ext_parse_ext_line "$line"
-		[[ -n "$_EXT_PARSE_ID" ]] && _ext_uninstall_extension "$target" "$_EXT_PARSE_ID" || true
+		if [[ -n "$_EXT_PARSE_ID" ]]; then
+			if ! _ext_uninstall_extension "$target" "$_EXT_PARSE_ID"; then
+				failures=$((failures + 1))
+			fi
+		fi
 	done
+	if ((failures > 0)); then
+		_err "  Failed to uninstall ${failures} extension(s) for ${target}"
+		return 1
+	fi
 }
 
 _ext_cmd_compare() {
@@ -2460,8 +2494,7 @@ cmd_self() {
 		_err "Error: git is not installed."
 		exit 1
 	fi
-	git -C "$DOTFILES_DIR" pull --ff-only
-	cmd_restow
+	upgrade_dotfiles_repo
 }
 
 cmd_menu() {
@@ -2485,7 +2518,7 @@ Commands:
              Use --all to include Node.js, Go, and Monaspace fonts
   status     Show installed versions and dotfiles git status
   restow     Re-apply stow for bash, bin, readline
-  self       git pull dotfiles repo, then restow
+  self       fast-forward pull a clean dotfiles repo, then restow
   ext        IDE extension backup/restore (see: dotfiles ext help)
   help       Show this help
 

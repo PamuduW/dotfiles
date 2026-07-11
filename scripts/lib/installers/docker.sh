@@ -3,37 +3,108 @@
 
 configure_docker_daemon() {
 	local daemon_json="/etc/docker/daemon.json"
-	local tmp_file backup_file
+	local tmp_file backup_file merge_status
+
+	command -v python3 >/dev/null 2>&1 || {
+		log_warn "Python 3 is required to safely merge /etc/docker/daemon.json; leaving it unchanged"
+		return 1
+	}
 
 	tmp_file="$(mktemp)"
-	cat >"$tmp_file" <<'EOF'
-{
-	"storage-driver": "overlay2",
-	"log-driver": "json-file",
-	"log-opts": {
-		"max-size": "10m",
-		"max-file": "3"
-	}
-}
-EOF
 
 	sudo install -d -m 0755 /etc/docker
 
-	if sudo test -f "$daemon_json" && sudo cmp -s "$tmp_file" "$daemon_json"; then
-		log_skip "Docker daemon config already set in /etc/docker/daemon.json"
-		rm -f "$tmp_file"
-		return 0
-	fi
-
 	if sudo test -f "$daemon_json"; then
+		# Do not replace a user's daemon configuration. Merge only our logging
+		# defaults, preserve unrelated keys, and refuse conflicting log settings.
+		if sudo python3 - "$daemon_json" "$tmp_file" <<'PY'
+import json
+import sys
+
+source, destination = sys.argv[1:]
+try:
+    with open(source, encoding="utf-8") as handle:
+        config = json.load(handle)
+except (OSError, json.JSONDecodeError) as error:
+    print(f"cannot parse existing Docker JSON: {error}", file=sys.stderr)
+    raise SystemExit(2)
+
+if not isinstance(config, dict):
+    print("existing Docker configuration must be a JSON object", file=sys.stderr)
+    raise SystemExit(2)
+
+defaults = {
+    "log-driver": "json-file",
+    "log-opts": {"max-size": "10m", "max-file": "3"},
+}
+for key in ("log-driver",):
+    if key in config and config[key] != defaults[key]:
+        print(f"existing {key!r} conflicts with requested default {defaults[key]!r}", file=sys.stderr)
+        raise SystemExit(3)
+
+existing_options = config.get("log-opts", {})
+if not isinstance(existing_options, dict):
+    print("existing 'log-opts' must be a JSON object", file=sys.stderr)
+    raise SystemExit(2)
+for key, value in defaults["log-opts"].items():
+    if key in existing_options and existing_options[key] != value:
+        print(f"existing log-opts.{key!r} conflicts with requested default {value!r}", file=sys.stderr)
+        raise SystemExit(3)
+
+config.setdefault("log-driver", defaults["log-driver"])
+config["log-opts"] = {**defaults["log-opts"], **existing_options}
+with open(destination, "w", encoding="utf-8") as handle:
+    json.dump(config, handle, indent=2, sort_keys=True)
+    handle.write("\n")
+PY
+		then
+			:
+		else
+			merge_status=$?
+			rm -f "$tmp_file"
+			if [[ "$merge_status" -eq 3 ]]; then
+				log_warn "Existing Docker daemon settings conflict with dotfiles defaults; leaving $daemon_json unchanged"
+				return 1
+			fi
+			log_warn "Existing Docker daemon config is invalid or cannot be safely read; leaving it unchanged"
+			return 1
+		fi
+		if sudo cmp -s "$tmp_file" "$daemon_json"; then
+			log_skip "Docker daemon config already contains the dotfiles defaults"
+			rm -f "$tmp_file"
+			return 0
+		fi
 		backup_file="/etc/docker/daemon.json.bak.$(date +%Y%m%d_%H%M%S)"
 		sudo cp "$daemon_json" "$backup_file"
 		log_step "Backed up existing Docker daemon config to $backup_file"
+	else
+		cat >"$tmp_file" <<'EOF'
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  }
+}
+EOF
+	fi
+
+	# Modern Docker selects its storage driver automatically. Validate the exact
+	# merged configuration before changing the live daemon file when dockerd is
+	# available; older/minimal environments simply retain the safe merge above.
+	if command -v dockerd >/dev/null 2>&1; then
+		if ! sudo dockerd --validate --config-file "$tmp_file"; then
+			log_warn "Docker rejected the proposed daemon configuration; leaving $daemon_json unchanged"
+			rm -f "$tmp_file"
+			return 1
+		fi
+	else
+		log_warn "dockerd is unavailable; unable to validate the proposed daemon config before writing it"
 	fi
 
 	sudo install -m 0644 "$tmp_file" "$daemon_json"
 	rm -f "$tmp_file"
-	log_ok "Docker daemon config written to /etc/docker/daemon.json"
+	log_ok "Docker daemon logging config safely written to /etc/docker/daemon.json"
 }
 
 restart_docker_service() {
@@ -50,28 +121,6 @@ restart_docker_service() {
 	fi
 
 	log_warn "Could not determine how to restart Docker service"
-	return 1
-}
-
-verify_docker_storage_driver() {
-	local driver
-	driver="$(run_docker info --format '{{.Driver}}' 2>/dev/null || true)"
-
-	if [[ -z "$driver" ]]; then
-		driver="$(run_docker info 2>/dev/null | awk -F': ' '/^ Storage Driver:/ {print $2; exit}' || true)"
-	fi
-
-	if [[ "$driver" == "overlay2" ]]; then
-		log_ok "Docker storage driver verified: overlay2"
-		return 0
-	fi
-
-	if [[ -n "$driver" ]]; then
-		log_warn "Docker storage driver is '$driver' (expected: overlay2)"
-	else
-		log_warn "Unable to determine Docker storage driver"
-	fi
-
 	return 1
 }
 
@@ -114,9 +163,6 @@ DOCKEREOF
 	configure_docker_daemon
 	if ! restart_docker_service; then
 		log_warn "Docker restart failed after daemon config update"
-	fi
-	if ! verify_docker_storage_driver; then
-		log_warn "Please check: docker info | grep \"Storage Driver\""
 	fi
 }
 

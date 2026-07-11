@@ -122,7 +122,7 @@ _menu_mx_cell_color() {
 			ui_color_word "$glyph" dim
 		fi
 		;;
-	?)
+	\?)
 		ui_color_word "$glyph" warn
 		;;
 	Y)
