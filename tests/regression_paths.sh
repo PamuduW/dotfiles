@@ -33,6 +33,13 @@ test_docker_stops_before_restart_on_config_failure() {
 	' _ "$ROOT" "$tmp"
 }
 
+test_docker_merge_temp_file_uses_sudo_boundary() {
+	local installer="$ROOT/scripts/lib/installers/docker.sh"
+	grep -Fq 'tmp_file="$(sudo mktemp)"' "$installer" &&
+		grep -Fq 'sudo tee "$tmp_file" >/dev/null' "$installer" &&
+		grep -Fq 'sudo rm -f "$tmp_file"' "$installer"
+}
+
 test_existing_unapproved_origin_is_rejected() {
 	local repo="$1/rejected-repo"
 	git init -q "$repo"
@@ -113,6 +120,7 @@ main() {
 	trap 'rm -rf -- "${tmp:-}"' EXIT
 
 	expect_failure 'Docker config failure prevents restart' test_docker_stops_before_restart_on_config_failure "$tmp"
+	expect_success 'Docker merge temporary file stays in the sudo boundary' test_docker_merge_temp_file_uses_sudo_boundary
 	if [[ ! -e "$tmp/restarted" ]]; then
 		pass 'Docker restart was not attempted'
 	else

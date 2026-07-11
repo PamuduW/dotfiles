@@ -10,7 +10,11 @@ configure_docker_daemon() {
 		return 1
 	}
 
-	tmp_file="$(mktemp)"
+	# The merge runs under sudo because daemon.json may be readable only by root.
+	# Keep its temporary destination in that same ownership boundary: a user-owned
+	# 0600 mktemp file can reject the root-run Python writer on constrained WSL
+	# mounts.
+	tmp_file="$(sudo mktemp)"
 
 	sudo install -d -m 0755 /etc/docker
 
@@ -61,7 +65,7 @@ PY
 			:
 		else
 			merge_status=$?
-			rm -f "$tmp_file"
+			sudo rm -f "$tmp_file"
 			if [[ "$merge_status" -eq 3 ]]; then
 				log_warn "Existing Docker daemon settings conflict with dotfiles defaults; leaving $daemon_json unchanged"
 				return 1
@@ -71,14 +75,14 @@ PY
 		fi
 		if sudo cmp -s "$tmp_file" "$daemon_json"; then
 			log_skip "Docker daemon config already contains the dotfiles defaults"
-			rm -f "$tmp_file"
+			sudo rm -f "$tmp_file"
 			return 0
 		fi
 		backup_file="/etc/docker/daemon.json.bak.$(date +%Y%m%d_%H%M%S)"
 		sudo cp "$daemon_json" "$backup_file"
 		log_step "Backed up existing Docker daemon config to $backup_file"
 	else
-		cat >"$tmp_file" <<'EOF'
+		sudo tee "$tmp_file" >/dev/null <<'EOF'
 {
   "log-driver": "json-file",
   "log-opts": {
@@ -95,7 +99,7 @@ EOF
 	if command -v dockerd >/dev/null 2>&1; then
 		if ! sudo dockerd --validate --config-file "$tmp_file"; then
 			log_warn "Docker rejected the proposed daemon configuration; leaving $daemon_json unchanged"
-			rm -f "$tmp_file"
+				sudo rm -f "$tmp_file"
 			return 1
 		fi
 	else
@@ -103,7 +107,7 @@ EOF
 	fi
 
 	sudo install -m 0644 "$tmp_file" "$daemon_json"
-	rm -f "$tmp_file"
+	sudo rm -f "$tmp_file"
 	log_ok "Docker daemon logging config safely written to /etc/docker/daemon.json"
 }
 
