@@ -91,6 +91,18 @@ agent_bootstrap_repo_url_allowed() {
 	return 1
 }
 
+# Existing clones must meet the same origin allowlist as new clones before an
+# update fetches code. The documented bypass applies to both paths.
+agent_bootstrap_existing_origin_allowed() {
+	local repo="$1" origin
+
+	origin="$(git -C "$repo" remote get-url origin 2>/dev/null)" || {
+		echo "Warning: agent_bootstrap clone has no readable origin remote: ${repo}" >&2
+		return 1
+	}
+	agent_bootstrap_repo_url_allowed "$origin"
+}
+
 # Re-export AGENT_BOOTSTRAP_HOME only when install.sh exists at the canonical sibling.
 sync_agent_bootstrap_home_env() {
 	local resolved

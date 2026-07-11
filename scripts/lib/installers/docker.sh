@@ -160,7 +160,10 @@ DOCKEREOF
 		log_ok "Added $USER to docker group (log out/in or 'newgrp docker' to activate)"
 	fi
 
-	configure_docker_daemon
+	if ! configure_docker_daemon; then
+		log_warn "Docker daemon configuration was not applied; refusing to restart Docker"
+		return 1
+	fi
 	if ! restart_docker_service; then
 		log_warn "Docker restart failed after daemon config update"
 	fi

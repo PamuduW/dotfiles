@@ -51,6 +51,11 @@ clone_or_update_agent_bootstrap() {
 			_agents_print_row "git remote" "$remote" \
 				"$([[ "$remote" != "not configured" ]] && echo ok || echo check)"
 			_agents_print_row "git commit" "$before_sha (before)" ok
+			if ! agent_bootstrap_existing_origin_allowed "$ab_home"; then
+				_agents_print_row "fetch" "blocked: unapproved or unreadable origin remote" failed
+				ui_print_report_rollup "$_agents_ok_count" "$_agents_check_count" "$_agents_miss_count"
+				return 1
+			fi
 
 			ui_print_report_section_block "── Fetch ──"
 			fetch_lines="$(git -C "$ab_home" fetch --prune 2>&1 || true)"

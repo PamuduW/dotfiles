@@ -2494,6 +2494,10 @@ cmd_self() {
 		_err "Error: git is not installed."
 		exit 1
 	fi
+	if [[ "$(git -C "$DOTFILES_DIR" rev-parse --is-inside-work-tree 2>/dev/null)" != "true" ]]; then
+		_err "Error: DOTFILES_DIR is not a Git worktree: ${DOTFILES_DIR}"
+		return 1
+	fi
 	upgrade_dotfiles_repo
 }
 

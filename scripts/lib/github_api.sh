@@ -2,12 +2,13 @@
 # GitHub Releases API helpers (User-Agent + optional GITHUB_TOKEN).
 
 github_api_release_json() {
-	local repo="$1"
+	local repo="$1" tmp_file curl_error token="${GITHUB_TOKEN:-}"
 	local -a auth_header=()
 
-	[[ -n "${GITHUB_TOKEN:-}" ]] && auth_header=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+	[[ -n "$token" ]] && auth_header=(-H "Authorization: Bearer ${token}")
+	tmp_file="$(mktemp)" || return 1
 
-	curl -fsSL \
+	if ! curl_error="$(curl -fsSL \
 		--connect-timeout 10 \
 		--max-time 30 \
 		--retry 2 \
@@ -15,7 +16,20 @@ github_api_release_json() {
 		-H "Accept: application/vnd.github+json" \
 		-H "User-Agent: dotfiles-bootstrap" \
 		"${auth_header[@]}" \
-		"https://api.github.com/repos/${repo}/releases/latest" 2>/dev/null
+		"https://api.github.com/repos/${repo}/releases/latest" -o "$tmp_file" 2>&1)"; then
+		rm -f "$tmp_file"
+		[[ -n "$token" ]] && curl_error="${curl_error//"$token"/[redacted]}"
+		echo "GitHub Releases API request failed for ${repo}." >&2
+		if [[ "$curl_error" == *"403"* || "$curl_error" == *"429"* ]]; then
+			echo "  GitHub denied or rate-limited the request; wait for the limit reset or set GITHUB_TOKEN." >&2
+		else
+			echo "  Check network/TLS access to api.github.com, then retry." >&2
+		fi
+		[[ -n "$curl_error" ]] && echo "  curl: ${curl_error}" >&2
+		return 1
+	fi
+	cat "$tmp_file"
+	rm -f "$tmp_file"
 }
 
 # Prints the SHA-256 digest published by GitHub for a named release asset.

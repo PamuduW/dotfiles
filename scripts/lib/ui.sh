@@ -233,16 +233,21 @@ ui_print_check_result_path_row() {
 
 ui_print_check_result_path_header() {
 	local cols="${1:-}"
-	local label_w mid_w path_w
+	local label_w mid_w path_w label_rule result_rule path_rule
 
 	if [[ -z "$cols" ]]; then
 		cols="$(menu_tty_cols)"
 	fi
 	_ui_status_table_layout "$cols" label_w mid_w path_w
+	printf -v label_rule '%*s' "$label_w" ''
+	printf -v result_rule '%*s' "$mid_w" ''
+	printf -v path_rule '%*s' "$path_w" ''
+	label_rule="${label_rule// /-}"
+	result_rule="${result_rule// /-}"
+	path_rule="${path_rule// /-}"
 
 	printf '  %-*s | %-*s | %s\n' "$label_w" "check" "$mid_w" "result" "path"
-	printf '  %*s-+-%*s-+-%s\n' \
-		"$label_w" '' "$mid_w" '' "$path_w" | tr ' ' '-'
+	printf '  %s-+-%s-+-%s\n' "$label_rule" "$result_rule" "$path_rule"
 }
 
 # Two-column status row: label | detail | colored result.

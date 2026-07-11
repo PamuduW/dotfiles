@@ -124,11 +124,18 @@ rt_print_section_block() {
 }
 
 rt_print_table_columns() {
+	local label_rule detail_rule result_rule
+	printf -v label_rule '%*s' "$_RT_LABEL_W" ''
+	printf -v detail_rule '%*s' "$_RT_DETAIL_W" ''
+	printf -v result_rule '%*s' "$_RT_RESULT_W" ''
+	label_rule="${label_rule// /-}"
+	detail_rule="${detail_rule// /-}"
+	result_rule="${result_rule// /-}"
+
 	_rt_ensure_colors
 	printf '  %s%-*s | %-*s | %s%s\n' \
 		"$C_BOLD" "$_RT_LABEL_W" "component" "$_RT_DETAIL_W" "detail" "result" "$C_RESET"
-	printf '  %.*s-+-' "$_RT_LABEL_W" "----------------------"
-	printf '%.*s-+-%.*s\n' "$_RT_DETAIL_W" "------------------------------" "$_RT_RESULT_W" "----------"
+	printf '  %s-+-%s-+-%s\n' "$label_rule" "$detail_rule" "$result_rule"
 }
 
 rt_print_table_row() {
