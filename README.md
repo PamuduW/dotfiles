@@ -104,7 +104,7 @@ Use arrow keys to navigate and Enter to select.
 | Option | Submenu / action |
 | ------ | ---------------- |
 | Initial setup | **Check status** — component install summary table · **Run setup** — toggle menu, confirm loop, install · **Back** |
-| Update | **Update & upgrade** — `dotfiles update` report, then optional `dotfiles upgrade` (prompts for `--all`) · **Back** |
+| Update | **Update & upgrade** — `dotfiles update` report and incoming-extension warning, then optional `dotfiles upgrade` (prompts for `--all`) · **Back** |
 | Extensions | **Check status** (`ext compare all`) · **Edit manifest** · **Restore** (missing only) · **Remove** (extras) · **Publish manifest changes** · **Back** |
 | Agents | **Check status** · **Clone/update repo** · **Run full bootstrap** · **Refresh skills only** · **Link agentboot** · **Scaffold repo (agentboot)** · **Run doctor** · **Back** |
 | Quit | Exit |
@@ -260,7 +260,9 @@ dotfiles ext compare all
 
 Access via boot menu **Extensions**, `dotfiles menu`, or `./install.sh --extensions`.
 
-**Publishing manifest changes:** Extensions → **Publish manifest changes** previews changes first and only permits `extensions/*.txt`, `extensions/manifest.json`, and tracked `extensions/ext-compat.tsv`. It rejects unrelated local work, including staged or untracked non-extension paths; allowed manifest changes may themselves be staged or untracked. **Run** requires confirmation, creates `extension changes - YYYY-MM-DD`, then pushes the configured upstream. **Revert local manifest changes** restores only those allowed paths in both the index and worktree. This feature neither publishes non-extension work nor resolves upstream conflicts; handle those manually with Git.
+**Extension matrix:** Every Edit, Restore, and Remove screen uses the same state index: `Y` is in the manifest and installed, `N` is installed but absent from the manifest, `—` is in the manifest but missing locally, `!` is neither, and `#` is a wrong-store cell that cannot be changed. Checkboxes always start empty and mean a proposed operation, never current state. Edit permits `Y → N`, `N → Y`, `— → !`, and `! → —`; Restore permits only `— → Y`; Remove permits only `N → !`. Each operation previews its target, extension, line/version, and transition, then requires confirmation. A failed install, uninstall, or manifest sync is reported as a failure rather than claimed as success.
+
+**Publishing manifest changes:** Extensions → **Publish manifest changes** previews changes first and only permits `extensions/*.txt`, `extensions/manifest.json`, and tracked `extensions/ext-compat.tsv`. It rejects unrelated local work, including staged or untracked non-extension paths, and rejects renames/copies so Git never stages a human-readable rename arrow as a path. Allowed manifest changes may themselves be staged or untracked. **Run** requires confirmation, creates `extension changes - YYYY-MM-DD`, then pushes the configured upstream. **Revert local manifest changes** previews and confirms before restoring only those allowed paths in both the index and worktree. This feature neither publishes non-extension work, resolves upstream conflicts, nor rolls back a successfully created local commit after a push failure; handle those boundaries manually with Git.
 
 ### Agents — `agent_bootstrap`
 
@@ -391,6 +393,8 @@ Check what can be upgraded without changing anything:
 ```bash
 dotfiles update
 ```
+
+When the fetched upstream commits include files under `extensions/`, Update warns you to review them in **Extensions → Publish manifest changes** before choosing upgrades. It separately warns when those commits also contain non-extension files. These notices are read-only: Update does not pull the repository or change the existing clean-worktree requirement for `dotfiles self`.
 
 Apply upgrades (apt, agent CLIs, etc.):
 

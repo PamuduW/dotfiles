@@ -10,6 +10,7 @@ _update_desc_fn() {
 	case "$1" in
 	0)
 		echo "Run dotfiles update to sync the repo and refresh stowed configs."
+		echo "Warns when fetched upstream changes include extension manifests."
 		echo "Optionally run dotfiles upgrade (with or without --all)."
 		;;
 	1)

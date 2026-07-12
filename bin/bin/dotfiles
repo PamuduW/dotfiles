@@ -719,6 +719,28 @@ _dotfiles_repo_fetch() {
 	git -C "$DOTFILES_DIR" fetch --prune origin "$branch" 2>/dev/null || true
 }
 
+dotfiles_repo_incoming_change_notice() {
+	local branch="${1:-}" path has_extensions=0 has_other=0
+
+	[[ -n "$branch" && "$branch" != "unknown" ]] || return 0
+	git -C "$DOTFILES_DIR" rev-parse --verify "origin/${branch}" >/dev/null 2>&1 || return 0
+
+	while IFS= read -r path; do
+		[[ -z "$path" ]] && continue
+		case "$path" in
+		extensions/*) has_extensions=1 ;;
+		*) has_other=1 ;;
+		esac
+	done < <(git -C "$DOTFILES_DIR" diff --name-only "HEAD..origin/${branch}" 2>/dev/null)
+
+	if ((has_extensions)); then
+		_msg "Upstream changes include extension manifests. Review them in Extensions > Publish manifest changes before updating."
+	fi
+	if ((has_other)); then
+		_msg "Upstream changes also include non-extension files. Review those changes manually before updating."
+	fi
+}
+
 _dotfiles_repo_behind_count() {
 	local branch="$1"
 	local remote_rev="$2"
@@ -2201,7 +2223,7 @@ Subcommands:
                            --yes           skip prune confirmation (required if non-TTY)
   compare [target]         Table diff: manifest vs installed (missing, extra, drift)
                            Use --verbose to list every extra extension
-  sync-manifest <target>   Write extension lines from stdin to manifest (manifest-sync)
+  sync-manifest <target>   Write confirmed extension lines from stdin to manifest (manifest-sync)
   list-edit <target>       TSV: checked|line|status for installed extensions
   list-edit-all            Matrix TSV: all targets (vscode-wsl, vscode-win, cursor-wsl, cursor-win)
   list-missing <target>    TSV: line|id|version for manifest entries not installed
@@ -2210,6 +2232,7 @@ Subcommands:
   list-extra-all           Matrix TSV: extra cells across all targets
   install-lines <target>   Install extension lines read from stdin
   remove-lines <target>    Uninstall extensions (lines or ids) read from stdin
+  manifest-preflight       Show allowed manifest changes; reject unrelated local changes
 
 Targets: vscode-wsl, cursor-wsl, vscode-win, cursor-win, all (default: all)
          list-* and sync-manifest require a single target (not all)
@@ -2252,6 +2275,16 @@ cmd_ext() {
 	list-extra-all)
 		_ext_collect_extra_rows_all
 		return 0
+		;;
+	manifest-preflight)
+		[[ $# -eq 0 ]] || {
+			_err "manifest-preflight takes no arguments"
+			return 1
+		}
+		# shellcheck source=scripts/menus/helpers.sh
+		source "$DOTFILES_DIR/scripts/menus/helpers.sh"
+		ext_manifest_preflight "$DOTFILES_DIR"
+		return
 		;;
 	sync-manifest | list-edit | list-missing | list-extra | install-lines | remove-lines)
 		if [[ $# -lt 1 || "$1" == -* ]]; then
@@ -2405,6 +2438,9 @@ cmd_ext() {
 # --- Subcommands ---
 cmd_update() {
 	print_report_table
+	local branch
+	branch="$(git -C "$DOTFILES_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")"
+	dotfiles_repo_incoming_change_notice "$branch"
 	exit 0
 }
 

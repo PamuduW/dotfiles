@@ -69,61 +69,21 @@ _menu_mx_render_lines() {
 	menu_page_render_lines "$1" "$2" "$3" "$(_menu_mx_fixed_rows)"
 }
 
-_menu_mx_cell_yn() {
-	local mode="$1" m="$2" i="$3"
-
-	case "$mode" in
-	edit)
-		if [[ "$m" -eq 1 ]]; then
-			printf 'Y'
-		elif [[ "$i" -eq 1 ]]; then
-			printf 'N'
-		else
-			printf '—'
-		fi
-		;;
-	restore | remove)
-		if [[ "$i" -eq 1 ]]; then
-			printf 'Y'
-		elif [[ "$m" -eq 1 || "$mode" == restore ]]; then
-			printf 'N'
-		else
-			printf '—'
-		fi
-		;;
-	*)
-		printf '—'
-		;;
-	esac
-}
-
 _menu_mx_cell_glyph() {
-	local mode="$1" m="$2" i="$3" chk="$4" store_ok="$5"
-
-	if [[ "$store_ok" -eq 0 ]]; then
-		printf '×'
-		return
-	fi
-	if [[ "$mode" == edit && "$m" -eq 0 && "$i" -eq 0 && "$chk" -eq 1 ]]; then
-		printf '?'
-		return
-	fi
-	_menu_mx_cell_yn "$mode" "$m" "$i"
+	local m="$2" i="$3" store_ok="$5"
+	ext_matrix_state_glyph "$m" "$i" "$store_ok"
 }
 
 _menu_mx_cell_color() {
 	local mode="$1" glyph="$2" focused="$3"
 
 	case "$glyph" in
-	×)
+	'#')
 		if [[ "$focused" -eq 1 ]]; then
 			ui_color_word "$glyph" err
 		else
 			ui_color_word "$glyph" dim
 		fi
-		;;
-	\?)
-		ui_color_word "$glyph" warn
 		;;
 	Y)
 		ui_color_word "$glyph" ok
@@ -144,7 +104,6 @@ _menu_mx_cell_color() {
 _menu_mx_draw_cell() {
 	local row="$1" col="$2" cur_row="$3" cur_col="$4" row_inverted="$5"
 	local idx m i chk store_ok glyph mark mode="${MENU_MX_MODE:-edit}"
-	local cell_body
 
 	idx="$(_menu_mx_idx "$row" "$col")"
 	m="${MENU_MX_MANIFEST[$idx]:-0}"
@@ -155,9 +114,9 @@ _menu_mx_draw_cell() {
 	mark=' '
 	[[ "$chk" -eq 1 && "$store_ok" -eq 1 ]] && mark='x'
 
-	cell_body="$(printf '%s  [%s]' "$glyph" "$mark")"
 	if [[ "$row_inverted" -eq 1 ]]; then
-		printf '%-*s' "$_MENU_MX_COL_WIDTH" "$cell_body"
+		printf '%s  [%s]' "$glyph" "$mark"
+		printf '%*s' $((_MENU_MX_COL_WIDTH - 6)) ''
 	else
 		_menu_mx_cell_color "$mode" "$glyph" 0
 		printf '  [%s]' "$mark"
@@ -168,28 +127,18 @@ _menu_mx_draw_cell() {
 
 _menu_mx_print_glyph_key() {
 	local cols="$1"
-	local mode="${MENU_MX_MODE:-edit}"
+	local line
+	local -a legend=(
+		'Y >>> in manifest, installed'
+		'N >>> not in manifest, installed'
+		'— >>> in manifest, not installed'
+		'! >>> not in manifest, not installed'
+		'# >>> wrong IDE store'
+	)
 
-	case "$mode" in
-	edit)
-		printf '  %s%s%s\e[K\n' "$C_DIM" \
-			"$(menu_fit_indent "Y in manifest   N installed, not backed up   — not present" "$cols" 2)" \
-			"$C_RESET"
-		printf '  %s%s%s\e[K\n' "$C_DIM" \
-			"$(menu_fit_indent "? add to manifest (may fail on restore)   × wrong IDE store" "$cols" 2)" \
-			"$C_RESET"
-		;;
-	restore)
-		printf '  %s%s%s\e[K\n' "$C_DIM" \
-			"$(menu_fit_indent "Y installed   N missing (in manifest, will install)   — n/a   × wrong IDE store (skipped)" "$cols" 2)" \
-			"$C_RESET"
-		;;
-	remove)
-		printf '  %s%s%s\e[K\n' "$C_DIM" \
-			"$(menu_fit_indent "Y extra installed (not in manifest)   — not an extra here   × wrong IDE store" "$cols" 2)" \
-			"$C_RESET"
-		;;
-	esac
+	for line in "${legend[@]}"; do
+		printf '  %s%s%s\e[K\n' "$C_DIM" "$(menu_fit_indent "$line" "$cols" 2)" "$C_RESET"
+	done
 }
 
 _menu_mx_draw_col_header() {
@@ -220,11 +169,11 @@ _menu_mx_draw_headers() {
 
 _menu_mx_draw_row() {
 	local cur_row="$1" cur_col="$2" idx="$3" cols="$4"
-	local prefix index_w label max_label c lead_w ext_start row_inverted=0
+	local cursor_marker index_w label max_label c lead_w ext_start row_inverted=0
 	local row_prefix_len printed_len
 
-	prefix='  '
-	[[ "$idx" -eq "$cur_row" ]] && prefix='> '
+	cursor_marker='  '
+	[[ "$idx" -eq "$cur_row" ]] && cursor_marker='> '
 	[[ "$idx" -eq "$cur_row" ]] && row_inverted=1
 
 	index_w="$(_menu_mx_index_width "${#MENU_MX_ROWS[@]}")"
@@ -236,14 +185,14 @@ _menu_mx_draw_row() {
 	fi
 
 	printf '  '
-	printf '%s%*d. ' "$prefix" "$index_w" "$((idx + 1))"
+	printf '%s%*d. ' "$cursor_marker" "$index_w" "$((idx + 1))"
 
 	for ((c = 0; c < _MENU_MX_COL_COUNT; c++)); do
 		_menu_mx_draw_cell "$idx" "$c" "$cur_row" "$cur_col" "$row_inverted"
 	done
 
 	label="${MENU_MX_LABELS[$idx]}"
-	row_prefix_len=$((2 + ${#prefix} + index_w + 2 + _MENU_MX_COL_COUNT * _MENU_MX_COL_WIDTH + (_MENU_MX_COL_COUNT - 1) * ${#_MENU_MX_ROW_GAP}))
+	row_prefix_len=$((2 + ${#cursor_marker} + index_w + 2 + _MENU_MX_COL_COUNT * _MENU_MX_COL_WIDTH + (_MENU_MX_COL_COUNT - 1) * ${#_MENU_MX_ROW_GAP}))
 	max_label=$((cols - ext_start - 2))
 	((max_label < 12)) && max_label=12
 	if ((${#label} > max_label)); then
@@ -346,7 +295,7 @@ menu_matrix_run() {
 			toggle)
 				idx="$(_menu_mx_idx "$row" "$col")"
 				if [[ "${MENU_MX_STORE_OK[$idx]:-0}" -eq 0 ]]; then
-					status_msg='× incompatible with this IDE store'
+					status_msg='# incompatible with this IDE store'
 				elif ext_matrix_toggle_cell "$row" "$col"; then
 					status_msg=''
 				else

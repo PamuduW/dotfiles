@@ -14,6 +14,69 @@ resolve_dotfiles_cmd() {
 	return 1
 }
 
+ext_manifest_path_allowed() {
+	local repo="$1" path="$2" extension_name
+
+	case "$path" in
+	extensions/*.txt)
+		extension_name="${path#extensions/}"
+		[[ "$extension_name" != */* ]]
+		return
+		;;
+	extensions/manifest.json) return 0 ;;
+	extensions/ext-compat.tsv)
+		git -C "$repo" ls-files --error-unmatch -- "$path" >/dev/null 2>&1
+		return
+		;;
+	esac
+	return 1
+}
+
+ext_manifest_preflight() {
+	local repo="${1:-$DOTFILES_DIR}" status entry path original xy invalid=0
+	local -a changed=() invalid_paths=()
+
+	if [[ "$(git -C "$repo" rev-parse --is-inside-work-tree 2>/dev/null)" != true ]]; then
+		echo "Error: manifest publishing requires a Git worktree: $repo" >&2
+		return 1
+	fi
+
+	status="$(git -C "$repo" status --short --untracked-files=all)"
+	printf 'Manifest change summary (git status --short):\n'
+	printf '%s\n' "${status:-  (clean)}"
+	printf '\nUnstaged manifest changes (git diff --name-status):\n'
+	git -C "$repo" diff --name-status
+	printf '\nStaged manifest changes (git diff --cached --name-status):\n'
+	git -C "$repo" diff --cached --name-status
+
+	EXT_MANIFEST_CHANGED_PATHS=()
+	while IFS= read -r -d '' entry; do
+		[[ -z "$entry" ]] && continue
+		xy="${entry:0:2}"
+		path="${entry:3}"
+		if [[ "$xy" == *R* || "$xy" == *C* ]]; then
+			IFS= read -r -d '' original || true
+			invalid_paths+=("rename/copy: $path")
+			invalid=1
+			continue
+		fi
+		changed+=("$path")
+		if ext_manifest_path_allowed "$repo" "$path"; then
+			EXT_MANIFEST_CHANGED_PATHS+=("$path")
+		else
+			invalid_paths+=("$path")
+			invalid=1
+		fi
+	done < <(git -C "$repo" status --porcelain=v1 -z --untracked-files=all)
+
+	if ((invalid)); then
+		printf '\nRefusing: non-extension local changes are present:\n' >&2
+		printf '  %s\n' "${invalid_paths[@]}" >&2
+		return 1
+	fi
+	return 0
+}
+
 _ext_pick_target_desc_fn() {
 	case "$1" in
 	0)
@@ -164,19 +227,53 @@ _menu_mx_row_desc_fn() {
 	fi
 }
 
+ext_matrix_state_glyph() {
+	local manifest="$1" installed="$2" store_ok="$3"
+
+	if [[ "$store_ok" -eq 0 ]]; then
+		printf '#'
+		return
+	fi
+	case "${manifest}${installed}" in
+	11) printf 'Y' ;;
+	01) printf 'N' ;;
+	10) printf '—' ;;
+	00) printf '!' ;;
+	esac
+}
+
+ext_matrix_transition() {
+	local mode="$1" baseline_state="$2" checked="$3"
+
+	[[ "$checked" -eq 1 ]] || {
+		printf 'no-op'
+		return
+	}
+	case "${mode}:${baseline_state}" in
+	edit:Y) printf 'N' ;;
+	edit:N) printf 'Y' ;;
+	edit:—) printf '!' ;;
+	edit:'!') printf '—' ;;
+	restore:—) printf 'Y' ;;
+	remove:N) printf '!' ;;
+	*) printf 'no-op' ;;
+	esac
+}
+
 ext_matrix_from_tsv() {
 	local dotfiles_cmd="$1"
 	local subcmd="$2"
-	local mode line ext_id display
+	local mode="${3:-}" line ext_id display
 	local -a lines=()
-	local c idx m i cell_line store_ok col_key
+	local c idx m i cell_line store_ok
 
 	case "$subcmd" in
-	list-edit-all) mode=edit ;;
-	list-missing-all) mode=restore ;;
-	list-extra-all) mode=remove ;;
+	list-edit-all) [[ -n "$mode" ]] || mode=edit ;;
+	list-missing-all) [[ -n "$mode" ]] || mode=restore ;;
+	list-extra-all) [[ -n "$mode" ]] || mode=remove ;;
 	*) return 1 ;;
 	esac
+	case "$mode" in edit | restore | remove) ;; *) return 1 ;; esac
 
 	mapfile -t lines < <("$dotfiles_cmd" ext "$subcmd")
 
@@ -187,6 +284,8 @@ ext_matrix_from_tsv() {
 	MENU_MX_MANIFEST=()
 	MENU_MX_INSTALLED=()
 	MENU_MX_CHECKED=()
+	MENU_MX_PENDING_ACTION=()
+	MENU_MX_PENDING_LINES=()
 	MENU_MX_TOGGLEABLE=()
 	MENU_MX_STORE_OK=()
 	MENU_MX_COL_KEYS=(vscode-wsl vscode-win cursor-wsl cursor-win)
@@ -212,40 +311,18 @@ ext_matrix_from_tsv() {
 			MENU_MX_MANIFEST[$idx]="$m"
 			MENU_MX_INSTALLED[$idx]="$i"
 			MENU_MX_STORE_OK[$idx]="${store_ok:-1}"
-			col_key="${MENU_MX_COL_KEYS[$c]}"
+			MENU_MX_CHECKED[$idx]=0
+			MENU_MX_PENDING_ACTION[$idx]=no-op
+			MENU_MX_PENDING_LINES[$idx]=''
 			if [[ "${MENU_MX_STORE_OK[$idx]}" -eq 0 ]]; then
-				MENU_MX_CHECKED[$idx]=0
 				MENU_MX_TOGGLEABLE[$idx]=0
 				continue
 			fi
-			case "$mode" in
-			edit)
-				MENU_MX_CHECKED[$idx]="$m"
-				if [[ "$m" -eq 1 || "$i" -eq 1 ]]; then
-					MENU_MX_TOGGLEABLE[$idx]=1
-				else
-					MENU_MX_CHECKED[$idx]=0
-					MENU_MX_TOGGLEABLE[$idx]=1
-				fi
-				;;
-			restore)
-				if [[ "$m" -eq 1 && "$i" -eq 0 ]]; then
-					MENU_MX_CHECKED[$idx]=1
-					MENU_MX_TOGGLEABLE[$idx]=1
-				else
-					MENU_MX_CHECKED[$idx]=0
-					MENU_MX_TOGGLEABLE[$idx]=0
-				fi
-				;;
-			remove)
-				MENU_MX_CHECKED[$idx]=0
-				if [[ "$i" -eq 1 && "$m" -eq 0 ]]; then
-					MENU_MX_TOGGLEABLE[$idx]=1
-				else
-					MENU_MX_TOGGLEABLE[$idx]=0
-				fi
-				;;
-			esac
+			if [[ "$(ext_matrix_transition "$mode" "$(ext_matrix_state_glyph "$m" "$i" "${MENU_MX_STORE_OK[$idx]}")" 1)" == no-op ]]; then
+				MENU_MX_TOGGLEABLE[$idx]=0
+			else
+				MENU_MX_TOGGLEABLE[$idx]=1
+			fi
 		done
 	done
 
@@ -255,7 +332,7 @@ ext_matrix_from_tsv() {
 
 ext_matrix_toggle_cell() {
 	local row="$1" col="$2"
-	local idx c other line ext_id
+	local idx c other line manifest_fallback='' ext_id baseline_state pending_action
 
 	idx=$((row * 4 + col))
 	ext_id="${MENU_MX_ROWS[$row]}"
@@ -266,21 +343,30 @@ ext_matrix_toggle_cell() {
 
 	if [[ "${MENU_MX_CHECKED[$idx]:-0}" -eq 1 ]]; then
 		MENU_MX_CHECKED[$idx]=0
-		if [[ "${MENU_MX_MANIFEST[$idx]:-0}" -eq 0 ]]; then
-			MENU_MX_LINES[$idx]=''
-		fi
+		MENU_MX_PENDING_ACTION[$idx]=no-op
+		MENU_MX_PENDING_LINES[$idx]=''
 		return 0
 	fi
 
+	baseline_state="$(ext_matrix_state_glyph "${MENU_MX_MANIFEST[$idx]:-0}" "${MENU_MX_INSTALLED[$idx]:-0}" "${MENU_MX_STORE_OK[$idx]:-1}")"
+	pending_action="$(ext_matrix_transition "${MENU_MX_MODE:-edit}" "$baseline_state" 1)"
+	[[ "$pending_action" != no-op ]] || return 1
 	MENU_MX_CHECKED[$idx]=1
+	MENU_MX_PENDING_ACTION[$idx]="$pending_action"
 	line="${MENU_MX_LINES[$idx]:-}"
 	if [[ -z "$line" ]]; then
 		for c in 0 1 2 3; do
 			other=$((row * 4 + c))
-			[[ -n "${MENU_MX_LINES[$other]:-}" ]] && line="${MENU_MX_LINES[$other]}"
+			[[ "${MENU_MX_STORE_OK[$other]:-0}" -eq 1 ]] || continue
+			if [[ "${MENU_MX_INSTALLED[$other]:-0}" -eq 1 && -n "${MENU_MX_LINES[$other]:-}" ]]; then
+				line="${MENU_MX_LINES[$other]}"
+				break
+			fi
+			[[ "${MENU_MX_MANIFEST[$other]:-0}" -eq 1 && -n "${MENU_MX_LINES[$other]:-}" ]] && manifest_fallback="${MENU_MX_LINES[$other]}"
 		done
+		[[ -n "$line" ]] || line="$manifest_fallback"
 		[[ -z "$line" ]] && line="$ext_id"
-		MENU_MX_LINES[$idx]="$line"
+		MENU_MX_PENDING_LINES[$idx]="$line"
 	fi
 	return 0
 }
@@ -344,36 +430,111 @@ ext_matrix_count_checked() {
 	printf '%s\n' "$count"
 }
 
+ext_matrix_collect_changes() {
+	local mode="$1" row col idx target ext_id before after
+
+	for row in "${!MENU_MX_ROWS[@]}"; do
+		for col in 0 1 2 3; do
+			idx=$((row * 4 + col))
+			after="${MENU_MX_PENDING_ACTION[$idx]:-no-op}"
+			[[ "$after" != no-op ]] || continue
+			before="$(ext_matrix_state_glyph "${MENU_MX_MANIFEST[$idx]:-0}" "${MENU_MX_INSTALLED[$idx]:-0}" "${MENU_MX_STORE_OK[$idx]:-1}")"
+			target="${MENU_MX_COL_KEYS[$col]}"
+			ext_id="${MENU_MX_ROWS[$row]}"
+			printf '%s: %s  %s → %s\n' "$target" "$ext_id" "$before" "$after"
+		done
+	done
+}
+
+ext_matrix_collect_action_preview() {
+	local mode="$1" row col idx target ext_id line before after
+
+	for row in "${!MENU_MX_ROWS[@]}"; do
+		for col in 0 1 2 3; do
+			idx=$((row * 4 + col))
+			after="${MENU_MX_PENDING_ACTION[$idx]:-no-op}"
+			[[ "$after" != no-op ]] || continue
+			before="$(ext_matrix_state_glyph "${MENU_MX_MANIFEST[$idx]:-0}" "${MENU_MX_INSTALLED[$idx]:-0}" "${MENU_MX_STORE_OK[$idx]:-1}")"
+			target="${MENU_MX_COL_KEYS[$col]}"
+			ext_id="${MENU_MX_ROWS[$row]}"
+			line="${MENU_MX_LINES[$idx]:-${MENU_MX_PENDING_LINES[$idx]:-$ext_id}}"
+			printf '%s: %s  %s  %s → %s\n' "$target" "$ext_id" "$line" "$before" "$after"
+		done
+	done
+}
+
+ext_matrix_apply_action() {
+	local dotfiles_cmd="$1" mode="$2"
+	local verb failure_word row col idx target ext_id line before after failed=0
+
+	case "$mode" in
+	restore) verb=install-lines; failure_word=install ;;
+	remove) verb=remove-lines; failure_word=uninstall ;;
+	*) return 1 ;;
+	esac
+
+	for row in "${!MENU_MX_ROWS[@]}"; do
+		for col in 0 1 2 3; do
+			idx=$((row * 4 + col))
+			after="${MENU_MX_PENDING_ACTION[$idx]:-no-op}"
+			[[ "$after" != no-op ]] || continue
+			target="${MENU_MX_COL_KEYS[$col]}"
+			ext_id="${MENU_MX_ROWS[$row]}"
+			line="${MENU_MX_LINES[$idx]:-${MENU_MX_PENDING_LINES[$idx]:-$ext_id}}"
+			before="$(ext_matrix_state_glyph "${MENU_MX_MANIFEST[$idx]:-0}" "${MENU_MX_INSTALLED[$idx]:-0}" "${MENU_MX_STORE_OK[$idx]:-1}")"
+			if printf '%s\n' "$line" | "$dotfiles_cmd" ext "$verb" "$target"; then
+				printf '%s: %s  %s  %s → %s\n' "$target" "$ext_id" "$line" "$before" "$after"
+			else
+				printf '%s: %s  %s  %s → %s (%s failed)\n' "$target" "$ext_id" "$line" "$before" "$before" "$failure_word"
+				failed=1
+			fi
+		done
+	done
+	return "$failed"
+}
+
+ext_matrix_target_has_changes() {
+	local col="$1" row idx
+
+	for row in "${!MENU_MX_ROWS[@]}"; do
+		idx=$((row * 4 + col))
+		[[ "${MENU_MX_PENDING_ACTION[$idx]:-no-op}" != no-op ]] && return 0
+	done
+	return 1
+}
+
 ext_matrix_apply_edit() {
 	local dotfiles_cmd="$1"
-	local risky_count target col tmpfile row idx line
-
-	risky_count="$(ext_matrix_count_risky edit)"
-	if [[ "$risky_count" -gt 0 ]]; then
-		printf '\n' >/dev/tty
-		printf '  %s%s%s\n' "$C_YELLOW" \
-			"Warning: ${risky_count} checked cell(s) add manifest entries without a local install." \
-			"$C_RESET" >/dev/tty
-		ext_matrix_format_risky_lines edit 12 >/dev/tty
-		printf '\n' >/dev/tty
-		if ! ui_confirm_yes_no "Save manifest anyway?"; then
-			return 1
-		fi
-	fi
+	local target col tmpfile row idx line pending_action include count failed=0
 
 	for col in 0 1 2 3; do
+		ext_matrix_target_has_changes "$col" || continue
 		target="${MENU_MX_COL_KEYS[$col]}"
 		tmpfile="$(mktemp)"
 		for row in "${!MENU_MX_ROWS[@]}"; do
 			idx=$((row * 4 + col))
-			[[ "${MENU_MX_STORE_OK[$idx]:-0}" -eq 0 ]] && continue
-			[[ "${MENU_MX_CHECKED[$idx]:-0}" -eq 1 ]] || continue
+			include="${MENU_MX_MANIFEST[$idx]:-0}"
+			pending_action="${MENU_MX_PENDING_ACTION[$idx]:-no-op}"
+			case "$pending_action" in
+			Y | —) include=1 ;;
+			N | '!') include=0 ;;
+			esac
+			[[ "$include" -eq 1 ]] || continue
 			line="${MENU_MX_LINES[$idx]:-}"
+			[[ -z "$line" ]] && line="${MENU_MX_PENDING_LINES[$idx]:-}"
 			[[ -n "$line" ]] && printf '%s\n' "$line"
 		done | sort -u >"$tmpfile"
-		"$dotfiles_cmd" ext sync-manifest "$target" <"$tmpfile"
+		if ! "$dotfiles_cmd" ext sync-manifest "$target" <"$tmpfile"; then
+			printf '  %s: manifest sync failed\n' "$target" >&2
+			failed=1
+			rm -f "$tmpfile"
+			continue
+		fi
+		count="$(wc -l <"$tmpfile" | tr -d ' ')"
+		printf '  %s: %s manifest entr%s\n' "$target" "$count" "$([[ "$count" -eq 1 ]] && echo y || echo ies)"
 		rm -f "$tmpfile"
 	done
+	return "$failed"
 }
 
 ext_matrix_apply_restore() {
