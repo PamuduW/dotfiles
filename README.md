@@ -105,7 +105,7 @@ Use arrow keys to navigate and Enter to select.
 | ------ | ---------------- |
 | Initial setup | **Check status** — component install summary table · **Run setup** — toggle menu, confirm loop, install · **Back** |
 | Update | **Update & upgrade** — `dotfiles update` report, then optional `dotfiles upgrade` (prompts for `--all`) · **Back** |
-| Extensions | **Check status** (`ext compare all`) · **Edit manifest** · **Restore** (missing only) · **Remove** (extras) · **Back** |
+| Extensions | **Check status** (`ext compare all`) · **Edit manifest** · **Restore** (missing only) · **Remove** (extras) · **Publish manifest changes** · **Back** |
 | Agents | **Check status** · **Clone/update repo** · **Run full bootstrap** · **Refresh skills only** · **Link agentboot** · **Scaffold repo (agentboot)** · **Run doctor** · **Back** |
 | Quit | Exit |
 
@@ -259,6 +259,8 @@ dotfiles ext compare all
 **Workspace recommendations:** copy `templates/vscode-extensions.json` to a repo's `.vscode/extensions.json` for lean team recommendations (does not auto-install).
 
 Access via boot menu **Extensions**, `dotfiles menu`, or `./install.sh --extensions`.
+
+**Publishing manifest changes:** Extensions → **Publish manifest changes** previews changes first and only permits `extensions/*.txt`, `extensions/manifest.json`, and tracked `extensions/ext-compat.tsv`. It rejects unrelated local work, including staged or untracked non-extension paths; allowed manifest changes may themselves be staged or untracked. **Run** requires confirmation, creates `extension changes - YYYY-MM-DD`, then pushes the configured upstream. **Revert local manifest changes** restores only those allowed paths in both the index and worktree. This feature neither publishes non-extension work nor resolves upstream conflicts; handle those manually with Git.
 
 ### Agents — `agent_bootstrap`
 
