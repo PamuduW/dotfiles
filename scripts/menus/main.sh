@@ -11,14 +11,10 @@ _main_menu_desc_fn() {
 		echo "Prompts before upgrading Node, Go, fonts, and other tools."
 		;;
 	2)
-		echo "Manage IDE extension manifests across VS Code and Cursor."
-		echo "Compare, edit, restore missing, or remove extras."
-		;;
-	3)
 		echo "Install and maintain agent_bootstrap (skills, links, doctor)."
 		echo "Clone repo, run bootstrap, or scaffold a new project."
 		;;
-	4)
+	3)
 		echo "Exit the dotfiles menu."
 		;;
 	esac
@@ -27,11 +23,10 @@ _main_menu_desc_fn() {
 _main_menu_labels=(
 	"Initial setup"
 	"Update"
-	"Extensions"
 	"Agents"
 	"Quit"
 )
-_main_menu_keys=(initial update extensions agents quit)
+_main_menu_keys=(initial update agents quit)
 
 main_menu_loop() {
 	local choice=''
@@ -52,7 +47,6 @@ main_menu_loop() {
 		case "$choice" in
 		initial) initial_setup_menu ;;
 		update) update_menu ;;
-		extensions) extensions_menu ;;
 		agents) agents_menu ;;
 		quit) exit 0 ;;
 		esac

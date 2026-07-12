@@ -24,8 +24,6 @@ source "$_LIB_DIR/menu_simple.sh"
 source "$_LIB_DIR/menu_paging.sh"
 # shellcheck source=scripts/lib/menu_checkbox.sh
 source "$_LIB_DIR/menu_checkbox.sh"
-# shellcheck source=scripts/lib/menu_matrix.sh
-source "$_LIB_DIR/menu_matrix.sh"
 # shellcheck source=scripts/lib/agent_bootstrap_paths.sh
 source "$_LIB_DIR/agent_bootstrap_paths.sh"
 # shellcheck source=scripts/lib/menu_runner.sh

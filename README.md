@@ -4,7 +4,7 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 
 ## What you get
 
-- **Interactive boot menu** — `dotfiles` / `dotfiles menu` or `./install.sh`; loops through initial setup, update, extensions, and agents
+- **Interactive boot menu** — `dotfiles` / `dotfiles menu` or `./install.sh`; loops through initial setup, update, and agents
 - Custom Bash prompt: time, user@host, path, git branch + status markers, exit code
 - Cross-terminal history syncing (`history -a; history -n`) with 10k line history
 - Modern CLI tools: `eza`, `fzf` (Ctrl+R/Ctrl+T/Alt+C), `zoxide`, `ripgrep`, `fd`
@@ -35,16 +35,6 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 │   └── .inputrc        # better tab completion + history search
 ├── packages/
 │   └── packages.txt    # apt packages with @tag sections
-├── extensions/         # IDE extension manifests (git-tracked)
-│   ├── vscode-wsl.txt
-│   ├── cursor-wsl.txt
-│   ├── vscode-win.txt
-│   ├── cursor-win.txt
-│   ├── cursor-core.txt       # lean Cursor restore target (~39 extensions)
-│   ├── manifest.json         # backup metadata (timestamp, counts)
-│   └── extensions-decisions.md  # prune/add checklist before applying changes
-├── templates/
-│   └── vscode-extensions.json  # lean workspace recommendations template
 ├── windows/
 │   └── terminal-settings.json  # Windows Terminal profile export (manual import)
 ├── log/                # install logs (gitignored)
@@ -92,7 +82,6 @@ The main menu **loops** until you choose Quit:
 === Dotfiles ===
   Initial setup
   Update
-  Extensions
   Agents
   Quit
 ```
@@ -104,8 +93,7 @@ Use arrow keys to navigate and Enter to select.
 | Option | Submenu / action |
 | ------ | ---------------- |
 | Initial setup | **Check status** — component install summary table · **Run setup** — toggle menu, confirm loop, install · **Back** |
-| Update | **Update & upgrade** — `dotfiles update` report and incoming-extension warning, then optional `dotfiles upgrade` (prompts for `--all`) · **Back** |
-| Extensions | **Check status** (`ext compare all`) · **Edit manifest** · **Restore** (missing only) · **Remove** (extras) · **Publish manifest changes** · **Back** |
+| Update | **Update & upgrade** — `dotfiles update` report, then optional `dotfiles upgrade` (prompts for `--all`) · **Back** |
 | Agents | **Check status** · **Clone/update repo** · **Run full bootstrap** · **Refresh skills only** · **Link agentboot** · **Scaffold repo (agentboot)** · **Run doctor** · **Back** |
 | Quit | Exit |
 
@@ -116,7 +104,6 @@ Skip the boot menu with explicit flags:
 ```bash
 ./install.sh --initial      # Initial setup submenu (or run setup if non-interactive)
 ./install.sh --update       # Update submenu
-./install.sh --extensions   # Extensions submenu
 ./install.sh --agents       # Agents submenu
 ./install.sh --help         # Usage
 ```
@@ -128,7 +115,6 @@ Skip the boot menu with explicit flags:
 | `./install.sh` (no flag, no TTY) | Runs **Initial setup → Run setup** with all components enabled by default |
 | `./install.sh --initial` (no TTY) | Same as above — prints execution plan to stdout, then installs |
 | `./install.sh --update` | Runs update flow (non-interactive where applicable) |
-| `./install.sh --extensions` | Opens extensions submenu (requires TTY for interactive editor) |
 | `./install.sh --agents` | Opens agents submenu (requires TTY for interactive menu) |
 
 Set `DOTFILES_COMPONENTS` to a comma-separated list of component keys to install only those (e.g. `DOTFILES_COMPONENTS=docker,portainer,lazygit`). When git identity is enabled but not prompted, existing `git config --global` values are used.
@@ -208,62 +194,6 @@ Global command (stowed to `~/bin/dotfiles`, on PATH like `ex` and `clip`):
 
 Runs **unprivileged**; only the apt portion invokes `sudo` internally (single prompt). Agent CLI and npm updates stay under your user.
 
-### `dotfiles ext` — IDE extensions
-
-Manage VS Code and Cursor extensions across four targets: `vscode-wsl`, `cursor-wsl`, `vscode-win`, `cursor-win`.
-
-| Subcommand | Action |
-| ---------- | ------ |
-| `dotfiles ext check [target\|all]` | Table of installed vs manifest counts per target |
-| `dotfiles ext backup [target\|all]` | Export manifests to `extensions/<target>.txt` + update `manifest.json` |
-| `dotfiles ext restore [target\|all]` | Install from `extensions/<target>.txt` (`publisher.ext@version` per line) |
-| `dotfiles ext restore --missing-only` | Install only manifest entries not already installed |
-| `dotfiles ext restore --prune` | Install all manifest entries, then uninstall extras |
-| `dotfiles ext restore --prune-only` | Uninstall extras only (no install pass) |
-| `dotfiles ext compare [target\|all]` | Diff manifest vs installed: missing, extra, version drift |
-| `dotfiles ext sync-manifest <target>` | Write extension lines from stdin to `extensions/<target>.txt` |
-| `dotfiles ext list-edit <target>` | TSV for menu: installed extensions (checked/line/status) |
-| `dotfiles ext list-missing <target>` | TSV for menu: manifest entries not installed |
-| `dotfiles ext list-extra <target>` | TSV for menu: installed extras not in manifest |
-| `dotfiles ext install-lines <target>` | Install extension lines read from stdin |
-| `dotfiles ext remove-lines <target>` | Uninstall extensions (lines or ids) read from stdin |
-
-Restore always reads `extensions/<target>.txt` — there is no custom manifest path argument. Use `sync-manifest` or edit the file to change what gets restored.
-
-`list-*`, `sync-manifest`, `install-lines`, and `remove-lines` require a single target (not `all`).
-
-**Manifest layout** (`extensions/`):
-
-- `vscode-wsl.txt`, `cursor-wsl.txt`, `vscode-win.txt`, `cursor-win.txt` — lean inventories (one `publisher.ext@version` per line; see **Applying lean set** below)
-- `cursor-core.txt` — lean Cursor restore set (keep list + recommended adds, minus prune candidates)
-- `manifest.json` — `{ "generated": "<ISO>", "targets": { "<name>": { "count", "method" } } }`
-- `extensions-decisions.md` — human checklist to confirm prune/add before applying changes
-
-**CLI examples:**
-
-```bash
-# Restore from extensions/cursor-wsl.txt
-dotfiles ext restore cursor-wsl
-
-# Install only missing, then prune extras
-dotfiles ext restore cursor-wsl --missing-only
-dotfiles ext restore cursor-wsl --prune-only
-
-# Backup all targets after manual changes
-dotfiles ext backup all
-
-# Compare drift (also used by Extensions → Check status)
-dotfiles ext compare all
-```
-
-**Workspace recommendations:** copy `templates/vscode-extensions.json` to a repo's `.vscode/extensions.json` for lean team recommendations (does not auto-install).
-
-Access via boot menu **Extensions**, `dotfiles menu`, or `./install.sh --extensions`.
-
-**Extension matrix:** Every Edit, Restore, and Remove screen uses the same state index: `Y` is in the manifest and installed, `N` is installed but absent from the manifest, `—` is in the manifest but missing locally, `!` is neither, and `#` is a wrong-store cell that cannot be changed. Checkboxes always start empty and mean a proposed operation, never current state. Edit permits `Y → N`, `N → Y`, `— → !`, and `! → —`; Restore permits only `— → Y`; Remove permits only `N → !`. Each operation previews its target, extension, line/version, and transition, then requires confirmation. A failed install, uninstall, or manifest sync is reported as a failure rather than claimed as success.
-
-**Publishing manifest changes:** Extensions → **Publish manifest changes** previews changes first and only permits `extensions/*.txt`, `extensions/manifest.json`, and tracked `extensions/ext-compat.tsv`. It rejects unrelated local work, including staged or untracked non-extension paths, and rejects renames/copies so Git never stages a human-readable rename arrow as a path. Allowed manifest changes may themselves be staged or untracked. **Run** requires confirmation, creates `extension changes - YYYY-MM-DD`, then pushes the configured upstream. **Revert local manifest changes** previews and confirms before restoring only those allowed paths in both the index and worktree. This feature neither publishes non-extension work, resolves upstream conflicts, nor rolls back a successfully created local commit after a push failure; handle those boundaries manually with Git.
-
 ### Agents — `agent_bootstrap`
 
 The **Agents** submenu clones and bootstraps [`agent_bootstrap`](https://github.com/PamuduW/agent_bootstrap) as a sibling of this dotfiles repo (e.g. `~/Dev/agent_bootstrap` next to `~/Dev/dotfiles`).
@@ -288,46 +218,6 @@ The **Agents** submenu clones and bootstraps [`agent_bootstrap`](https://github.
 | `AGENT_BOOTSTRAP_ALLOW_OVERRIDE` | unset | Set to `1` to use a non-canonical `AGENT_BOOTSTRAP_HOME` (**unsafe** — can point bootstrap at an arbitrary tree) |
 
 When `AGENT_BOOTSTRAP_REPO_URL` is overridden, clone is refused unless the URL is `git@github.com:PamuduW/agent_bootstrap.git` or `https://github.com/PamuduW/agent_bootstrap.git`, or `AGENT_BOOTSTRAP_REPO_URL_ALLOW_ANY=1` is set.
-
-### Applying lean set
-
-Lean manifests were applied on **2026-07-08** per `extensions/extensions-decisions.md` (user confirmed prune/add on all targets). Counts:
-
-| Target | Before | After |
-| ------ | -----: | ----: |
-| `cursor-wsl` | 49 | 39 |
-| `cursor-win` | 96 | 40 |
-| `vscode-wsl` | 82 | 45 |
-| `vscode-win` | 114 | 63 |
-
-**Canonical Cursor set:** `extensions/cursor-core.txt` (~39 extensions). `cursor-wsl.txt` and `cursor-win.txt` match this set (+ `anysphere.remote-wsl` on Windows).
-
-**What was pruned (high confidence):** Flutter/Dart, Azure service sprawl, legacy Docker, Copilot/ChatGPT companions, Java stack, HTML preview cluster, redundant Git/GitLab/bash-pack extensions, web front-end noise, misc low-use tools. VS Code Windows also dropped AKS tools, Jupyter stack, and remote meta-pack.
-
-**What was added:** `hashicorp.terraform`, `amazonwebservices.aws-toolkit-vscode`, `usernamehw.errorlens`, `tamasfe.even-better-toml`, `eamodio.gitlens` (WSL targets; already on vscode-win). GCP Cloud Code was **not** added (not in any prior manifest).
-
-**Apply to live editors** (open the target editor first — restore without a running server may fail on WSL):
-
-```bash
-# Install lean manifest per target
-dotfiles ext restore cursor-wsl
-dotfiles ext restore cursor-win
-dotfiles ext restore vscode-wsl
-dotfiles ext restore vscode-win
-
-# Then prune extras not in manifest (destructive — review with compare first)
-dotfiles ext compare cursor-wsl    # optional: preview drift
-dotfiles ext restore cursor-wsl --prune
-# repeat --prune per target, or:
-dotfiles ext restore all --prune
-
-# Refresh manifests after live changes
-dotfiles ext backup all
-```
-
-Manifest metadata: `extensions/manifest.json` (`note: lean-applied`).
-
----
 
 ## Bash prompt
 
@@ -393,8 +283,6 @@ Check what can be upgraded without changing anything:
 ```bash
 dotfiles update
 ```
-
-When the fetched upstream commits include files under `extensions/`, Update warns you to review them in **Extensions → Publish manifest changes** before choosing upgrades. It separately warns when those commits also contain non-extension files. These notices are read-only: Update does not pull the repository or change the existing clean-worktree requirement for `dotfiles self`.
 
 Apply upgrades (apt, agent CLIs, etc.):
 

@@ -57,8 +57,6 @@ source "$DOTFILES_DIR/scripts/menus/main.sh"
 source "$DOTFILES_DIR/scripts/menus/initial_setup.sh"
 # shellcheck source=scripts/menus/update.sh
 source "$DOTFILES_DIR/scripts/menus/update.sh"
-# shellcheck source=scripts/menus/extensions.sh
-source "$DOTFILES_DIR/scripts/menus/extensions.sh"
 # shellcheck source=scripts/menus/agents.sh
 source "$DOTFILES_DIR/scripts/menus/agents.sh"
 
@@ -119,7 +117,6 @@ Usage: $(basename "$0") [OPTIONS]
 Options:
   --initial     Open initial setup submenu (or run setup non-interactively)
   --update      Open update submenu
-  --extensions  Open IDE extensions submenu
   --agents      Open agents bootstrap submenu
   --help        Show this help and exit
 
@@ -144,10 +141,6 @@ main() {
 			;;
 		--update)
 			mode="update"
-			shift
-			;;
-		--extensions)
-			mode="extensions"
 			shift
 			;;
 		--agents)
@@ -185,9 +178,6 @@ main() {
 		;;
 	update)
 		update_menu
-		;;
-	extensions)
-		extensions_menu
 		;;
 	agents)
 		agents_menu

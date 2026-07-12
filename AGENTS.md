@@ -89,7 +89,7 @@ Scaffolded from `agent_bootstrap/base/` via `agentboot`. Canonical templates sta
 
 ## Project
 
-**Purpose:** WSL Debian/Ubuntu dotfiles — interactive installer, GNU Stow symlinks, IDE extension manifests, and integration with sibling `agent_bootstrap` for skills and agent scaffolding.
+**Purpose:** WSL Debian/Ubuntu dotfiles — interactive installer, GNU Stow symlinks, and integration with sibling `agent_bootstrap` for skills and agent scaffolding.
 
 **Stack:** bash (installer + TUI menus), GNU Stow (`bash/`, `bin/`, `readline/` packages), `dotfiles` CLI (`bin/bin/dotfiles`).
 
@@ -99,11 +99,10 @@ Scaffolded from `agent_bootstrap/base/` via `agentboot`. Canonical templates sta
 |------|------|
 | `install.sh` | Shim → `scripts/install.sh` (boot menu + component install) |
 | `scripts/install.sh` | Real installer; logs to `log/` |
-| `scripts/lib/` | TUI (`menu_simple`, `menu_matrix`, `report_table`), component registry |
-| `scripts/menus/` | Main, initial setup, update, extensions, agents submenus |
-| `bin/bin/dotfiles` | `update`, `upgrade`, `ext`, `restow`, `menu` |
+| `scripts/lib/` | TUI (`menu_simple`, `report_table`), component registry |
+| `scripts/menus/` | Main, initial setup, update, agents submenus |
+| `bin/bin/dotfiles` | `update`, `upgrade`, `restow`, `menu` |
 | `packages/packages.txt` | Apt components with `@tag` sections |
-| `extensions/` | VS Code / Cursor manifests (`vscode-wsl`, `cursor-wsl`, `vscode-win`, `cursor-win`) |
 | `bash/.bashrc` | Stowed shell config; sources `agent_bootstrap_paths.sh` |
 
 **Sibling repo:** `agent_bootstrap/` next to this repo (`../agent_bootstrap`). Agents menu clones, bootstraps, and links `agentboot` from there. `AGENT_BOOTSTRAP_HOME` resolves to the sibling when `install.sh` exists.
@@ -122,5 +121,4 @@ find scripts -name '*.sh' -print0 | xargs -0 -n1 bash -n   # shell syntax check
 - Stow only deploys `bash`, `bin`, `readline` — not agent policy files (those come from `agent_bootstrap`).
 - Menu changes: extend `scripts/lib/menu_*.sh` and wire in `scripts/menus/`.
 - Component installs: registry in `scripts/lib/components/`; keep probes honest for status tables.
-- Extension edits use the matrix TUI (`dotfiles` → Extensions); manifests live under `extensions/*.txt`.
 - Prefer minimal diffs; match existing bash patterns (`set -euo pipefail`, `shellcheck`).
