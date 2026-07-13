@@ -7,10 +7,13 @@ _AGENTS_LIB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/../lib"
 source "$_AGENTS_LIB_DIR/agents_status_report.sh"
 # shellcheck source=scripts/lib/git_sync_report.sh
 source "$_AGENTS_LIB_DIR/git_sync_report.sh"
+# shellcheck source=scripts/lib/github_token.sh
+source "$_AGENTS_LIB_DIR/github_token.sh"
 
 _agents_menu_labels=(
 	"Check status"
 	"Clone/update repo"
+	"Configure GitHub token"
 	"Run full bootstrap"
 	"Refresh skills only"
 	"Link agentboot"
@@ -18,7 +21,7 @@ _agents_menu_labels=(
 	"Run doctor"
 	"Back"
 )
-_agents_menu_keys=(status repo bootstrap skills link agentboot doctor back)
+_agents_menu_keys=(status repo github_token bootstrap skills link agentboot doctor back)
 
 _agents_menu_desc_fn() {
 	case "$1" in
@@ -31,29 +34,43 @@ _agents_menu_desc_fn() {
 		echo "Required before bootstrap, skills refresh, or doctor."
 		;;
 	2)
+		echo "Save a GitHub token outside this repo for bootstrap, skills, and doctor."
+		echo "Stored with owner-only permissions; blank input can remove it."
+		;;
+	3)
 		echo "Run full install.sh: skills, Claude bridge, AGENTS.md, doctor, link."
 		echo "Confirms before proceeding."
 		;;
-	3)
+	4)
 		echo "Update globally installed skills from ~/.agents/.skill-lock.json."
 		echo "Re-bridges Claude and refreshes Codex symlinks; no new manifest sources."
 		;;
-	4)
+	5)
 		echo "Symlink agentboot into your PATH via install.sh link-agentboot."
 		echo "Use after bootstrap to run agentboot from any directory."
 		;;
-	5)
+	6)
 		echo "Run agentboot in a target directory to scaffold agent config."
 		echo "Optionally add Copilot/Cursor pointers with --full."
 		;;
-	6)
+	7)
 		echo "Run install.sh doctor to verify install health."
 		echo "Reports issues; non-zero exit if problems found."
 		;;
-	7)
+	8)
 		echo "Return to the main Dotfiles menu."
 		;;
 	esac
+}
+
+run_agent_bootstrap_command() {
+	local ab_home="$1"
+	shift
+	(
+		github_token_load || exit 1
+		cd "$ab_home" || exit 1
+		AGENT_BOOTSTRAP_TUI=1 ./install.sh "$@"
+	)
 }
 
 require_agent_bootstrap_installer() {
@@ -90,6 +107,26 @@ _agents_dispatch() {
 			clone_or_update_agent_bootstrap "$clone_home"
 		fi
 		;;
+	github_token)
+		ui_clear
+		ui_print_header "Configure GitHub token" "Dotfiles › Agents" "$(menu_tty_cols)"
+		echo "Saved outside this repository: $(github_token_file)"
+		echo "Leave blank to remove an existing saved token."
+		read_tty_secret answer "GitHub token: "
+		if [[ -z "$answer" ]]; then
+			if [[ -f "$(github_token_file)" ]] && ui_confirm_yes_no "Remove saved GitHub token?"; then
+				github_token_remove
+				echo "Saved GitHub token removed."
+			else
+				echo "GitHub token unchanged."
+			fi
+		elif github_token_write "$answer"; then
+			echo "GitHub token saved with owner-only permissions."
+		else
+			echo "Error: token must be at least 20 letters, numbers, or underscores." >&2
+			return 1
+		fi
+		;;
 	bootstrap)
 		ab_home="$(resolve_agent_bootstrap_home)" || {
 			echo "Error: agent_bootstrap not installed at ${clone_home}." >&2
@@ -101,7 +138,7 @@ _agents_dispatch() {
 		ui_print_header "Run full bootstrap" "Dotfiles › Agents" "$(menu_tty_cols)"
 		echo "Installs skills from manifest, bridges Claude, renders global AGENTS.md, runs doctor, links agentboot."
 		if ui_confirm_yes_no "Proceed with full bootstrap?"; then
-			( cd "$ab_home" && AGENT_BOOTSTRAP_TUI=1 ./install.sh )
+			run_agent_bootstrap_command "$ab_home"
 		else
 			echo "Bootstrap cancelled."
 		fi
@@ -118,7 +155,7 @@ _agents_dispatch() {
 		echo "Re-bridges Claude and updates Codex symlinks. Does not add new manifest sources."
 		echo ""
 		if ui_confirm_yes_no "Proceed with skills refresh?"; then
-			( cd "$ab_home" && AGENT_BOOTSTRAP_TUI=1 ./install.sh skills update )
+			run_agent_bootstrap_command "$ab_home" skills update
 		else
 			echo "Skills refresh cancelled."
 		fi
@@ -166,7 +203,7 @@ _agents_dispatch() {
 		ui_clear
 		ui_print_header "Run doctor" "Dotfiles › Agents" "$(menu_tty_cols)"
 		local doctor_rc=0
-		( cd "$ab_home" && AGENT_BOOTSTRAP_TUI=1 ./install.sh doctor ) || doctor_rc=$?
+		run_agent_bootstrap_command "$ab_home" doctor || doctor_rc=$?
 		if (( doctor_rc != 0 )); then
 			echo "Warning: doctor reported issues (exit $doctor_rc)" >&2
 		fi

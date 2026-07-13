@@ -197,6 +197,20 @@ test_lazygit_uses_current_lowercase_linux_release_asset() {
 	grep -Fqx 'https://github.com/jesseduffield/lazygit/releases/download/v1.2.3/lazygit_1.2.3_linux_x86_64.tar.gz' "$url_log"
 }
 
+test_github_token_config_is_private_and_scoped() {
+	local home_dir="$1/token-home" output
+	output="$(HOME="$home_dir" XDG_CONFIG_HOME="$home_dir/config" bash -c '
+		set -euo pipefail
+		source "$1/scripts/lib/github_token.sh"
+		github_token_write "ghp_abcdefghijklmnopqrstuvwxyz1234567890"
+		[[ "$(stat -c %a "$(github_token_file)")" == "600" ]]
+		unset GITHUB_TOKEN
+		github_token_load
+		[[ "$GITHUB_TOKEN" == "ghp_abcdefghijklmnopqrstuvwxyz1234567890" ]]
+	' _ "$ROOT" 2>&1)" || return 1
+	[[ "$output" != *"ghp_abcdefghijklmnopqrstuvwxyz1234567890"* ]]
+}
+
 main() {
 	local tmp
 	tmp="$(mktemp -d)"
@@ -225,6 +239,7 @@ main() {
 	expect_success 'failed GitHub release install cleans up without an unbound variable' test_failed_github_release_install_cleans_up_without_unbound_variable "$tmp"
 	expect_success 'CLI probes find installed local binaries before PATH refresh' test_cli_probes_find_installed_local_binaries_before_path_refresh "$tmp"
 	expect_success 'lazygit uses the current lowercase Linux release asset' test_lazygit_uses_current_lowercase_linux_release_asset "$tmp"
+	expect_success 'GitHub token config is private and scoped' test_github_token_config_is_private_and_scoped "$tmp"
 
 	printf '%s test(s) passed; %s failed\n' "$PASS" "$FAIL"
 	[[ "$FAIL" -eq 0 ]]
