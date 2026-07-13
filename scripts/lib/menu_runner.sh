@@ -47,7 +47,8 @@ menu_submenu_loop() {
 		fi
 
 		ui_clear
-		"$dispatch_fn" "$choice"
+		local dispatch_rc=0
+		"$dispatch_fn" "$choice" || dispatch_rc=$?
 		ui_pause
 	done
 }

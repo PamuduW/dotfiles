@@ -143,6 +143,9 @@ _comp_probe_cursor_cli() {
 			ver="$(cursor --version 2>/dev/null | head -n1 || true)"
 		fi
 		printf 'installed|%s\n' "${ver:-cursor cli}"
+	elif [[ -x "$HOME/.local/bin/agent" ]]; then
+		ver="$("$HOME/.local/bin/agent" --version 2>/dev/null | head -n1 || true)"
+		printf 'installed|%s\n' "${ver:-cursor cli}"
 	else
 		printf 'missing|cursor/agent not on PATH\n'
 	fi
@@ -157,8 +160,13 @@ _comp_probe_codex_cli() {
 }
 
 _comp_probe_claude_cli() {
+	local ver
 	if command -v claude >/dev/null 2>&1; then
-		printf 'installed|%s\n' "$(claude --version 2>/dev/null | head -n1)"
+		ver="$(claude --version 2>/dev/null | head -n1 || true)"
+		printf 'installed|%s\n' "${ver:-claude cli}"
+	elif [[ -x "$HOME/.local/bin/claude" ]]; then
+		ver="$("$HOME/.local/bin/claude" --version 2>/dev/null | head -n1 || true)"
+		printf 'installed|%s\n' "${ver:-claude cli}"
 	else
 		printf 'missing|claude not on PATH\n'
 	fi
