@@ -312,6 +312,17 @@ test_package_menu_does_not_open_detail_pages_for_components() (
 	[[ "$calls" -eq 0 && "$pauses" -eq 0 ]]
 )
 
+test_package_menu_has_no_component_description_footer() (
+	local state="$TEST_HARNESS_ROOT/package-desc-state"
+	MENU_SIMPLE_DESC_FN=stale
+	menu_simple_run() {
+		printf '%s' "${MENU_SIMPLE_DESC_FN:-unset}" >"$state"
+		return 1
+	}
+	package_lib_menu || return 1
+	[[ "$(<"$state")" == unset ]]
+)
+
 test_narrow_reports_remain_bounded() {
 	declare -F command_lib_render >/dev/null || return 1
 	declare -F package_lib_render_components >/dev/null || return 1
@@ -341,6 +352,7 @@ expect_success 'Package Lib renders all 20 components without probes or side eff
 expect_success 'System package pages cover all 28 names exactly once' test_package_pages_cover_all_28_once
 expect_success 'Package Lib q return and system-packages hook are deterministic' test_package_menu_cancel_and_system_hook
 expect_success 'Package Lib component entries do not open redundant detail pages' test_package_menu_does_not_open_detail_pages_for_components
+expect_success 'Package Lib omits the redundant component description footer' test_package_menu_has_no_component_description_footer
 expect_success 'Command and Package Lib narrow rendering remains bounded' test_narrow_reports_remain_bounded
 
 printf '%d test(s) passed; %d failed\n' "$passed" "$failed"

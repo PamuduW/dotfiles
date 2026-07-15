@@ -21,18 +21,19 @@ _github_token_menu_line() {
 
 _github_token_menu_confirm() {
 	local answer=''
-	_github_token_menu_line answer "$1 [y/N/q]: "
+	_github_token_menu_line answer "${C_YELLOW:-}$1${C_RESET:-} [y/N/q]: "
 	case "$answer" in y | Y | yes | YES) return 0 ;; *) return 1 ;; esac
 }
 
 _github_token_menu_pause() {
 	# shellcheck disable=SC2034  # Filled indirectly by _github_token_menu_line.
 	local ignored=''
-	_github_token_menu_line ignored "Press Enter to continue: "
+	_github_token_menu_line ignored "${C_DIM:-}Press Enter to continue:${C_RESET:-} "
 }
 
 _github_token_menu_render() {
-	local token='' current='not configured' root="${DOTFILES_MENU_ROOT:-Dotfiles}"
+	local token='' current='not configured' current_color="${C_DIM:-}"
+	local root="${DOTFILES_MENU_ROOT:-Dotfiles}"
 	local cols="${GITHUB_TOKEN_TTY_COLS:-}"
 	if [[ -z "$cols" ]]; then
 		cols="$(menu_tty_cols)"
@@ -40,32 +41,49 @@ _github_token_menu_render() {
 	github_token_read token
 	if [[ -n "$token" ]]; then
 		current="$(github_token_fingerprint "$token")"
+		current_color="${C_GREEN:-}"
 	elif [[ -e "$(github_token_file)" || -L "$(github_token_file)" ]]; then
 		current='saved state is invalid or unsafe'
+		current_color="${C_RED:-}"
 	fi
 	ui_print_header "GitHub Token Config" "${root} › GitHub Token Config" "$cols" >&"$GITHUB_TOKEN_MENU_OUT_FD"
-	printf '  Current: %s\n' "$current" >&"$GITHUB_TOKEN_MENU_OUT_FD"
-	printf '  Saved outside this repository: %s\n\n' "$(github_token_file)" >&"$GITHUB_TOKEN_MENU_OUT_FD"
-	printf '  Optional: raises public-repository API rate limits.\n' >&"$GITHUB_TOKEN_MENU_OUT_FD"
-	printf '  No repository scopes are needed for this workflow.\n\n' >&"$GITHUB_TOKEN_MENU_OUT_FD"
-	printf '  [s] Save or replace   [r] Reveal once   [d] Remove   [q] Back\n' >&"$GITHUB_TOKEN_MENU_OUT_FD"
+	printf '  %sCurrent:%s %s%s%s\n' \
+		"${C_BOLD:-}" "${C_RESET:-}" "$current_color" "$current" "${C_RESET:-}" \
+		>&"$GITHUB_TOKEN_MENU_OUT_FD"
+	printf '  %sSaved outside this repository:%s %s%s%s\n\n' \
+		"${C_DIM:-}" "${C_RESET:-}" "${C_CYAN:-}" "$(github_token_file)" "${C_RESET:-}" \
+		>&"$GITHUB_TOKEN_MENU_OUT_FD"
+	printf '  %sOptional:%s raises public-repository API rate limits.\n' \
+		"${C_DIM:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
+	printf '  %sNo repository scopes are needed for this workflow.%s\n\n' \
+		"${C_DIM:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
+	printf '  %s[s]%s Save or replace   %s[r]%s Reveal once   %s[d]%s Remove   %s[q]%s Back\n' \
+		"${C_CYAN:-}" "${C_RESET:-}" "${C_CYAN:-}" "${C_RESET:-}" \
+		"${C_CYAN:-}" "${C_RESET:-}" "${C_CYAN:-}" "${C_RESET:-}" \
+		>&"$GITHUB_TOKEN_MENU_OUT_FD"
 }
 
 _github_token_menu_save() {
 	local token=''
-	printf '  Input is visible on screen and may be seen by others.\n' >&"$GITHUB_TOKEN_MENU_OUT_FD"
-	_github_token_menu_line token "  GitHub token (q cancels): "
+	printf '  %sInput is visible on screen and may be seen by others.%s\n' \
+		"${C_YELLOW:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
+	_github_token_menu_line token "  ${C_CYAN:-}GitHub token${C_RESET:-} (q cancels): "
 	[[ "$token" != q && "$token" != Q && -n "$token" ]] || return 0
 	if ! github_token_is_valid "$token"; then
-		printf '  Invalid token; nothing was saved.\n' >&"$GITHUB_TOKEN_MENU_OUT_FD"
+		printf '  %sInvalid token; nothing was saved.%s\n' \
+			"${C_RED:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
 		return 0
 	fi
-	printf '  Proposed: %s\n' "$(github_token_fingerprint "$token")" >&"$GITHUB_TOKEN_MENU_OUT_FD"
+	printf '  %sProposed:%s %s%s%s\n' \
+		"${C_DIM:-}" "${C_RESET:-}" "${C_CYAN:-}" \
+		"$(github_token_fingerprint "$token")" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
 	if _github_token_menu_confirm "  Save this token?"; then
 		if github_token_write "$token"; then
-			printf '  GitHub token saved.\n' >&"$GITHUB_TOKEN_MENU_OUT_FD"
+			printf '  %sGitHub token saved.%s\n' \
+				"${C_GREEN:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
 		else
-			printf '  GitHub token was not saved.\n' >&"$GITHUB_TOKEN_MENU_OUT_FD"
+			printf '  %sGitHub token was not saved.%s\n' \
+				"${C_RED:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
 		fi
 	fi
 }
@@ -74,10 +92,12 @@ _github_token_menu_reveal() {
 	local token=''
 	github_token_read token
 	if [[ -z "$token" ]]; then
-		printf '  No valid saved token is available to reveal.\n' >&"$GITHUB_TOKEN_MENU_OUT_FD"
+		printf '  %sNo valid saved token is available to reveal.%s\n' \
+			"${C_YELLOW:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
 		return 0
 	fi
-	printf '  WARNING: the full token will be printed once on this terminal.\n' >&"$GITHUB_TOKEN_MENU_OUT_FD"
+	printf '  %sWARNING: the full token will be printed once on this terminal.%s\n' \
+		"${C_RED:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
 	if _github_token_menu_confirm "  Reveal the full token once?"; then
 		printf '  %s\n' "$token" >&"$GITHUB_TOKEN_MENU_OUT_FD"
 		_github_token_menu_pause
@@ -86,14 +106,17 @@ _github_token_menu_reveal() {
 
 _github_token_menu_remove() {
 	if [[ ! -e "$(github_token_file)" && ! -L "$(github_token_file)" ]]; then
-		printf '  No saved token file exists.\n' >&"$GITHUB_TOKEN_MENU_OUT_FD"
+		printf '  %sNo saved token file exists.%s\n' \
+			"${C_DIM:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
 		return 0
 	fi
 	if _github_token_menu_confirm "  Remove the saved token?"; then
 		if github_token_remove; then
-			printf '  Saved token removed.\n' >&"$GITHUB_TOKEN_MENU_OUT_FD"
+			printf '  %sSaved token removed.%s\n' \
+				"${C_GREEN:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
 		else
-			printf '  Saved token could not be removed safely.\n' >&"$GITHUB_TOKEN_MENU_OUT_FD"
+			printf '  %sSaved token could not be removed safely.%s\n' \
+				"${C_RED:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
 		fi
 	fi
 }
@@ -105,13 +128,13 @@ github_token_menu() {
 	while true; do
 		ui_clear
 		_github_token_menu_render
-		_github_token_menu_line action "  Select action: "
+		_github_token_menu_line action "  ${C_BOLD:-}Select action:${C_RESET:-} "
 		case "$action" in
 		s | S) _github_token_menu_save ;;
 		r | R) _github_token_menu_reveal ;;
 		d | D) _github_token_menu_remove ;;
 		q | Q) break ;;
-		*) printf '  Invalid choice.\n' >&"$GITHUB_TOKEN_MENU_OUT_FD" ;;
+		*) printf '  %sInvalid choice.%s\n' "${C_YELLOW:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD" ;;
 		esac
 	done
 	_github_token_warning_scope_end

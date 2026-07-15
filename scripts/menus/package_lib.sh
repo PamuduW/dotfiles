@@ -188,10 +188,6 @@ package_lib_packages_menu() {
 	done
 }
 
-_package_lib_desc_fn() {
-	comp_description "${COMP_KEYS[$1]}"
-}
-
 package_lib_menu() {
 	local choice i
 
@@ -202,7 +198,7 @@ package_lib_menu() {
 		MENU_SIMPLE_LABELS=()
 		MENU_SIMPLE_KEYS=("${COMP_KEYS[@]}")
 		MENU_SIMPLE_TYPES=()
-		MENU_SIMPLE_DESC_FN=_package_lib_desc_fn
+		unset MENU_SIMPLE_DESC_FN
 		for i in "${!COMP_KEYS[@]}"; do
 			MENU_SIMPLE_LABELS+=("${COMP_KEYS[$i]} — ${COMP_LABELS[$i]}")
 		done
