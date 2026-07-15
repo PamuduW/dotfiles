@@ -101,7 +101,7 @@ package_lib_render_packages_page() {
 	read -r start end < <(menu_page_range "${#PACKAGE_LIB_NAMES[@]}" "$page_size" "$page")
 
 	_package_lib_header "System packages" "Dotfiles › Package Lib" "$cols"
-	printf '  %s\n\n' "$(ui_color_input_hint 'Up/Down page   q back')"
+	printf '  %s%s%s\n\n' "${C_DIM:-}" "$(ui_color_input_hint 'Up/Down page   q back')" "${C_RESET:-}"
 	printf '  %sPage %d/%d   Showing %d-%d of %d%s\n\n' \
 		"${C_DIM:-}" \
 		"$((page + 1))" "$page_count" "$((start + 1))" "$((end + 1))" "${#PACKAGE_LIB_NAMES[@]}" \

@@ -109,14 +109,15 @@ ui_print_section() {
 
 ui_color_input_hint() {
 	local hint="$1"
-	local cyan="${C_CYAN:-}" reset="${C_RESET:-}"
-	hint="${hint//Up\/Down/${cyan}Up\/Down${reset}}"
-	hint="${hint//Space toggle/${cyan}Space${reset} toggle}"
-	hint="${hint//Enter confirm/${cyan}Enter${reset} confirm}"
-	hint="${hint//Enter system package details/${cyan}Enter${reset} system package details}"
-	hint="${hint//   a all/   ${cyan}a${reset} all}"
-	hint="${hint//   n none/   ${cyan}n${reset} none}"
-	hint="${hint//   q back/   ${cyan}q${reset} back}"
+	local cyan="${C_CYAN:-}" reset="${C_RESET:-}" dim="${C_DIM:-}"
+	local key_start="${reset}${cyan}" key_end="${reset}${dim}"
+	hint="${hint//Up\/Down/${key_start}Up\/Down${key_end}}"
+	hint="${hint//Space toggle/${key_start}Space${key_end} toggle}"
+	hint="${hint//Enter confirm/${key_start}Enter${key_end} confirm}"
+	hint="${hint//Enter system package details/${key_start}Enter${key_end} system package details}"
+	hint="${hint//   a all/   ${key_start}a${key_end} all}"
+	hint="${hint//   n none/   ${key_start}n${key_end} none}"
+	hint="${hint//   q back/   ${key_start}q${key_end} back}"
 	printf '%s' "$hint"
 }
 
