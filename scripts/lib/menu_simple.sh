@@ -65,7 +65,7 @@ _menu_simple_draw() {
 	local i prefix row item_num
 
 	ui_print_header "${MENU_SIMPLE_TITLE}" "${MENU_SIMPLE_BREADCRUMB:-}" "$cols"
-	printf '  %s%s%s\e[K\n' "$C_DIM" "$(menu_fit_indent "$hint" "$cols" 2)" "$C_RESET"
+	printf '  %s%s%s\e[K\n' "$C_DIM" "$(ui_color_input_hint "$(menu_fit_indent "$hint" "$cols" 2)")" "$C_RESET"
 	printf '\e[K\n'
 
 	item_num=0

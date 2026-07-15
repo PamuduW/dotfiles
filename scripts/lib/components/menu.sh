@@ -19,7 +19,7 @@ _draw_component_menu() {
 	read -r start end < <(menu_page_range "$count" "$page_size" "$page")
 
 	ui_print_header "Install Dotfiles" "Dotfiles › Install Dotfiles" "$cols"
-	printf '  %s%s%s\e[K\n' "$C_DIM" "$(_fit_menu_line_with_indent "Up/Down navigate   Space toggle   a all   n none   Enter confirm   q back" "$cols" 2)" "$C_RESET"
+	printf '  %s%s%s\e[K\n' "$C_DIM" "$(ui_color_input_hint "$(_fit_menu_line_with_indent "Up/Down navigate   Space toggle   a all   n none   Enter confirm   q back" "$cols" 2)")" "$C_RESET"
 	printf '  %s%s%s\e[K\n\n' "$C_DIM" "$(_fit_menu_line_with_indent "Page $((page + 1))/$total_pages   Showing $((start + 1))-$((end + 1)) of $count" "$cols" 2)" "$C_RESET"
 
 	for ((i = start; i <= end; i++)); do

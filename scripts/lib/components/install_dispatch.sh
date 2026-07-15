@@ -112,7 +112,7 @@ run_install() {
 	local key
 
 	echo ""
-	printf '%s=== Installing ===%s\n' "${C_YELLOW:-}" "${C_RESET:-}"
+	printf '%s=== Installing ===%s\n' "${C_ORANGE:-}" "${C_RESET:-}"
 	_log_legend_line
 	echo ""
 

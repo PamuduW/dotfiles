@@ -60,7 +60,7 @@ _main_menu_run_direct_action() {
 	ui_clear
 	"$action_fn" || rc=$?
 	if ((rc != 0)); then
-		printf 'Action failed (exit %d).\n' "$rc" >&2
+		printf '%sAction failed (exit %d).%s\n' "${C_RED:-}" "$rc" "${C_RESET:-}" >&2
 	fi
 	if [[ "${DOTFILES_UPDATE_RELAUNCHED:-false}" == true ]]; then
 		DOTFILES_UPDATE_RELAUNCHED=false
@@ -74,7 +74,7 @@ _main_menu_run_child_menu() {
 	local menu_fn="$1" rc=0
 	"$menu_fn" || rc=$?
 	if ((rc != 0)); then
-		printf 'Action failed (exit %d).\n' "$rc" >&2
+		printf '%sAction failed (exit %d).%s\n' "${C_RED:-}" "$rc" "${C_RESET:-}" >&2
 		ui_pause
 	fi
 	return "$rc"

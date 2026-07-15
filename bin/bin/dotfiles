@@ -72,7 +72,6 @@ if _dotfiles_use_color; then
 	C_DIM=$'\033[2m'
 	C_GREEN=$'\033[32m'
 	C_YELLOW=$'\033[33m'
-	C_LIGHT_YELLOW=$'\033[93m'
 	C_CYAN=$'\033[36m'
 	C_ORANGE=$'\033[38;5;208m'
 	C_RED=$'\033[31m'
@@ -82,7 +81,6 @@ else
 	C_DIM=''
 	C_GREEN=''
 	C_YELLOW=''
-	C_LIGHT_YELLOW=''
 	C_CYAN=''
 	C_ORANGE=''
 	C_RED=''
@@ -106,7 +104,7 @@ _run_upgrade_step() {
 	local rc=$?
 	set -e
 	if [[ $rc -ne 0 ]]; then
-		_warn "  ${label} failed (exit ${rc})"
+		printf '%s  %s failed (exit %d)%s\n' "$C_RED" "$label" "$rc" "$C_RESET" >&2
 		UPGRADE_STEP_RESULT["$label"]="failed"
 	else
 		UPGRADE_STEP_RESULT["$label"]="ok"
@@ -545,7 +543,7 @@ upgrade_node() {
 		return 0
 	fi
 	nvm install --lts
-	nvm alias default 'lts/*'
+	nvm alias --no-colors default 'lts/*'
 }
 
 # --- Go (asdf) — opt-in ---
@@ -893,11 +891,13 @@ _update_table_rule() {
 
 _print_update_table_header() {
 	local last_col="$1"
-	printf '%s%s%-*s%s | %s%s%-*s%s | %s%s%-*s%s | %s%s%-*s%s\n' \
-		"$C_BOLD" "$C_LIGHT_YELLOW" "$_UPDATE_LABEL_W" component "$C_RESET" \
-		"$C_BOLD" "$C_LIGHT_YELLOW" "$_UPDATE_INSTALLED_W" installed "$C_RESET" \
-		"$C_BOLD" "$C_LIGHT_YELLOW" "$_UPDATE_AVAILABLE_W" available "$C_RESET" \
-		"$C_BOLD" "$C_LIGHT_YELLOW" "$_UPDATE_ACTION_W" "$last_col" "$C_RESET"
+	printf '%s%-*s | %-*s | %-*s | %-*s%s\n' \
+		"$C_BOLD" \
+		"$_UPDATE_LABEL_W" component \
+		"$_UPDATE_INSTALLED_W" installed \
+		"$_UPDATE_AVAILABLE_W" available \
+		"$_UPDATE_ACTION_W" "$last_col" \
+		"$C_RESET"
 	printf '%s%s-+-%s-+-%s-+-%s%s\n' \
 		"$C_DIM" \
 		"$(_update_table_rule "$_UPDATE_LABEL_W")" \
@@ -1051,7 +1051,7 @@ print_upgrade_summary() {
 		[[ "$upgrade_all" != true ]] && printf ' (opt-in components skipped; use --all)'
 		printf '.\n'
 	else
-		printf '%sUpgrade finished with %d failure(s)%s — see log above.\n' "$C_YELLOW" "$fail_count" "$C_RESET"
+		printf '%sUpgrade finished with %d failure(s)%s — see log above.\n' "$C_RED" "$fail_count" "$C_RESET"
 	fi
 }
 
@@ -1063,11 +1063,7 @@ print_status_table() {
 	mapfile -t rows < <(_collect_check_rows)
 
 	printf '\n%s%s%s\n' "$C_BOLD" "$title" "$C_RESET"
-	printf '%s%s%-18s%s | %s%s%-28s%s | %s%s%-22s%s | %s%s%s%s\n' \
-		"$C_BOLD" "$C_LIGHT_YELLOW" component "$C_RESET" \
-		"$C_BOLD" "$C_LIGHT_YELLOW" installed "$C_RESET" \
-		"$C_BOLD" "$C_LIGHT_YELLOW" available "$C_RESET" \
-		"$C_BOLD" "$C_LIGHT_YELLOW" status "$C_RESET"
+	printf '%s%-18s | %-28s | %-22s | %s\n' "$C_BOLD" "component" "installed" "available" "status"
 	printf '%s\n' "-------------------+------------------------------+------------------------+----------"
 
 	for row in "${rows[@]}"; do
@@ -1104,7 +1100,7 @@ _print_repo_update_table() {
 		;;
 	esac
 
-	printf '\n%s%s==Repository update==%s\n' "$C_BOLD" "$C_YELLOW" "$C_RESET"
+	printf '\n%s%s==Repository update==%s\n\n' "$C_BOLD" "$C_YELLOW" "$C_RESET"
 	_print_update_table_header action
 	_print_repo_update_row 'dotfiles repo' "${branch}@${local_rev}" "$available" "$action"
 	printf '\n'
@@ -1190,7 +1186,7 @@ cmd_update() {
 	if [[ "$upgrade_all" != true ]] && _dotfiles_confirm 'Include Node.js, Go, and Monaspace fonts (--all)?'; then
 		upgrade_all=true
 	fi
-	printf '\n%s%s=== Upgrade ===%s\n' "$C_BOLD" "$C_YELLOW" "$C_RESET"
+	printf '\n%s%s=== Upgrade ===%s\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
 	local downstream_rc=0
 	_run_update_downstream "$upgrade_all" || downstream_rc=$?
 	print_upgrade_summary "$upgrade_all"

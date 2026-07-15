@@ -225,7 +225,7 @@ test_repository_update_preview_uses_semantic_colors() (
 
 test_update_topics_use_submenu_yellow() (
 	local output
-	C_BOLD=$'\033[1m' C_CYAN=$'\033[36m' C_ORANGE=$'\033[38;5;208m' C_YELLOW=$'\033[33m' C_LIGHT_YELLOW=$'\033[93m' C_RESET=$'\033[0m'
+	C_BOLD=$'\033[1m' C_CYAN=$'\033[36m' C_ORANGE=$'\033[38;5;208m' C_YELLOW=$'\033[33m' C_RESET=$'\033[0m'
 	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|up to date'; }
 	output="$(print_report_table)" 2>/dev/null || true
 	grep -Fq $'\033[33m==Update report==' <<<"$output" || return 1
@@ -240,7 +240,7 @@ test_update_topics_use_submenu_yellow() (
 	_run_update_downstream() { :; }
 	print_upgrade_summary() { :; }
 	output="$(cmd_update)"
-	grep -Fq $'\033[33m=== Upgrade ===' <<<"$output"
+	grep -Fq $'\033[38;5;208m=== Upgrade ===' <<<"$output"
 )
 
 test_repository_fetch_notice_uses_cyan() (

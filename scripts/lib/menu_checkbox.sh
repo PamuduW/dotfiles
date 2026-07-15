@@ -163,7 +163,7 @@ _menu_cb_draw() {
 	total_pages="$(_menu_cb_page_count "$count" "$page_size")"
 
 	ui_print_header "${MENU_CB_TITLE}" "${MENU_CB_BREADCRUMB:-}" "$cols"
-	printf '  %s%s%s\e[K\n' "$C_DIM" "$(menu_fit_indent "$hint" "$cols" 2)" "$C_RESET"
+	printf '  %s%s%s\e[K\n' "$C_DIM" "$(ui_color_input_hint "$(menu_fit_indent "$hint" "$cols" 2)")" "$C_RESET"
 	printf '  %s%s%s\e[K\n\n' "$C_DIM" \
 		"$(menu_fit_indent "Page $((page + 1))/${total_pages}   Showing $((start + 1))-$((end + 1)) of ${count}" "$cols" 2)" \
 		"$C_RESET"

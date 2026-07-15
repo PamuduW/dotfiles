@@ -101,8 +101,11 @@ package_lib_render_packages_page() {
 	read -r start end < <(menu_page_range "${#PACKAGE_LIB_NAMES[@]}" "$page_size" "$page")
 
 	_package_lib_header "System packages" "Dotfiles › Package Lib" "$cols"
-	printf '  Page %d/%d   Showing %d-%d of %d\n\n' \
-		"$((page + 1))" "$page_count" "$((start + 1))" "$((end + 1))" "${#PACKAGE_LIB_NAMES[@]}"
+	printf '  %s\n\n' "$(ui_color_input_hint 'Up/Down page   q back')"
+	printf '  %sPage %d/%d   Showing %d-%d of %d%s\n\n' \
+		"${C_DIM:-}" \
+		"$((page + 1))" "$page_count" "$((start + 1))" "$((end + 1))" "${#PACKAGE_LIB_NAMES[@]}" \
+		"${C_RESET:-}"
 
 	# Keep the package browser useful on narrow terminals while retaining a
 	# fixed-width, colored table that is easy to scan on normal screens.
@@ -123,10 +126,10 @@ package_lib_render_packages_page() {
 	description_fit="$(_package_lib_fit description "$description_w")"
 	if declare -F _rt_ensure_colors >/dev/null; then
 		_rt_ensure_colors
-		printf '  %s%s%-*s%s | %s%s%-*s%s | %s%s%-*s%s\n' \
-			"$C_BOLD" "$C_LIGHT_YELLOW" "$package_w" "$package_fit" "$C_RESET" \
-			"$C_BOLD" "$C_LIGHT_YELLOW" "$tag_w" "$tag_fit" "$C_RESET" \
-			"$C_BOLD" "$C_LIGHT_YELLOW" "$description_w" "$description_fit" "$C_RESET"
+		printf '  %s%-*s | %-*s | %-*s%s\n' \
+			"$C_BOLD" "$package_w" "$package_fit" \
+			"$tag_w" "$tag_fit" \
+			"$description_w" "$description_fit" "$C_RESET"
 	else
 		printf '  %-*s | %-*s | %-*s\n' \
 			"$package_w" "$package_fit" "$tag_w" "$tag_fit" "$description_w" "$description_fit"
@@ -173,7 +176,6 @@ package_lib_packages_menu() {
 		{
 			ui_clear
 			package_lib_render_packages_page "$page" "$page_size" "$cols"
-			printf '\n  Up/Down page   q back\n'
 		} >/dev/tty
 		action="$(menu_read_key)"
 		case "$action" in
