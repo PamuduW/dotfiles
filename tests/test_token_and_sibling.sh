@@ -269,6 +269,13 @@ test_menu_presentation_is_complete() (
 	grep -Fqi 'no repository scopes' "$output"
 )
 
+test_menu_presentation_separates_action_prompt() (
+	reset_token_state
+	local output="$TEST_HARNESS_ROOT/presentation-spacing.menu"
+	run_menu_script $'q\n' "$output" || return 1
+	grep -Fq $'  [q] Back\n\n  Select action:' "$output"
+)
+
 test_menu_presentation_uses_semantic_colors() (
 	reset_token_state
 	local token output="$TEST_HARNESS_ROOT/colored-presentation.menu"
@@ -349,6 +356,7 @@ expect_success 'visible entry does not write before save confirmation' test_visi
 expect_success 'menu save, entry cancel, remove confirm/cancel, and q preserve state' test_menu_save_cancel_remove_and_q_state_machine
 expect_success 'existing token is fingerprinted and Reveal is warned, confirmed, and one-time' test_fingerprint_and_warned_one_time_reveal
 expect_success 'token screen header, breadcrumb, path, and optional no-scope copy are complete' test_menu_presentation_is_complete
+expect_success 'token screen separates the action prompt from the options' test_menu_presentation_separates_action_prompt
 expect_success 'token screen uses semantic colors for state and actions' test_menu_presentation_uses_semantic_colors
 expect_success 'invalid saved state warns once across menu redraw and Reveal per session' test_invalid_saved_state_warns_once_per_menu_session
 expect_success 'migration and export consolidate one bad-target warning per attempt' test_migration_and_export_consolidate_target_warning_per_attempt

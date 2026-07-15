@@ -282,52 +282,13 @@ test_package_pages_cover_all_28_once() {
 	grep -Fq 'description' "$output"
 }
 
-test_package_menu_cancel_and_system_hook() (
+test_package_menu_opens_system_packages_directly() (
 	declare -F package_lib_menu >/dev/null || return 1
-	local calls=0 queue="$TEST_HARNESS_ROOT/package-menu.queue"
-	menu_simple_run() { return 1; }
+	local calls=0
+	menu_simple_run() { return 99; }
 	package_lib_packages_menu() { calls=$((calls + 1)); }
-	package_lib_menu || return 1
-	[[ "$calls" -eq 0 ]] || return 1
-	printf '%s\n' system_packages >"$queue"
-	menu_simple_run() {
-		local choice
-		if ! IFS= read -r choice <"$queue" || [[ -z "$choice" ]]; then
-			return 1
-		fi
-		: >"$queue"
-		printf '%s\n' "$choice"
-	}
 	package_lib_menu || return 1
 	[[ "$calls" -eq 1 ]]
-)
-
-test_package_menu_does_not_open_detail_pages_for_components() (
-	local queue="$TEST_HARNESS_ROOT/package-menu-component.queue" calls=0 pauses=0
-	printf '%s\n%s\n' git_identity q >"$queue"
-	menu_simple_run() {
-		local choice
-		IFS= read -r choice <"$queue" || return 1
-		tail -n +2 "$queue" >"$queue.rest"
-		mv -f -- "$queue.rest" "$queue"
-		[[ "$choice" == q ]] && return 1
-		printf '%s\n' "$choice"
-	}
-	package_lib_packages_menu() { calls=$((calls + 1)); }
-	ui_pause() { pauses=$((pauses + 1)); }
-	package_lib_menu || return 1
-	[[ "$calls" -eq 0 && "$pauses" -eq 0 ]]
-)
-
-test_package_menu_has_no_component_description_footer() (
-	local state="$TEST_HARNESS_ROOT/package-desc-state"
-	MENU_SIMPLE_DESC_FN=stale
-	menu_simple_run() {
-		printf '%s' "${MENU_SIMPLE_DESC_FN:-unset}" >"$state"
-		return 1
-	}
-	package_lib_menu || return 1
-	[[ "$(<"$state")" == unset ]]
 )
 
 test_narrow_reports_remain_bounded() {
@@ -358,9 +319,7 @@ expect_success 'component registry exposes the exact 20 described component IDs'
 expect_success 'package metadata contains 28 unique described names in 9/3/7/9 tags' test_package_metadata_has_exact_28_with_descriptions
 expect_success 'Package Lib renders all 20 components without probes or side effects' test_package_lib_components_are_metadata_only
 expect_success 'System package pages cover all 28 names exactly once' test_package_pages_cover_all_28_once
-expect_success 'Package Lib q return and system-packages hook are deterministic' test_package_menu_cancel_and_system_hook
-expect_success 'Package Lib component entries do not open redundant detail pages' test_package_menu_does_not_open_detail_pages_for_components
-expect_success 'Package Lib omits the redundant component description footer' test_package_menu_has_no_component_description_footer
+expect_success 'Package Lib opens the system package table directly' test_package_menu_opens_system_packages_directly
 expect_success 'Command and Package Lib narrow rendering remains bounded' test_narrow_reports_remain_bounded
 
 printf '%d test(s) passed; %d failed\n' "$passed" "$failed"

@@ -172,8 +172,8 @@ test_update_report_uses_clear_title_spacing_and_aligned_action_rule() (
 	local output_file="$TEST_HARNESS_ROOT/update-report.output"
 	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|up to date'; }
 	NO_COLOR=1 print_report_table >"$output_file"
-	[[ "$(sed -n '1p' "$output_file")" == 'Update report' ]] || return 1
-	grep -Fq $'Update report\n\ncomponent' "$output_file" || return 1
+	[[ "$(sed -n '1p' "$output_file")" == '==Update report==' ]] || return 1
+	grep -Fq $'==Update report==\n\ncomponent' "$output_file" || return 1
 	! grep -Fq 'Upgrade report' "$output_file" || return 1
 	grep -Fq $'everything looks current.\n\n' "$output_file" || return 1
 	grep -Eq '^-------------------\+------------------------------\+------------------------\+-----------------' "$output_file"
@@ -211,7 +211,7 @@ test_repository_update_preview_uses_semantic_colors() (
 	REPO_UPDATE_BEHIND=2
 	C_BOLD=$'\033[1m' C_CYAN=$'\033[36m' C_ORANGE=$'\033[38;5;208m' C_DIM=$'\033[2m' C_YELLOW=$'\033[33m' C_RESET=$'\033[0m'
 	output="$(_print_repo_update_table)"
-	grep -Fq $'\033[38;5;208mRepository update' <<<"$output" || return 1
+	grep -Fq $'\033[33m==Repository update==' <<<"$output" || return 1
 	grep -Fq $'\033[1mcomponent' <<<"$output" || return 1
 	grep -Fq $'\033[2m-------------------+' <<<"$output" || return 1
 	grep -Fq $'\033[33m2 commit(s) behind' <<<"$output" || return 1
@@ -225,10 +225,10 @@ test_repository_update_preview_uses_semantic_colors() (
 
 test_all_update_topics_use_orange() (
 	local output
-	C_BOLD=$'\033[1m' C_CYAN=$'\033[36m' C_ORANGE=$'\033[38;5;208m' C_RESET=$'\033[0m'
+	C_BOLD=$'\033[1m' C_CYAN=$'\033[36m' C_ORANGE=$'\033[38;5;208m' C_YELLOW=$'\033[33m' C_RESET=$'\033[0m'
 	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|up to date'; }
 	output="$(print_report_table)" 2>/dev/null || true
-	grep -Fq $'\033[38;5;208mUpdate report' <<<"$output" || return 1
+	grep -Fq $'\033[33m==Update report==' <<<"$output" || return 1
 
 	_upgrade_topic_probe() { :; }
 	output="$(_run_upgrade_step lazygit _upgrade_topic_probe)"
@@ -291,6 +291,21 @@ FAKE
 	[[ "$(sed -n '1p' "$events")" == 'dotfiles:update' && "$(wc -l <"$events")" -eq 1 ]] || return 1
 	grep -Fq 'header:Update|Dotfiles › Update' "$tty_output" || return 1
 	! declare -F update_menu >/dev/null 2>&1
+)
+
+test_tui_detects_a_relaunched_update_child() (
+	local fake_dotfiles="$TEST_HARNESS_ROOT/fake-relaunch-dotfiles"
+	local tty_output="$TEST_HARNESS_ROOT/relaunch-update.tty"
+	cat >"$fake_dotfiles" <<'FAKE'
+#!/usr/bin/env bash
+: >"${DOTFILES_RELAUNCH_MARKER:?}"
+FAKE
+	chmod 700 "$fake_dotfiles"
+	export DOTFILES_TTY_PATH="$tty_output"
+	resolve_dotfiles_cmd() { printf '%s\n' "$fake_dotfiles"; }
+	ui_print_header() { :; }
+	run_update_flow || return 1
+	[[ "${DOTFILES_UPDATE_RELAUNCHED:-false}" == true ]]
 )
 
 test_stopped_paths_have_no_downstream() {
@@ -406,6 +421,7 @@ expect_success 'repository fetch notices use cyan' test_repository_fetch_notice_
 expect_success 'update apply uses a high-level Upgrade heading without opt-in plan noise' test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan
 expect_success 'upgrade summary marks the repo gate as handled' test_upgrade_summary_marks_repo_gate_as_handled
 expect_success 'TUI runs shared update directly without a submenu' test_tui_runs_shared_update_without_submenu
+expect_success 'TUI detects when the update child relaunched the installer' test_tui_detects_a_relaunched_update_child
 expect_success 'stopped paths perform no apt tool network or stow work' test_stopped_paths_have_no_downstream
 expect_success 'dotfiles status is strictly local and labels freshness unchecked' test_status_is_strictly_local
 expect_success 'root TUI status omits unchecked apt and repository freshness locally' test_root_tui_status_omits_unchecked_freshness_without_network

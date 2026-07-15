@@ -991,7 +991,7 @@ print_report_table() {
 		esac
 	done
 
-	printf '%s%sUpdate report%s\n\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
+	printf '%s%s==Update report==%s\n\n' "$C_BOLD" "$C_YELLOW" "$C_RESET"
 	_print_update_table_header action
 
 	for row in "${rows[@]}"; do
@@ -1019,7 +1019,7 @@ print_upgrade_summary() {
 
 	mapfile -t rows < <(_collect_check_rows)
 
-	printf '\n%s%sUpgrade summary%s\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
+	printf '\n%s%s==Upgrade summary==%s\n\n' "$C_BOLD" "$C_YELLOW" "$C_RESET"
 	_print_update_table_header result
 
 	for row in "${rows[@]}"; do
@@ -1100,7 +1100,7 @@ _print_repo_update_table() {
 		;;
 	esac
 
-	printf '\n%s%sRepository update%s\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
+	printf '\n%s%s==Repository update==%s\n' "$C_BOLD" "$C_YELLOW" "$C_RESET"
 	_print_update_table_header action
 	_print_repo_update_row 'dotfiles repo' "${branch}@${local_rev}" "$available" "$action"
 	printf '\n'
@@ -1166,8 +1166,11 @@ cmd_update() {
 	case "$REPO_UPDATE_OUTCOME" in
 	stopped) return 1 ;;
 	relaunch_required)
-		_msg 'Repository fast-forward succeeded; the old update process will not continue.'
+		_msg "${C_GREEN}Repository fast-forward succeeded; the old update process will not continue.${C_RESET}"
 		_dotfiles_wait_for_reload
+		if [[ -n "${DOTFILES_RELAUNCH_MARKER:-}" ]]; then
+			: >"$DOTFILES_RELAUNCH_MARKER" 2>/dev/null || true
+		fi
 		repo_update_relaunch "$DOTFILES_DIR/install.sh"
 		return $?
 		;;

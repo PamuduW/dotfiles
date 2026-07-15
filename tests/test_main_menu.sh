@@ -156,6 +156,15 @@ test_failed_action_pauses_once() {
 	[[ "$pauses" -eq 1 ]]
 }
 
+test_relaunched_update_skips_stale_parent_pause() (
+	local pauses=0
+	run_update_flow() { DOTFILES_UPDATE_RELAUNCHED=true; return 0; }
+	ui_clear() { :; }
+	ui_pause() { pauses=$((pauses + 1)); }
+	_main_menu_run_direct_action run_update_flow || return 1
+	[[ "$pauses" -eq 0 ]]
+)
+
 test_deferred_actions_are_safe_when_undefined() {
 	local pauses=0 action output output_file="$TEST_HARNESS_ROOT/deferred.output"
 	unset -f github_token_menu command_lib_menu package_lib_menu 2>/dev/null || true
@@ -231,6 +240,7 @@ expect_success 'status, install, and update dispatch directly' test_direct_statu
 expect_success 'status, picker, and plan breadcrumbs are exact' test_required_breadcrumb_literals
 expect_success 'root cancel redraws and explicit Quit returns cleanly' test_cancel_redraws_and_quit_returns
 expect_success 'failed direct action pauses exactly once and returns failure' test_failed_action_pauses_once
+expect_success 're-launched updates skip the stale parent pause' test_relaunched_update_skips_stale_parent_pause
 expect_success 'undefined deferred actions are unavailable and non-mutating' test_deferred_actions_are_safe_when_undefined
 expect_success 'defined deferred hooks are dispatched without root rewiring' test_deferred_actions_call_defined_hooks
 expect_success 'Agentbot is deterministic unavailable and non-mutating' test_agentbot_is_deterministic_unavailable_and_non_mutating

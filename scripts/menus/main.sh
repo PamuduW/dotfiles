@@ -24,8 +24,8 @@ _main_menu_desc_fn() {
 		echo "Read-only command and mutation matrix."
 		;;
 	package_lib)
-		echo "Browse setup components and package descriptions."
-		echo "Read-only catalog; no probes or installers run."
+		echo "Browse the complete system package catalog."
+		echo "Read-only package metadata; no probes or installers run."
 		;;
 	agentbot)
 		echo "Open the standalone Agentbot setup."
@@ -56,13 +56,17 @@ _main_menu_unavailable() {
 }
 
 _main_menu_run_direct_action() {
-	local action_fn="$1" rc=0
+	local action_fn="$1" rc=0 skip_pause=false
 	ui_clear
 	"$action_fn" || rc=$?
 	if ((rc != 0)); then
 		printf 'Action failed (exit %d).\n' "$rc" >&2
 	fi
-	ui_pause
+	if [[ "${DOTFILES_UPDATE_RELAUNCHED:-false}" == true ]]; then
+		DOTFILES_UPDATE_RELAUNCHED=false
+		skip_pause=true
+	fi
+	[[ "$skip_pause" == true ]] || ui_pause
 	return "$rc"
 }
 

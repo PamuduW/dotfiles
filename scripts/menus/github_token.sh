@@ -61,6 +61,7 @@ _github_token_menu_render() {
 		"${C_CYAN:-}" "${C_RESET:-}" "${C_CYAN:-}" "${C_RESET:-}" \
 		"${C_CYAN:-}" "${C_RESET:-}" "${C_CYAN:-}" "${C_RESET:-}" \
 		>&"$GITHUB_TOKEN_MENU_OUT_FD"
+	printf '\n' >&"$GITHUB_TOKEN_MENU_OUT_FD"
 }
 
 _github_token_menu_save() {

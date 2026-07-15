@@ -100,7 +100,7 @@ package_lib_render_packages_page() {
 	((page >= 0 && page < page_count)) || return 1
 	read -r start end < <(menu_page_range "${#PACKAGE_LIB_NAMES[@]}" "$page_size" "$page")
 
-	_package_lib_header "System packages" "Dotfiles › Package Lib › System packages" "$cols"
+	_package_lib_header "System packages" "Dotfiles › Package Lib" "$cols"
 	printf '  Page %d/%d   Showing %d-%d of %d\n\n' \
 		"$((page + 1))" "$page_count" "$((start + 1))" "$((end + 1))" "${#PACKAGE_LIB_NAMES[@]}"
 
@@ -189,28 +189,5 @@ package_lib_packages_menu() {
 }
 
 package_lib_menu() {
-	local choice i
-
-	while true; do
-		MENU_SIMPLE_TITLE="Package Lib"
-		MENU_SIMPLE_BREADCRUMB="Dotfiles › Package Lib"
-		MENU_SIMPLE_HINT="Up/Down navigate   Enter system package details   q back"
-		MENU_SIMPLE_LABELS=()
-		MENU_SIMPLE_KEYS=("${COMP_KEYS[@]}")
-		MENU_SIMPLE_TYPES=()
-		unset MENU_SIMPLE_DESC_FN
-		for i in "${!COMP_KEYS[@]}"; do
-			MENU_SIMPLE_LABELS+=("${COMP_KEYS[$i]} — ${COMP_LABELS[$i]}")
-		done
-
-		if ! choice="$(menu_simple_run)"; then
-			return 0
-		fi
-		if [[ "$choice" == system_packages ]]; then
-			package_lib_packages_menu || return $?
-			continue
-		fi
-		# Component descriptions stay in the menu footer. Only the aggregate
-		# system package catalog opens another screen.
-	done
+	package_lib_packages_menu
 }
