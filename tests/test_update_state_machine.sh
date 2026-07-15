@@ -106,28 +106,36 @@ test_cmd_update_executes_outcome_contract() (
 		printf 'confirm:%s\n' "$1" >>"$events"
 		[[ "$answer" == yes ]]
 	}
+	print_report_table() { printf 'report\n' >>"$events"; }
+	print_upgrade_summary() { printf 'summary:%s\n' "$1" >>"$events"; }
 	_run_update_downstream() { printf 'downstream:%s\n' "$1" >>"$events"; }
 	repo_update_relaunch() { printf 'relaunch:%s|%s\n' "$*" "${SETUP_CALLER:-}" >>"$events"; }
+	_dotfiles_wait_for_reload() { printf 'wait\n' >>"$events"; }
 
 	TEST_GATE_OUTCOME=stopped
 	if cmd_update >/dev/null 2>&1; then return 1; fi
 	[[ "$(<"$events")" == gate ]] || return 1
 
-	: >"$events"; TEST_GATE_OUTCOME=current; replies='no yes'
+	: >"$events"; TEST_GATE_OUTCOME=current; replies=no
 	cmd_update >/dev/null || return 1
-	[[ "$(sed -n '1p' "$events")" == gate && "$(sed -n '2p' "$events")" == confirm:* && "$(sed -n '3p' "$events")" == confirm:* && "$(sed -n '4p' "$events")" == downstream:false ]] || return 1
+	[[ "$(sed -n '1p' "$events")" == gate && "$(sed -n '2p' "$events")" == report && "$(sed -n '3p' "$events")" == confirm:* ]] || return 1
+
+	: >"$events"; TEST_GATE_OUTCOME=current; replies='yes no'
+	cmd_update >/dev/null || return 1
+	[[ "$(sed -n '1p' "$events")" == gate && "$(sed -n '2p' "$events")" == report && "$(sed -n '3p' "$events")" == confirm:* && "$(sed -n '4p' "$events")" == confirm:* && "$(sed -n '5p' "$events")" == downstream:false && "$(sed -n '6p' "$events")" == summary:false ]] || return 1
 
 	: >"$events"; TEST_GATE_OUTCOME=current; replies='yes yes'
 	cmd_update >/dev/null || return 1
-	[[ "$(sed -n '1p' "$events")" == gate && "$(sed -n '2p' "$events")" == confirm:* && "$(sed -n '3p' "$events")" == confirm:* && "$(sed -n '4p' "$events")" == downstream:true ]] || return 1
+	[[ "$(sed -n '5p' "$events")" == downstream:true && "$(sed -n '6p' "$events")" == summary:true ]] || return 1
 
 	: >"$events"; TEST_GATE_OUTCOME=ahead_continue; replies=yes
 	cmd_update --all >/dev/null || return 1
-	[[ "$(sed -n '3p' "$events")" == downstream:true ]] || return 1
+	[[ "$(sed -n '3p' "$events")" == confirm:* && "$(sed -n '4p' "$events")" == downstream:true && "$(sed -n '5p' "$events")" == summary:true ]] || return 1
 
 	: >"$events"; TEST_GATE_OUTCOME=relaunch_required; replies=yes; SETUP_CALLER=dotfiles
 	cmd_update --all >/dev/null || return 1
-	grep -Fq "relaunch:${_script} update --all|dotfiles" "$events" || return 1
+	grep -Fq "wait" "$events" || return 1
+	grep -Fq "relaunch:${DOTFILES_DIR}/install.sh|dotfiles" "$events" || return 1
 	! grep -Fq downstream "$events"
 )
 
@@ -148,6 +156,14 @@ test_downstream_executes_apt_first_and_all_matrix() (
 	grep -Fq 'step:Node.js (nvm)' "$events" || return 1
 	grep -Fq 'step:Go (asdf)' "$events" || return 1
 	grep -Fq 'step:Monaspace fonts' "$events"
+)
+
+test_upgrade_summary_marks_repo_gate_as_handled() (
+	_collect_check_rows() { printf '%s\n' 'dotfiles repo|main@abc123|none|up to date'; }
+	local output
+	output="$(print_upgrade_summary false)"
+	grep -Fq 'dotfiles repo' <<<"$output" || return 1
+	grep -Fq '| ok' <<<"$output"
 )
 
 test_tui_runs_shared_update_without_submenu() (
@@ -248,6 +264,7 @@ expect_success 'successful pull requires relaunch and stops old-process work' te
 expect_success 'relaunch wrapper is injectable without a fake exec command' test_relaunch_is_injectable
 expect_success 'cmd_update executes stopped current ahead and relaunch outcomes' test_cmd_update_executes_outcome_contract
 expect_success 'downstream execution runs apt refresh first and honors --all' test_downstream_executes_apt_first_and_all_matrix
+expect_success 'upgrade summary marks the repo gate as handled' test_upgrade_summary_marks_repo_gate_as_handled
 expect_success 'TUI runs shared update directly without a submenu' test_tui_runs_shared_update_without_submenu
 expect_success 'stopped paths perform no apt tool network or stow work' test_stopped_paths_have_no_downstream
 expect_success 'dotfiles status is strictly local and labels freshness unchecked' test_status_is_strictly_local

@@ -935,6 +935,7 @@ print_upgrade_summary() {
 		result="${UPGRADE_STEP_RESULT[$component]:-}"
 		if [[ -z "$result" ]]; then
 			case "$component" in
+			"dotfiles repo") result="ok" ;;
 			"Node.js (nvm)" | "Go (asdf)" | "Monaspace fonts")
 				if [[ "$upgrade_all" == true ]]; then
 					result="skipped"
@@ -988,6 +989,45 @@ _dotfiles_confirm() {
 	case "$answer" in y | Y | yes | YES) return 0 ;; *) return 1 ;; esac
 }
 
+_print_repo_update_table() {
+	local branch local_rev available action
+	branch="$(git -C "$DOTFILES_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+	local_rev="$(git -C "$DOTFILES_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+	case "$REPO_UPDATE_STATE" in
+	behind)
+		available="${REPO_UPDATE_BEHIND} commit(s) behind"
+		action='pull --ff-only'
+		;;
+	ahead)
+		available="${REPO_UPDATE_AHEAD} local commit(s) ahead"
+		action='continue'
+		;;
+	*)
+		available='repository state requires review'
+		action='check'
+		;;
+	esac
+
+	printf '\n%sRepository update%s\n' "$C_BOLD" "$C_RESET"
+	printf '%-18s | %-28s | %-22s | %s\n' "component" "installed" "available" "action"
+	printf '%s\n' "-------------------+------------------------------+------------------------+----------"
+	_print_check_table_row 'dotfiles repo' "${branch}@${local_rev}" "$available" "$action" action
+	printf '\n'
+}
+
+_dotfiles_confirm_repo_update() {
+	_print_repo_update_table
+	_dotfiles_confirm "$1"
+}
+
+_dotfiles_wait_for_reload() {
+	local answer=''
+	if [[ -t 0 || -e /dev/tty ]]; then
+		printf 'Press Enter to reload the updated Dotfiles menu: ' >/dev/tty
+		IFS= read -r answer </dev/tty || true
+	fi
+}
+
 _update_apt_packages() {
 	command -v apt-get >/dev/null 2>&1 || { _warn '  apt-get not found, skipping'; return 0; }
 	sudo apt-get -o Dpkg::Use-Pty=0 upgrade -y
@@ -1031,33 +1071,32 @@ cmd_update() {
 		esac
 	done
 
-	repo_update_gate "$DOTFILES_DIR" _dotfiles_confirm
+	repo_update_gate "$DOTFILES_DIR" _dotfiles_confirm_repo_update
 	case "$REPO_UPDATE_OUTCOME" in
 	stopped) return 1 ;;
 	relaunch_required)
 		_msg 'Repository fast-forward succeeded; the old update process will not continue.'
-		if _dotfiles_confirm 'Relaunch the updated workflow now?'; then
-			if [[ "$upgrade_all" == true ]]; then repo_update_relaunch "$_script" update --all
-			else repo_update_relaunch "$_script" update; fi
-		fi
-		_msg 'Relaunch declined; run dotfiles update again when ready.'
-		return 0
+		_dotfiles_wait_for_reload
+		repo_update_relaunch "$DOTFILES_DIR/install.sh"
+		return $?
 		;;
 	current | ahead_continue) ;;
 	*) _err "Unknown repository update outcome: $REPO_UPDATE_OUTCOME"; return 1 ;;
 	esac
 
-	_msg 'Downstream freshness: unchecked (local preview only).'
-	_msg 'Plan: apt packages, CLIs, lazygit, and lazydocker.'
-	if [[ "$upgrade_all" != true ]] && _dotfiles_confirm 'Include Node.js, Go, and Monaspace fonts (--all)?'; then
-		upgrade_all=true
-	fi
-	[[ "$upgrade_all" == true ]] && _msg 'Opt-in plan: Node.js, Go, and Monaspace.'
+	print_report_table
 	if ! _dotfiles_confirm "Proceed with apt refresh and downstream updates?"; then
 		_msg 'Downstream updates skipped.'
 		return 0
 	fi
-	_run_update_downstream "$upgrade_all"
+	if [[ "$upgrade_all" != true ]] && _dotfiles_confirm 'Include Node.js, Go, and Monaspace fonts (--all)?'; then
+		upgrade_all=true
+	fi
+	[[ "$upgrade_all" == true ]] && _msg 'Opt-in plan: Node.js, Go, and Monaspace.'
+	local downstream_rc=0
+	_run_update_downstream "$upgrade_all" || downstream_rc=$?
+	print_upgrade_summary "$upgrade_all"
+	return "$downstream_rc"
 }
 
 cmd_status() {

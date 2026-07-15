@@ -112,7 +112,7 @@ test_direct_status_install_update_dispatch() (
 	[[ "$(printf '%s ' "$(<"$calls")")" == *status* ]] || return 1
 	[[ "$(<"$calls")" == $'status\ninstall\nupdate' ]] || return 1
 	[[ "$pauses" -eq 3 ]] || return 1
-	[[ "$clears" -eq 1 ]]
+	[[ "$clears" -eq 4 ]]
 )
 
 test_required_breadcrumb_literals() {

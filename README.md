@@ -204,6 +204,14 @@ Global command (stowed to `~/bin/dotfiles`, on PATH like `ex` and `clip`):
 
 Runs **unprivileged**; only the apt portion invokes `sudo` internally (single prompt). Agent CLI and npm updates stay under your user.
 
+The interactive Update action clears the menu before starting. It checks the
+repository first; an available pull is shown in a colored repository table and
+requires confirmation. After a pull, press Enter to restart `install.sh` from
+the updated checkout. When the repository is current, Update shows the full
+colored installed/available/action report, asks whether to upgrade, then asks
+whether to include the Node.js, Go, and Monaspace opt-ins. It finishes with a
+colored result table and returns to the menu after Enter.
+
 ### Agentbot — `agent_bootstrap`
 
 The **Agentbot** action validates or clones [`agent_bootstrap`](https://github.com/PamuduW/agent_bootstrap) as a sibling of this dotfiles repo, then launches it as a child process.

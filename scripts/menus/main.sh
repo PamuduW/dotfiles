@@ -57,6 +57,7 @@ _main_menu_unavailable() {
 
 _main_menu_run_direct_action() {
 	local action_fn="$1" rc=0
+	ui_clear
 	"$action_fn" || rc=$?
 	if ((rc != 0)); then
 		printf 'Action failed (exit %d).\n' "$rc" >&2
