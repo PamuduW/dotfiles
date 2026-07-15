@@ -185,7 +185,7 @@ main() {
 		fi
 		;;
 	update)
-		update_menu
+		run_update_flow
 		;;
 	agents)
 		dotfiles_launch_agentbot

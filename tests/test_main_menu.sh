@@ -102,7 +102,7 @@ test_direct_status_install_update_dispatch() (
 	# shellcheck disable=SC2317
 	run_initial_setup_flow() { printf '%s\n' install >>"$calls"; }
 	# shellcheck disable=SC2317
-	update_menu() { printf '%s\n' update >>"$calls"; }
+	run_update_flow() { printf '%s\n' update >>"$calls"; }
 	ui_pause() { pauses=$((pauses + 1)); }
 	# shellcheck disable=SC2317
 	ui_clear() { clears=$((clears + 1)); }
@@ -111,7 +111,7 @@ test_direct_status_install_update_dispatch() (
 	_main_menu_dispatch update || return 1
 	[[ "$(printf '%s ' "$(<"$calls")")" == *status* ]] || return 1
 	[[ "$(<"$calls")" == $'status\ninstall\nupdate' ]] || return 1
-	[[ "$pauses" -eq 2 ]] || return 1
+	[[ "$pauses" -eq 3 ]] || return 1
 	[[ "$clears" -eq 1 ]]
 )
 

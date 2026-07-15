@@ -93,7 +93,7 @@ _main_menu_dispatch() {
 		_main_menu_run_direct_action run_install_action
 		;;
 	update)
-		_main_menu_run_child_menu update_menu
+		_main_menu_run_direct_action run_update_flow
 		;;
 	github_token)
 		_main_menu_dispatch_optional github_token_menu \

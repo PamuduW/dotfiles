@@ -113,13 +113,13 @@ test_cmd_update_executes_outcome_contract() (
 	if cmd_update >/dev/null 2>&1; then return 1; fi
 	[[ "$(<"$events")" == gate ]] || return 1
 
-	: >"$events"; TEST_GATE_OUTCOME=current; replies=no
+	: >"$events"; TEST_GATE_OUTCOME=current; replies='no yes'
 	cmd_update >/dev/null || return 1
-	[[ "$(sed -n '1p' "$events")" == gate && "$(sed -n '2p' "$events")" == confirm:* && "$(wc -l <"$events")" -eq 2 ]] || return 1
+	[[ "$(sed -n '1p' "$events")" == gate && "$(sed -n '2p' "$events")" == confirm:* && "$(sed -n '3p' "$events")" == confirm:* && "$(sed -n '4p' "$events")" == downstream:false ]] || return 1
 
-	: >"$events"; TEST_GATE_OUTCOME=current; replies=yes
+	: >"$events"; TEST_GATE_OUTCOME=current; replies='yes yes'
 	cmd_update >/dev/null || return 1
-	[[ "$(sed -n '1p' "$events")" == gate && "$(sed -n '2p' "$events")" == confirm:* && "$(sed -n '3p' "$events")" == downstream:false ]] || return 1
+	[[ "$(sed -n '1p' "$events")" == gate && "$(sed -n '2p' "$events")" == confirm:* && "$(sed -n '3p' "$events")" == confirm:* && "$(sed -n '4p' "$events")" == downstream:true ]] || return 1
 
 	: >"$events"; TEST_GATE_OUTCOME=ahead_continue; replies=yes
 	cmd_update --all >/dev/null || return 1
@@ -150,8 +150,8 @@ test_downstream_executes_apt_first_and_all_matrix() (
 	grep -Fq 'step:Monaspace fonts' "$events"
 )
 
-test_tui_executes_shared_update_with_context_and_pause() (
-	local fake_dotfiles="$TEST_HARNESS_ROOT/fake-dotfiles" queue="$TEST_HARNESS_ROOT/update.queue"
+test_tui_runs_shared_update_without_submenu() (
+	local fake_dotfiles="$TEST_HARNESS_ROOT/fake-dotfiles"
 	local events="$TEST_HARNESS_ROOT/tui-update.events" tty_output="$TEST_HARNESS_ROOT/tui-update.tty"
 	cat >"$fake_dotfiles" <<'FAKE'
 #!/usr/bin/env bash
@@ -163,26 +163,11 @@ FAKE
 	: >"$events"
 	resolve_dotfiles_cmd() { printf '%s\n' "$fake_dotfiles"; }
 	ui_print_header() { printf 'header:%s|%s\n' "$1" "$2"; }
-	read_tty_line() { printf -v "$1" '%s' "${TEST_TUI_ANSWER:-}"; }
 
-	TEST_TUI_ANSWER='' run_update_flow || return 1
-	TEST_TUI_ANSWER=yes run_update_flow || return 1
-	[[ "$(sed -n '1p' "$events")" == 'dotfiles:update' && "$(sed -n '2p' "$events")" == 'dotfiles:update --all' ]] || return 1
+	run_update_flow || return 1
+	[[ "$(sed -n '1p' "$events")" == 'dotfiles:update' && "$(wc -l <"$events")" -eq 1 ]] || return 1
 	grep -Fq 'header:Update|Dotfiles › Update' "$tty_output" || return 1
-
-	printf 'run\nback\n' >"$queue"
-	menu_simple_run() {
-		local choice rest="$queue.rest"
-		printf 'context:%s|%s\n' "$MENU_SIMPLE_TITLE" "$MENU_SIMPLE_BREADCRUMB" >>"$events"
-		IFS= read -r choice <"$queue"
-		tail -n +2 "$queue" >"$rest"; mv -f -- "$rest" "$queue"
-		printf '%s\n' "$choice"
-	}
-	ui_clear() { :; }
-	ui_pause() { printf 'pause\n' >>"$events"; }
-	TEST_TUI_ANSWER='' update_menu || return 1
-	grep -Fq 'context:Update|Dotfiles › Update' "$events" || return 1
-	[[ "$(grep -c '^pause$' "$events")" -eq 1 ]]
+	! declare -F update_menu >/dev/null 2>&1
 )
 
 test_stopped_paths_have_no_downstream() {
@@ -263,7 +248,7 @@ expect_success 'successful pull requires relaunch and stops old-process work' te
 expect_success 'relaunch wrapper is injectable without a fake exec command' test_relaunch_is_injectable
 expect_success 'cmd_update executes stopped current ahead and relaunch outcomes' test_cmd_update_executes_outcome_contract
 expect_success 'downstream execution runs apt refresh first and honors --all' test_downstream_executes_apt_first_and_all_matrix
-expect_success 'TUI executes shared update with breadcrumb and one pause' test_tui_executes_shared_update_with_context_and_pause
+expect_success 'TUI runs shared update directly without a submenu' test_tui_runs_shared_update_without_submenu
 expect_success 'stopped paths perform no apt tool network or stow work' test_stopped_paths_have_no_downstream
 expect_success 'dotfiles status is strictly local and labels freshness unchecked' test_status_is_strictly_local
 expect_success 'root TUI status reports apt and repository freshness unchecked locally' test_root_tui_status_reports_unchecked_without_network

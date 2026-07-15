@@ -1049,6 +1049,9 @@ cmd_update() {
 
 	_msg 'Downstream freshness: unchecked (local preview only).'
 	_msg 'Plan: apt packages, CLIs, lazygit, and lazydocker.'
+	if [[ "$upgrade_all" != true ]] && _dotfiles_confirm 'Include Node.js, Go, and Monaspace fonts (--all)?'; then
+		upgrade_all=true
+	fi
 	[[ "$upgrade_all" == true ]] && _msg 'Opt-in plan: Node.js, Go, and Monaspace.'
 	if ! _dotfiles_confirm "Proceed with apt refresh and downstream updates?"; then
 		_msg 'Downstream updates skipped.'
