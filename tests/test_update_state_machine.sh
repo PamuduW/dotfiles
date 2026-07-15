@@ -35,6 +35,7 @@ case "$cmd" in
   'status --porcelain --untracked-files=all') [[ "$state" == dirty ]] && printf '?? local-change\n' ;;
   'fetch --prune')
     if [[ "$state" == fetch-failure ]]; then printf 'fetch diagnostic\n' >&2; exit 23; fi
+    [[ "$state" == fetch-output ]] && printf 'From github.com:PamuduW/dotfiles\n'
     exit 0 ;;
   'rev-list --left-right --count HEAD...@{upstream}')
     case "$state" in ahead) printf '2\t0\n' ;; behind|pull-failure) printf '0\t3\n' ;; diverged) printf '2\t3\n' ;; *) printf '0\t0\n' ;; esac ;;
@@ -188,6 +189,33 @@ test_update_and_upgrade_rows_keep_the_last_column_width() (
 	[[ "$line_lengths" == $'93\n93\n93' ]]
 )
 
+test_repository_update_preview_uses_semantic_colors() (
+	local output prompt
+	REPO_UPDATE_STATE=behind
+	REPO_UPDATE_BEHIND=2
+	C_BOLD=$'\033[1m' C_CYAN=$'\033[36m' C_DIM=$'\033[2m' C_YELLOW=$'\033[33m' C_RESET=$'\033[0m'
+	output="$(_print_repo_update_table)"
+	grep -Fq $'\033[36mRepository update' <<<"$output" || return 1
+	grep -Fq $'\033[1mcomponent' <<<"$output" || return 1
+	grep -Fq $'\033[2m-------------------+' <<<"$output" || return 1
+	grep -Fq $'\033[33m2 commit(s) behind' <<<"$output" || return 1
+	grep -Fq $'\033[36mpull --ff-only' <<<"$output" || return 1
+
+	if prompt="$(printf 'n\n' | _dotfiles_confirm 'Pull 2 commit(s) with --ff-only?')"; then
+		return 1
+	fi
+	grep -Fq $'\033[33mPull 2 commit(s) with --ff-only?' <<<"$prompt"
+)
+
+test_repository_fetch_notice_uses_cyan() (
+	local output
+	C_CYAN=$'\033[36m' C_RESET=$'\033[0m'
+	TEST_REPO_STATE=fetch-output
+	export TEST_REPO_STATE
+	output="$(repo_update_gate "$TEST_HARNESS_ROOT/repo" confirm_state 2>&1)" || return 1
+	grep -Fq $'\033[36mFrom github.com:PamuduW/dotfiles' <<<"$output"
+)
+
 test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan() (
 	local output
 	repo_update_gate() { REPO_UPDATE_OUTCOME=current; }
@@ -335,6 +363,8 @@ expect_success 'downstream execution runs apt refresh first and honors --all' te
 expect_success 'pre-confirmation apt report probing never invokes sudo' test_apt_report_probe_uses_cached_indices_without_sudo
 expect_success 'update report title spacing and action separator are stable' test_update_report_uses_clear_title_spacing_and_aligned_action_rule
 expect_success 'update and upgrade rows preserve the fixed final column width' test_update_and_upgrade_rows_keep_the_last_column_width
+expect_success 'repository update preview uses semantic colors' test_repository_update_preview_uses_semantic_colors
+expect_success 'repository fetch notices use cyan' test_repository_fetch_notice_uses_cyan
 expect_success 'update apply uses a high-level Upgrade heading without opt-in plan noise' test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan
 expect_success 'upgrade summary marks the repo gate as handled' test_upgrade_summary_marks_repo_gate_as_handled
 expect_success 'TUI runs shared update directly without a submenu' test_tui_runs_shared_update_without_submenu

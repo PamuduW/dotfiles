@@ -34,12 +34,16 @@ repo_update_inspect() {
 }
 
 repo_update_gate() {
-	local repo_dir="$1" confirm_fn="$2"
+	local repo_dir="$1" confirm_fn="$2" fetch_output=''
 	REPO_UPDATE_OUTCOME=stopped
 	repo_update_inspect "$repo_dir" || return 0
-	if ! git -C "$repo_dir" fetch --prune; then
+	if ! fetch_output="$(git -C "$repo_dir" fetch --prune 2>&1)"; then
+		[[ -n "$fetch_output" ]] && printf '%s\n' "$fetch_output" >&2
 		printf 'Git fetch failed; remote freshness is unknown.\n' >&2
 		return 0
+	fi
+	if [[ -n "$fetch_output" ]]; then
+		printf '%s%s%s\n' "${C_CYAN:-}" "$fetch_output" "${C_RESET:-}"
 	fi
 	repo_update_inspect "$repo_dir" || return 0
 	case "$REPO_UPDATE_STATE" in

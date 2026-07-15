@@ -96,7 +96,7 @@ declare -A UPGRADE_STEP_RESULT=()
 _run_upgrade_step() {
 	local label="$1"
 	shift
-	printf '\n%s== %s ==%s\n' "$C_BOLD" "$label" "$C_RESET"
+	printf '\n%s%s== %s ==%s\n' "$C_BOLD" "$C_CYAN" "$label" "$C_RESET"
 	set +e
 	"$@"
 	local rc=$?
@@ -815,9 +815,18 @@ _color_action() {
 	local action="$1"
 	case "$action" in
 	up\ to\ date | skip) printf '%s%s%s' "$C_GREEN" "$action" "$C_RESET" ;;
-	upgrade* | refresh) printf '%s%s%s' "$C_YELLOW" "$action" "$C_RESET" ;;
+	upgrade* | refresh | continue | check) printf '%s%s%s' "$C_YELLOW" "$action" "$C_RESET" ;;
 	pull*) printf '%s%s%s' "$C_CYAN" "$action" "$C_RESET" ;;
 	*) printf '%s' "$action" ;;
+	esac
+}
+
+_color_available() {
+	local available="$1"
+	case "$available" in
+	none | — | up\ to\ date) printf '%s%s%s' "$C_DIM" "$available" "$C_RESET" ;;
+	*behind | *ahead | update* | *review*) printf '%s%s%s' "$C_YELLOW" "$available" "$C_RESET" ;;
+	*) printf '%s%s%s' "$C_CYAN" "$available" "$C_RESET" ;;
 	esac
 }
 
@@ -880,16 +889,20 @@ _update_table_rule() {
 
 _print_update_table_header() {
 	local last_col="$1"
-	printf '%-*s | %-*s | %-*s | %-*s\n' \
+	printf '%s%-*s | %-*s | %-*s | %-*s%s\n' \
+		"$C_BOLD" \
 		"$_UPDATE_LABEL_W" component \
 		"$_UPDATE_INSTALLED_W" installed \
 		"$_UPDATE_AVAILABLE_W" available \
-		"$_UPDATE_ACTION_W" "$last_col"
-	printf '%s-+-%s-+-%s-+-%s\n' \
+		"$_UPDATE_ACTION_W" "$last_col" \
+		"$C_RESET"
+	printf '%s%s-+-%s-+-%s-+-%s%s\n' \
+		"$C_DIM" \
 		"$(_update_table_rule "$_UPDATE_LABEL_W")" \
 		"$(_update_table_rule "$_UPDATE_INSTALLED_W")" \
 		"$(_update_table_rule "$_UPDATE_AVAILABLE_W")" \
-		"$(_update_table_rule "$_UPDATE_ACTION_W")"
+		"$(_update_table_rule "$_UPDATE_ACTION_W")" \
+		"$C_RESET"
 }
 
 _print_check_table_row() {
@@ -915,6 +928,30 @@ _print_check_table_row() {
 	printf '\n'
 }
 
+_print_repo_update_row() {
+	local component="$1"
+	local installed="$2"
+	local available="$3"
+	local action="$4"
+	local available_fit="${available:0:_UPDATE_AVAILABLE_W}"
+	local available_padding=$((_UPDATE_AVAILABLE_W - ${#available_fit}))
+	local action_padding=$((_UPDATE_ACTION_W - ${#action}))
+
+	printf '%-*.*s | %-*.*s | ' \
+		"$_UPDATE_LABEL_W" "$_UPDATE_LABEL_W" "$component" \
+		"$_UPDATE_INSTALLED_W" "$_UPDATE_INSTALLED_W" "$installed"
+	_color_available "$available_fit"
+	if ((available_padding > 0)); then
+		printf '%*s' "$available_padding" ''
+	fi
+	printf ' | '
+	_color_action "$action"
+	if ((action_padding > 0)); then
+		printf '%*s' "$action_padding" ''
+	fi
+	printf '\n'
+}
+
 print_report_table() {
 	local -a rows=()
 	local row component installed available action
@@ -930,7 +967,7 @@ print_report_table() {
 		esac
 	done
 
-	printf '\n%sUpdate report%s\n\n' "$C_BOLD" "$C_RESET"
+	printf '\n%s%sUpdate report%s\n\n' "$C_BOLD" "$C_CYAN" "$C_RESET"
 	_print_update_table_header action
 
 	for row in "${rows[@]}"; do
@@ -958,7 +995,7 @@ print_upgrade_summary() {
 
 	mapfile -t rows < <(_collect_check_rows)
 
-	printf '\n%sUpgrade summary%s\n' "$C_BOLD" "$C_RESET"
+	printf '\n%s%sUpgrade summary%s\n' "$C_BOLD" "$C_CYAN" "$C_RESET"
 	_print_update_table_header result
 
 	for row in "${rows[@]}"; do
@@ -1015,7 +1052,7 @@ print_status_table() {
 # --- Subcommands ---
 _dotfiles_confirm() {
 	local prompt="$1" answer=''
-	printf '%s [y/N]: ' "$prompt"
+	printf '%s%s%s [y/N]: ' "$C_YELLOW" "$prompt" "$C_RESET"
 	IFS= read -r answer || true
 	case "$answer" in y | Y | yes | YES) return 0 ;; *) return 1 ;; esac
 }
@@ -1039,10 +1076,9 @@ _print_repo_update_table() {
 		;;
 	esac
 
-	printf '\n%sRepository update%s\n' "$C_BOLD" "$C_RESET"
-	printf '%-18s | %-28s | %-22s | %s\n' "component" "installed" "available" "action"
-	printf '%s\n' "-------------------+------------------------------+------------------------+----------"
-	_print_check_table_row 'dotfiles repo' "${branch}@${local_rev}" "$available" "$action" action
+	printf '\n%s%sRepository update%s\n' "$C_BOLD" "$C_CYAN" "$C_RESET"
+	_print_update_table_header action
+	_print_repo_update_row 'dotfiles repo' "${branch}@${local_rev}" "$available" "$action"
 	printf '\n'
 }
 
@@ -1123,7 +1159,7 @@ cmd_update() {
 	if [[ "$upgrade_all" != true ]] && _dotfiles_confirm 'Include Node.js, Go, and Monaspace fonts (--all)?'; then
 		upgrade_all=true
 	fi
-	printf '\n%s=== Upgrade ===%s\n' "$C_BOLD" "$C_RESET"
+	printf '\n%s%s=== Upgrade ===%s\n' "$C_BOLD" "$C_CYAN" "$C_RESET"
 	local downstream_rc=0
 	_run_update_downstream "$upgrade_all" || downstream_rc=$?
 	print_upgrade_summary "$upgrade_all"
