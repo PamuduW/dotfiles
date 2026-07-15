@@ -16,6 +16,7 @@ _rt_ensure_colors() {
 		C_DIM=$'\033[2m'
 		C_GREEN=$'\033[32m'
 		C_YELLOW=$'\033[33m'
+		C_ORANGE=$'\033[38;5;208m'
 		C_RED=$'\033[31m'
 		C_CYAN=$'\033[36m'
 	else
@@ -24,6 +25,7 @@ _rt_ensure_colors() {
 		C_DIM=''
 		C_GREEN=''
 		C_YELLOW=''
+		C_ORANGE=''
 		C_RED=''
 		C_CYAN=''
 	fi
@@ -101,7 +103,7 @@ rt_print_header() {
 
 	_rt_ensure_colors
 	printf '\n'
-	printf '  %s=== %s ===%s\n' "$C_BOLD" "$title" "$C_RESET"
+	printf '  %s%s=== %s ===%s\n' "$C_BOLD" "$C_ORANGE" "$title" "$C_RESET"
 	if [[ -n "$breadcrumb" ]]; then
 		printf '  %s%s%s\n' "$C_DIM" "$breadcrumb" "$C_RESET"
 	fi
@@ -112,7 +114,7 @@ rt_print_section() {
 	local label="$1"
 
 	_rt_ensure_colors
-	printf '  %s%s%s\n' "$C_DIM" "$label" "$C_RESET"
+	printf '  %s%s%s%s\n' "$C_BOLD" "$C_ORANGE" "$label" "$C_RESET"
 }
 
 # Blank line, section title, blank line, then column header — easier to scan than one long table.

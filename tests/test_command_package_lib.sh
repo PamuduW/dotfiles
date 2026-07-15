@@ -193,6 +193,13 @@ test_command_lib_colors_behavior_cells_when_enabled() {
 	[[ "$output" == *$'\033[32mread-only\033[0m'* ]]
 }
 
+test_topic_headers_use_orange() {
+	local output
+	NO_COLOR='' FORCE_COLOR=1 ui_init_colors
+	output="$(ui_print_header 'Update' 'Dotfiles › Update' 80)"
+	grep -Fq $'\033[38;5;208m=== Update ===' <<<"$output"
+}
+
 test_component_registry_has_exact_20() {
 	local expected=(
 		git_identity system_packages python powershell go nodejs direnv docker portainer lazygit
@@ -346,6 +353,7 @@ expect_success 'dotfiles status is local-only and reports freshness unchecked' t
 expect_success 'report path shortening preserves the fixed detail width' test_report_path_shortening_preserves_exact_width
 expect_success 'Command Lib renders all metadata once without side effects' test_command_lib_is_metadata_only
 expect_success 'Command Lib colors mutating and read-only behavior cells' test_command_lib_colors_behavior_cells_when_enabled
+expect_success 'topic headers use the orange palette' test_topic_headers_use_orange
 expect_success 'component registry exposes the exact 20 described component IDs' test_component_registry_has_exact_20
 expect_success 'package metadata contains 28 unique described names in 9/3/7/9 tags' test_package_metadata_has_exact_28_with_descriptions
 expect_success 'Package Lib renders all 20 components without probes or side effects' test_package_lib_components_are_metadata_only

@@ -2,7 +2,7 @@
 # Shared TUI colors, headers, confirms, and semantic word coloring.
 # Depends on: menu_render.sh, tty.sh
 
-# Public palette tokens (C_BLUE/C_INVERT consumed by menu modules).
+# Public palette tokens (C_ORANGE, C_BLUE, and C_INVERT consumed by menu modules).
 # shellcheck disable=SC2034
 ui_init_colors() {
 	if [[ -z "${NO_COLOR:-}" ]]; then
@@ -13,6 +13,7 @@ ui_init_colors() {
 		C_CYAN=$'\e[36m'
 		C_GREEN=$'\e[32m'
 		C_YELLOW=$'\e[33m'
+		C_ORANGE=$'\e[38;5;208m'
 		C_RED=$'\e[31m'
 		C_BLUE=$'\e[34m'
 		C_INVERT=$'\e[7m'
@@ -26,6 +27,7 @@ ui_init_colors() {
 	C_CYAN=''
 	C_GREEN=''
 	C_YELLOW=''
+	C_ORANGE=''
 	C_RED=''
 	C_BLUE=''
 	C_INVERT=''
@@ -86,7 +88,7 @@ ui_print_header() {
 		cols="$(menu_tty_cols)"
 	fi
 
-	printf '  %s%s%s\e[K\n' "$C_BOLD" "$(menu_fit_indent "=== ${title} ===" "$cols" 2)" "$C_RESET"
+	printf '  %s%s%s%s\e[K\n' "$C_BOLD" "$C_ORANGE" "$(menu_fit_indent "=== ${title} ===" "$cols" 2)" "$C_RESET"
 	if [[ -n "$breadcrumb" ]]; then
 		printf '  %s%s%s\e[K\n' "$C_DIM" "$(menu_fit_indent "$breadcrumb" "$cols" 2)" "$C_RESET"
 	fi
@@ -101,7 +103,7 @@ ui_print_section() {
 		cols="$(menu_tty_cols)"
 	fi
 
-	printf '  %s%s%s\e[K\n' "$C_DIM" "$(menu_fit_indent "$label" "$cols" 2)" "$C_RESET"
+	printf '  %s%s%s%s\e[K\n' "$C_BOLD" "$C_ORANGE" "$(menu_fit_indent "$label" "$cols" 2)" "$C_RESET"
 }
 
 ui_color_word() {

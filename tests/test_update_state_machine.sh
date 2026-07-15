@@ -172,6 +172,7 @@ test_update_report_uses_clear_title_spacing_and_aligned_action_rule() (
 	local output_file="$TEST_HARNESS_ROOT/update-report.output"
 	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|up to date'; }
 	NO_COLOR=1 print_report_table >"$output_file"
+	[[ "$(sed -n '1p' "$output_file")" == 'Update report' ]] || return 1
 	grep -Fq $'Update report\n\ncomponent' "$output_file" || return 1
 	! grep -Fq 'Upgrade report' "$output_file" || return 1
 	grep -Fq $'everything looks current.\n\n' "$output_file" || return 1
@@ -189,13 +190,28 @@ test_update_and_upgrade_rows_keep_the_last_column_width() (
 	[[ "$line_lengths" == $'93\n93\n93' ]]
 )
 
+test_update_rows_align_unicode_available_cells() (
+	local output
+	_collect_check_rows() { printf '%s\n' 'Cursor CLI|2026.07.09-a3815c0|—|up to date'; }
+	output="$(NO_COLOR=1 print_report_table)"
+	awk '
+	/^Cursor CLI/ {
+		pipes=""
+		for (i = 1; i <= length($0); i++) if (substr($0, i, 1) == "|") pipes = pipes i ","
+		if (length($0) != 93 || pipes != "20,51,76,") exit 1
+		found=1
+	}
+	END { exit(found ? 0 : 1) }
+	' <<<"$output"
+)
+
 test_repository_update_preview_uses_semantic_colors() (
 	local output prompt
 	REPO_UPDATE_STATE=behind
 	REPO_UPDATE_BEHIND=2
-	C_BOLD=$'\033[1m' C_CYAN=$'\033[36m' C_DIM=$'\033[2m' C_YELLOW=$'\033[33m' C_RESET=$'\033[0m'
+	C_BOLD=$'\033[1m' C_CYAN=$'\033[36m' C_ORANGE=$'\033[38;5;208m' C_DIM=$'\033[2m' C_YELLOW=$'\033[33m' C_RESET=$'\033[0m'
 	output="$(_print_repo_update_table)"
-	grep -Fq $'\033[36mRepository update' <<<"$output" || return 1
+	grep -Fq $'\033[38;5;208mRepository update' <<<"$output" || return 1
 	grep -Fq $'\033[1mcomponent' <<<"$output" || return 1
 	grep -Fq $'\033[2m-------------------+' <<<"$output" || return 1
 	grep -Fq $'\033[33m2 commit(s) behind' <<<"$output" || return 1
@@ -205,6 +221,26 @@ test_repository_update_preview_uses_semantic_colors() (
 		return 1
 	fi
 	grep -Fq $'\033[33mPull 2 commit(s) with --ff-only?' <<<"$prompt"
+)
+
+test_all_update_topics_use_orange() (
+	local output
+	C_BOLD=$'\033[1m' C_CYAN=$'\033[36m' C_ORANGE=$'\033[38;5;208m' C_RESET=$'\033[0m'
+	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|up to date'; }
+	output="$(print_report_table)" 2>/dev/null || true
+	grep -Fq $'\033[38;5;208mUpdate report' <<<"$output" || return 1
+
+	_upgrade_topic_probe() { :; }
+	output="$(_run_upgrade_step lazygit _upgrade_topic_probe)"
+	grep -Fq $'\033[38;5;208m== lazygit ==' <<<"$output" || return 1
+
+	repo_update_gate() { REPO_UPDATE_OUTCOME=current; }
+	print_report_table() { :; }
+	_dotfiles_confirm() { return 0; }
+	_run_update_downstream() { :; }
+	print_upgrade_summary() { :; }
+	output="$(cmd_update)"
+	grep -Fq $'\033[38;5;208m=== Upgrade ===' <<<"$output"
 )
 
 test_repository_fetch_notice_uses_cyan() (
@@ -363,7 +399,9 @@ expect_success 'downstream execution runs apt refresh first and honors --all' te
 expect_success 'pre-confirmation apt report probing never invokes sudo' test_apt_report_probe_uses_cached_indices_without_sudo
 expect_success 'update report title spacing and action separator are stable' test_update_report_uses_clear_title_spacing_and_aligned_action_rule
 expect_success 'update and upgrade rows preserve the fixed final column width' test_update_and_upgrade_rows_keep_the_last_column_width
+expect_success 'update rows align a Unicode em-dash available cell' test_update_rows_align_unicode_available_cells
 expect_success 'repository update preview uses semantic colors' test_repository_update_preview_uses_semantic_colors
+expect_success 'all update topics use orange' test_all_update_topics_use_orange
 expect_success 'repository fetch notices use cyan' test_repository_fetch_notice_uses_cyan
 expect_success 'update apply uses a high-level Upgrade heading without opt-in plan noise' test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan
 expect_success 'upgrade summary marks the repo gate as handled' test_upgrade_summary_marks_repo_gate_as_handled

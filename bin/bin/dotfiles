@@ -73,6 +73,7 @@ if _dotfiles_use_color; then
 	C_GREEN=$'\033[32m'
 	C_YELLOW=$'\033[33m'
 	C_CYAN=$'\033[36m'
+	C_ORANGE=$'\033[38;5;208m'
 	C_RED=$'\033[31m'
 else
 	C_RESET=''
@@ -81,6 +82,7 @@ else
 	C_GREEN=''
 	C_YELLOW=''
 	C_CYAN=''
+	C_ORANGE=''
 	C_RED=''
 fi
 
@@ -96,7 +98,7 @@ declare -A UPGRADE_STEP_RESULT=()
 _run_upgrade_step() {
 	local label="$1"
 	shift
-	printf '\n%s%s== %s ==%s\n' "$C_BOLD" "$C_CYAN" "$label" "$C_RESET"
+	printf '\n%s%s== %s ==%s\n' "$C_BOLD" "$C_ORANGE" "$label" "$C_RESET"
 	set +e
 	"$@"
 	local rc=$?
@@ -905,26 +907,56 @@ _print_update_table_header() {
 		"$C_RESET"
 }
 
+_update_fit_text() {
+	local text="$1" width="$2"
+	if ((${#text} > width)); then
+		if ((width <= 3)); then
+			printf '%s' "${text:0:width}"
+		else
+			printf '%s...' "${text:0:$((width - 3))}"
+		fi
+	else
+		printf '%s' "$text"
+	fi
+}
+
+_update_print_plain_cell() {
+	local text="$1" width="$2" fit padding
+	fit="$(_update_fit_text "$text" "$width")"
+	printf '%s' "$fit"
+	padding=$((width - ${#fit}))
+	if ((padding > 0)); then
+		printf '%*s' "$padding" ''
+	fi
+}
+
+_update_print_colored_cell() {
+	local text="$1" width="$2" color_fn="$3" fit padding
+	fit="$(_update_fit_text "$text" "$width")"
+	"$color_fn" "$fit"
+	padding=$((width - ${#fit}))
+	if ((padding > 0)); then
+		printf '%*s' "$padding" ''
+	fi
+}
+
 _print_check_table_row() {
 	local component="$1"
 	local installed="$2"
 	local available="$3"
 	local last_col="$4"
 	local color_fn="$5"
-	local last_col_len=${#last_col}
-	local last_col_padding=$((_UPDATE_ACTION_W - last_col_len))
 
-	printf '%-*.*s | %-*.*s | %-*.*s | ' \
-		"$_UPDATE_LABEL_W" "$_UPDATE_LABEL_W" "$component" \
-		"$_UPDATE_INSTALLED_W" "$_UPDATE_INSTALLED_W" "$installed" \
-		"$_UPDATE_AVAILABLE_W" "$_UPDATE_AVAILABLE_W" "$available"
+	_update_print_plain_cell "$component" "$_UPDATE_LABEL_W"
+	printf ' | '
+	_update_print_plain_cell "$installed" "$_UPDATE_INSTALLED_W"
+	printf ' | '
+	_update_print_plain_cell "$available" "$_UPDATE_AVAILABLE_W"
+	printf ' | '
 	case "$color_fn" in
-	result) _color_result "$last_col" ;;
-	*) _color_action "$last_col" ;;
+	result) _update_print_colored_cell "$last_col" "$_UPDATE_ACTION_W" _color_result ;;
+	*) _update_print_colored_cell "$last_col" "$_UPDATE_ACTION_W" _color_action ;;
 	esac
-	if ((last_col_padding > 0)); then
-		printf '%*s' "$last_col_padding" ''
-	fi
 	printf '\n'
 }
 
@@ -933,22 +965,14 @@ _print_repo_update_row() {
 	local installed="$2"
 	local available="$3"
 	local action="$4"
-	local available_fit="${available:0:_UPDATE_AVAILABLE_W}"
-	local available_padding=$((_UPDATE_AVAILABLE_W - ${#available_fit}))
-	local action_padding=$((_UPDATE_ACTION_W - ${#action}))
 
-	printf '%-*.*s | %-*.*s | ' \
-		"$_UPDATE_LABEL_W" "$_UPDATE_LABEL_W" "$component" \
-		"$_UPDATE_INSTALLED_W" "$_UPDATE_INSTALLED_W" "$installed"
-	_color_available "$available_fit"
-	if ((available_padding > 0)); then
-		printf '%*s' "$available_padding" ''
-	fi
+	_update_print_plain_cell "$component" "$_UPDATE_LABEL_W"
 	printf ' | '
-	_color_action "$action"
-	if ((action_padding > 0)); then
-		printf '%*s' "$action_padding" ''
-	fi
+	_update_print_plain_cell "$installed" "$_UPDATE_INSTALLED_W"
+	printf ' | '
+	_update_print_colored_cell "$available" "$_UPDATE_AVAILABLE_W" _color_available
+	printf ' | '
+	_update_print_colored_cell "$action" "$_UPDATE_ACTION_W" _color_action
 	printf '\n'
 }
 
@@ -967,7 +991,7 @@ print_report_table() {
 		esac
 	done
 
-	printf '\n%s%sUpdate report%s\n\n' "$C_BOLD" "$C_CYAN" "$C_RESET"
+	printf '%s%sUpdate report%s\n\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
 	_print_update_table_header action
 
 	for row in "${rows[@]}"; do
@@ -995,7 +1019,7 @@ print_upgrade_summary() {
 
 	mapfile -t rows < <(_collect_check_rows)
 
-	printf '\n%s%sUpgrade summary%s\n' "$C_BOLD" "$C_CYAN" "$C_RESET"
+	printf '\n%s%sUpgrade summary%s\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
 	_print_update_table_header result
 
 	for row in "${rows[@]}"; do
@@ -1076,7 +1100,7 @@ _print_repo_update_table() {
 		;;
 	esac
 
-	printf '\n%s%sRepository update%s\n' "$C_BOLD" "$C_CYAN" "$C_RESET"
+	printf '\n%s%sRepository update%s\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
 	_print_update_table_header action
 	_print_repo_update_row 'dotfiles repo' "${branch}@${local_rev}" "$available" "$action"
 	printf '\n'
@@ -1159,7 +1183,7 @@ cmd_update() {
 	if [[ "$upgrade_all" != true ]] && _dotfiles_confirm 'Include Node.js, Go, and Monaspace fonts (--all)?'; then
 		upgrade_all=true
 	fi
-	printf '\n%s%s=== Upgrade ===%s\n' "$C_BOLD" "$C_CYAN" "$C_RESET"
+	printf '\n%s%s=== Upgrade ===%s\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
 	local downstream_rc=0
 	_run_update_downstream "$upgrade_all" || downstream_rc=$?
 	print_upgrade_summary "$upgrade_all"
@@ -1167,7 +1191,7 @@ cmd_update() {
 }
 
 cmd_status() {
-	printf '%s=== Installed versions ===%s\n\n' "$C_BOLD" "$C_RESET"
+	printf '%s%s=== Installed versions ===%s\n\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
 
 	printf '  %-20s %s\n' "apt:" "$(command -v apt-get >/dev/null 2>&1 && echo "available (freshness unchecked)" || echo "$NOT_INSTALLED")"
 	printf '  %-20s %s\n' "Cursor CLI:" "$(cursor_installed_version)"
@@ -1180,7 +1204,7 @@ cmd_status() {
 	printf '  %-20s %s\n' "Go:" "$(go_installed_version)"
 	printf '  %-20s %s\n' "Monaspace:" "$(monaspace_installed_version)"
 
-	printf '\n%s=== Dotfiles repo ===%s\n' "$C_BOLD" "$C_RESET"
+	printf '\n%s%s=== Dotfiles repo ===%s\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
 	if command -v git >/dev/null 2>&1; then
 		git -C "$DOTFILES_DIR" status -sb
 		_msg "Remote freshness: unchecked (run dotfiles update)"

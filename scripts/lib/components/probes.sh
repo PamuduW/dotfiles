@@ -234,7 +234,7 @@ print_install_summary() {
 	local ok_count=0 miss_count=0
 
 	echo ""
-	echo "=== Install summary ==="
+	printf '%s=== Install summary ===%s\n' "${C_ORANGE:-}" "${C_RESET:-}"
 	printf '%-22s | %-32s | %s\n' "component" "detail" "result"
 	printf '%s\n' "----------------------+----------------------------------+-----------"
 
