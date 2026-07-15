@@ -4,14 +4,14 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 
 ## What you get
 
-- **Interactive boot menu** — `dotfiles` / `dotfiles menu` or `./install.sh`; loops through initial setup, update, and agents
+- **Interactive boot menu** — `dotfiles` / `dotfiles menu` or `./install.sh`; loops through status, install, update, token, library, and Agentbot actions
 - Custom Bash prompt: time, user@host, path, git branch + status markers, exit code
 - Cross-terminal history syncing (`history -a; history -n`) with 10k line history
 - Modern CLI tools: `eza`, `fzf` (Ctrl+R/Ctrl+T/Alt+C), `zoxide`, `ripgrep`, `fd`
 - Better readline: case-insensitive completion, arrow-key history search
 - Docker Engine + Portainer CE (with `dpot`/`dpotstop` shortcuts)
 - Node.js via nvm, Python 3, Go (asdf), PowerShell, direnv
-- AI CLI tools: Cursor, Codex, Claude, Copilot (with `dotfiles upgrade` / `update-all` to keep them current)
+- AI CLI tools: Cursor, Codex, Claude, Copilot (updated through the explicit `dotfiles update` workflow)
 - SSH key generation with GitHub setup notes
 - WSL-specific config: systemd, Windows PATH interop (`appendWindowsPath=true`), Git credential helper, clipboard helper
 
@@ -30,7 +30,7 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 │   └── bin/
 │       ├── ex          # open Windows Explorer from WSL
 │       ├── clip        # copy to Windows clipboard from WSL
-│       └── dotfiles    # report/apply upgrades, status, restow, self
+│       └── dotfiles    # status, update, command/package libraries
 ├── readline/
 │   └── .inputrc        # better tab completion + history search
 ├── packages/
@@ -61,15 +61,15 @@ chmod +x install.sh bin/bin/ex bin/bin/clip bin/bin/dotfiles
 
 ### agent_bootstrap sibling path
 
-The **Agents** submenu expects `agent_bootstrap` as a **sibling** of this repo (not a fixed `~/Dev` path):
+The **Agentbot** action expects `agent_bootstrap` as a **sibling** of this repo (not a fixed `~/Dev` path):
 
 ```text
 parent/
 ├── dotfiles/           # this repo
-└── agent_bootstrap/    # clone target for Agents → Clone/update repo
+└── agent_bootstrap/    # sibling target for Agentbot
 ```
 
-Clone manually or use **Agents → Clone/update repo**. `AGENT_BOOTSTRAP_HOME` is set from the sibling path when `install.sh` exists there. A standalone `agent_bootstrap` clone elsewhere still works for direct `./install.sh` use; override with `AGENT_BOOTSTRAP_ALLOW_OVERRIDE=1` if dotfiles should point at a non-sibling path.
+Clone manually or use **Agentbot**. The bridge validates `install.sh` and the Git origin before launching. A standalone `agent_bootstrap` clone still works when launched directly.
 
 Entry points (interactive TTY):
 
@@ -80,9 +80,13 @@ The main menu **loops** until you choose Quit:
 
 ```
 === Dotfiles ===
-  Initial setup
+  Check Status
+  Install Dotfiles
   Update
-  Agents
+  GitHub Token Config
+  Command Lib
+  Package Lib
+  Agentbot
   Quit
 ```
 
@@ -92,9 +96,13 @@ Use arrow keys to navigate and Enter to select.
 
 | Option | Submenu / action |
 | ------ | ---------------- |
-| Initial setup | **Check status** — component install summary table · **Run setup** — toggle menu, confirm loop, install · **Back** |
-| Update | **Update & upgrade** — `dotfiles update` report, then optional `dotfiles upgrade` (prompts for `--all`) · **Back** |
-| Agents | **Check status** · **Clone/update repo** · **Run full bootstrap** · **Refresh skills only** · **Link agentboot** · **Scaffold repo (agentboot)** · **Run doctor** · **Back** |
+| Check Status | Read-only local component and repository report; remote and apt freshness are labelled unchecked. |
+| Install Dotfiles | Select components, review the execution plan, and apply setup. |
+| Update | Repo-first fetch/classify/pull gate, then confirmed downstream updates. |
+| GitHub Token Config | Configure the optional shared API token without blocking anonymous use. |
+| Command Lib | Read-only command and mutation matrix. |
+| Package Lib | Read-only component and system-package catalog. |
+| Agentbot | Validate/clone the sibling `agent_bootstrap` repository, then launch it as a child. |
 | Quit | Exit |
 
 ### CLI flags
@@ -102,9 +110,9 @@ Use arrow keys to navigate and Enter to select.
 Skip the boot menu with explicit flags:
 
 ```bash
-./install.sh --initial      # Initial setup submenu (or run setup if non-interactive)
+./install.sh --status       # Read-only status
 ./install.sh --update       # Update submenu
-./install.sh --agents       # Agents submenu
+./install.sh --agents       # Agentbot sibling bridge
 ./install.sh --help         # Usage
 ```
 
@@ -112,10 +120,10 @@ Skip the boot menu with explicit flags:
 
 | Invocation | Behavior |
 | ---------- | -------- |
-| `./install.sh` (no flag, no TTY) | Runs **Initial setup → Run setup** with all components enabled by default |
-| `./install.sh --initial` (no TTY) | Same as above — prints execution plan to stdout, then installs |
+| `./install.sh` (no flag, no TTY) | Runs the explicit non-interactive install path |
+| `./install.sh --status` (no TTY) | Prints local status without fetch, apt refresh, or writes |
 | `./install.sh --update` | Runs update flow (non-interactive where applicable) |
-| `./install.sh --agents` | Opens agents submenu (requires TTY for interactive menu) |
+| `./install.sh --agents` | Launches Agentbot as a sibling child after validation |
 
 Set `DOTFILES_COMPONENTS` to a comma-separated list of component keys to install only those (e.g. `DOTFILES_COMPONENTS=docker,portainer,lazygit`). When git identity is enabled but not prompted, existing `git config --global` values are used.
 
@@ -185,39 +193,35 @@ Global command (stowed to `~/bin/dotfiles`, on PATH like `ex` and `clip`):
 | ---------- | ------ |
 | `dotfiles` | On a TTY, opens the boot menu; otherwise prints help |
 | `dotfiles menu` | Boot menu (same as `./install.sh`) |
-| `dotfiles update` | **Report only** — check apt, agent CLIs, runtimes, and the dotfiles repo; print what can be upgraded (no changes) |
-| `dotfiles upgrade` | **Apply** — run upgrades (apt, CLIs, **dotfiles git pull + restow**, etc.); idempotent and safe to re-run |
-| `dotfiles upgrade --all` | Same as `upgrade`, plus opt-in **Node.js** (nvm LTS), **Go** (asdf), and **Monaspace** fonts |
-| `dotfiles status` | Installed versions + dotfiles repo git status |
+| `dotfiles update` | **Apply after confirmation** — repo-first gate, then apt/CLI/tool changes |
+| `dotfiles update --all` | Same as `update`, plus opt-in **Node.js**, **Go**, and **Monaspace** fonts |
+| `dotfiles status` | Local installed versions + repo state; no fetch or apt refresh |
+| `dotfiles commands` | Read-only command behavior matrix |
+| `dotfiles packages` | Read-only component/package catalog |
+| `dotfiles token` | Optional shared GitHub token configuration |
+| `dotfiles agentbot` | Validated sibling Agentbot launch |
 | `dotfiles restow` | `stow --restow bash bin readline` |
-| `dotfiles self` | Fast-forward pull in a **clean** dotfiles worktree, then restow; commit or stash local changes first |
 
 Runs **unprivileged**; only the apt portion invokes `sudo` internally (single prompt). Agent CLI and npm updates stay under your user.
 
-### Agents — `agent_bootstrap`
+### Agentbot — `agent_bootstrap`
 
-The **Agents** submenu clones and bootstraps [`agent_bootstrap`](https://github.com/PamuduW/agent_bootstrap) as a sibling of this dotfiles repo (e.g. `~/Dev/agent_bootstrap` next to `~/Dev/dotfiles`).
+The **Agentbot** action validates or clones [`agent_bootstrap`](https://github.com/PamuduW/agent_bootstrap) as a sibling of this dotfiles repo, then launches it as a child process.
 
 | Action | What it does |
 | ------ | ------------ |
-| Check status | Repo path, git state, skills count, doctor summary |
-| Clone/update repo | `git clone` or `git pull` at the sibling path |
-| Run full bootstrap | `./install.sh` in the clone |
-| Refresh skills only | `./install.sh skills update` |
-| Link agentboot | Symlink `bin/agentboot` → `~/bin/agentboot` |
-| Scaffold repo | Run `agentboot` in a chosen git repo |
-| Run doctor | `./install.sh doctor` |
+| Existing sibling | Requires executable `install.sh` and an allowlisted origin |
+| Missing sibling | Shows exact URL/destination and asks before cloning |
+| Child launch | Runs `SETUP_CALLER=dotfiles ../agent_bootstrap/install.sh` and returns on exit |
 
 **Environment overrides (advanced):**
 
 | Variable | Default | Notes |
 | -------- | ------- | ----- |
-| `AGENT_BOOTSTRAP_REPO_URL` | `git@github.com:PamuduW/agent_bootstrap.git` | Clone URL; must match the allowlist unless bypass is set |
-| `AGENT_BOOTSTRAP_REPO_URL_ALLOW_ANY` | unset | Set to `1` to clone any URL (**unsafe** — disables supply-chain guard) |
-| `AGENT_BOOTSTRAP_CLONE_HOME` | sibling of dotfiles | Override clone target directory |
-| `AGENT_BOOTSTRAP_ALLOW_OVERRIDE` | unset | Set to `1` to use a non-canonical `AGENT_BOOTSTRAP_HOME` (**unsafe** — can point bootstrap at an arbitrary tree) |
+| `DOTFILES_AGENTBOT_URL` | `git@github.com:PamuduW/agent_bootstrap.git` | Clone URL; must match the allowlist |
+| `AGENTBOT_HOME` | sibling `agent_bootstrap` | Explicit validated sibling override |
 
-When `AGENT_BOOTSTRAP_REPO_URL` is overridden, clone is refused unless the URL is `git@github.com:PamuduW/agent_bootstrap.git` or `https://github.com/PamuduW/agent_bootstrap.git`, or `AGENT_BOOTSTRAP_REPO_URL_ALLOW_ANY=1` is set.
+Clone URLs never contain credentials. `SETUP_CALLER=agentbot` makes the child hide its Dotfiles route.
 
 ## Bash prompt
 
@@ -271,37 +275,23 @@ Both use full Windows paths, so they work even with `appendWindowsPath=true`.
 | `update-codex`   | Update Codex CLI (`npm i -g @openai/codex@latest`) |
 | `update-claude`  | Update Claude CLI (`claude update`)                |
 | `update-copilot` | Update Copilot CLI (`copilot update`)              |
-| `update-all`     | Delegates to `dotfiles upgrade` (apt + CLIs)       |
+| `update-all`     | Use `dotfiles update --all` (apt + CLIs)            |
 | `cp`, `mv`, `rm` | Safety wrappers with `-i`                          |
 
 ---
 
 ## Update / re-apply
 
-Check what can be upgraded without changing anything:
+Apply the repo-first update workflow (the downstream plan is confirmed before mutation):
 
 ```bash
 dotfiles update
 ```
 
-Apply upgrades (apt, agent CLIs, etc.):
-
-```bash
-dotfiles upgrade
-# or the alias:
-update-all
-```
-
 Include opt-in runtime/font upgrades (Node.js via nvm, Go via asdf, Monaspace):
 
 ```bash
-dotfiles upgrade --all
-```
-
-Pull latest dotfiles and refresh symlinks:
-
-```bash
-dotfiles self
+dotfiles update --all
 ```
 
 Symlinks point to repo files, so edits are immediate. To refresh links manually:

@@ -89,7 +89,7 @@ ensure_asdf_installed() {
 		}
 		tmp="$(mktemp -d)"
 		trap '[[ -n "${tmp:-}" ]] && rm -rf -- "$tmp"' RETURN
-		if ! curl -fsSL -o "$tmp/asdf.tar.gz" "$tarball_url"; then
+		if ! github_curl -fsSL -o "$tmp/asdf.tar.gz" "$tarball_url"; then
 			echo "  Failed to download asdf. Check TLS trust in WSL or retry after fixing CA certificates." >&2
 			return 1
 		fi

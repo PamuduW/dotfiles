@@ -17,7 +17,7 @@ _draw_component_menu() {
 	total_pages="$(menu_page_count "$count" "$page_size")"
 	read -r start end < <(menu_page_range "$count" "$page_size" "$page")
 
-	ui_print_header "Select Components" "" "$cols"
+	ui_print_header "Install Dotfiles" "Dotfiles › Install Dotfiles" "$cols"
 	printf '  %s%s%s\e[K\n' "$C_DIM" "$(_fit_menu_line_with_indent "Up/Down navigate   Space toggle   a all   n none   Enter confirm   q back" "$cols" 2)" "$C_RESET"
 	printf '  %s%s%s\e[K\n\n' "$C_DIM" "$(_fit_menu_line_with_indent "Page $((page + 1))/$total_pages   Showing $((start + 1))-$((end + 1)) of $count" "$cols" 2)" "$C_RESET"
 
@@ -52,6 +52,7 @@ _draw_component_menu() {
 		printf '\e[K\n'
 	fi
 
+	# shellcheck disable=SC2034  # Consumed by menu_desc_print_footer.
 	COMP_DESC_FN=_comp_menu_desc_fn
 	menu_desc_print_footer COMP "$cur" "$cols"
 }

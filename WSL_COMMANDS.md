@@ -199,14 +199,11 @@ sudo nano /etc/wsl.conf
 ## Dotfiles maintenance (inside WSL)
 
 ```bash
-# Report only — what can be upgraded (no changes)
+# Repo-first update workflow (downstream changes require confirmation)
 dotfiles update
 
-# Apply upgrades (apt, agent CLIs, etc.; sudo only for apt)
-dotfiles upgrade
-
 # Include opt-in upgrades: Node.js (nvm), Go (asdf), Monaspace fonts
-dotfiles upgrade --all
+dotfiles update --all
 
 # Boot menu (initial setup / update / agents)
 dotfiles menu
@@ -216,8 +213,8 @@ dotfiles
 # Installed versions + repo git status
 dotfiles status
 
-# Pull dotfiles repo and restow symlinks
-dotfiles self
+# Re-apply bash, bin, and readline stow links
+dotfiles restow
 ```
 
 ## Quick Access from PowerShell/CMD

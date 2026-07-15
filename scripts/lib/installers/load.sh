@@ -1,7 +1,10 @@
 # shellcheck shell=bash
+# shellcheck disable=SC1091  # Installer modules are resolved relative to this loader.
 
 _INSTALL_LIB_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# shellcheck source=scripts/lib/github_token.sh
+source "$(cd -- "$_INSTALL_LIB_DIR/.." && pwd)/github_token.sh"
 # shellcheck source=scripts/lib/github_api.sh
 source "$(cd -- "$_INSTALL_LIB_DIR/.." && pwd)/github_api.sh"
 

@@ -52,6 +52,7 @@ _menu_simple_menu_lines() {
 	if ((desc_rows > 0)); then
 		footer_rows=1
 		lines=$((lines - footer_rows + desc_rows))
+		lines=$((lines + 1))
 	fi
 	printf '%s\n' "$lines"
 }
@@ -87,6 +88,7 @@ _menu_simple_draw() {
 	done
 
 	if menu_desc_configured MENU_SIMPLE; then
+		printf '\e[K\n'
 		menu_desc_print_footer MENU_SIMPLE "$cur" "$cols"
 	else
 		printf '\e[K\n'

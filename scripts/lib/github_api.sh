@@ -1,24 +1,65 @@
 # shellcheck shell=bash
 # GitHub Releases API helpers (User-Agent + optional GITHUB_TOKEN).
 
-github_api_release_json() {
-	local repo="$1" tmp_file curl_error token="${GITHUB_TOKEN:-}"
-	local -a auth_header=()
+_github_curl_redact_stderr() {
+	local token="$1" stderr_file="$2" content=''
+	IFS= read -r -d '' content <"$stderr_file" || true
+	printf '%s' "${content//"$token"/[redacted]}" >&2
+}
 
-	[[ -n "$token" ]] && auth_header=(-H "Authorization: Bearer ${token}")
+# Keep token discovery and curl authentication inside a child shell. The token
+# is supplied through curl's private standard-input config, never its argv.
+github_curl() (
+	local token='' rc stderr_file old_umask
+	if declare -F github_token_export_if_valid >/dev/null; then
+		github_token_export_if_valid
+		token="${GITHUB_TOKEN:-}"
+	fi
+	unset GITHUB_TOKEN
+
+	if [[ -z "$token" ]]; then
+		curl "$@"
+		return
+	fi
+
+	old_umask="$(umask)"
+	umask 077
+	stderr_file="$(mktemp "${TMPDIR:-/tmp}/github-curl.stderr.XXXXXX")" || {
+		umask "$old_umask"
+		return 1
+	}
+	umask "$old_umask"
+	trap 'rm -f -- "$stderr_file"' EXIT
+
+	if curl --config - "$@" \
+		2>"$stderr_file" <<EOF
+header = "Authorization: Bearer ${token}"
+EOF
+	then
+		rc=0
+	else
+		rc=$?
+	fi
+	_github_curl_redact_stderr "$token" "$stderr_file"
+	rm -f -- "$stderr_file"
+	trap - EXIT
+	return "$rc"
+)
+
+github_api_release_json() {
+	local repo="$1" tmp_file curl_error
+
 	tmp_file="$(mktemp)" || return 1
 
-	if ! curl_error="$(curl -fsSL \
+	if ! curl_error="$(github_curl -fsSL \
 		--connect-timeout 10 \
 		--max-time 30 \
 		--retry 2 \
 		--retry-delay 1 \
 		-H "Accept: application/vnd.github+json" \
 		-H "User-Agent: dotfiles-bootstrap" \
-		"${auth_header[@]}" \
 		"https://api.github.com/repos/${repo}/releases/latest" -o "$tmp_file" 2>&1)"; then
 		rm -f "$tmp_file"
-		[[ -n "$token" ]] && curl_error="${curl_error//"$token"/[redacted]}"
 		echo "GitHub Releases API request failed for ${repo}." >&2
 		if [[ "$curl_error" == *"403"* || "$curl_error" == *"429"* ]]; then
 			echo "  GitHub denied or rate-limited the request; wait for the limit reset or set GITHUB_TOKEN." >&2

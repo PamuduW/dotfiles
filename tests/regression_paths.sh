@@ -60,32 +60,20 @@ test_existing_unapproved_origin_can_be_explicitly_bypassed() {
 	' _ "$ROOT" "$repo"
 }
 
-test_self_rejects_non_git_directory() {
-	local non_git="$1/non-git"
-	mkdir -p "$non_git"
-	bash -c '
-		upgrade_dotfiles_repo() { return 0; }
-		_err() { :; }
-		source <(sed -n "/^cmd_self()/,/^}/p" "$1/bin/bin/dotfiles")
-		DOTFILES_DIR="$2"
+test_removed_commands_have_migration_guidance() {
+	local cmd output rc
+	for cmd in summary upgrade self; do
 		set +e
-		cmd_self
-		exit $?
-	' _ "$ROOT" "$non_git"
-}
-
-test_self_rejects_bare_git_repository() {
-	local bare_repo="$1/bare.git"
-	git init -q --bare "$bare_repo"
-	bash -c '
-		upgrade_dotfiles_repo() { return 0; }
-		_err() { :; }
-		source <(sed -n "/^cmd_self()/,/^}/p" "$1/bin/bin/dotfiles")
-		DOTFILES_DIR="$2"
-		set +e
-		cmd_self
-		exit $?
-	' _ "$ROOT" "$bare_repo"
+		output="$($ROOT/bin/bin/dotfiles "$cmd" 2>&1)"
+		rc=$?
+		set -e
+		[[ "$rc" -ne 0 ]] || return 1
+		case "$cmd" in
+		summary) [[ "$output" == *'use dotfiles status'* ]] || return 1 ;;
+		upgrade) [[ "$output" == *'use dotfiles update'* ]] || return 1 ;;
+		self) [[ "$output" == *'use dotfiles update'* && "$output" == *'restow'* ]] || return 1 ;;
+		esac
+	done
 }
 
 test_report_separator_has_no_stray_trailing_dash() {
@@ -94,6 +82,12 @@ test_report_separator_has_no_stray_trailing_dash() {
 	[[ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" -eq 2 ]] &&
 		[[ "$(printf '%s\n' "$output" | sed -n '2p')" == *+*+* ]] &&
 		! printf '%s\n' "$output" | sed -n '2p' | grep -Eq -- '-[0-9]+$'
+}
+
+test_help_omits_removed_commands() {
+	local output
+	output="$($ROOT/bin/bin/dotfiles help 2>&1)"
+	! printf '%s\n' "$output" | grep -Eq '^  (summary|upgrade|self)([[:space:]]|$)'
 }
 
 test_path_status_separator_has_no_numeric_format_artifact() {
@@ -225,8 +219,8 @@ main() {
 	fi
 	expect_failure 'unapproved existing agent_bootstrap origin is rejected' test_existing_unapproved_origin_is_rejected "$tmp"
 	expect_success 'explicit origin bypass remains available' test_existing_unapproved_origin_can_be_explicitly_bypassed "$tmp"
-	expect_failure 'dotfiles self rejects non-git directory' test_self_rejects_non_git_directory "$tmp"
-	expect_failure 'dotfiles self rejects bare Git repository' test_self_rejects_bare_git_repository "$tmp"
+	expect_success 'removed dotfiles commands have migration guidance' test_removed_commands_have_migration_guidance
+	expect_success 'removed dotfiles commands are absent from help' test_help_omits_removed_commands
 	expect_success 'report separator has no stray trailing dash' test_report_separator_has_no_stray_trailing_dash
 	expect_success 'path-status separator has no numeric format artifact' test_path_status_separator_has_no_numeric_format_artifact
 

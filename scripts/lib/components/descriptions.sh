@@ -9,9 +9,8 @@ _comp_desc_git_identity() {
 }
 
 _comp_desc_system_packages() {
-	local pkgs
-	pkgs="$(read_packages_by_tags core cli system | tr '\n' ',' | sed 's/,$//' | sed 's/,/, /g')"
-	echo "Installs via apt: ${pkgs}"
+	echo "Installs the curated apt package catalog from packages/packages.txt."
+	echo "Package Lib shows every package name, tag, and description."
 }
 
 _comp_desc_python() {

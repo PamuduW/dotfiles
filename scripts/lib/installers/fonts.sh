@@ -23,7 +23,7 @@ install_monaspace_fonts() {
 
 	tmp="$(mktemp -d)"
 	trap 'rm -rf "$tmp"' RETURN
-	if ! curl -fsSL -o "$tmp/monaspace-nerdfonts.zip" \
+	if ! github_curl -fsSL -o "$tmp/monaspace-nerdfonts.zip" \
 		"https://github.com/githubnext/monaspace/releases/download/v${ver}/monaspace-nerdfonts-v${ver}.zip"; then
 		echo "  Monaspace download failed." >&2
 		return 1

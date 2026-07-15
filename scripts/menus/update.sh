@@ -9,8 +9,8 @@ _update_keys=(run back)
 _update_desc_fn() {
 	case "$1" in
 	0)
-		echo "Run dotfiles update to sync the repo and refresh stowed configs."
-		echo "Optionally run dotfiles upgrade (with or without --all)."
+		echo "Run the repo-first update workflow."
+		echo "Optionally include Node.js, Go, and Monaspace with --all."
 		;;
 	1)
 		echo "Return to the main Dotfiles menu."
@@ -26,12 +26,12 @@ _update_dispatch() {
 
 update_menu() {
 	MENU_SUBMENU_DESC_FN=_update_desc_fn
-	menu_submenu_loop "Update & upgrade" "" \
+	menu_submenu_loop "Update" "Dotfiles › Update" \
 		_update_labels _update_keys _update_dispatch
 }
 
 run_update_flow() {
-	local dotfiles_cmd answer
+	local dotfiles_cmd answer tty_path="${DOTFILES_TTY_PATH:-/dev/tty}"
 
 	dotfiles_cmd="$(resolve_dotfiles_cmd)" || {
 		echo "Error: dotfiles command not found." >&2
@@ -40,28 +40,17 @@ run_update_flow() {
 
 	{
 		printf '\n'
-		ui_print_header "Update & upgrade" ""
+		ui_print_header "Update" "Dotfiles › Update"
 		printf '\n'
-	} >/dev/tty
+	} >"$tty_path"
 
-	"$dotfiles_cmd" update
-
-	echo ""
-	read_tty_line answer "Proceed with upgrades? [y/N]: "
+	read_tty_line answer "Include Node.js, Go, and Monaspace fonts (--all)? [y/N]: "
 	case "$answer" in
 	y | Y | yes | YES)
-		read_tty_line answer "Include Node.js, Go, and Monaspace fonts (--all)? [y/N]: "
-		case "$answer" in
-		y | Y | yes | YES)
-			"$dotfiles_cmd" upgrade --all
-			;;
-		*)
-			"$dotfiles_cmd" upgrade
-			;;
-		esac
+		"$dotfiles_cmd" update --all
 		;;
 	*)
-		echo "Skipped upgrades."
+		"$dotfiles_cmd" update
 		;;
 	esac
 }

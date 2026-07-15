@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2034  # Registry arrays are public to sourced component modules.
 # Component registry: keys, labels, deps, and dispatch helpers.
 
 COMP_KEYS=(

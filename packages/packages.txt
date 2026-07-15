@@ -3,37 +3,37 @@
 # Lines starting with # (without @) are plain comments.
 
 # @core
-git
-curl
-ca-certificates
-bash-completion
-bubblewrap
-stow
-shellcheck
-shfmt
-tree
+git  # Distributed version control client
+curl  # Command-line HTTP and data transfer client
+ca-certificates  # Trusted certificate authority bundle
+bash-completion  # Programmable completion definitions for Bash
+bubblewrap  # Lightweight unprivileged sandbox helper
+stow  # Symlink-farm manager for dotfiles
+shellcheck  # Static analysis for shell scripts
+shfmt  # Shell source formatter
+tree  # Recursive directory tree viewer
 
 # @python
-python3
-python3-pip
-python3-venv
+python3  # Python 3 interpreter
+python3-pip  # Python package installer
+python3-venv  # Python virtual-environment support
 
 # @cli
-duf
-ripgrep
-fd-find
-fzf
-zoxide
-eza
-moreutils
+duf  # Human-friendly disk usage viewer
+ripgrep  # Fast recursive text search
+fd-find  # Fast filesystem search tool
+fzf  # Interactive fuzzy finder
+zoxide  # Smarter directory navigation
+eza  # Modern directory listing tool
+moreutils  # Additional Unix command-line utilities
 
 # @system
-lshw
-mtr-tiny
-glances
-lsof
-wslu
-rsync
-unp
-poppler-utils
-magic-wormhole
+lshw  # Hardware inventory utility
+mtr-tiny  # Network route and latency diagnostic
+glances  # Interactive system monitor
+lsof  # List open files and owning processes
+wslu  # WSL integration utilities
+rsync  # Incremental file synchronization
+unp  # Archive unpacking convenience wrapper
+poppler-utils  # PDF inspection and conversion tools
+magic-wormhole  # Secure peer-to-peer file transfer

@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2015  # Existing compact enabled/skip row pattern.
 # Per-component execution plan rows (_comp_plan_<id>).
 
 _comp_plan_git_identity() {
@@ -142,7 +143,7 @@ show_plan() {
 
 	{
 		ui_clear
-		ui_print_header "Execution Plan" "" "$cols"
+		ui_print_header "Execution Plan" "Dotfiles › Install Dotfiles › Execution Plan" "$cols"
 		printf '\n'
 
 		for i in "${!COMP_KEYS[@]}"; do

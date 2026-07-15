@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC1091  # Runtime sources are rooted beneath DOTFILES_DIR.
 set -euo pipefail
 
 # --------------------------------------------
@@ -14,6 +15,7 @@ DOTFILES_DIR="$SCRIPT_DIR"
 if [[ "$(basename "$SCRIPT_DIR")" == "scripts" ]]; then
 	DOTFILES_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 fi
+# shellcheck disable=SC2034  # Consumed by sourced component/install modules.
 PKG_FILE="$DOTFILES_DIR/packages/packages.txt"
 
 DOTFILES_INTERACTIVE_TTY=false
@@ -57,8 +59,14 @@ source "$DOTFILES_DIR/scripts/menus/main.sh"
 source "$DOTFILES_DIR/scripts/menus/initial_setup.sh"
 # shellcheck source=scripts/menus/update.sh
 source "$DOTFILES_DIR/scripts/menus/update.sh"
-# shellcheck source=scripts/menus/agents.sh
-source "$DOTFILES_DIR/scripts/menus/agents.sh"
+# shellcheck source=scripts/menus/github_token.sh
+source "$DOTFILES_DIR/scripts/menus/github_token.sh"
+# shellcheck source=scripts/menus/command_lib.sh
+source "$DOTFILES_DIR/scripts/menus/command_lib.sh"
+# shellcheck source=scripts/menus/package_lib.sh
+source "$DOTFILES_DIR/scripts/menus/package_lib.sh"
+# shellcheck source=scripts/menus/agentbot.sh
+source "$DOTFILES_DIR/scripts/menus/agentbot.sh"
 
 SETUP_GIT_NAME=""
 SETUP_GIT_EMAIL=""
@@ -180,7 +188,7 @@ main() {
 		update_menu
 		;;
 	agents)
-		agents_menu
+		dotfiles_launch_agentbot
 		;;
 	*)
 		printf 'unknown mode: %s\n' "$mode" >&2

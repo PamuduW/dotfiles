@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC1091  # Dynamic loader paths are rooted beside this file.
 # Load unified menu / UI library (order matters).
 
 _LIB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -9,8 +10,14 @@ source "$_LIB_DIR/bootstrap.sh"
 source "$_LIB_DIR/menu_render.sh"
 # shellcheck source=scripts/lib/tty.sh
 source "$_LIB_DIR/tty.sh"
+# shellcheck source=scripts/lib/repo_update.sh
+source "$_LIB_DIR/repo_update.sh"
 # shellcheck source=scripts/lib/report_table.sh
 source "$_LIB_DIR/report_table.sh"
+# shellcheck source=scripts/lib/command_metadata.sh
+source "$_LIB_DIR/command_metadata.sh"
+# shellcheck source=scripts/lib/github_token.sh
+source "$_LIB_DIR/github_token.sh"
 # shellcheck source=scripts/lib/ui.sh
 source "$_LIB_DIR/ui.sh"
 ui_init_colors

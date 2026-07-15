@@ -26,15 +26,24 @@ _initial_desc_fn() {
 _initial_dispatch() {
 	case "$1" in
 	status)
-		print_status_summary_all
+		run_status_action
 		;;
 	run)
-		ui_clear
-		run_initial_setup_flow
+		run_install_action
 		;;
 	esac
 }
 
+run_status_action() {
+	print_status_summary_all
+}
+
+run_install_action() {
+	ui_clear
+	run_initial_setup_flow
+}
+
+# shellcheck disable=SC2034  # Consumed by menu_submenu_loop.
 initial_setup_menu() {
 	MENU_SUBMENU_DESC_FN=_initial_desc_fn
 	menu_submenu_loop "Initial setup" "Dotfiles › Initial setup" \
@@ -92,7 +101,7 @@ confirm_loop() {
 			need_git_prompt=true
 			;;
 		q | Q)
-			printf '%s\n' "Returning to Initial setup menu." >/dev/tty
+			printf '%s\n' "Returning to Dotfiles menu." >/dev/tty
 			return 1
 			;;
 		*) printf '%s\n' "    Invalid choice." >/dev/tty ;;
@@ -103,14 +112,14 @@ confirm_loop() {
 print_status_summary_all() {
 	local i key label row result detail short_label
 	local ok_count=0 check_count=0 miss_count=0
-	local cols
+	local cols status_output="${DOTFILES_STATUS_OUTPUT:-/dev/tty}"
 
 	cols="$(menu_tty_cols)"
 
 	{
 		ui_clear
 		printf '\n'
-		ui_print_header "Status summary" "Dotfiles › Initial setup" "$cols"
+		ui_print_header "Check Status" "Dotfiles › Check Status" "$cols"
 		ui_print_report_table_columns
 
 		for i in "${!COMP_KEYS[@]}"; do
@@ -135,5 +144,7 @@ print_status_summary_all() {
 		else
 			ui_print_report_rollup "$ok_count" "$check_count" "$miss_count"
 		fi
-	} >/dev/tty
+		printf '\nApt/package freshness: unchecked (run dotfiles update)\n'
+		printf 'Repository freshness: unchecked (run dotfiles update)\n'
+	} >"$status_output"
 }
