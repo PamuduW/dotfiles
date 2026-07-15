@@ -898,6 +898,8 @@ _print_check_table_row() {
 	local available="$3"
 	local last_col="$4"
 	local color_fn="$5"
+	local last_col_len=${#last_col}
+	local last_col_padding=$((_UPDATE_ACTION_W - last_col_len))
 
 	printf '%-*.*s | %-*.*s | %-*.*s | ' \
 		"$_UPDATE_LABEL_W" "$_UPDATE_LABEL_W" "$component" \
@@ -907,6 +909,9 @@ _print_check_table_row() {
 	result) _color_result "$last_col" ;;
 	*) _color_action "$last_col" ;;
 	esac
+	if ((last_col_padding > 0)); then
+		printf '%*s' "$last_col_padding" ''
+	fi
 	printf '\n'
 }
 

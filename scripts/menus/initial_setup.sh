@@ -136,7 +136,6 @@ print_status_summary_all() {
 			ui_print_report_table_row "$short_label" "$detail" "$result"
 		done
 
-		printf '\n'
 		if [[ $miss_count -eq 0 && $check_count -eq 0 ]]; then
 			ui_print_report_rollup "$ok_count" 0 0
 		elif [[ $miss_count -eq 0 ]]; then

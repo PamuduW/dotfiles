@@ -177,6 +177,17 @@ test_update_report_uses_clear_title_spacing_and_aligned_action_rule() (
 	grep -Eq '^-------------------\+------------------------------\+------------------------\+-----------------' "$output_file"
 )
 
+test_update_and_upgrade_rows_keep_the_last_column_width() (
+	local output line_lengths
+	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|up to date'; }
+
+	line_lengths="$(NO_COLOR=1 print_report_table | awk '/^(component|apt packages|---)/ { print length($0) }')"
+	[[ "$line_lengths" == $'93\n93\n93' ]] || return 1
+
+	line_lengths="$(NO_COLOR=1 print_upgrade_summary false | awk '/^(component|apt packages|---)/ { print length($0) }')"
+	[[ "$line_lengths" == $'93\n93\n93' ]]
+)
+
 test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan() (
 	local output
 	repo_update_gate() { REPO_UPDATE_OUTCOME=current; }
@@ -250,6 +261,31 @@ test_root_tui_status_omits_unchecked_freshness_without_network() (
 	[[ ! -s "$TEST_COMMAND_LOG" && ! -s "$TEST_URL_LOG" ]]
 )
 
+test_root_status_rollup_has_one_blank_line() (
+	local output="$TEST_HARNESS_ROOT/root-status-rollup.output"
+	export DOTFILES_STATUS_OUTPUT="$output"
+	COMP_KEYS=(sample)
+	COMP_LABELS=('Sample')
+	menu_tty_cols() { printf '80\n'; }
+	ui_clear() { :; }
+	ui_print_header() { printf 'header:%s|%s\n' "$1" "$2"; }
+	ui_print_report_table_columns() { rt_print_table_columns; }
+	_install_summary_probe() { printf 'installed|present\n'; }
+	_install_short_label() { printf '%s\n' "$1"; }
+	ui_print_report_table_row() { rt_print_table_row "$@"; }
+	ui_print_report_rollup() { rt_print_rollup "$@"; }
+	NO_COLOR=1 run_status_action || return 1
+
+	awk '
+	/All 1 component\(s\) look good\./ {
+		if (previous != "" || before_previous == "") exit 1
+		found=1
+	}
+	{ before_previous=previous; previous=$0 }
+	END { exit(found ? 0 : 1) }
+	' "$output"
+)
+
 test_retained_capability_coverage() {
 	declare -F cmd_status >/dev/null 2>&1 || return 1
 	declare -F cmd_update >/dev/null 2>&1 || return 1
@@ -298,12 +334,14 @@ expect_success 'cmd_update executes stopped current ahead and relaunch outcomes'
 expect_success 'downstream execution runs apt refresh first and honors --all' test_downstream_executes_apt_first_and_all_matrix
 expect_success 'pre-confirmation apt report probing never invokes sudo' test_apt_report_probe_uses_cached_indices_without_sudo
 expect_success 'update report title spacing and action separator are stable' test_update_report_uses_clear_title_spacing_and_aligned_action_rule
+expect_success 'update and upgrade rows preserve the fixed final column width' test_update_and_upgrade_rows_keep_the_last_column_width
 expect_success 'update apply uses a high-level Upgrade heading without opt-in plan noise' test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan
 expect_success 'upgrade summary marks the repo gate as handled' test_upgrade_summary_marks_repo_gate_as_handled
 expect_success 'TUI runs shared update directly without a submenu' test_tui_runs_shared_update_without_submenu
 expect_success 'stopped paths perform no apt tool network or stow work' test_stopped_paths_have_no_downstream
 expect_success 'dotfiles status is strictly local and labels freshness unchecked' test_status_is_strictly_local
 expect_success 'root TUI status omits unchecked apt and repository freshness locally' test_root_tui_status_omits_unchecked_freshness_without_network
+expect_success 'root status rollup has exactly one blank line before the summary' test_root_status_rollup_has_one_blank_line
 expect_success 'status update and restow retain removed command capabilities' test_retained_capability_coverage
 expect_success 'summary upgrade and self fail with migration guidance' test_removed_commands_have_guidance
 expect_success 'metadata help Command Lib and dispatch share seven keys' test_exact_command_set_parity
