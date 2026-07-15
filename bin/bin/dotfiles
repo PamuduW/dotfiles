@@ -96,7 +96,7 @@ declare -A UPGRADE_STEP_RESULT=()
 _run_upgrade_step() {
 	local label="$1"
 	shift
-	printf '\n%s=== %s ===%s\n' "$C_BOLD" "$label" "$C_RESET"
+	printf '\n%s== %s ==%s\n' "$C_BOLD" "$label" "$C_RESET"
 	set +e
 	"$@"
 	local rc=$?
@@ -141,8 +141,7 @@ apt_upgradable_count() {
 		return
 	fi
 	local count
-	# Refresh indices so the report matches what upgrade_apt will apply.
-	sudo apt-get update -qq 2>/dev/null || true
+	# Use cached indices for the pre-confirmation preview; refresh during apply.
 	count="$(apt-get -s upgrade 2>/dev/null | grep -c '^Inst' || true)"
 	echo "${count:-0}"
 }
@@ -868,6 +867,31 @@ _collect_check_rows() {
 }
 
 # Fixed-width table row: truncate text columns so pipes stay aligned; color last column only.
+_UPDATE_LABEL_W=18
+_UPDATE_INSTALLED_W=28
+_UPDATE_AVAILABLE_W=22
+_UPDATE_ACTION_W=16
+
+_update_table_rule() {
+	local width="$1" rule
+	printf -v rule '%*s' "$width" ''
+	printf '%s' "${rule// /-}"
+}
+
+_print_update_table_header() {
+	local last_col="$1"
+	printf '%-*s | %-*s | %-*s | %-*s\n' \
+		"$_UPDATE_LABEL_W" component \
+		"$_UPDATE_INSTALLED_W" installed \
+		"$_UPDATE_AVAILABLE_W" available \
+		"$_UPDATE_ACTION_W" "$last_col"
+	printf '%s-+-%s-+-%s-+-%s\n' \
+		"$(_update_table_rule "$_UPDATE_LABEL_W")" \
+		"$(_update_table_rule "$_UPDATE_INSTALLED_W")" \
+		"$(_update_table_rule "$_UPDATE_AVAILABLE_W")" \
+		"$(_update_table_rule "$_UPDATE_ACTION_W")"
+}
+
 _print_check_table_row() {
 	local component="$1"
 	local installed="$2"
@@ -875,7 +899,10 @@ _print_check_table_row() {
 	local last_col="$4"
 	local color_fn="$5"
 
-	printf '%-18.18s | %-28.28s | %-22.22s | ' "$component" "$installed" "$available"
+	printf '%-*.*s | %-*.*s | %-*.*s | ' \
+		"$_UPDATE_LABEL_W" "$_UPDATE_LABEL_W" "$component" \
+		"$_UPDATE_INSTALLED_W" "$_UPDATE_INSTALLED_W" "$installed" \
+		"$_UPDATE_AVAILABLE_W" "$_UPDATE_AVAILABLE_W" "$available"
 	case "$color_fn" in
 	result) _color_result "$last_col" ;;
 	*) _color_action "$last_col" ;;
@@ -898,9 +925,8 @@ print_report_table() {
 		esac
 	done
 
-	printf '\n%sUpgrade report%s\n' "$C_BOLD" "$C_RESET"
-	printf '%-18s | %-28s | %-22s | %s\n' "component" "installed" "available" "action"
-	printf '%s\n' "-------------------+------------------------------+------------------------+----------"
+	printf '\n%sUpdate report%s\n\n' "$C_BOLD" "$C_RESET"
+	_print_update_table_header action
 
 	for row in "${rows[@]}"; do
 		IFS='|' read -r component installed available action <<<"$row"
@@ -916,6 +942,7 @@ print_report_table() {
 			"$C_YELLOW" "$upgrade_count" "$([[ $upgrade_count -eq 1 ]] && echo '' || echo 's')" "$C_RESET" \
 			"$C_BOLD" "$C_RESET"
 	fi
+	printf '\n'
 }
 
 print_upgrade_summary() {
@@ -927,8 +954,7 @@ print_upgrade_summary() {
 	mapfile -t rows < <(_collect_check_rows)
 
 	printf '\n%sUpgrade summary%s\n' "$C_BOLD" "$C_RESET"
-	printf '%-18s | %-28s | %-22s | %s\n' "component" "installed" "available" "result"
-	printf '%s\n' "-------------------+------------------------------+------------------------+----------"
+	_print_update_table_header result
 
 	for row in "${rows[@]}"; do
 		IFS='|' read -r component installed available _action <<<"$row"
@@ -1092,7 +1118,7 @@ cmd_update() {
 	if [[ "$upgrade_all" != true ]] && _dotfiles_confirm 'Include Node.js, Go, and Monaspace fonts (--all)?'; then
 		upgrade_all=true
 	fi
-	[[ "$upgrade_all" == true ]] && _msg 'Opt-in plan: Node.js, Go, and Monaspace.'
+	printf '\n%s=== Upgrade ===%s\n' "$C_BOLD" "$C_RESET"
 	local downstream_rc=0
 	_run_update_downstream "$upgrade_all" || downstream_rc=$?
 	print_upgrade_summary "$upgrade_all"

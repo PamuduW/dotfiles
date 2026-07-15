@@ -158,6 +158,38 @@ test_downstream_executes_apt_first_and_all_matrix() (
 	grep -Fq 'step:Monaspace fonts' "$events"
 )
 
+test_apt_report_probe_uses_cached_indices_without_sudo() (
+	local count sudo_calls=0
+	apt-get() { printf '%s\n' 'Inst cached-package'; }
+	sudo() { sudo_calls=$((sudo_calls + 1)); return 99; }
+	count="$(apt_upgradable_count)"
+	[[ "$count" -eq 1 ]] || return 1
+	[[ "$sudo_calls" -eq 0 ]]
+)
+
+test_update_report_uses_clear_title_spacing_and_aligned_action_rule() (
+	local output_file="$TEST_HARNESS_ROOT/update-report.output"
+	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|up to date'; }
+	NO_COLOR=1 print_report_table >"$output_file"
+	grep -Fq $'Update report\n\ncomponent' "$output_file" || return 1
+	! grep -Fq 'Upgrade report' "$output_file" || return 1
+	grep -Fq $'everything looks current.\n\n' "$output_file" || return 1
+	grep -Eq '^-------------------\+------------------------------\+------------------------\+-----------------' "$output_file"
+)
+
+test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan() (
+	local output
+	repo_update_gate() { REPO_UPDATE_OUTCOME=current; }
+	print_report_table() { :; }
+	_dotfiles_confirm() { return 0; }
+	_run_update_downstream() { printf '%s\n' '== apt packages =='; }
+	print_upgrade_summary() { :; }
+	output="$(cmd_update)"
+	grep -Fq '=== Upgrade ===' <<<"$output" || return 1
+	grep -Fq '== apt packages ==' <<<"$output" || return 1
+	! grep -Fq 'Opt-in plan:' <<<"$output"
+)
+
 test_upgrade_summary_marks_repo_gate_as_handled() (
 	_collect_check_rows() { printf '%s\n' 'dotfiles repo|main@abc123|none|up to date'; }
 	local output
@@ -198,7 +230,7 @@ test_status_is_strictly_local() {
 	! grep -Eq $'git\t.*\t(fetch|pull|ls-remote)(\t|$)|^(curl|npx|sudo|stow|apt-get)\t' "$TEST_COMMAND_LOG"
 }
 
-test_root_tui_status_reports_unchecked_without_network() (
+test_root_tui_status_omits_unchecked_freshness_without_network() (
 	local output="$TEST_HARNESS_ROOT/root-status.output"
 	export DOTFILES_STATUS_OUTPUT="$output"
 	COMP_KEYS=(sample)
@@ -213,8 +245,8 @@ test_root_tui_status_reports_unchecked_without_network() (
 	ui_print_report_rollup() { printf 'rollup:%s|%s|%s\n' "$1" "$2" "$3"; }
 	test_harness_reset_logs
 	run_status_action || return 1
-	grep -Fqi 'apt/package freshness: unchecked' "$output" || return 1
-	grep -Fqi 'repository freshness: unchecked' "$output" || return 1
+	! grep -Fqi 'apt/package freshness: unchecked' "$output" || return 1
+	! grep -Fqi 'repository freshness: unchecked' "$output" || return 1
 	[[ ! -s "$TEST_COMMAND_LOG" && ! -s "$TEST_URL_LOG" ]]
 )
 
@@ -264,11 +296,14 @@ expect_success 'successful pull requires relaunch and stops old-process work' te
 expect_success 'relaunch wrapper is injectable without a fake exec command' test_relaunch_is_injectable
 expect_success 'cmd_update executes stopped current ahead and relaunch outcomes' test_cmd_update_executes_outcome_contract
 expect_success 'downstream execution runs apt refresh first and honors --all' test_downstream_executes_apt_first_and_all_matrix
+expect_success 'pre-confirmation apt report probing never invokes sudo' test_apt_report_probe_uses_cached_indices_without_sudo
+expect_success 'update report title spacing and action separator are stable' test_update_report_uses_clear_title_spacing_and_aligned_action_rule
+expect_success 'update apply uses a high-level Upgrade heading without opt-in plan noise' test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan
 expect_success 'upgrade summary marks the repo gate as handled' test_upgrade_summary_marks_repo_gate_as_handled
 expect_success 'TUI runs shared update directly without a submenu' test_tui_runs_shared_update_without_submenu
 expect_success 'stopped paths perform no apt tool network or stow work' test_stopped_paths_have_no_downstream
 expect_success 'dotfiles status is strictly local and labels freshness unchecked' test_status_is_strictly_local
-expect_success 'root TUI status reports apt and repository freshness unchecked locally' test_root_tui_status_reports_unchecked_without_network
+expect_success 'root TUI status omits unchecked apt and repository freshness locally' test_root_tui_status_omits_unchecked_freshness_without_network
 expect_success 'status update and restow retain removed command capabilities' test_retained_capability_coverage
 expect_success 'summary upgrade and self fail with migration guidance' test_removed_commands_have_guidance
 expect_success 'metadata help Command Lib and dispatch share seven keys' test_exact_command_set_parity

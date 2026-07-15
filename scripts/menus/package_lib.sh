@@ -90,7 +90,8 @@ package_lib_render_components() {
 
 package_lib_render_packages_page() {
 	local page="$1" page_size="$2" cols="${3:-$(menu_tty_cols)}"
-	local page_count start end i row
+	local page_count start end i row package_fit tag_fit description_fit
+	local package_w tag_w description_w available package_rule tag_rule description_rule
 
 	if ((${#PACKAGE_LIB_NAMES[@]} == 0)); then
 		package_metadata_load "${PKG_FILE:-}" || return 1
@@ -102,10 +103,57 @@ package_lib_render_packages_page() {
 	_package_lib_header "System packages" "Dotfiles › Package Lib › System packages" "$cols"
 	printf '  Page %d/%d   Showing %d-%d of %d\n\n' \
 		"$((page + 1))" "$page_count" "$((start + 1))" "$((end + 1))" "${#PACKAGE_LIB_NAMES[@]}"
+
+	# Keep the package browser useful on narrow terminals while retaining a
+	# fixed-width, colored table that is easy to scan on normal screens.
+	available=$((cols - 2 - 6))
+	package_w=18
+	tag_w=10
+	description_w=$((available - package_w - tag_w))
+	if ((description_w < 18)); then
+		package_w=17
+		tag_w=9
+		description_w=$((available - package_w - tag_w))
+	fi
+	if ((description_w < 1)); then
+		description_w=1
+	fi
+	package_fit="$(_package_lib_fit package "$package_w")"
+	tag_fit="$(_package_lib_fit category "$tag_w")"
+	description_fit="$(_package_lib_fit description "$description_w")"
+	if declare -F _rt_ensure_colors >/dev/null; then
+		_rt_ensure_colors
+		printf '  %s%-*s%s | %s%-*s%s | %s%-*s%s\n' \
+			"$C_BOLD" "$package_w" "$package_fit" "$C_RESET" \
+			"$C_BOLD" "$tag_w" "$tag_fit" "$C_RESET" \
+			"$C_BOLD" "$description_w" "$description_fit" "$C_RESET"
+	else
+		printf '  %-*s | %-*s | %-*s\n' \
+			"$package_w" "$package_fit" "$tag_w" "$tag_fit" "$description_w" "$description_fit"
+	fi
+	package_rule="$(printf '%*s' "$package_w" '')"; package_rule="${package_rule// /-}"
+	tag_rule="$(printf '%*s' "$tag_w" '')"; tag_rule="${tag_rule// /-}"
+	description_rule="$(printf '%*s' "$description_w" '')"; description_rule="${description_rule// /-}"
+	printf '  %s-+-%s-+-%s\n' "$package_rule" "$tag_rule" "$description_rule"
 	for ((i = start; i <= end; i++)); do
-		row="$(printf '%-20s [%s] %s' \
-			"${PACKAGE_LIB_NAMES[$i]}" "${PACKAGE_LIB_TAGS[$i]}" "${PACKAGE_LIB_DESCRIPTIONS[$i]}")"
-		printf '  %s\n' "$(_package_lib_fit "$row" "$((cols - 2))")"
+		package_fit="$(_package_lib_fit "${PACKAGE_LIB_NAMES[$i]}" "$package_w")"
+		tag_fit="$(_package_lib_fit "${PACKAGE_LIB_TAGS[$i]}" "$tag_w")"
+		description_fit="$(_package_lib_fit "${PACKAGE_LIB_DESCRIPTIONS[$i]}" "$description_w")"
+		printf '  %-*s | ' "$package_w" "$package_fit"
+		if declare -F _rt_ensure_colors >/dev/null; then
+			_rt_ensure_colors
+			case "${PACKAGE_LIB_TAGS[$i]}" in
+			core) printf '%s%s%s' "$C_CYAN" "$tag_fit" "$C_RESET" ;;
+			python) printf '%s%s%s' "$C_GREEN" "$tag_fit" "$C_RESET" ;;
+			cli) printf '%s%s%s' "$C_YELLOW" "$tag_fit" "$C_RESET" ;;
+			system) printf '%s%s%s' "$C_DIM" "$tag_fit" "$C_RESET" ;;
+			*) printf '%s' "$tag_fit" ;;
+			esac
+		else
+			printf '%s' "$tag_fit"
+		fi
+		if ((tag_w > ${#tag_fit})); then printf '%*s' "$((tag_w - ${#tag_fit}))" ''; fi
+		printf ' | %-*s\n' "$description_w" "$description_fit"
 	done
 }
 
@@ -150,7 +198,7 @@ package_lib_menu() {
 	while true; do
 		MENU_SIMPLE_TITLE="Package Lib"
 		MENU_SIMPLE_BREADCRUMB="Dotfiles › Package Lib"
-		MENU_SIMPLE_HINT="Up/Down navigate   Enter details   q back"
+		MENU_SIMPLE_HINT="Up/Down navigate   Enter system package details   q back"
 		MENU_SIMPLE_LABELS=()
 		MENU_SIMPLE_KEYS=("${COMP_KEYS[@]}")
 		MENU_SIMPLE_TYPES=()
@@ -166,12 +214,7 @@ package_lib_menu() {
 			package_lib_packages_menu || return $?
 			continue
 		fi
-		{
-			ui_clear
-			_package_lib_header "${COMP_LABELS[$(comp_key_index "$choice")]}" \
-				"Dotfiles › Package Lib › ${choice}" "$(menu_tty_cols)"
-			comp_description "$choice"
-		} >/dev/tty
-		ui_pause
+		# Component descriptions stay in the menu footer. Only the aggregate
+		# system package catalog opens another screen.
 	done
 }

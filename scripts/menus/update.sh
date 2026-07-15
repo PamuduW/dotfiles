@@ -11,7 +11,6 @@ run_update_flow() {
 	{
 		printf '\n'
 		ui_print_header "Update" "Dotfiles › Update"
-		printf '\n'
 	} >"$tty_path"
 
 	"$dotfiles_cmd" update

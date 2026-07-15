@@ -164,6 +164,14 @@ test_status_is_local_read_only() {
 	[[ ! -s "$TEST_URL_LOG" ]]
 }
 
+test_report_path_shortening_preserves_exact_width() {
+	local value output
+	value='/mnt/c/Program Files/Microsoft/Windows/Credential Manager/git-credential-manager.exe'
+	output="$(_rt_shorten_path "$value" 40)"
+	[[ "${#output}" -eq 40 ]] || return 1
+	[[ "$output" == *'…'* ]]
+}
+
 test_command_lib_is_metadata_only() {
 	declare -F command_lib_render >/dev/null || return 1
 	local output="$TEST_HARNESS_ROOT/command-lib.output"
@@ -176,6 +184,13 @@ test_command_lib_is_metadata_only() {
 		[[ "$(grep -Ec "^[[:space:]]*${key}([[:space:]]|$)" "$output")" -eq 1 ]] || return 1
 	done
 	[[ ! -s "$TEST_COMMAND_LOG" && ! -s "$TEST_URL_LOG" ]]
+}
+
+test_command_lib_colors_behavior_cells_when_enabled() {
+	local output
+	NO_COLOR='' FORCE_COLOR=1 output="$(dotfiles_command_print_table 80)"
+	[[ "$output" == *$'\033[33mmutating\033[0m'* ]] || return 1
+	[[ "$output" == *$'\033[32mread-only\033[0m'* ]]
 }
 
 test_component_registry_has_exact_20() {
@@ -255,6 +270,9 @@ test_package_pages_cover_all_28_once() {
 		[[ "$(grep -Ec "^[[:space:]]*${name}([[:space:]]|$)" "$output")" -eq 1 ]] || return 1
 	done
 	[[ "$(grep -c 'Page ' "$output")" -eq "$page_count" ]]
+	grep -Fq 'package' "$output" || return 1
+	grep -Fq 'category' "$output" || return 1
+	grep -Fq 'description' "$output"
 }
 
 test_package_menu_cancel_and_system_hook() (
@@ -277,6 +295,23 @@ test_package_menu_cancel_and_system_hook() (
 	[[ "$calls" -eq 1 ]]
 )
 
+test_package_menu_does_not_open_detail_pages_for_components() (
+	local queue="$TEST_HARNESS_ROOT/package-menu-component.queue" calls=0 pauses=0
+	printf '%s\n%s\n' git_identity q >"$queue"
+	menu_simple_run() {
+		local choice
+		IFS= read -r choice <"$queue" || return 1
+		tail -n +2 "$queue" >"$queue.rest"
+		mv -f -- "$queue.rest" "$queue"
+		[[ "$choice" == q ]] && return 1
+		printf '%s\n' "$choice"
+	}
+	package_lib_packages_menu() { calls=$((calls + 1)); }
+	ui_pause() { pauses=$((pauses + 1)); }
+	package_lib_menu || return 1
+	[[ "$calls" -eq 0 && "$pauses" -eq 0 ]]
+)
+
 test_narrow_reports_remain_bounded() {
 	declare -F command_lib_render >/dev/null || return 1
 	declare -F package_lib_render_components >/dev/null || return 1
@@ -297,12 +332,15 @@ expect_success 'help, commands output, and dispatch consume authoritative metada
 expect_success 'dispatch parity rejects extra, duplicate, and missing command keys' test_dispatch_parity_rejects_extra_duplicate_and_missing_keys
 expect_success 'removed commands fail with migration guidance' test_removed_commands_report_migration_guidance
 expect_success 'dotfiles status is local-only and reports freshness unchecked' test_status_is_local_read_only
+expect_success 'report path shortening preserves the fixed detail width' test_report_path_shortening_preserves_exact_width
 expect_success 'Command Lib renders all metadata once without side effects' test_command_lib_is_metadata_only
+expect_success 'Command Lib colors mutating and read-only behavior cells' test_command_lib_colors_behavior_cells_when_enabled
 expect_success 'component registry exposes the exact 20 described component IDs' test_component_registry_has_exact_20
 expect_success 'package metadata contains 28 unique described names in 9/3/7/9 tags' test_package_metadata_has_exact_28_with_descriptions
 expect_success 'Package Lib renders all 20 components without probes or side effects' test_package_lib_components_are_metadata_only
 expect_success 'System package pages cover all 28 names exactly once' test_package_pages_cover_all_28_once
 expect_success 'Package Lib q return and system-packages hook are deterministic' test_package_menu_cancel_and_system_hook
+expect_success 'Package Lib component entries do not open redundant detail pages' test_package_menu_does_not_open_detail_pages_for_components
 expect_success 'Command and Package Lib narrow rendering remains bounded' test_narrow_reports_remain_bounded
 
 printf '%d test(s) passed; %d failed\n' "$passed" "$failed"

@@ -39,6 +39,7 @@ ui_clear() {
 
 ui_pause() {
 	local _ui_pause_reply=''
+	printf '\n' >/dev/tty
 	read_tty_line _ui_pause_reply "Press Enter to continue: "
 }
 

@@ -46,7 +46,9 @@ _rt_shorten_path() {
 		if ((max <= 8)); then
 			printf '%s...' "${path:0:$((max - 3))}"
 		else
-			printf '%s…%s' "${path:0:$((max / 2 - 1))}" "${path: -$((max - max / 2 + 1))}"
+			local head=$((max / 2 - 1))
+			local tail=$((max - head - 1))
+			printf '%s…%s' "${path:0:head}" "${path: -tail}"
 		fi
 	else
 		printf '%s' "$path"

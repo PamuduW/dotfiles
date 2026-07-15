@@ -15,6 +15,7 @@ _comp_desc_system_packages() {
 
 _comp_desc_python() {
 	echo "Installs python3, pip, and venv via apt."
+	echo "Provides the standard Python runtime and virtual-environment tooling."
 }
 
 _comp_desc_powershell() {
@@ -24,6 +25,7 @@ _comp_desc_powershell() {
 
 _comp_desc_go() {
 	echo "Installs latest Go via asdf and sets it global."
+	echo "The selected Go version is available to shells and Go-based tools."
 }
 
 _comp_desc_nodejs() {
@@ -48,10 +50,12 @@ _comp_desc_portainer() {
 
 _comp_desc_lazygit() {
 	echo "Terminal UI for git. Downloaded from GitHub releases."
+	echo "Use it to review status, stage changes, and manage commits interactively."
 }
 
 _comp_desc_lazydocker() {
 	echo "Terminal UI for Docker. Downloaded from GitHub releases."
+	echo "Use it to inspect containers, images, logs, and compose services."
 }
 
 _comp_desc_cursor_cli() {

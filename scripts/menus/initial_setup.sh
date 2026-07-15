@@ -144,7 +144,5 @@ print_status_summary_all() {
 		else
 			ui_print_report_rollup "$ok_count" "$check_count" "$miss_count"
 		fi
-		printf '\nApt/package freshness: unchecked (run dotfiles update)\n'
-		printf 'Repository freshness: unchecked (run dotfiles update)\n'
 	} >"$status_output"
 }

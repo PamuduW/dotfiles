@@ -92,6 +92,22 @@ _dotfiles_command_fit() {
 	fi
 }
 
+_dotfiles_command_print_cell() {
+	local value="$1" width="$2" context="${3:-}" color='' reset=''
+	if declare -F _rt_ensure_colors >/dev/null; then
+		_rt_ensure_colors
+		reset="$C_RESET"
+		case "$context" in
+		mutating) color="$C_YELLOW" ;;
+		read-only) color="$C_GREEN" ;;
+		esac
+	fi
+	printf '%s%s%s' "$color" "$value" "$reset"
+	if ((width > ${#value})); then
+		printf '%*s' "$((width - ${#value}))" ''
+	fi
+}
+
 dotfiles_command_print_table() {
 	local cols="${1:-100}"
 	local usage_w=20 class_w=10 description_w available
@@ -112,21 +128,33 @@ dotfiles_command_print_table() {
 	description_w=$((available - usage_w - class_w))
 	((description_w < 1)) && description_w=1
 
+	if declare -F _rt_ensure_colors >/dev/null; then
+		_rt_ensure_colors
+	else
+		C_BOLD=''
+		C_RESET=''
+	fi
 	usage_fit="$(_dotfiles_command_fit command "$usage_w")"
 	class_fit="$(_dotfiles_command_fit behavior "$class_w")"
 	description_fit="$(_dotfiles_command_fit description "$description_w")"
-	printf '  %-*s | %-*s | %-*s\n' \
-		"$usage_w" "$usage_fit" "$class_w" "$class_fit" "$description_w" "$description_fit"
+	printf '  %s%-*s%s | %s%-*s%s | %-*s\n' \
+		"$C_BOLD" "$usage_w" "$usage_fit" "$C_RESET" \
+		"$C_BOLD" "$class_w" "$class_fit" "$C_RESET" \
+		"$description_w" "$description_fit"
+	local usage_rule class_rule description_rule
+	usage_rule="$(printf '%*s' "$usage_w" '')"; usage_rule="${usage_rule// /-}"
+	class_rule="$(printf '%*s' "$class_w" '')"; class_rule="${class_rule// /-}"
+	description_rule="$(printf '%*s' "$description_w" '')"; description_rule="${description_rule// /-}"
+	printf '  %s-+-%s-+-%s\n' "$usage_rule" "$class_rule" "$description_rule"
 	for key in "${DOTFILES_COMMAND_KEYS[@]}"; do
 		usage="$(dotfiles_command_display_usage "$key")"
 		description="${DOTFILES_COMMAND_DESCRIPTION[$key]}"
 		usage_fit="$(_dotfiles_command_fit "$usage" "$usage_w")"
 		class_fit="$(_dotfiles_command_fit "${DOTFILES_COMMAND_CLASS[$key]}" "$class_w")"
 		description_fit="$(_dotfiles_command_fit "$description" "$description_w")"
-		printf '  %-*s | %-*s | %-*s\n' \
-			"$usage_w" "$usage_fit" \
-			"$class_w" "$class_fit" \
-			"$description_w" "$description_fit"
+		printf '  %-*s | ' "$usage_w" "$usage_fit"
+		_dotfiles_command_print_cell "$class_fit" "$class_w" "${DOTFILES_COMMAND_CLASS[$key]}"
+		printf ' | %-*s\n' "$description_w" "$description_fit"
 	done
 }
 
