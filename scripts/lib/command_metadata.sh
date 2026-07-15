@@ -132,15 +132,16 @@ dotfiles_command_print_table() {
 		_rt_ensure_colors
 	else
 		C_BOLD=''
+		C_LIGHT_YELLOW=''
 		C_RESET=''
 	fi
 	usage_fit="$(_dotfiles_command_fit command "$usage_w")"
 	class_fit="$(_dotfiles_command_fit behavior "$class_w")"
 	description_fit="$(_dotfiles_command_fit description "$description_w")"
-	printf '  %s%-*s%s | %s%-*s%s | %-*s\n' \
-		"$C_BOLD" "$usage_w" "$usage_fit" "$C_RESET" \
-		"$C_BOLD" "$class_w" "$class_fit" "$C_RESET" \
-		"$description_w" "$description_fit"
+	printf '  %s%s%-*s%s | %s%s%-*s%s | %s%s%-*s%s\n' \
+		"$C_BOLD" "$C_LIGHT_YELLOW" "$usage_w" "$usage_fit" "$C_RESET" \
+		"$C_BOLD" "$C_LIGHT_YELLOW" "$class_w" "$class_fit" "$C_RESET" \
+		"$C_BOLD" "$C_LIGHT_YELLOW" "$description_w" "$description_fit" "$C_RESET"
 	local usage_rule class_rule description_rule
 	usage_rule="$(printf '%*s' "$usage_w" '')"; usage_rule="${usage_rule// /-}"
 	class_rule="$(printf '%*s' "$class_w" '')"; class_rule="${class_rule// /-}"

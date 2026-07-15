@@ -223,16 +223,16 @@ test_repository_update_preview_uses_semantic_colors() (
 	grep -Fq $'\033[33mPull 2 commit(s) with --ff-only?' <<<"$prompt"
 )
 
-test_all_update_topics_use_orange() (
+test_update_topics_use_submenu_yellow() (
 	local output
-	C_BOLD=$'\033[1m' C_CYAN=$'\033[36m' C_ORANGE=$'\033[38;5;208m' C_YELLOW=$'\033[33m' C_RESET=$'\033[0m'
+	C_BOLD=$'\033[1m' C_CYAN=$'\033[36m' C_ORANGE=$'\033[38;5;208m' C_YELLOW=$'\033[33m' C_LIGHT_YELLOW=$'\033[93m' C_RESET=$'\033[0m'
 	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|up to date'; }
 	output="$(print_report_table)" 2>/dev/null || true
 	grep -Fq $'\033[33m==Update report==' <<<"$output" || return 1
 
 	_upgrade_topic_probe() { :; }
 	output="$(_run_upgrade_step lazygit _upgrade_topic_probe)"
-	grep -Fq $'\033[38;5;208m== lazygit ==' <<<"$output" || return 1
+	grep -Fq $'\033[33m== lazygit ==' <<<"$output" || return 1
 
 	repo_update_gate() { REPO_UPDATE_OUTCOME=current; }
 	print_report_table() { :; }
@@ -240,7 +240,7 @@ test_all_update_topics_use_orange() (
 	_run_update_downstream() { :; }
 	print_upgrade_summary() { :; }
 	output="$(cmd_update)"
-	grep -Fq $'\033[38;5;208m=== Upgrade ===' <<<"$output"
+	grep -Fq $'\033[33m=== Upgrade ===' <<<"$output"
 )
 
 test_repository_fetch_notice_uses_cyan() (
@@ -416,7 +416,7 @@ expect_success 'update report title spacing and action separator are stable' tes
 expect_success 'update and upgrade rows preserve the fixed final column width' test_update_and_upgrade_rows_keep_the_last_column_width
 expect_success 'update rows align a Unicode em-dash available cell' test_update_rows_align_unicode_available_cells
 expect_success 'repository update preview uses semantic colors' test_repository_update_preview_uses_semantic_colors
-expect_success 'all update topics use orange' test_all_update_topics_use_orange
+expect_success 'update subtopics use the report yellow palette' test_update_topics_use_submenu_yellow
 expect_success 'repository fetch notices use cyan' test_repository_fetch_notice_uses_cyan
 expect_success 'update apply uses a high-level Upgrade heading without opt-in plan noise' test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan
 expect_success 'upgrade summary marks the repo gate as handled' test_upgrade_summary_marks_repo_gate_as_handled

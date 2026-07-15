@@ -123,10 +123,10 @@ package_lib_render_packages_page() {
 	description_fit="$(_package_lib_fit description "$description_w")"
 	if declare -F _rt_ensure_colors >/dev/null; then
 		_rt_ensure_colors
-		printf '  %s%-*s%s | %s%-*s%s | %s%-*s%s\n' \
-			"$C_BOLD" "$package_w" "$package_fit" "$C_RESET" \
-			"$C_BOLD" "$tag_w" "$tag_fit" "$C_RESET" \
-			"$C_BOLD" "$description_w" "$description_fit" "$C_RESET"
+		printf '  %s%s%-*s%s | %s%s%-*s%s | %s%s%-*s%s\n' \
+			"$C_BOLD" "$C_LIGHT_YELLOW" "$package_w" "$package_fit" "$C_RESET" \
+			"$C_BOLD" "$C_LIGHT_YELLOW" "$tag_w" "$tag_fit" "$C_RESET" \
+			"$C_BOLD" "$C_LIGHT_YELLOW" "$description_w" "$description_fit" "$C_RESET"
 	else
 		printf '  %-*s | %-*s | %-*s\n' \
 			"$package_w" "$package_fit" "$tag_w" "$tag_fit" "$description_w" "$description_fit"

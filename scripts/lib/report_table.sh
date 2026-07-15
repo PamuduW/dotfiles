@@ -8,6 +8,9 @@ _RT_RESULT_W=10
 
 _rt_ensure_colors() {
 	if [[ -n "${C_RESET:-}" ]]; then
+		if [[ ! -v C_LIGHT_YELLOW ]]; then
+			C_LIGHT_YELLOW=$'\033[93m'
+		fi
 		return 0
 	fi
 	if [[ -z "${NO_COLOR:-}" ]] && { [[ -t 1 ]] || [[ -t 0 ]] || [[ -n "${FORCE_COLOR:-}" ]]; }; then
@@ -16,6 +19,7 @@ _rt_ensure_colors() {
 		C_DIM=$'\033[2m'
 		C_GREEN=$'\033[32m'
 		C_YELLOW=$'\033[33m'
+		C_LIGHT_YELLOW=$'\033[93m'
 		C_ORANGE=$'\033[38;5;208m'
 		C_RED=$'\033[31m'
 		C_CYAN=$'\033[36m'
@@ -25,6 +29,7 @@ _rt_ensure_colors() {
 		C_DIM=''
 		C_GREEN=''
 		C_YELLOW=''
+		C_LIGHT_YELLOW=''
 		C_ORANGE=''
 		C_RED=''
 		C_CYAN=''
@@ -100,10 +105,15 @@ _rt_color_result() {
 rt_print_header() {
 	local title="$1"
 	local breadcrumb="${2:-}"
+	local title_color
 
 	_rt_ensure_colors
+	title_color="$C_ORANGE"
+	if [[ -n "$breadcrumb" && "$breadcrumb" != "$title" ]]; then
+		title_color="$C_YELLOW"
+	fi
 	printf '\n'
-	printf '  %s%s=== %s ===%s\n' "$C_BOLD" "$C_ORANGE" "$title" "$C_RESET"
+	printf '  %s%s=== %s ===%s\n' "$C_BOLD" "$title_color" "$title" "$C_RESET"
 	if [[ -n "$breadcrumb" ]]; then
 		printf '  %s%s%s\n' "$C_DIM" "$breadcrumb" "$C_RESET"
 	fi
@@ -114,7 +124,7 @@ rt_print_section() {
 	local label="$1"
 
 	_rt_ensure_colors
-	printf '  %s%s%s%s\n' "$C_BOLD" "$C_ORANGE" "$label" "$C_RESET"
+	printf '  %s%s%s%s\n' "$C_BOLD" "$C_YELLOW" "$label" "$C_RESET"
 }
 
 # Blank line, section title, blank line, then column header — easier to scan than one long table.
@@ -137,8 +147,10 @@ rt_print_table_columns() {
 	result_rule="${result_rule// /-}"
 
 	_rt_ensure_colors
-	printf '  %s%-*s | %-*s | %s%s\n' \
-		"$C_BOLD" "$_RT_LABEL_W" "component" "$_RT_DETAIL_W" "detail" "result" "$C_RESET"
+	printf '  %s%s%-*s%s | %s%s%-*s%s | %s%s%s%s\n' \
+		"$C_BOLD" "$C_LIGHT_YELLOW" "$_RT_LABEL_W" "component" "$C_RESET" \
+		"$C_BOLD" "$C_LIGHT_YELLOW" "$_RT_DETAIL_W" "detail" "$C_RESET" \
+		"$C_BOLD" "$C_LIGHT_YELLOW" "result" "$C_RESET"
 	printf '  %s-+-%s-+-%s\n' "$label_rule" "$detail_rule" "$result_rule"
 }
 
