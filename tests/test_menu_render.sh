@@ -13,6 +13,17 @@ source "$ROOT/scripts/lib/menu_descriptions.sh"
 source "$ROOT/scripts/lib/menu_simple.sh"
 # shellcheck source=scripts/lib/menu_checkbox.sh
 source "$ROOT/scripts/lib/menu_checkbox.sh"
+# shellcheck source=scripts/lib/menu_paging.sh
+source "$ROOT/scripts/lib/menu_paging.sh"
+# shellcheck source=scripts/lib/components/registry.sh
+source "$ROOT/scripts/lib/components/registry.sh"
+# shellcheck source=scripts/lib/components/descriptions.sh
+source "$ROOT/scripts/lib/components/descriptions.sh"
+# shellcheck source=scripts/lib/components/menu.sh
+source "$ROOT/scripts/lib/components/menu.sh"
+
+_fit_menu_line() { menu_fit_line "$@"; }
+_fit_menu_line_with_indent() { menu_fit_indent "$@"; }
 
 passed=0
 failed=0
@@ -139,6 +150,20 @@ test_checkbox_fixed_rows_are_unchanged() {
 	[[ "$(_menu_cb_fixed_rows)" -eq 10 ]]
 }
 
+test_component_menu_redraw_count_matches_rendered_frame() {
+	local output_file="$TEST_TMP/component-menu"
+	local -a lines=()
+	COMP_KEYS=(alpha beta)
+	COMP_LABELS=('Alpha' 'Beta')
+	COMP_DEPS=(-1 -1)
+	declare -A COMP_ON=()
+	COMP_ON=([alpha]=1 [beta]=1)
+	_draw_component_menu 0 2 '' 80 >"$output_file"
+	mapfile -t lines <"$output_file"
+	[[ "$_COMP_MENU_FIXED_ROWS" -eq 9 ]] || return 1
+	[[ "${#lines[@]}" -eq 11 ]]
+}
+
 TEST_TMP="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-menu-render.XXXXXX")"
 trap 'rm -rf -- "$TEST_TMP"' EXIT
 NO_COLOR=1
@@ -149,6 +174,7 @@ expect_success 'simple menu has exactly one spacer before descriptions' test_sim
 expect_success 'down/up frames match redraw count without stale content' test_down_up_frames_match_redraw_count_without_stale_content
 expect_success 'no-description menu keeps its existing blank footer' test_no_description_keeps_existing_blank_footer
 expect_success 'checkbox fixed-row accounting is unchanged' test_checkbox_fixed_rows_are_unchanged
+expect_success 'component menu redraw count matches its rendered frame' test_component_menu_redraw_count_matches_rendered_frame
 
 printf '%d test(s) passed; %d failed\n' "$passed" "$failed"
 ((failed == 0))
