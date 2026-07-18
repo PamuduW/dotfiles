@@ -159,6 +159,26 @@ test_downstream_executes_apt_first_and_all_matrix() (
 	grep -Fq 'step:Monaspace fonts' "$events"
 )
 
+test_cursor_update_falls_back_to_official_installer() (
+	local calls="$TEST_HARNESS_ROOT/cursor-update.calls" output="$TEST_HARNESS_ROOT/cursor-update.output"
+	: >"$calls"
+	agent() {
+		printf 'agent:%s\n' "$*" >>"$calls"
+		return 7
+	}
+	curl() {
+		printf 'curl:%s\n' "$*" >>"$calls"
+		printf '%s\n' 'printf "official-installer\n"'
+	}
+
+	if ! upgrade_cursor_cli >"$output" 2>&1; then
+		return 1
+	fi
+	grep -Fqx 'agent:update' "$calls" || return 1
+	grep -Fqx 'curl:-fsSL https://cursor.com/install' "$calls" || return 1
+	grep -Fqx 'official-installer' "$output"
+)
+
 test_apt_report_probe_uses_cached_indices_without_sudo() (
 	local count sudo_calls=0
 	apt-get() { printf '%s\n' 'Inst cached-package'; }
@@ -411,6 +431,7 @@ expect_success 'successful pull requires relaunch and stops old-process work' te
 expect_success 'relaunch wrapper is injectable without a fake exec command' test_relaunch_is_injectable
 expect_success 'cmd_update executes stopped current ahead and relaunch outcomes' test_cmd_update_executes_outcome_contract
 expect_success 'downstream execution runs apt refresh first and honors --all' test_downstream_executes_apt_first_and_all_matrix
+expect_success 'Cursor update falls back to the official installer after agent update failure' test_cursor_update_falls_back_to_official_installer
 expect_success 'pre-confirmation apt report probing never invokes sudo' test_apt_report_probe_uses_cached_indices_without_sudo
 expect_success 'update report title spacing and action separator are stable' test_update_report_uses_clear_title_spacing_and_aligned_action_rule
 expect_success 'update and upgrade rows preserve the fixed final column width' test_update_and_upgrade_rows_keep_the_last_column_width

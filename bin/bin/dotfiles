@@ -207,7 +207,11 @@ check_cursor_cli() {
 
 upgrade_cursor_cli() {
 	if command -v agent >/dev/null 2>&1; then
-		agent update
+		if agent update; then
+			return 0
+		fi
+		_warn "  Cursor Agent update command failed; retrying with the official installer."
+		curl -fsSL https://cursor.com/install | bash
 	elif command -v cursor >/dev/null 2>&1; then
 		cursor update
 	else

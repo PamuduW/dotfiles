@@ -279,7 +279,7 @@ Both use full Windows paths, so they work even with `appendWindowsPath=true`.
 | `reload`         | `source ~/.bashrc`                                 |
 | `aptup`          | `sudo apt update && sudo apt upgrade -y`           |
 | `cleanzone`      | Remove Windows `Zone.Identifier` files             |
-| `update-cursor`  | Update Cursor CLI (`agent update`)                 |
+| `update-cursor`  | Update Cursor CLI (`agent update`, installer fallback) |
 | `update-codex`   | Update Codex CLI (`npm i -g @openai/codex@latest`) |
 | `update-claude`  | Update Claude CLI (`claude update`)                |
 | `update-copilot` | Update Copilot CLI (`copilot update`)              |
