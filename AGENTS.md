@@ -85,7 +85,7 @@ Never agree with me by default. Your first instinct should be to stress-test wha
 
 ## Project overlay
 
-Scaffolded from `agent_bootstrap/base/` via `agentboot`. Canonical templates stay in the sibling `agent_bootstrap` repo; this file is the live dotfiles instance with project notes below.
+Scaffolded from `agent_bootstrap/base/` via `agentbot boot`. Canonical templates stay in the sibling `agent_bootstrap` repo; this file is the live dotfiles instance with project notes below.
 
 ## Project
 
@@ -100,12 +100,12 @@ Scaffolded from `agent_bootstrap/base/` via `agentboot`. Canonical templates sta
 | `install.sh` | Shim → `scripts/install.sh` (boot menu + component install) |
 | `scripts/install.sh` | Real installer; logs to `log/` |
 | `scripts/lib/` | TUI (`menu_simple`, `report_table`), component registry |
-| `scripts/menus/` | Main, initial setup, update, agents submenus |
+| `scripts/menus/` | Main, initial setup, update, and Agentbot submenus |
 | `bin/bin/dotfiles` | `update`, `upgrade`, `restow`, `menu` |
 | `packages/packages.txt` | Apt components with `@tag` sections |
 | `bash/.bashrc` | Stowed shell config; sources `agent_bootstrap_paths.sh` |
 
-**Sibling repo:** `agent_bootstrap/` next to this repo (`../agent_bootstrap`). Agents menu clones, bootstraps, and links `agentboot` from there. `AGENT_BOOTSTRAP_HOME` resolves to the sibling when `install.sh` exists.
+**Sibling repo:** `agent_bootstrap/` next to this repo (`../agent_bootstrap`). The Agentbot menu validates or clones the sibling, then launches its standalone menu. `AGENT_BOOTSTRAP_HOME` resolves to the sibling when `install.sh` exists.
 
 **Commands:**
 

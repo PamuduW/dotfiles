@@ -216,6 +216,16 @@ colored result table and returns to the menu after Enter.
 
 The **Agentbot** action validates or clones [`agent_bootstrap`](https://github.com/PamuduW/agent_bootstrap) as a sibling of this dotfiles repo, then launches it as a child process.
 
+This is the Phase 1 ownership boundary:
+
+- Dotfiles owns sibling-path resolution, clone-origin validation, and the
+  `--agents`/menu bridge.
+- `agent_bootstrap` owns the standalone Agentbot menu, skills workflow, global
+  outputs, and `agentbot boot` repository scaffolding.
+- `./install.sh --agents` launches the sibling `./install.sh`; with a
+  controlling TTY that opens the Agentbot menu. There is no separate
+  `./install.sh menu` command.
+
 | Action | What it does |
 | ------ | ------------ |
 | Existing sibling | Requires executable `install.sh` and an allowlisted origin |
