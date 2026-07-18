@@ -43,7 +43,7 @@ expect_success() {
 make_token() {
 	local label="${1:-default}"
 	TOKEN_SEQ=$((TOKEN_SEQ + 1))
-	printf 'ghp_runtime_%s_%024d' "$label" "$TOKEN_SEQ"
+	printf 'test_token_runtime_%s_%024d' "$label" "$TOKEN_SEQ"
 }
 
 active_dir() { dirname -- "$(github_token_file)"; }

@@ -196,13 +196,13 @@ test_github_token_config_is_private_and_scoped() {
 	output="$(HOME="$home_dir" XDG_CONFIG_HOME="$home_dir/config" bash -c '
 		set -euo pipefail
 		source "$1/scripts/lib/github_token.sh"
-		github_token_write "ghp_abcdefghijklmnopqrstuvwxyz1234567890"
+		github_token_write "test_token_fixture_abcdefghijklmnopqrstuvwxyz1234567890"
 		[[ "$(stat -c %a "$(github_token_file)")" == "600" ]]
 		unset GITHUB_TOKEN
 		github_token_load
-		[[ "$GITHUB_TOKEN" == "ghp_abcdefghijklmnopqrstuvwxyz1234567890" ]]
+		[[ "$GITHUB_TOKEN" == "test_token_fixture_abcdefghijklmnopqrstuvwxyz1234567890" ]]
 	' _ "$ROOT" 2>&1)" || return 1
-	[[ "$output" != *"ghp_abcdefghijklmnopqrstuvwxyz1234567890"* ]]
+		[[ "$output" != *"test_token_fixture_abcdefghijklmnopqrstuvwxyz1234567890"* ]]
 }
 
 main() {
