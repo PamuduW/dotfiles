@@ -181,9 +181,41 @@ test_command_lib_is_metadata_only() {
 	grep -Fq 'Dotfiles › Command Lib' "$output" || return 1
 	local key
 	for key in "${DOTFILES_COMMAND_KEYS[@]}"; do
-		[[ "$(grep -Ec "^[[:space:]]*${key}([[:space:]]|$)" "$output")" -eq 1 ]] || return 1
+		[[ "$(grep -Ec "^  ${key}[^|]*\\|" "$output")" -eq 1 ]] || return 1
 	done
 	[[ ! -s "$TEST_COMMAND_LOG" && ! -s "$TEST_URL_LOG" ]]
+}
+
+test_command_lib_documents_full_help_catalog() {
+	local output
+	output="$(NO_COLOR=1 dotfiles_command_print_table 100)"
+	dotfiles_command_metadata_validate
+	for needle in \
+		'update [--all]' \
+		'--all' \
+		'Include Node.js, Go, and Monaspace' \
+		'DOTFILES_COMPONENTS' \
+		'AGENT_BOOTSTRAP_HOME' \
+		'GITHUB_TOKEN' \
+		'install.sh --initial' \
+		'Agentbot integration' \
+		'stow'; do
+		[[ "$output" == *"$needle"* ]] || {
+			printf 'missing Dotfiles Command Lib detail: %s\n' "$needle" >&2
+			return 1
+		}
+	done
+}
+
+test_command_lib_details_fit_narrow_terminal() {
+	local output line
+	output="$(NO_COLOR=1 dotfiles_command_print_table 48)"
+	while IFS= read -r line; do
+		(( ${#line} <= 48 )) || {
+			printf 'line exceeds 48 columns (%d): %s\n' "${#line}" "$line" >&2
+			return 1
+		}
+	done <<<"$output"
 }
 
 test_command_lib_colors_behavior_cells_when_enabled() {
@@ -323,6 +355,8 @@ expect_success 'removed commands fail with migration guidance' test_removed_comm
 expect_success 'dotfiles status is local-only and reports freshness unchecked' test_status_is_local_read_only
 expect_success 'report path shortening preserves the fixed detail width' test_report_path_shortening_preserves_exact_width
 expect_success 'Command Lib renders all metadata once without side effects' test_command_lib_is_metadata_only
+expect_success 'Command Lib documents the full command/config catalog' test_command_lib_documents_full_help_catalog
+expect_success 'Command Lib wraps details to the terminal width' test_command_lib_details_fit_narrow_terminal
 expect_success 'Command Lib colors mutating and read-only behavior cells' test_command_lib_colors_behavior_cells_when_enabled
 expect_success 'topic headers use the orange palette' test_topic_headers_use_orange
 expect_success 'table column headers remain bold white' test_table_column_headers_are_bold_white

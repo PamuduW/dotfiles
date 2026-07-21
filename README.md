@@ -100,7 +100,7 @@ Use arrow keys to navigate and Enter to select.
 | Install Dotfiles | Select components, review the execution plan, and apply setup. |
 | Update | Repo-first fetch/classify/pull gate, then confirmed downstream updates. |
 | GitHub Token Config | Configure the optional shared API token without blocking anonymous use. |
-| Command Lib | Read-only command and mutation matrix. |
+| Command Lib | Read-only full command, option, configuration, and integration reference. |
 | Package Lib | Read-only component and system-package catalog. |
 | Agentbot | Validate/clone the sibling `agent_bootstrap` repository, then launch it as a child. |
 | Quit | Exit |
@@ -196,11 +196,14 @@ Global command (stowed to `~/bin/dotfiles`, on PATH like `ex` and `clip`):
 | `dotfiles update` | **Apply after confirmation** — repo-first gate, then apt/CLI/tool changes |
 | `dotfiles update --all` | Same as `update`, plus opt-in **Node.js**, **Go**, and **Monaspace** fonts |
 | `dotfiles status` | Local installed versions + repo state; no fetch or apt refresh |
-| `dotfiles commands` | Read-only command behavior matrix |
+| `dotfiles commands` | Read-only full command, option, configuration, and integration reference |
 | `dotfiles packages` | Read-only component/package catalog |
-| `dotfiles token` | Optional shared GitHub token configuration |
-| `dotfiles agentbot` | Validated sibling Agentbot launch |
+| `dotfiles menu --agents` | Open the Agentbot submenu through the installer |
 | `dotfiles restow` | `stow --restow bash bin readline` |
+
+The interactive **Command Lib**, `dotfiles commands`, and `dotfiles help` show
+the complete supported command, option, configuration, output, and integration
+reference. They are read-only and use the same catalog.
 
 Runs **unprivileged**; only the apt portion invokes `sudo` internally (single prompt). Agent CLI and npm updates stay under your user.
 
