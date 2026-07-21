@@ -26,9 +26,40 @@ prepare_existing() {
 
 test_existing_launches_with_caller() {
 	prepare_existing
+	DOTFILES_AGENTBOT_EXITED=false
 	dotfiles_launch_agentbot >/dev/null
-	grep -Fqx 'sibling-install' "$TEST_COMMAND_LOG"
+	grep -Fqx 'sibling-install' "$TEST_COMMAND_LOG" &&
+		[[ "$DOTFILES_AGENTBOT_EXITED" == true ]]
 }
+
+prepare_git_alias_repo() {
+	local origin="$1"
+	ALIAS_AGENTBOT_HOME="$TEST_HARNESS_ROOT/alias-agentbot-${BASHPID}"
+	ALIAS_GIT_CONFIG="$TEST_HARNESS_ROOT/alias-gitconfig-${BASHPID}"
+	mkdir -p "$ALIAS_AGENTBOT_HOME"
+	printf '%s\n' '#!/usr/bin/env bash' 'exit 0' >"$ALIAS_AGENTBOT_HOME/install.sh"
+	chmod 700 "$ALIAS_AGENTBOT_HOME/install.sh"
+	PATH="$ORIGINAL_PATH" git init -q "$ALIAS_AGENTBOT_HOME"
+	PATH="$ORIGINAL_PATH" git -C "$ALIAS_AGENTBOT_HOME" remote add origin "$origin"
+	PATH="$ORIGINAL_PATH" git config --file "$ALIAS_GIT_CONFIG" \
+		url."git@github-personal:".insteadOf git@github.com:
+}
+
+test_configured_ssh_alias_is_allowed() (
+	prepare_git_alias_repo 'git@github-personal:PamuduW/agent_bootstrap.git'
+	GIT_CONFIG_GLOBAL="$ALIAS_GIT_CONFIG" GIT_CONFIG_NOSYSTEM=1 PATH="$ORIGINAL_PATH" \
+		dotfiles_agentbot_validate "$ALIAS_AGENTBOT_HOME"
+)
+
+test_configured_ssh_alias_wrong_path_is_rejected() (
+	prepare_git_alias_repo 'git@github-personal:Other/agent_bootstrap.git'
+	set +e
+	GIT_CONFIG_GLOBAL="$ALIAS_GIT_CONFIG" GIT_CONFIG_NOSYSTEM=1 PATH="$ORIGINAL_PATH" \
+		dotfiles_agentbot_validate "$ALIAS_AGENTBOT_HOME" >/dev/null 2>&1
+	local rc=$?
+	set -e
+	[[ "$rc" -ne 0 ]]
+)
 
 test_wrong_origin_stops() {
 	prepare_existing 'https://credential@github.com/PamuduW/agent_bootstrap.git'
@@ -62,6 +93,8 @@ test_clone_failure_stops() {
 }
 
 check 'existing allowlisted Agentbot launches with SETUP_CALLER=dotfiles' test_existing_launches_with_caller
+check 'configured SSH alias resolving to Agentbot is allowed' test_configured_ssh_alias_is_allowed
+check 'configured SSH alias resolving to another path is rejected' test_configured_ssh_alias_wrong_path_is_rejected
 check 'wrong or token-bearing Agentbot origin is rejected' test_wrong_origin_stops
 check 'declining a missing Agentbot clone is non-mutating' test_declined_clone_does_not_run
 check 'Agentbot clone failure stops before launch' test_clone_failure_stops

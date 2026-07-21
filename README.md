@@ -233,7 +233,8 @@ This is the Phase 1 ownership boundary:
 | ------ | ------------ |
 | Existing sibling | Requires executable `install.sh` and an allowlisted origin |
 | Missing sibling | Shows exact URL/destination and asks before cloning |
-| Child launch | Runs `SETUP_CALLER=dotfiles ../agent_bootstrap/install.sh` and returns on exit |
+| Git URL aliases | Global `url.*.insteadOf` aliases are accepted only when they resolve to the exact allowlisted repository |
+| Child launch | Runs `SETUP_CALLER=dotfiles ../agent_bootstrap/install.sh`; Dotfiles exits when Agentbot exits |
 
 **Environment overrides (advanced):**
 

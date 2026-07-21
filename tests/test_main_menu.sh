@@ -231,6 +231,26 @@ test_agentbot_failure_pauses_before_redraw() (
 	[[ "$rc" -eq 23 && "$pauses" -eq 1 ]]
 )
 
+test_agentbot_success_exits_outer_menu_loop() (
+	local calls_file="$TEST_HARNESS_ROOT/agentbot-exit.calls"
+	: >"$calls_file"
+	dotfiles_launch_agentbot() {
+		DOTFILES_AGENTBOT_EXITED=true
+		return 0
+	}
+	menu_simple_run() {
+		printf 'menu\n' >>"$calls_file"
+		if [[ "$(wc -l <"$calls_file")" -eq 1 ]]; then
+			printf '%s\n' agentbot
+		else
+			printf '%s\n' quit
+		fi
+	}
+
+	main_menu_loop
+	[[ "$(wc -l <"$calls_file")" -eq 1 ]]
+)
+
 test_caller_guard_hides_agentbot_entry() {
 	local captured="$TEST_HARNESS_ROOT/caller-guard.captured"
 	SETUP_CALLER=agentbot
@@ -257,6 +277,7 @@ expect_success 'undefined deferred actions are unavailable and non-mutating' tes
 expect_success 'defined deferred hooks are dispatched without root rewiring' test_deferred_actions_call_defined_hooks
 expect_success 'Agentbot is deterministic unavailable and non-mutating' test_agentbot_is_deterministic_unavailable_and_non_mutating
 expect_success 'failed Agentbot launch pauses before the Dotfiles menu redraws' test_agentbot_failure_pauses_before_redraw
+expect_success 'successful Agentbot exit stops the outer Dotfiles menu loop' test_agentbot_success_exits_outer_menu_loop
 expect_success 'SETUP_CALLER=agentbot hides the reciprocal menu entry' test_caller_guard_hides_agentbot_entry
 
 printf '%d test(s) passed; %d failed\n' "$passed" "$failed"

@@ -132,6 +132,7 @@ _main_menu_dispatch() {
 main_menu_loop() {
 	local choice=''
 	local -a labels keys
+	DOTFILES_AGENTBOT_EXITED=false
 	labels=("${_main_menu_labels[@]}")
 	keys=("${_main_menu_keys[@]}")
 	if [[ "${SETUP_CALLER:-}" == agentbot ]]; then
@@ -157,5 +158,8 @@ main_menu_loop() {
 		fi
 
 		_main_menu_dispatch "$choice" || true
+		if [[ "${DOTFILES_AGENTBOT_EXITED:-false}" == true ]]; then
+			return 0
+		fi
 	done
 }
