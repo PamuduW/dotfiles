@@ -508,6 +508,14 @@ upgrade_lazydocker() {
 # --- Node.js (nvm) — opt-in ---
 node_installed_version() {
 	_load_nvm
+	if command -v nvm >/dev/null 2>&1; then
+		local default_version
+		default_version="$(nvm version default 2>/dev/null || true)"
+		if [[ "$default_version" =~ ^v[0-9]+(\.[0-9]+){2}$ ]]; then
+			printf '%s\n' "${default_version#v}"
+			return 0
+		fi
+	fi
 	if command -v node >/dev/null 2>&1; then
 		node --version 2>/dev/null | tr -d 'v'
 	else

@@ -159,6 +159,20 @@ test_downstream_executes_apt_first_and_all_matrix() (
 	grep -Fq 'step:Monaspace fonts' "$events"
 )
 
+test_node_probe_uses_nvm_default_when_shell_path_is_stale() (
+	_load_nvm() { :; }
+	node() { printf 'v24.16.0\n'; }
+	nvm() {
+		if [[ "$1 ${2:-}" == 'version default' ]]; then
+			printf 'v24.18.0\n'
+			return 0
+		fi
+		return 1
+	}
+
+	[[ "$(node_installed_version)" == '24.18.0' ]]
+)
+
 test_cursor_update_falls_back_to_official_installer() (
 	local calls="$TEST_HARNESS_ROOT/cursor-update.calls" output="$TEST_HARNESS_ROOT/cursor-update.output"
 	: >"$calls"
@@ -431,6 +445,7 @@ expect_success 'successful pull requires relaunch and stops old-process work' te
 expect_success 'relaunch wrapper is injectable without a fake exec command' test_relaunch_is_injectable
 expect_success 'cmd_update executes stopped current ahead and relaunch outcomes' test_cmd_update_executes_outcome_contract
 expect_success 'downstream execution runs apt refresh first and honors --all' test_downstream_executes_apt_first_and_all_matrix
+expect_success 'Node.js probe follows nvm default instead of a stale shell PATH' test_node_probe_uses_nvm_default_when_shell_path_is_stale
 expect_success 'Cursor update falls back to the official installer after agent update failure' test_cursor_update_falls_back_to_official_installer
 expect_success 'pre-confirmation apt report probing never invokes sudo' test_apt_report_probe_uses_cached_indices_without_sudo
 expect_success 'update report title spacing and action separator are stable' test_update_report_uses_clear_title_spacing_and_aligned_action_rule
