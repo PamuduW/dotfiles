@@ -219,6 +219,18 @@ test_agentbot_is_deterministic_unavailable_and_non_mutating() {
 	[[ ! -e "$protected" ]]
 }
 
+test_agentbot_failure_pauses_before_redraw() (
+	local pauses=0 rc
+	dotfiles_launch_agentbot() { return 23; }
+	ui_pause() { pauses=$((pauses + 1)); }
+
+	set +e
+	_main_menu_dispatch agentbot >/dev/null 2>&1
+	rc=$?
+	set -e
+	[[ "$rc" -eq 23 && "$pauses" -eq 1 ]]
+)
+
 test_caller_guard_hides_agentbot_entry() {
 	local captured="$TEST_HARNESS_ROOT/caller-guard.captured"
 	SETUP_CALLER=agentbot
@@ -244,6 +256,7 @@ expect_success 're-launched updates skip the stale parent pause' test_relaunched
 expect_success 'undefined deferred actions are unavailable and non-mutating' test_deferred_actions_are_safe_when_undefined
 expect_success 'defined deferred hooks are dispatched without root rewiring' test_deferred_actions_call_defined_hooks
 expect_success 'Agentbot is deterministic unavailable and non-mutating' test_agentbot_is_deterministic_unavailable_and_non_mutating
+expect_success 'failed Agentbot launch pauses before the Dotfiles menu redraws' test_agentbot_failure_pauses_before_redraw
 expect_success 'SETUP_CALLER=agentbot hides the reciprocal menu entry' test_caller_guard_hides_agentbot_entry
 
 printf '%d test(s) passed; %d failed\n' "$passed" "$failed"

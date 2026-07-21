@@ -114,7 +114,7 @@ _main_menu_dispatch() {
 		;;
 	agentbot)
 		if declare -F dotfiles_launch_agentbot >/dev/null; then
-			dotfiles_launch_agentbot
+			_main_menu_run_child_menu dotfiles_launch_agentbot
 		else
 			_main_menu_unavailable \
 				"Agentbot is unavailable until the sibling bridge is installed."
