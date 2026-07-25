@@ -193,7 +193,7 @@ test_command_lib_documents_full_help_catalog() {
 	for needle in \
 		'update [--all]' \
 		'--all' \
-		'Include Node.js, Go, and Monaspace' \
+		'Include Node.js, npm, Go, and Monaspace' \
 		'DOTFILES_COMPONENTS' \
 		'AGENT_BOOTSTRAP_HOME' \
 		'GITHUB_TOKEN' \

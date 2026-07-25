@@ -45,7 +45,7 @@ declare -A DOTFILES_COMMAND_DESCRIPTION=(
 
 declare -A DOTFILES_COMMAND_NOTE=(
 	[menu]=''
-	[update]='Use --all to include Node.js, Go, and Monaspace.'
+	[update]='Use --all to include Node.js, npm, Go, and Monaspace.'
 	[status]='Remote and apt freshness remain unchecked.'
 	[commands]=''
 	[packages]=''
@@ -55,7 +55,7 @@ declare -A DOTFILES_COMMAND_NOTE=(
 
 declare -A DOTFILES_COMMAND_OPTIONS=(
 	[menu]=$'--initial|Run the initial setup flow through install.sh --initial.|menu default\n--update|Open the update workflow through install.sh --update.|menu default\n--agents|Open the Agentbot workflow through install.sh --agents.|menu default\n--help|Show installer menu help and exit.|off'
-	[update]=$'--all|Include Node.js, Go, and Monaspace font updates.|off\n-h|Show command help and exit.|off\n--help|Show command help and exit.|off'
+	[update]=$'--all|Include Node.js, npm, Go, and Monaspace font updates.|off\n-h|Show command help and exit.|off\n--help|Show command help and exit.|off'
 	[status]=$'(none)|Show local versions and repository state without command options.|always'
 	[commands]=$'(none)|Show this full read-only command/configuration catalog.|always'
 	[packages]=$'(none)|Show component and package metadata without probing the system.|always'
@@ -65,7 +65,7 @@ declare -A DOTFILES_COMMAND_OPTIONS=(
 
 declare -A DOTFILES_COMMAND_DEFAULTS=(
 	[menu]='No flags opens the interactive installer menu.'
-	[update]='Without --all, opt-in Node.js, Go, and Monaspace updates are skipped.'
+	[update]='Without --all, opt-in Node.js, npm, Go, and Monaspace updates are skipped.'
 	[status]='Reads local installed versions; remote freshness remains unchecked.'
 	[commands]='Prints the complete catalog without changing state.'
 	[packages]='Reads packages/packages.txt and component metadata only.'
@@ -75,7 +75,7 @@ declare -A DOTFILES_COMMAND_DEFAULTS=(
 
 declare -A DOTFILES_COMMAND_EFFECTS=(
 	[menu]='Delegates to scripts/install.sh; selected workflows may install, update, or configure components.'
-	[update]='May pull the repository, refresh apt, update CLIs, and optionally update Node.js, Go, and Monaspace.'
+	[update]='May pull the repository, refresh apt, update CLIs, and optionally update Node.js, npm, Go, and Monaspace.'
 	[status]='Reads local command versions and git status; it does not run remote freshness checks.'
 	[commands]='Performs no installer, git, network, stow, package, or component action.'
 	[packages]='Performs no package installation or system probe.'

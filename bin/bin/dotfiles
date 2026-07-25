@@ -95,16 +95,22 @@ _err() { printf '%s%s%s\n' "$C_RED" "$*" "$C_RESET" >&2; }
 
 declare -A UPGRADE_STEP_RESULT=()
 
+_report_command_failure() {
+	local exit_status="$1" retry_command="$2"
+	printf '%s>> FAILED (exit %s) — retry manually: %s <<%s\n' \
+		"$C_RED" "$exit_status" "$retry_command" "$C_RESET" >&2
+}
+
 _run_upgrade_step() {
-	local label="$1"
-	shift
+	local label="$1" retry_command="$2"
+	shift 2
 	printf '\n%s%s== %s ==%s\n' "$C_BOLD" "$C_YELLOW" "$label" "$C_RESET"
 	set +e
 	"$@"
 	local rc=$?
 	set -e
 	if [[ $rc -ne 0 ]]; then
-		printf '%s  %s failed (exit %d)%s\n' "$C_RED" "$label" "$rc" "$C_RESET" >&2
+		_report_command_failure "$rc" "$retry_command"
 		UPGRADE_STEP_RESULT["$label"]="failed"
 	else
 		UPGRADE_STEP_RESULT["$label"]="ok"
@@ -196,7 +202,7 @@ check_cursor_cli() {
 	installed="$(cursor_installed_version)"
 	if cursor_is_installed; then
 		available="—"
-		action="up to date"
+		action="latest unchecked"
 	else
 		available="—"
 		action="skip"
@@ -207,9 +213,12 @@ check_cursor_cli() {
 
 upgrade_cursor_cli() {
 	if command -v agent >/dev/null 2>&1; then
-		if agent update; then
+		local update_rc=0
+		agent update || update_rc=$?
+		if [[ $update_rc -eq 0 ]]; then
 			return 0
 		fi
+		_report_command_failure "$update_rc" "agent update"
 		_warn "  Cursor Agent update command failed; retrying with the official installer."
 		curl -fsSL https://cursor.com/install | bash
 	elif command -v cursor >/dev/null 2>&1; then
@@ -283,7 +292,7 @@ check_claude_cli() {
 		action="skip"
 	else
 		available="—"
-		action="up to date"
+		action="latest unchecked"
 	fi
 	printf '%s|%s|%s|%s\n' "Claude CLI" "$installed" "$available" "$action"
 	[[ $upgradable -eq 1 ]]
@@ -317,7 +326,7 @@ check_copilot_cli() {
 	installed="$(copilot_installed_version)"
 	if copilot_is_installed; then
 		available="—"
-		action="up to date"
+		action="latest unchecked"
 	else
 		available="—"
 		action="skip"
@@ -554,8 +563,52 @@ upgrade_node() {
 		_msg "  nvm not installed, skipping Node.js upgrade"
 		return 0
 	fi
-	nvm install --lts
+	nvm install --lts || return $?
 	nvm alias --no-colors default 'lts/*'
+}
+
+# --- npm (nvm) — opt-in ---
+npm_installed_version() {
+	_load_nvm
+	if command -v npm >/dev/null 2>&1; then
+		npm --version 2>/dev/null || echo "$NOT_INSTALLED"
+	else
+		echo "$NOT_INSTALLED"
+	fi
+}
+
+npm_available_version() {
+	_load_nvm
+	if command -v npm >/dev/null 2>&1; then
+		npm view npm version 2>/dev/null || echo "—"
+	else
+		echo "—"
+	fi
+}
+
+check_npm() {
+	local installed available action upgradable=0
+	installed="$(npm_installed_version)"
+	available="$(npm_available_version)"
+	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
+		action="skip"
+	elif [[ "$available" != "—" ]] && _version_gt "$available" "$installed"; then
+		action="upgrade (--all)"
+		upgradable=1
+	else
+		action="up to date"
+	fi
+	printf '%s|%s|%s|%s\n' "npm" "$installed" "$available" "$action"
+	[[ $upgradable -eq 1 ]]
+}
+
+upgrade_npm() {
+	_load_nvm
+	if ! command -v nvm >/dev/null 2>&1; then
+		_msg "  nvm not installed, skipping npm upgrade"
+		return 0
+	fi
+	nvm install-latest-npm
 }
 
 # --- Go (asdf) — opt-in ---
@@ -604,9 +657,9 @@ upgrade_go() {
 		_msg "  asdf not installed, skipping Go upgrade"
 		return 0
 	fi
-	asdf install golang latest
-	asdf set -u golang latest
-	asdf reshim golang 2>/dev/null || true
+	asdf install golang latest || return $?
+	asdf set -u golang latest || return $?
+	asdf reshim golang
 }
 
 # --- Monaspace fonts — opt-in ---
@@ -820,6 +873,7 @@ CHECK_FUNCS=(
 	check_lazygit
 	check_lazydocker
 	check_node
+	check_npm
 	check_go
 	check_monaspace
 	dotfiles_repo_status
@@ -829,6 +883,7 @@ _color_action() {
 	local action="$1"
 	case "$action" in
 	up\ to\ date | skip) printf '%s%s%s' "$C_GREEN" "$action" "$C_RESET" ;;
+	latest\ unchecked) printf '%s%s%s' "$C_DIM" "$action" "$C_RESET" ;;
 	upgrade* | refresh | continue | check) printf '%s%s%s' "$C_YELLOW" "$action" "$C_RESET" ;;
 	pull*) printf '%s%s%s' "$C_CYAN" "$action" "$C_RESET" ;;
 	*) printf '%s' "$action" ;;
@@ -1040,7 +1095,7 @@ print_upgrade_summary() {
 		if [[ -z "$result" ]]; then
 			case "$component" in
 			"dotfiles repo") result="ok" ;;
-			"Node.js (nvm)" | "Go (asdf)" | "Monaspace fonts")
+			"Node.js (nvm)" | "npm" | "Go (asdf)" | "Monaspace fonts")
 				if [[ "$upgrade_all" == true ]]; then
 					result="skipped"
 				else
@@ -1137,27 +1192,33 @@ _update_apt_packages() {
 }
 
 _run_update_downstream() {
-	local upgrade_all=false
+	local upgrade_all=false apt_refresh_rc=0
 	[[ "${1:-}" == true ]] && upgrade_all=true
 	UPGRADE_STEP_RESULT=()
 	if command -v apt-get >/dev/null 2>&1; then
-		sudo apt-get update -qq || return 1
+		sudo apt-get update -qq || apt_refresh_rc=$?
+		if [[ $apt_refresh_rc -ne 0 ]]; then
+			_report_command_failure "$apt_refresh_rc" "sudo apt-get update"
+			UPGRADE_STEP_RESULT["apt packages"]="failed"
+			return "$apt_refresh_rc"
+		fi
 	fi
-	_run_upgrade_step "apt packages" _update_apt_packages
-	_run_upgrade_step "Cursor CLI" upgrade_cursor_cli
-	_run_upgrade_step "Codex CLI" upgrade_codex_cli
-	_run_upgrade_step "Claude CLI" upgrade_claude_cli
-	_run_upgrade_step "Copilot CLI" upgrade_copilot_cli
-	_run_upgrade_step "lazygit" upgrade_lazygit
-	_run_upgrade_step "lazydocker" upgrade_lazydocker
+	_run_upgrade_step "apt packages" "sudo apt-get upgrade" _update_apt_packages
+	_run_upgrade_step "Cursor CLI" "curl -fsSL https://cursor.com/install | bash" upgrade_cursor_cli
+	_run_upgrade_step "Codex CLI" "npm i -g @openai/codex@latest" upgrade_codex_cli
+	_run_upgrade_step "Claude CLI" "claude update" upgrade_claude_cli
+	_run_upgrade_step "Copilot CLI" "copilot update" upgrade_copilot_cli
+	_run_upgrade_step "lazygit" "dotfiles update" upgrade_lazygit
+	_run_upgrade_step "lazydocker" "dotfiles update" upgrade_lazydocker
 
 	if [[ $upgrade_all == true ]]; then
-		_run_upgrade_step "Node.js (nvm)" upgrade_node
-		_run_upgrade_step "Go (asdf)" upgrade_go
-		_run_upgrade_step "Monaspace fonts" upgrade_monaspace
+		_run_upgrade_step "Node.js (nvm)" "nvm install --lts" upgrade_node
+		_run_upgrade_step "npm" "nvm install-latest-npm" upgrade_npm
+		_run_upgrade_step "Go (asdf)" "asdf install golang latest" upgrade_go
+		_run_upgrade_step "Monaspace fonts" "dotfiles update --all" upgrade_monaspace
 	else
 		_msg ""
-		_msg "${C_DIM}Skipping opt-in updates (Node.js, Go, Monaspace). Use --all to include them.${C_RESET}"
+		_msg "${C_DIM}Skipping opt-in updates (Node.js, npm, Go, Monaspace). Use --all to include them.${C_RESET}"
 	fi
 	local result failures=0
 	for result in "${UPGRADE_STEP_RESULT[@]}"; do [[ "$result" == failed ]] && failures=$((failures + 1)); done
@@ -1195,7 +1256,7 @@ cmd_update() {
 		_msg 'Downstream updates skipped.'
 		return 0
 	fi
-	if [[ "$upgrade_all" != true ]] && _dotfiles_confirm 'Include Node.js, Go, and Monaspace fonts (--all)?'; then
+	if [[ "$upgrade_all" != true ]] && _dotfiles_confirm 'Include Node.js, npm, Go, and Monaspace fonts (--all)?'; then
 		upgrade_all=true
 	fi
 	printf '\n%s%s=== Upgrade ===%s\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
