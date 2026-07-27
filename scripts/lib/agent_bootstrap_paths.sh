@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# agent_bootstrap lives as a sibling of the dotfiles repo (plan5 / plan8).
+# agent_bootstrap lives as a sibling of the dotfiles repo.
 # Clone target: $(dirname "$DOTFILES_DIR")/agent_bootstrap — never a fixed ~/Dev path.
 
 # Repo root when menus run (DOTFILES_DIR) or when inferred from stowed ~/.bashrc.

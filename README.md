@@ -41,7 +41,7 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 ├── scripts/
 │   ├── install.sh      # real installer
 │   ├── lib/            # TUI, bootstrap helpers
-│   └── menus/          # main + submenus (plan8)
+│   └── menus/          # main + submenus
 ├── install.sh          # shim → scripts/install.sh
 └── README.md
 ```
