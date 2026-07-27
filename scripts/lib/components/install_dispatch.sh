@@ -15,6 +15,10 @@ _comp_install_python() {
 	apt_install_packages python
 }
 
+_comp_install_graphify_cli() {
+	install_graphify_cli || echo "  Warning: Graphify CLI install failed."
+}
+
 _comp_install_powershell() {
 	install_powershell || echo "  Warning: PowerShell install failed."
 }

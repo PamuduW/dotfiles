@@ -6,6 +6,7 @@ COMP_KEYS=(
 	git_identity
 	system_packages
 	python
+	graphify_cli
 	powershell
 	go
 	nodejs
@@ -29,6 +30,7 @@ COMP_LABELS=(
 	"Git identity (global user.name / email)"
 	"System packages"
 	"Python (python3, pip, venv)"
+	"Graphify CLI"
 	"PowerShell (pwsh)"
 	"Go (asdf)"
 	"Node.js 24 LTS (nvm)"
@@ -49,14 +51,15 @@ COMP_LABELS=(
 )
 
 # Dependency: index of required component, -1 = none
-#              gid sys py  psh go  njs dir doc por lg  ld  cur cdx cla cop mon ssh dot wsl gcr
-COMP_DEPS=(-1 -1 -1 -1 -1 -1 -1 -1 7 -1 7 -1 5 -1 -1 -1 -1 1 -1 -1)
+#              gid sys py  gr  psh go  njs dir doc por lg  ld  cur cdx cla cop mon ssh dot wsl gcr
+COMP_DEPS=(-1 -1 -1 2 -1 -1 -1 -1 -1 8 -1 8 -1 6 -1 -1 -1 -1 1 -1 -1)
 
 # Install execution order (differs from menu display order).
 COMP_INSTALL_ORDER=(
 	git_identity
 	system_packages
 	python
+	graphify_cli
 	powershell
 	go
 	lazygit
@@ -87,6 +90,9 @@ comp_registry_init() {
 	if git config --global --list 2>/dev/null | grep -q '^includeif\.'; then
 		COMP_ON[git_identity]=0
 	fi
+	# Graphify is intentionally opt-in; selecting all components remains an
+	# explicit action in the interactive picker.
+	COMP_ON[graphify_cli]=0
 }
 
 # Non-interactive: honor DOTFILES_COMPONENTS (comma-separated COMP_KEYS); default = all on.

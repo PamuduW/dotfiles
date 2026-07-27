@@ -101,7 +101,7 @@ Scaffolded from `agent_bootstrap/base/` via `agentbot boot`. Canonical templates
 | `scripts/install.sh` | Real installer; logs to `log/` |
 | `scripts/lib/` | TUI (`menu_simple`, `report_table`), component registry |
 | `scripts/menus/` | Main, initial setup, update, and Agentbot submenus |
-| `bin/bin/dotfiles` | `update`, `upgrade`, `restow`, `menu` |
+| `bin/bin/dotfiles` | `update`, `restow`, `menu` |
 | `packages/packages.txt` | Apt components with `@tag` sections |
 | `bash/.bashrc` | Stowed shell config; sources `agent_bootstrap_paths.sh` |
 
@@ -112,7 +112,7 @@ Scaffolded from `agent_bootstrap/base/` via `agentbot boot`. Canonical templates
 ```bash
 ./install.sh                    # interactive boot menu
 dotfiles menu                   # same (after stow)
-dotfiles update && dotfiles upgrade
+dotfiles update
 find scripts -name '*.sh' -print0 | xargs -0 -n1 bash -n   # shell syntax check
 ```
 

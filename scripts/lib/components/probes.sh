@@ -57,6 +57,20 @@ _comp_probe_python() {
 	printf 'installed|python3 pip venv\n'
 }
 
+_comp_probe_graphify_cli() {
+	local graphify_path ver
+	if graphify_path="$(graphify_command 2>/dev/null)"; then
+		ver="$("$graphify_path" --version 2>/dev/null | head -n1 || true)"
+		if declare -F graphify_cli_is_uv_owned >/dev/null 2>&1 && graphify_cli_is_uv_owned; then
+			printf 'installed|%s (uv)\n' "${ver:-$graphify_path}"
+		else
+			printf 'installed|%s\n' "${ver:-$graphify_path}"
+		fi
+	else
+		printf 'missing|graphify not on PATH\n'
+	fi
+}
+
 _comp_probe_powershell() {
 	if command -v pwsh >/dev/null 2>&1; then
 		printf 'installed|%s\n' "$(pwsh --version 2>/dev/null | head -n1)"

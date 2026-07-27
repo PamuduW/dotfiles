@@ -18,6 +18,11 @@ _comp_desc_python() {
 	echo "Provides the standard Python runtime and virtual-environment tooling."
 }
 
+_comp_desc_graphify_cli() {
+	echo "Installs the official graphifyy package with uv, exposing the graphify CLI."
+	echo "Optional Agent Skills integration for Codex, Cursor, Claude, and compatible assistants."
+}
+
 _comp_desc_powershell() {
 	echo "Installs Microsoft PowerShell from packages.microsoft.com."
 	echo "Adds the Microsoft apt repository if missing, then installs 'powershell'."

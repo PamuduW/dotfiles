@@ -167,6 +167,14 @@ test_cli_probes_find_installed_local_binaries_before_path_refresh() {
 	[[ "$output" == $'installed|cursor cli\ninstalled|claude cli' ]]
 }
 
+test_graphify_component_probe_is_defined() {
+	bash -c '
+		set -euo pipefail
+		source "$1/scripts/lib/components/probes.sh"
+		declare -F _comp_probe_graphify_cli >/dev/null
+	' _ "$ROOT"
+}
+
 test_lazygit_uses_current_lowercase_linux_release_asset() {
 	local url_log="$1/lazygit-urls"
 	URL_LOG="$url_log" bash -c '
@@ -232,6 +240,7 @@ main() {
 	expect_success 'failed submenu action pauses and returns to the menu' test_failed_submenu_action_returns_to_menu_after_pause "$tmp"
 	expect_success 'failed GitHub release install cleans up without an unbound variable' test_failed_github_release_install_cleans_up_without_unbound_variable "$tmp"
 	expect_success 'CLI probes find installed local binaries before PATH refresh' test_cli_probes_find_installed_local_binaries_before_path_refresh "$tmp"
+	expect_success 'Graphify component probe is defined' test_graphify_component_probe_is_defined
 	expect_success 'lazygit uses the current lowercase Linux release asset' test_lazygit_uses_current_lowercase_linux_release_asset "$tmp"
 	expect_success 'GitHub token config is private and scoped' test_github_token_config_is_private_and_scoped "$tmp"
 

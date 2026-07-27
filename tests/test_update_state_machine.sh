@@ -155,6 +155,7 @@ test_downstream_executes_apt_first_and_all_matrix() (
 	: >"$events"
 	_run_update_downstream true >/dev/null || return 1
 	[[ "$(sed -n '1p' "$events")" == 'sudo:apt-get update -qq' ]] || return 1
+	grep -Fq 'step:Graphify CLI' "$events" || return 1
 	grep -Fq 'step:Node.js (nvm)' "$events" || return 1
 	grep -Fq 'step:npm' "$events" || return 1
 	grep -Fq 'step:Go (asdf)' "$events" || return 1
@@ -226,6 +227,66 @@ test_unverifiable_cli_probes_label_latest_unchecked() (
 	[[ "$output" == 'Claude CLI|2.1.220 (Claude Code)|—|latest unchecked' ]] || return 1
 	output="$(check_copilot_cli || true)"
 	[[ "$output" == 'Copilot CLI|GitHub Copilot CLI 1.0.75.|—|latest unchecked' ]]
+)
+
+test_graphify_probe_reports_uv_owned_and_external_states() (
+	local output
+	graphify() { [[ "$1" == --version ]] && printf 'graphify 1.2.3\n'; }
+	uv() {
+		case "$*" in
+		'tool list') printf '%s\n' 'graphifyy v1.2.3' ;;
+		*) return 97 ;;
+		esac
+	}
+	output="$(check_graphify_cli || true)"
+	[[ "$output" == 'Graphify CLI|graphify 1.2.3|—|latest unchecked' ]] || return 1
+
+	uv() {
+		[[ "$*" == 'tool list' ]] && printf '%s\n' 'other-tool v1.0.0'
+	}
+	output="$(check_graphify_cli || true)"
+	[[ "$output" == 'Graphify CLI|graphify 1.2.3|—|externally managed' ]]
+)
+
+test_graphify_probe_skips_when_not_installed() (
+	local output
+	unset -f graphify 2>/dev/null || true
+	output="$(check_graphify_cli || true)"
+	[[ "$output" == 'Graphify CLI|not installed|—|skip' ]]
+)
+
+test_graphify_upgrade_uses_uv_tool_upgrade() (
+	local calls="$TEST_HARNESS_ROOT/graphify-upgrade.calls"
+	: >"$calls"
+	graphify() { [[ "$1" == --version ]] && printf 'graphify 1.2.3\n'; }
+	uv() {
+		printf 'uv:%s\n' "$*" >>"$calls"
+		case "$*" in
+		'tool list') printf '%s\n' 'graphifyy v1.2.3' ;;
+		'tool upgrade graphifyy') return 0 ;;
+		*) return 97 ;;
+		esac
+	}
+	upgrade_graphify_cli
+	grep -Fqx 'uv:tool upgrade graphifyy' "$calls"
+)
+
+test_graphify_upgrade_failure_has_copyable_retry_command() (
+	local output calls="$TEST_HARNESS_ROOT/graphify-failure.calls"
+	: >"$calls"
+	graphify() { [[ "$1" == --version ]] && printf 'graphify 1.2.3\n'; }
+	uv() {
+		printf 'uv:%s\n' "$*" >>"$calls"
+		case "$*" in
+		'tool list') printf '%s\n' 'graphifyy v1.2.3' ;;
+		'tool upgrade graphifyy') return 23 ;;
+		*) return 97 ;;
+		esac
+	}
+	C_RED=$'\033[31m' C_RESET=$'\033[0m'
+	output="$(_run_upgrade_step 'Graphify CLI' 'uv tool upgrade graphifyy' upgrade_graphify_cli 2>&1)"
+	grep -Fqx 'uv:tool upgrade graphifyy' "$calls"
+	grep -Fq 'retry manually: uv tool upgrade graphifyy' <<<"$output"
 )
 
 test_upgrade_step_marks_failures_in_red_with_retry_command() (
@@ -557,6 +618,10 @@ expect_success 'Node.js probe follows nvm default instead of a stale shell PATH'
 expect_success 'npm probe reports upgrade current and missing states' test_npm_probe_reports_upgrade_current_and_missing_states
 expect_success 'npm upgrade uses nvm latest compatible release' test_npm_upgrade_uses_nvm_latest_compatible_release
 expect_success 'unverifiable CLI probes label latest freshness unchecked' test_unverifiable_cli_probes_label_latest_unchecked
+expect_success 'Graphify update probe distinguishes uv-owned and external installs' test_graphify_probe_reports_uv_owned_and_external_states
+expect_success 'Graphify update probe skips an absent CLI' test_graphify_probe_skips_when_not_installed
+expect_success 'Graphify update uses uv tool upgrade' test_graphify_upgrade_uses_uv_tool_upgrade
+expect_success 'Graphify update failures include a copyable retry command' test_graphify_upgrade_failure_has_copyable_retry_command
 expect_success 'upgrade step marks failures in red with retry command' test_upgrade_step_marks_failures_in_red_with_retry_command
 expect_success 'upgrade step omits failure marker after success' test_upgrade_step_omits_failure_marker_after_success
 expect_success 'Node.js upgrade stops when nvm install fails' test_node_upgrade_stops_when_nvm_install_fails

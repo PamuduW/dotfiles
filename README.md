@@ -11,6 +11,7 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 - Better readline: case-insensitive completion, arrow-key history search
 - Docker Engine + Portainer CE (with `dpot`/`dpotstop` shortcuts)
 - Node.js via nvm, Python 3, Go (asdf), PowerShell, direnv
+- Optional Graphify CLI (`graphifyy` through `uv`; default-off)
 - AI CLI tools: Cursor, Codex, Claude, Copilot (updated through the explicit `dotfiles update` workflow)
 - SSH key generation with GitHub setup notes
 - WSL-specific config: systemd, Windows PATH interop (`appendWindowsPath=true`), Git credential helper, clipboard helper
@@ -142,6 +143,7 @@ When you choose **Run setup** interactively (TTY), the installer will:
 | Git identity    | Set global `user.name` / `user.email` (auto-disabled if `includeIf` detected) |
 | System packages | Core CLI tools from apt (@core, @cli, @system)                                |
 | Python          | python3, pip, venv                                                            |
+| Graphify CLI    | Optional `graphifyy` package through `uv`; exposes the `graphify` command (default OFF) |
 | PowerShell      | Microsoft PowerShell from official Microsoft apt repository                   |
 | Go              | Latest Go via asdf                                                            |
 | Node.js         | v24 LTS via nvm                                                               |
@@ -161,6 +163,18 @@ When you choose **Run setup** interactively (TTY), the installer will:
 | Git credential  | Windows Credential Manager for HTTPS auth                                     |
 
 Dependencies are enforced automatically (e.g., disabling Docker also disables Portainer).
+
+### Optional Graphify CLI
+
+`graphify_cli` is a selectable, default-off component. It requires Python
+3.10+ and installs the official Graphify package as a user tool with
+`uv tool install graphifyy`; the installed command is `graphify`. If `uv` is
+missing, the component may install it through Astral's official installer.
+
+Dotfiles owns only this CLI component. It does not install Graphify's
+assistant skill or edit project `AGENTS.md`, Cursor rules, hooks, or graph data.
+After selecting the component, use Agentbot's explicit `agentbot graphify setup`
+to install the generic Agent Skills copy.
 
 **Multi-identity git setups**: If your `~/.gitconfig` uses `includeIf` for per-directory identities, the installer detects this and defaults "Git identity" to OFF so it won't overwrite your configuration.
 
@@ -206,6 +220,13 @@ the complete supported command, option, configuration, output, and integration
 reference. They are read-only and use the same catalog.
 
 Runs **unprivileged**; only the apt portion invokes `sudo` internally (single prompt). Agent CLI and npm updates stay under your user.
+
+When Graphify is selected, `dotfiles update` (including `dotfiles update --all`)
+updates it with `uv tool upgrade graphifyy` only when `uv tool list` proves that
+the installed `graphify` command is owned by the `graphifyy` tool. An external
+or otherwise unproven Graphify installation is preserved and reported as
+externally managed; update it through its own owner instead. Dotfiles does not
+run any Graphify assistant installer during install or update.
 
 The interactive Update action clears the menu before starting. It checks the
 repository first; an available pull is shown in a colored repository table and

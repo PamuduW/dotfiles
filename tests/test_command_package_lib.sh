@@ -242,19 +242,28 @@ test_table_column_headers_are_bold_white() {
 	! grep -Fq $'\033[93m' <<<"$output"
 }
 
-test_component_registry_has_exact_20() {
+test_component_registry_has_exact_21_with_graphify() {
 	local expected=(
-		git_identity system_packages python powershell go nodejs direnv docker portainer lazygit
+		git_identity system_packages python graphify_cli powershell go nodejs direnv docker portainer lazygit
 		lazydocker cursor_cli codex_cli claude_cli copilot_cli monaspace_fonts ssh_key dotfiles
 		wsl_conf git_credential
 	)
-	[[ "${#COMP_KEYS[@]}" -eq 20 && "${#COMP_LABELS[@]}" -eq 20 ]] || return 1
+	[[ "${#COMP_KEYS[@]}" -eq 21 && "${#COMP_LABELS[@]}" -eq 21 ]] || return 1
 	local i
 	for i in "${!expected[@]}"; do
 		[[ "${COMP_KEYS[$i]}" == "${expected[$i]}" ]] || return 1
 		[[ -n "${COMP_LABELS[$i]}" ]] || return 1
 		comp_description "${COMP_KEYS[$i]}" >/dev/null || return 1
 	done
+}
+
+test_graphify_component_is_default_off_and_depends_on_python() {
+	local graphify_idx python_idx
+	graphify_idx="$(comp_key_index graphify_cli)" || return 1
+	python_idx="$(comp_key_index python)" || return 1
+	[[ "${COMP_DEPS[$graphify_idx]}" -eq "$python_idx" ]] || return 1
+	comp_registry_init
+	[[ "${COMP_ON[graphify_cli]:-}" -eq 0 ]] || return 1
 }
 
 test_package_metadata_has_exact_28_with_descriptions() {
@@ -360,9 +369,10 @@ expect_success 'Command Lib wraps details to the terminal width' test_command_li
 expect_success 'Command Lib colors mutating and read-only behavior cells' test_command_lib_colors_behavior_cells_when_enabled
 expect_success 'topic headers use the orange palette' test_topic_headers_use_orange
 expect_success 'table column headers remain bold white' test_table_column_headers_are_bold_white
-expect_success 'component registry exposes the exact 20 described component IDs' test_component_registry_has_exact_20
+expect_success 'component registry exposes the exact 21 described component IDs' test_component_registry_has_exact_21_with_graphify
+expect_success 'Graphify is default-off and depends on Python' test_graphify_component_is_default_off_and_depends_on_python
 expect_success 'package metadata contains 28 unique described names in 9/3/7/9 tags' test_package_metadata_has_exact_28_with_descriptions
-expect_success 'Package Lib renders all 20 components without probes or side effects' test_package_lib_components_are_metadata_only
+expect_success 'Package Lib renders all 21 components without probes or side effects' test_package_lib_components_are_metadata_only
 expect_success 'System package pages cover all 28 names exactly once' test_package_pages_cover_all_28_once
 expect_success 'Package Lib opens the system package table directly' test_package_menu_opens_system_packages_directly
 expect_success 'Command and Package Lib narrow rendering remains bounded' test_narrow_reports_remain_bounded

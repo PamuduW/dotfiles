@@ -1,0 +1,137 @@
+# shellcheck shell=bash
+
+GRAPHIFY_UV_INSTALL_URL="https://astral.sh/uv/install.sh"
+
+graphify_uv_command() {
+	if command -v uv >/dev/null 2>&1; then
+		command -v uv
+	elif [[ -x "$HOME/.local/bin/uv" ]]; then
+		printf '%s\n' "$HOME/.local/bin/uv"
+	else
+		return 1
+	fi
+}
+
+graphify_command() {
+	if command -v graphify >/dev/null 2>&1; then
+		command -v graphify
+	elif [[ -x "$HOME/.local/bin/graphify" ]]; then
+		printf '%s\n' "$HOME/.local/bin/graphify"
+	else
+		return 1
+	fi
+}
+
+graphify_cli_is_uv_owned() {
+	local uv_cmd tool_list
+	uv_cmd="$(graphify_uv_command)" || return 1
+	tool_list="$("$uv_cmd" tool list 2>/dev/null)" || return 1
+	grep -Eq '(^|[[:space:]])graphifyy([[:space:]]|$)' <<<"$tool_list"
+}
+
+graphify_installed_version() {
+	local graphify_cmd version
+	if graphify_cmd="$(graphify_command 2>/dev/null)"; then
+		version="$("$graphify_cmd" --version 2>/dev/null | head -n1 || true)"
+		printf '%s\n' "${version:-installed}"
+	else
+		echo "not installed"
+	fi
+}
+
+check_graphify_cli() {
+	local installed action
+	installed="$(graphify_installed_version)"
+	if [[ "$installed" == "not installed" ]]; then
+		action="skip"
+	elif graphify_cli_is_uv_owned; then
+		action="latest unchecked"
+	else
+		action="externally managed"
+	fi
+	printf '%s|%s|%s|%s\n' "Graphify CLI" "$installed" "—" "$action"
+}
+
+upgrade_graphify_cli() {
+	local uv_cmd
+	if [[ "$(graphify_installed_version)" == "not installed" ]]; then
+		printf '%s\n' '  Graphify CLI not installed, skipping'
+		return 0
+	fi
+	if ! graphify_cli_is_uv_owned; then
+		printf '%s\n' '  Graphify CLI is externally managed, skipping uv upgrade'
+		return 0
+	fi
+	uv_cmd="$(graphify_uv_command)" || return 1
+	"$uv_cmd" tool upgrade graphifyy
+}
+
+ensure_graphify_uv() {
+	local py_version py_major py_minor tmp
+	if graphify_uv_command >/dev/null 2>&1; then
+		return 0
+	fi
+
+	command -v curl >/dev/null 2>&1 || {
+		echo "  curl is required to install uv for Graphify." >&2
+		return 1
+	}
+	command -v python3 >/dev/null 2>&1 || {
+		echo "  python3 is required to install Graphify." >&2
+		return 1
+	}
+	py_version="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')" || {
+		echo "  Could not determine the installed Python version." >&2
+		return 1
+	}
+	py_major="${py_version%%.*}"
+	py_minor="${py_version#*.}"
+	if ((py_major < 3 || (py_major == 3 && py_minor < 10))); then
+		echo "  Graphify requires Python 3.10 or newer; found ${py_version}." >&2
+		return 1
+	fi
+
+	tmp="$(mktemp)"
+	if ! curl -LsSf "$GRAPHIFY_UV_INSTALL_URL" >"$tmp"; then
+		rm -f -- "$tmp"
+		echo "  Failed to download the official uv installer." >&2
+		return 1
+	fi
+	if ! sh "$tmp"; then
+		rm -f -- "$tmp"
+		echo "  The official uv installer failed." >&2
+		return 1
+	fi
+	rm -f -- "$tmp"
+
+	graphify_uv_command >/dev/null 2>&1 || {
+		echo "  uv installed but is not available at ${HOME}/.local/bin/uv." >&2
+		return 1
+	}
+}
+
+install_graphify_cli() {
+	local graphify_cmd uv_cmd
+	if graphify_cmd="$(graphify_command 2>/dev/null)"; then
+		if graphify_cli_is_uv_owned; then
+			log_skip "Graphify CLI already installed via uv"
+		else
+			log_warn "Graphify CLI already exists outside uv; preserving external installation"
+		fi
+		return 0
+	fi
+
+	ensure_graphify_uv || return 1
+	uv_cmd="$(graphify_uv_command)" || return 1
+	log_step "Install Graphify CLI (graphifyy)"
+	if ! _run_quiet_command "Graphify CLI install" "$uv_cmd" tool install graphifyy; then
+		return 1
+	fi
+
+	if graphify_cmd="$(graphify_command 2>/dev/null)"; then
+		log_ok "Graphify CLI installed at ${graphify_cmd}"
+		return 0
+	fi
+	echo "  Graphify installed, but graphify is not on PATH. Add ${HOME}/.local/bin to PATH, then retry: uv tool install graphifyy" >&2
+	return 1
+}
