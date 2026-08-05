@@ -932,9 +932,12 @@ _color_action() {
 	local action="$1"
 	case "$action" in
 	up\ to\ date | skip) printf '%s%s%s' "$C_GREEN" "$action" "$C_RESET" ;;
+	current) printf '%s%s%s' "$C_GREEN" "$action" "$C_RESET" ;;
 	latest\ unchecked) printf '%s%s%s' "$C_DIM" "$action" "$C_RESET" ;;
 	upgrade* | refresh | continue | check) printf '%s%s%s' "$C_YELLOW" "$action" "$C_RESET" ;;
-	pull*) printf '%s%s%s' "$C_CYAN" "$action" "$C_RESET" ;;
+	pull* | verified) printf '%s%s%s' "$C_CYAN" "$action" "$C_RESET" ;;
+	unchecked) printf '%s%s%s' "$C_YELLOW" "$action" "$C_RESET" ;;
+	blocked) printf '%s%s%s' "$C_RED" "$action" "$C_RESET" ;;
 	*) printf '%s' "$action" ;;
 	esac
 }
@@ -1197,29 +1200,88 @@ _dotfiles_confirm() {
 	case "$answer" in y | Y | yes | YES) return 0 ;; *) return 1 ;; esac
 }
 
+_repo_update_change_count() {
+	if [[ -z "${REPO_UPDATE_CHANGES:-}" ]]; then
+		printf '0\n'
+		return
+	fi
+	awk 'END { print NR }' <<<"$REPO_UPDATE_CHANGES"
+}
+
+_repo_update_history_detail() {
+	case "${REPO_UPDATE_STATE:-stopped}" in
+	current) printf 'current' ;;
+	ahead) printf '%s local commit(s) ahead' "${REPO_UPDATE_AHEAD:-0}" ;;
+	behind) printf '%s commit(s) behind' "${REPO_UPDATE_BEHIND:-0}" ;;
+	diverged) printf '%s ahead / %s behind' "${REPO_UPDATE_AHEAD:-0}" "${REPO_UPDATE_BEHIND:-0}" ;;
+	*) printf 'freshness unknown' ;;
+	esac
+}
+
+_print_repo_update_changes() {
+	local max_lines=20 total shown=0 omitted quoted_repo line
+	[[ -n "${REPO_UPDATE_CHANGES:-}" ]] || return 0
+	total="$(_repo_update_change_count)"
+	printf '  Local changes:\n'
+	while IFS= read -r line; do
+		((shown >= max_lines)) && break
+		printf '  %s\n' "$line"
+		shown=$((shown + 1))
+	done <<<"$REPO_UPDATE_CHANGES"
+	omitted=$((total - shown))
+	if ((omitted > 0)); then
+		printf '  ... %d more local change(s)\n' "$omitted"
+	fi
+	printf -v quoted_repo '%q' "$DOTFILES_DIR"
+	printf '  Full list: git -C %s status --short --untracked-files=all\n' "$quoted_repo"
+}
+
 _print_repo_update_table() {
-	local branch local_rev available action
+	local branch local_rev available action upstream change_count remote_action
 	branch="$(git -C "$DOTFILES_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
 	local_rev="$(git -C "$DOTFILES_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
-	case "$REPO_UPDATE_STATE" in
-	behind)
-		available="${REPO_UPDATE_BEHIND} commit(s) behind"
-		action='pull --ff-only'
-		;;
-	ahead)
-		available="${REPO_UPDATE_AHEAD} local commit(s) ahead"
-		action='continue'
-		;;
-	*)
-		available='repository state requires review'
-		action='check'
-		;;
+	available="$(_repo_update_history_detail)"
+	upstream="${REPO_UPDATE_UPSTREAM:-upstream}"
+	change_count="$(_repo_update_change_count)"
+	case "${REPO_UPDATE_STATE:-stopped}" in
+	current|ahead|behind|diverged) remote_action='verified' ;;
+	*) remote_action='unchecked' ;;
 	esac
+	if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
+		action='blocked'
+	else
+		case "${REPO_UPDATE_STATE:-stopped}" in
+		behind) action='pull --ff-only' ;;
+		ahead) action='continue' ;;
+		current) action='current' ;;
+		*) action='check' ;;
+		esac
+	fi
 
 	printf '\n%s%s==Repository update==%s\n\n' "$C_BOLD" "$C_YELLOW" "$C_RESET"
 	_print_update_table_header action
-	_print_repo_update_row 'dotfiles repo' "${branch}@${local_rev}" "$available" "$action"
+	if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
+		_print_repo_update_row 'dotfiles repo' "${branch}@${local_rev}" "${change_count} local change(s)" "$action"
+	else
+		_print_repo_update_row 'dotfiles repo' "${branch}@${local_rev}" "$available" "$action"
+	fi
+	_print_repo_update_row "$upstream" 'remote history' "$available" "$remote_action"
 	printf '\n'
+}
+
+_print_repo_update_stopped_report() {
+	_print_repo_update_table
+	_print_repo_update_changes
+	case "${REPO_UPDATE_REASON:-unknown}" in
+	dirty)
+		_warn 'Repository pull and downstream updates stopped.'
+		_warn 'Resolve the local changes, then run dotfiles update again.'
+		;;
+	fetch-failed)
+		_warn 'Repository pull and downstream updates stopped because remote freshness is unknown.'
+		;;
+	*) _warn "Repository pull and downstream updates stopped: ${REPO_UPDATE_REASON:-unknown}." ;;
+	esac
 }
 
 _dotfiles_confirm_repo_update() {
@@ -1291,7 +1353,7 @@ cmd_update() {
 
 	repo_update_gate "$DOTFILES_DIR" _dotfiles_confirm_repo_update
 	case "$REPO_UPDATE_OUTCOME" in
-	stopped) return 1 ;;
+	stopped) _print_repo_update_stopped_report >&2; return 1 ;;
 	relaunch_required)
 		_msg "${C_GREEN}Repository fast-forward succeeded; the old update process will not continue.${C_RESET}"
 		_dotfiles_wait_for_reload

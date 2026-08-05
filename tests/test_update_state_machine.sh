@@ -32,13 +32,24 @@ case "$cmd" in
     [[ "$state" == no-upstream ]] && exit 1
     [[ "$state" == other-remote ]] && { printf 'fork/main\n'; exit 0; }
     printf 'origin/main\n' ;;
-  'status --porcelain --untracked-files=all') [[ "$state" == dirty ]] && printf '?? local-change\n' ;;
+  'status --short --untracked-files=all')
+    case "$state" in
+      dirty|dirty-current|dirty-ahead|dirty-behind|dirty-diverged)
+        printf ' M scripts/example.sh\n?? local-change\n'
+        ;;
+      status-failure) exit 25 ;;
+    esac ;;
   'fetch --prune')
-    if [[ "$state" == fetch-failure ]]; then printf 'fetch diagnostic\n' >&2; exit 23; fi
+    if [[ "$state" == fetch-failure || "${TEST_FETCH_FAILURE:-0}" == 1 ]]; then printf 'fetch diagnostic\n' >&2; exit 23; fi
     [[ "$state" == fetch-output ]] && printf 'From github.com:PamuduW/dotfiles\n'
     exit 0 ;;
   'rev-list --left-right --count HEAD...@{upstream}')
-    case "$state" in ahead) printf '2\t0\n' ;; behind|pull-failure) printf '0\t3\n' ;; diverged) printf '2\t3\n' ;; *) printf '0\t0\n' ;; esac ;;
+    case "$state" in
+      ahead|dirty-ahead) printf '2\t0\n' ;;
+      behind|dirty-behind|pull-failure) printf '0\t3\n' ;;
+      diverged|dirty-diverged) printf '2\t3\n' ;;
+      *) printf '0\t0\n' ;;
+    esac ;;
   'pull --ff-only')
     if [[ "$state" == pull-failure ]]; then printf 'pull diagnostic\n' >&2; exit 24; fi
     exit 0 ;;
@@ -57,8 +68,55 @@ test_state_table_outcomes() {
 	local pair state expected
 	for pair in current:current dirty:stopped detached:stopped no-upstream:stopped other-remote:stopped diverged:stopped fetch-failure:stopped; do
 		state="${pair%%:*}" expected="${pair#*:}"; test_harness_reset_logs; run_gate "$state" no
-		[[ "$REPO_UPDATE_OUTCOME" == "$expected" ]] || return 1
+		if [[ "$REPO_UPDATE_OUTCOME" != "$expected" ]]; then
+			printf 'state %s: expected %s, got %s (%s)\n' "$state" "$expected" "$REPO_UPDATE_OUTCOME" "${REPO_UPDATE_REASON:-none}" >&2
+			return 1
+		fi
 	done
+}
+
+test_dirty_history_matrix_fetches_classifies_and_stops() {
+	local pair state expected
+	for pair in dirty-current:current dirty-ahead:ahead dirty-behind:behind dirty-diverged:diverged; do
+		state="${pair%%:*}" expected="${pair#*:}"
+		test_harness_reset_logs
+		run_gate "$state" yes
+		[[ "$REPO_UPDATE_OUTCOME" == stopped && "$REPO_UPDATE_STATE" == "$expected" ]] || return 1
+		[[ "$REPO_UPDATE_REASON" == dirty && "$REPO_UPDATE_DIRTY" == 1 ]] || return 1
+		[[ "$REPO_UPDATE_CHANGES" == *' M scripts/example.sh'* && "$REPO_UPDATE_UPSTREAM" == origin/main ]] || return 1
+		grep -Eq $'git\t-C\t.*\tfetch\t--prune$' "$TEST_COMMAND_LOG" || return 1
+		grep -Eq $'git\t-C\t.*\trev-list\t--left-right\t--count\tHEAD\.\.\.@\{upstream\}$' "$TEST_COMMAND_LOG" || return 1
+		[[ "$(pull_count)" -eq 0 ]] || return 1
+	done
+}
+
+test_dirty_fetch_failure_preserves_changes_and_unknown_freshness() {
+	test_harness_reset_logs
+	TEST_REPO_STATE=dirty-current TEST_CONFIRM=yes TEST_FETCH_FAILURE=1
+	export TEST_REPO_STATE TEST_CONFIRM TEST_FETCH_FAILURE
+	repo_update_gate "$TEST_HARNESS_ROOT/repo" confirm_state >/dev/null 2>&1
+	unset TEST_FETCH_FAILURE
+	[[ "$REPO_UPDATE_OUTCOME" == stopped && "$REPO_UPDATE_REASON" == fetch-failed ]] || return 1
+	[[ "$REPO_UPDATE_DIRTY" == 1 && "$REPO_UPDATE_CHANGES" == *'?? local-change'* ]] || return 1
+	! grep -Eq $'git\t-C\t.*\trev-list\t' "$TEST_COMMAND_LOG"
+}
+
+test_status_failure_stops_before_fetch() {
+	test_harness_reset_logs
+	run_gate status-failure yes
+	[[ "$REPO_UPDATE_OUTCOME" == stopped && "$REPO_UPDATE_REASON" == status-failed ]] || return 1
+	! grep -Eq $'git\t-C\t.*\t(fetch|rev-list|pull)(\t|$)' "$TEST_COMMAND_LOG"
+}
+
+test_git_sequence_captures_changes_before_fetch_and_classification() {
+	test_harness_reset_logs
+	run_gate dirty-behind yes
+	local status_line fetch_line classify_line
+	status_line="$(grep -n $'git\t-C\t.*\tstatus\t--short\t--untracked-files=all$' "$TEST_COMMAND_LOG" | cut -d: -f1)"
+	fetch_line="$(grep -n $'git\t-C\t.*\tfetch\t--prune$' "$TEST_COMMAND_LOG" | cut -d: -f1)"
+	classify_line="$(grep -n $'git\t-C\t.*\trev-list\t--left-right\t--count' "$TEST_COMMAND_LOG" | cut -d: -f1)"
+	[[ -n "$status_line" && -n "$fetch_line" && -n "$classify_line" ]] || return 1
+	((status_line < fetch_line && fetch_line < classify_line))
 }
 
 test_only_confirmed_behind_pulls() {
@@ -139,6 +197,36 @@ test_cmd_update_executes_outcome_contract() (
 	grep -Fq "wait" "$events" || return 1
 	grep -Fq "relaunch:${DOTFILES_DIR}/install.sh|dotfiles" "$events" || return 1
 	! grep -Fq downstream "$events"
+)
+
+test_cmd_update_reports_dirty_paths_and_remote_state_before_stopping() (
+	repo_update_gate() {
+		REPO_UPDATE_OUTCOME=stopped
+		REPO_UPDATE_REASON=dirty
+		REPO_UPDATE_STATE=behind
+		REPO_UPDATE_AHEAD=0
+		REPO_UPDATE_BEHIND=3
+		REPO_UPDATE_DIRTY=1
+		REPO_UPDATE_UPSTREAM=origin/main
+		REPO_UPDATE_CHANGES=$' M scripts/example.sh\n?? local-change'
+	}
+	local output rc
+	set +e; output="$(cmd_update 2>&1)"; rc=$?; set -e
+	[[ "$rc" -ne 0 && "$output" == *'Repository update'* ]] || return 1
+	[[ "$output" == *'2 local change(s)'* && "$output" == *'blocked'* ]] || return 1
+	[[ "$output" == *'origin/main'* && "$output" == *'3 commit(s) behind'* ]] || return 1
+	[[ "$output" == *' M scripts/example.sh'* && "$output" == *'?? local-change'* ]] || return 1
+	[[ "$output" == *'Repository pull and downstream updates stopped.'* ]]
+)
+
+test_dirty_change_report_is_bounded_and_copyable() (
+	local i output status_lines='' printed
+	for i in $(seq 1 22); do status_lines+="?? path-${i}"$'\n'; done
+	REPO_UPDATE_CHANGES="${status_lines%$'\n'}"
+	output="$(_print_repo_update_changes)"
+	printed="$(grep -c '^  ?? path-' <<<"$output")"
+	[[ "$printed" -eq 20 && "$output" == *'... 2 more local change(s)'* ]] || return 1
+	[[ "$output" == *'git -C '* && "$output" == *' status --short --untracked-files=all'* ]]
 )
 
 test_downstream_executes_apt_first_and_all_matrix() (
@@ -737,6 +825,10 @@ REPO_UPDATE_OUTCOME="${REPO_UPDATE_OUTCOME:-missing}"
 declare -F repo_update_gate >/dev/null || repo_update_gate() { REPO_UPDATE_OUTCOME=missing; return 1; }
 declare -F repo_update_relaunch >/dev/null || repo_update_relaunch() { return 1; }
 expect_success 'repository state table returns stable outcomes' test_state_table_outcomes
+expect_success 'dirty current ahead behind and diverged states fetch classify and stop' test_dirty_history_matrix_fetches_classifies_and_stops
+expect_success 'dirty fetch failure preserves paths and marks freshness unknown' test_dirty_fetch_failure_preserves_changes_and_unknown_freshness
+expect_success 'failed local status probe stops before fetch' test_status_failure_stops_before_fetch
+expect_success 'repository checks run status before fetch before classification' test_git_sequence_captures_changes_before_fetch_and_classification
 expect_success 'only clean strictly-behind confirmed state pulls ff-only once' test_only_confirmed_behind_pulls
 expect_success 'blocked declined and failed states never reach downstream' test_blocked_states_never_pull
 expect_success 'non-origin upstream stops before fetch or pull' test_non_origin_upstream_stops_before_fetch
@@ -744,6 +836,8 @@ expect_success 'ahead never pulls and requires explicit continue confirmation' t
 expect_success 'successful pull requires relaunch and stops old-process work' test_success_requires_relaunch_without_old_work
 expect_success 'relaunch wrapper is injectable without a fake exec command' test_relaunch_is_injectable
 expect_success 'cmd_update executes stopped current ahead and relaunch outcomes' test_cmd_update_executes_outcome_contract
+expect_success 'cmd_update reports dirty paths and verified remote state before stopping' test_cmd_update_reports_dirty_paths_and_remote_state_before_stopping
+expect_success 'dirty path report is bounded and includes a copyable full-list command' test_dirty_change_report_is_bounded_and_copyable
 expect_success 'downstream execution runs apt refresh first and honors --all' test_downstream_executes_apt_first_and_all_matrix
 expect_success 'Node.js probe follows nvm default instead of a stale shell PATH' test_node_probe_uses_nvm_default_when_shell_path_is_stale
 expect_success 'npm probe reports upgrade current and missing states' test_npm_probe_reports_upgrade_current_and_missing_states

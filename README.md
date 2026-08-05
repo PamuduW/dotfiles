@@ -256,13 +256,21 @@ already-enabled Agentbot integration: run `agentbot graphify setup` or
 otherwise remain temporarily out of sync; Dotfiles never calls Agentbot or
 enables the skill automatically.
 
-The interactive Update action clears the menu before starting. It checks the
-repository first; an available pull is shown in a colored repository table and
-requires confirmation. After a pull, press Enter to restart `install.sh` from
-the updated checkout. When the repository is current, Update shows the full
-colored installed/available/action report, asks whether to upgrade, then asks
-whether to include the Node.js, npm, Go, and Monaspace opt-ins. It finishes with a
-colored result table and returns to the menu after Enter.
+The interactive Update action clears the menu before starting. It validates the
+repository and upstream, captures local changes, fetches `origin`, and then
+classifies the verified ahead/behind state. Any tracked or untracked local
+change stops both the repository pull and every downstream update, even when
+the fetched upstream is current. The stopped report shows the verified remote
+state and up to 20 changed paths, plus a copyable command for the complete
+list.
+
+For a clean repository, an available pull is shown in a colored repository
+table and requires confirmation. After a pull, press Enter to restart
+`install.sh` from the updated checkout. When the repository is current, Update
+shows the full colored installed/available/action report, asks whether to
+upgrade, then asks whether to include the Node.js, npm, Go, and Monaspace
+opt-ins. It finishes with a colored result table and returns to the menu after
+Enter.
 
 npm remains opt-in under `dotfiles update --all`. The updater captures one
 exact registry target, asks NVM for the latest compatible npm, and then checks
