@@ -87,8 +87,8 @@ configure_wsl() {
 	log_ok "WSL config updated (restart WSL to apply: wsl --shutdown)"
 }
 
-configure_git_credential_helper() {
-	local gcm_path=""
+find_windows_git_credential_manager() {
+	local path
 	local -a candidates=(
 		"/mnt/c/Program Files/Git/mingw64/bin/git-credential-manager.exe"
 		"/mnt/c/Program Files (x86)/Git/mingw64/bin/git-credential-manager.exe"
@@ -97,17 +97,29 @@ configure_git_credential_helper() {
 
 	for path in "${candidates[@]}"; do
 		if [[ -f "$path" ]]; then
-			gcm_path="$path"
-			break
+			printf '%s\n' "$path"
+			return 0
 		fi
 	done
+	return 1
+}
 
-	if [[ -n "$gcm_path" ]]; then
-		git config --global credential.helper "$gcm_path"
+configure_git_submodule_defaults() {
+	git config --global submodule.recurse true
+	git config --global fetch.recurseSubmodules on-demand
+	git config --global status.submoduleSummary true
+	log_ok "Git submodule defaults: recurse, on-demand fetch, status summary"
+}
+
+configure_git_settings() {
+	local gcm_path=''
+	configure_git_submodule_defaults || return 1
+	if gcm_path="$(find_windows_git_credential_manager)"; then
+		git config --global credential.helper "$gcm_path" || return 1
 		log_ok "Git credential helper: $gcm_path"
 	else
 		log_warn "Windows Git Credential Manager not found"
-		echo "    Install Git for Windows, then re-run or set manually."
+		echo "    Submodule defaults were configured; the existing credential helper was unchanged."
 	fi
 }
 

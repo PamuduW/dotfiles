@@ -138,8 +138,8 @@ _comp_plan_wsl_conf() {
 
 _comp_plan_git_credential() {
 	is_on git_credential \
-		&& ui_print_plan_row "Git credential" "Windows Credential Manager" 1 \
-		|| ui_print_plan_row "Git credential" "skip" 0
+		&& ui_print_plan_row "Git config" "GCM + recursive submodule defaults" 1 \
+		|| ui_print_plan_row "Git config" "skip" 0
 }
 
 show_plan() {

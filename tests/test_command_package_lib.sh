@@ -255,6 +255,13 @@ test_component_registry_has_exact_21_with_graphify() {
 		[[ -n "${COMP_LABELS[$i]}" ]] || return 1
 		comp_description "${COMP_KEYS[$i]}" >/dev/null || return 1
 	done
+	local git_config_idx description
+	git_config_idx="$(comp_key_index git_credential)" || return 1
+	[[ "${COMP_LABELS[$git_config_idx]}" == 'Git config (credentials + submodules)' ]] || return 1
+	description="$(comp_description git_credential)"
+	for setting in credential.helper submodule.recurse fetch.recurseSubmodules status.submoduleSummary; do
+		[[ "$description" == *"$setting"* ]] || return 1
+	done
 }
 
 test_graphify_component_is_default_off_and_depends_on_python() {

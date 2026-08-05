@@ -104,8 +104,8 @@ _comp_desc_wsl_conf() {
 }
 
 _comp_desc_git_credential() {
-	echo "Configures git to use Windows Git Credential Manager for HTTPS auth."
-	echo "Searches common install paths for git-credential-manager.exe."
+	echo "Sets credential.helper to Windows GCM for HTTPS when available."
+	echo "Sets submodule.recurse, fetch.recurseSubmodules, and status.submoduleSummary."
 }
 
 _comp_menu_desc_fn() {

@@ -234,12 +234,17 @@ _comp_probe_wsl_conf() {
 }
 
 _comp_probe_git_credential() {
-	local gcm
-	gcm="$(git config --global credential.helper 2>/dev/null || true)"
-	if [[ -n "$gcm" ]]; then
-		printf 'configured|%s\n' "$gcm"
+	local helper recurse fetch summary
+	helper="$(git config --global --get-all credential.helper 2>/dev/null || true)"
+	recurse="$(git config --global --get submodule.recurse 2>/dev/null || true)"
+	fetch="$(git config --global --get fetch.recurseSubmodules 2>/dev/null || true)"
+	summary="$(git config --global --get status.submoduleSummary 2>/dev/null || true)"
+	if [[ -n "$helper" && "$recurse" == true && "$fetch" == on-demand && "$summary" == true ]]; then
+		printf 'configured|credential helper + recursive submodule defaults\n'
+	elif [[ -z "$helper" && "$recurse" == true && "$fetch" == on-demand && "$summary" == true ]]; then
+		printf 'check|submodule defaults set; credential helper not configured\n'
 	else
-		printf 'skipped|no global credential.helper\n'
+		printf 'check|Git configuration incomplete\n'
 	fi
 }
 

@@ -48,7 +48,7 @@ _comp_install_wsl_conf() {
 }
 
 _comp_install_git_credential() {
-	configure_git_credential_helper
+	configure_git_settings
 }
 
 _comp_install_docker() {

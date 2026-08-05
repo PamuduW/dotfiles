@@ -47,7 +47,7 @@ COMP_LABELS=(
 	"Generate SSH key"
 	"Apply dotfiles (stow)"
 	"WSL config (systemd, appendWindowsPath)"
-	"Git credential helper (Windows)"
+	"Git config (credentials + submodules)"
 )
 
 # Dependency: index of required component, -1 = none

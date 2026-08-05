@@ -14,7 +14,7 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 - Optional Graphify CLI (`graphifyy` through `uv`; default-off)
 - AI CLI tools: Cursor, Codex, Claude, Copilot (updated through the explicit `dotfiles update` workflow)
 - SSH key generation with GitHub setup notes
-- WSL-specific config: systemd, Windows PATH interop (`appendWindowsPath=true`), Git credential helper, clipboard helper
+- WSL-specific config: systemd, Windows PATH interop (`appendWindowsPath=true`), Git credentials and recursive-submodule defaults, clipboard helper
 
 **Bonus:** See [WSL_COMMANDS.md](WSL_COMMANDS.md) for a guide to managing WSL instances.
 
@@ -160,7 +160,7 @@ When you choose **Run setup** interactively (TTY), the installer will:
 | SSH key         | ed25519 key + GitHub setup notes in `~/.ssh/github-setup.txt`                 |
 | Dotfiles        | Stow bash, bin, readline into `$HOME`                                         |
 | WSL config      | `systemd=true`, `appendWindowsPath=true` in `/etc/wsl.conf`                   |
-| Git credential  | Windows Credential Manager for HTTPS auth                                     |
+| Git config (credentials + submodules) | Windows GCM for HTTPS when available; recursive checkout/fetch/status defaults |
 
 Dependencies are enforced automatically (e.g., disabling Docker also disables Portainer).
 
@@ -173,8 +173,31 @@ missing, the component may install it through Astral's official installer.
 
 Dotfiles owns only this CLI component. It does not install Graphify's
 assistant skill or edit project `AGENTS.md`, Cursor rules, hooks, or graph data.
-After selecting the component, use Agentbot's explicit `agentbot graphify setup`
-to install the generic Agent Skills copy.
+After selecting the component, main Agentbot Install and Update synchronize the
+generic Agent Skills copy automatically. Direct `agentbot graphify status` and
+`agentbot graphify setup` remain available for inspection and repair.
+
+### Git config (credentials + submodules)
+
+This component always writes these idempotent global Git defaults:
+
+```bash
+git config --global submodule.recurse true
+git config --global fetch.recurseSubmodules on-demand
+git config --global status.submoduleSummary true
+```
+
+They make supported Git commands recurse into initialized submodules, fetch
+changed populated submodules on demand, and show changed-submodule commit
+summaries in long `git status` output. They affect real Git submodules only,
+not unrelated sibling repositories.
+
+When Git for Windows provides `git-credential-manager.exe`, the same component
+sets it as WSL Git's `credential.helper` for HTTPS authentication and Windows
+credential storage. If GCM is unavailable, the submodule defaults still apply
+and any existing credential helper remains unchanged. SSH remotes do not use
+this credential helper. The stable component key remains `git_credential` for
+existing `DOTFILES_COMPONENTS` automation.
 
 **Multi-identity git setups**: If your `~/.gitconfig` uses `includeIf` for per-directory identities, the installer detects this and defaults "Git identity" to OFF so it won't overwrite your configuration.
 
