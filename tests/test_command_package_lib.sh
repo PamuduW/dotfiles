@@ -266,17 +266,17 @@ test_graphify_component_is_default_off_and_depends_on_python() {
 	[[ "${COMP_ON[graphify_cli]:-}" -eq 0 ]] || return 1
 }
 
-test_package_metadata_has_exact_28_with_descriptions() {
+test_package_metadata_has_exact_29_with_descriptions() {
 	declare -F package_metadata_load >/dev/null || return 1
 	package_metadata_load "$PKG_FILE" || return 1
-	[[ "${#PACKAGE_LIB_NAMES[@]}" -eq 28 ]] || return 1
+	[[ "${#PACKAGE_LIB_NAMES[@]}" -eq 29 ]] || return 1
 	local expected=(
 		git curl ca-certificates bash-completion bubblewrap stow shellcheck shfmt tree
 		python3 python3-pip python3-venv
-		duf ripgrep fd-find fzf zoxide eza moreutils
+		duf ripgrep fd-find fzf zoxide eza jq moreutils
 		lshw mtr-tiny glances lsof wslu rsync unp poppler-utils magic-wormhole
 	)
-	local -A expected_counts=([core]=9 [python]=3 [cli]=7 [system]=9)
+	local -A expected_counts=([core]=9 [python]=3 [cli]=8 [system]=9)
 	local -A actual_counts=()
 	local -A seen=()
 	local i name tag description
@@ -313,7 +313,7 @@ test_package_lib_components_are_metadata_only() (
 	[[ ! -s "$TEST_COMMAND_LOG" && ! -s "$TEST_URL_LOG" ]]
 )
 
-test_package_pages_cover_all_28_once() {
+test_package_pages_cover_all_29_once() {
 	declare -F package_lib_render_packages_page >/dev/null || return 1
 	package_metadata_load "$PKG_FILE" || return 1
 	local output="$TEST_HARNESS_ROOT/package-pages.output"
@@ -371,9 +371,9 @@ expect_success 'topic headers use the orange palette' test_topic_headers_use_ora
 expect_success 'table column headers remain bold white' test_table_column_headers_are_bold_white
 expect_success 'component registry exposes the exact 21 described component IDs' test_component_registry_has_exact_21_with_graphify
 expect_success 'Graphify is default-off and depends on Python' test_graphify_component_is_default_off_and_depends_on_python
-expect_success 'package metadata contains 28 unique described names in 9/3/7/9 tags' test_package_metadata_has_exact_28_with_descriptions
+expect_success 'package metadata contains 29 unique described names in 9/3/8/9 tags' test_package_metadata_has_exact_29_with_descriptions
 expect_success 'Package Lib renders all 21 components without probes or side effects' test_package_lib_components_are_metadata_only
-expect_success 'System package pages cover all 28 names exactly once' test_package_pages_cover_all_28_once
+expect_success 'System package pages cover all 29 names exactly once' test_package_pages_cover_all_29_once
 expect_success 'Package Lib opens the system package table directly' test_package_menu_opens_system_packages_directly
 expect_success 'Command and Package Lib narrow rendering remains bounded' test_narrow_reports_remain_bounded
 

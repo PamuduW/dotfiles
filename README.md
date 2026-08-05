@@ -208,7 +208,7 @@ Global command (stowed to `~/bin/dotfiles`, on PATH like `ex` and `clip`):
 | `dotfiles` | On a TTY, opens the boot menu; otherwise prints help |
 | `dotfiles menu` | Boot menu (same as `./install.sh`) |
 | `dotfiles update` | **Apply after confirmation** — repo-first gate, then apt/CLI/tool changes |
-| `dotfiles update --all` | Same as `update`, plus opt-in **Node.js**, **Go**, and **Monaspace** fonts |
+| `dotfiles update --all` | Same as `update`, plus opt-in **Node.js**, **npm**, **Go**, and **Monaspace** fonts |
 | `dotfiles status` | Local installed versions + repo state; no fetch or apt refresh |
 | `dotfiles commands` | Read-only full command, option, configuration, and integration reference |
 | `dotfiles packages` | Read-only component/package catalog |
@@ -227,14 +227,27 @@ the installed `graphify` command is owned by the `graphifyy` tool. An external
 or otherwise unproven Graphify installation is preserved and reported as
 externally managed; update it through its own owner instead. Dotfiles does not
 run any Graphify assistant installer during install or update.
+After a successful CLI upgrade, Dotfiles prints a non-mutating handoff for an
+already-enabled Agentbot integration: run `agentbot graphify setup` or
+`agentbot update` to refresh the installed skill version. The CLI and skill may
+otherwise remain temporarily out of sync; Dotfiles never calls Agentbot or
+enables the skill automatically.
 
 The interactive Update action clears the menu before starting. It checks the
 repository first; an available pull is shown in a colored repository table and
 requires confirmation. After a pull, press Enter to restart `install.sh` from
 the updated checkout. When the repository is current, Update shows the full
 colored installed/available/action report, asks whether to upgrade, then asks
-whether to include the Node.js, Go, and Monaspace opt-ins. It finishes with a
+whether to include the Node.js, npm, Go, and Monaspace opt-ins. It finishes with a
 colored result table and returns to the menu after Enter.
+
+npm remains opt-in under `dotfiles update --all`. The updater captures one
+exact registry target, asks NVM for the latest compatible npm, and then checks
+the installed version instead of trusting command output or exit status. If
+NVM does not reach the target, Dotfiles retries that exact version with
+command-local `--engine-strict --allow-remote=all` settings and verifies again.
+A still-old npm is reported as a failed step with a copyable retry command.
+Dotfiles never writes this remote-package policy to an npmrc file.
 
 ### Agentbot — `agent_bootstrap`
 
@@ -331,7 +344,8 @@ Apply the repo-first update workflow (the downstream plan is confirmed before mu
 dotfiles update
 ```
 
-Include opt-in runtime/font upgrades (Node.js via nvm, Go via asdf, Monaspace):
+Include opt-in runtime/font upgrades (Node.js and npm via nvm, Go via asdf,
+Monaspace):
 
 ```bash
 dotfiles update --all

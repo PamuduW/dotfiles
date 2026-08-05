@@ -608,13 +608,55 @@ check_npm() {
 	[[ $upgradable -eq 1 ]]
 }
 
+npm_version_token_is_safe() {
+	[[ "${1:-}" =~ ^[0-9]+(\.[0-9]+){2}([+-][0-9A-Za-z.-]+)?$ ]]
+}
+
+npm_version_reached() {
+	local target="${1:-}" observed
+	npm_version_token_is_safe "$target" || return 1
+	observed="$(npm_installed_version)"
+	[[ "$observed" != "$NOT_INSTALLED" ]] || return 1
+	npm_version_token_is_safe "$observed" || return 1
+	[[ "$observed" == "$target" ]] || _version_gt "$observed" "$target"
+}
+
 upgrade_npm() {
+	local target="${1:-}" nvm_rc=0 fallback_rc=0
 	_load_nvm
 	if ! command -v nvm >/dev/null 2>&1; then
 		_msg "  nvm not installed, skipping npm upgrade"
 		return 0
 	fi
-	nvm install-latest-npm
+	if [[ "$(npm_installed_version)" == "$NOT_INSTALLED" ]]; then
+		_msg "  npm not installed for the active Node version, skipping"
+		return 0
+	fi
+	if ! npm_version_token_is_safe "$target"; then
+		_warn "  npm target is unavailable or invalid; refusing an unpinned upgrade"
+		return 1
+	fi
+	if npm_version_reached "$target"; then
+		_msg "  npm is already at the target version $target"
+		return 0
+	fi
+
+	nvm install-latest-npm || nvm_rc=$?
+	hash -r
+	if npm_version_reached "$target"; then
+		_msg "  npm verified at $(npm_installed_version)"
+		return 0
+	fi
+
+	_warn "  nvm did not reach npm $target (exit $nvm_rc); trying the pinned fallback"
+	npm install -g "npm@$target" --engine-strict --allow-remote=all || fallback_rc=$?
+	hash -r
+	if [[ $fallback_rc -ne 0 ]] || ! npm_version_reached "$target"; then
+		_warn "  npm remains at $(npm_installed_version); expected at least $target"
+		[[ $fallback_rc -ne 0 ]] && return "$fallback_rc"
+		return 1
+	fi
+	_msg "  npm verified at $(npm_installed_version)"
 }
 
 # --- Go (asdf) — opt-in ---
@@ -1199,7 +1241,7 @@ _update_apt_packages() {
 }
 
 _run_update_downstream() {
-	local upgrade_all=false apt_refresh_rc=0
+	local upgrade_all=false apt_refresh_rc=0 npm_target='' npm_retry='nvm install-latest-npm'
 	[[ "${1:-}" == true ]] && upgrade_all=true
 	UPGRADE_STEP_RESULT=()
 	if command -v apt-get >/dev/null 2>&1; then
@@ -1221,7 +1263,11 @@ _run_update_downstream() {
 
 	if [[ $upgrade_all == true ]]; then
 		_run_upgrade_step "Node.js (nvm)" "nvm install --lts" upgrade_node
-		_run_upgrade_step "npm" "nvm install-latest-npm" upgrade_npm
+		npm_target="$(npm_available_version)"
+		if npm_version_token_is_safe "$npm_target"; then
+			npm_retry="npm install -g npm@${npm_target} --engine-strict --allow-remote=all"
+		fi
+		_run_upgrade_step "npm" "$npm_retry" upgrade_npm "$npm_target"
 		_run_upgrade_step "Go (asdf)" "asdf install golang latest" upgrade_go
 		_run_upgrade_step "Monaspace fonts" "dotfiles update --all" upgrade_monaspace
 	else

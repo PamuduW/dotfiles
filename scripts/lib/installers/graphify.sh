@@ -63,7 +63,10 @@ upgrade_graphify_cli() {
 		return 0
 	fi
 	uv_cmd="$(graphify_uv_command)" || return 1
-	"$uv_cmd" tool upgrade graphifyy
+	"$uv_cmd" tool upgrade graphifyy || return $?
+	printf '%s\n' \
+		"  If Agentbot's Graphify integration is enabled, run agentbot graphify setup" \
+		"  or agentbot update to refresh the installed skill."
 }
 
 ensure_graphify_uv() {

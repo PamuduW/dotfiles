@@ -21,6 +21,10 @@ test_install_missing_graphify_uses_official_package() (
 	: >"$calls"
 	PATH="$HOME/.local/bin:$PATH"
 	export PATH
+	graphify_command() {
+		[[ -x "$HOME/.local/bin/graphify" ]] || return 1
+		printf '%s\n' "$HOME/.local/bin/graphify"
+	}
 	uv() {
 		printf 'uv:%s\n' "$*" >>"$calls"
 		case "$*" in
@@ -66,7 +70,10 @@ test_install_existing_uv_graphify_is_idempotent() (
 test_missing_uv_uses_official_astral_installer() (
 	local calls="$TEST_HARNESS_ROOT/uv-bootstrap.calls"
 	: >"$calls"
-	unset -f uv 2>/dev/null || true
+	graphify_uv_command() {
+		[[ -x "$HOME/.local/bin/uv" ]] || return 1
+		printf '%s\n' "$HOME/.local/bin/uv"
+	}
 	curl() {
 		printf 'curl:%s\n' "$*" >>"$calls"
 		printf '%s\n' \

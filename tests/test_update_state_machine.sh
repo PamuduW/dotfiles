@@ -145,21 +145,25 @@ test_downstream_executes_apt_first_and_all_matrix() (
 	local events="$TEST_HARNESS_ROOT/downstream.events"
 	: >"$events"
 	sudo() { printf 'sudo:%s\n' "$*" >>"$events"; }
-	_run_upgrade_step() { printf 'step:%s\n' "$1" >>"$events"; UPGRADE_STEP_RESULT["$1"]=ok; }
+	npm_available_version() { printf '12.0.2\n'; }
+	_run_upgrade_step() {
+		printf 'step:%s|%s|%s|%s\n' "$1" "$2" "$3" "${4:-}" >>"$events"
+		UPGRADE_STEP_RESULT["$1"]=ok
+	}
 
 	_run_update_downstream false >/dev/null || return 1
 	[[ "$(sed -n '1p' "$events")" == 'sudo:apt-get update -qq' ]] || return 1
-	grep -Fq 'step:apt packages' "$events" || return 1
-	! grep -Eq 'step:(Node.js \(nvm\)|npm|Go \(asdf\)|Monaspace fonts)' "$events" || return 1
+	grep -Fq 'step:apt packages|' "$events" || return 1
+	! grep -Eq 'step:(Node.js \(nvm\)|npm|Go \(asdf\)|Monaspace fonts)\|' "$events" || return 1
 
 	: >"$events"
 	_run_update_downstream true >/dev/null || return 1
 	[[ "$(sed -n '1p' "$events")" == 'sudo:apt-get update -qq' ]] || return 1
-	grep -Fq 'step:Graphify CLI' "$events" || return 1
-	grep -Fq 'step:Node.js (nvm)' "$events" || return 1
-	grep -Fq 'step:npm' "$events" || return 1
-	grep -Fq 'step:Go (asdf)' "$events" || return 1
-	grep -Fq 'step:Monaspace fonts' "$events"
+	grep -Fq 'step:Graphify CLI|' "$events" || return 1
+	grep -Fq 'step:Node.js (nvm)|' "$events" || return 1
+	grep -Fqx 'step:npm|npm install -g npm@12.0.2 --engine-strict --allow-remote=all|upgrade_npm|12.0.2' "$events" || return 1
+	grep -Fq 'step:Go (asdf)|' "$events" || return 1
+	grep -Fq 'step:Monaspace fonts|' "$events"
 )
 
 test_node_probe_uses_nvm_default_when_shell_path_is_stale() (
@@ -205,14 +209,136 @@ test_npm_probe_reports_upgrade_current_and_missing_states() (
 	[[ "$output" == 'npm|not installed|—|skip' ]]
 )
 
-test_npm_upgrade_uses_nvm_latest_compatible_release() (
-	local calls="$TEST_HARNESS_ROOT/npm-upgrade.calls"
+test_npm_version_reached_requires_a_safe_equal_or_newer_version() (
+	local installed=12.0.2
+	npm_installed_version() { printf '%s\n' "$installed"; }
+
+	npm_version_reached 12.0.2 || return 1
+	installed=12.1.0
+	npm_version_reached 12.0.2 || return 1
+	installed=12.0.1
+	! npm_version_reached 12.0.2 || return 1
+	installed="$NOT_INSTALLED"
+	! npm_version_reached 12.0.2 || return 1
+	installed=garbage
+	! npm_version_reached 12.0.2 || return 1
+	! npm_version_reached 'latest;touch /tmp/nope'
+)
+
+test_npm_upgrade_accepts_verified_nvm_result() (
+	local installed=12.0.1 calls="$TEST_HARNESS_ROOT/npm-nvm-success.calls"
 	: >"$calls"
 	_load_nvm() { :; }
-	nvm() { printf 'nvm:%s\n' "$*" >>"$calls"; }
+	npm() {
+		case "$*" in
+		--version) printf '%s\n' "$installed" ;;
+		*) printf 'npm:%s\n' "$*" >>"$calls"; return 97 ;;
+		esac
+	}
+	nvm() { printf 'nvm:%s\n' "$*" >>"$calls"; installed=12.0.2; }
 
-	upgrade_npm
-	grep -Fqx 'nvm:install-latest-npm' "$calls"
+	upgrade_npm 12.0.2 || return 1
+	grep -Fqx 'nvm:install-latest-npm' "$calls" || return 1
+	! grep -Fq 'npm:install' "$calls"
+)
+
+test_npm_upgrade_falls_back_after_false_nvm_success() (
+	local installed=12.0.1 calls="$TEST_HARNESS_ROOT/npm-false-success.calls"
+	: >"$calls"
+	_load_nvm() { :; }
+	nvm() { printf 'nvm:%s\n' "$*" >>"$calls"; return 0; }
+	npm() {
+		case "$*" in
+		--version) printf '%s\n' "$installed" ;;
+		'install -g npm@12.0.2 --engine-strict --allow-remote=all')
+			printf 'npm:%s\n' "$*" >>"$calls"
+			installed=12.0.2
+			;;
+		*) return 97 ;;
+		esac
+	}
+
+	upgrade_npm 12.0.2 || return 1
+	grep -Fqx 'npm:install -g npm@12.0.2 --engine-strict --allow-remote=all' "$calls"
+)
+
+test_npm_upgrade_fallback_can_recover_from_nvm_failure() (
+	local installed=12.0.1
+	_load_nvm() { :; }
+	nvm() { return 23; }
+	npm() {
+		case "$*" in
+		--version) printf '%s\n' "$installed" ;;
+		'install -g npm@12.0.2 --engine-strict --allow-remote=all') installed=12.0.2 ;;
+		*) return 97 ;;
+		esac
+	}
+
+	upgrade_npm 12.0.2
+)
+
+test_npm_upgrade_fails_when_fallback_command_fails() (
+	local installed=12.0.1
+	_load_nvm() { :; }
+	nvm() { return 0; }
+	npm() {
+		case "$*" in
+		--version) printf '%s\n' "$installed" ;;
+		'install -g npm@12.0.2 --engine-strict --allow-remote=all') return 24 ;;
+		*) return 97 ;;
+		esac
+	}
+
+	if upgrade_npm 12.0.2; then return 1; fi
+)
+
+test_npm_upgrade_fails_when_fallback_leaves_old_version() (
+	local installed=12.0.1
+	_load_nvm() { :; }
+	nvm() { return 0; }
+	npm() {
+		case "$*" in
+		--version) printf '%s\n' "$installed" ;;
+		'install -g npm@12.0.2 --engine-strict --allow-remote=all') return 0 ;;
+		*) return 97 ;;
+		esac
+	}
+
+	if upgrade_npm 12.0.2; then return 1; fi
+)
+
+test_npm_upgrade_skips_commands_when_already_current() (
+	local installed=12.0.2 calls="$TEST_HARNESS_ROOT/npm-current.calls"
+	: >"$calls"
+	_load_nvm() { :; }
+	nvm() { printf 'nvm:%s\n' "$*" >>"$calls"; return 97; }
+	npm() {
+		case "$*" in
+		--version) printf '%s\n' "$installed" ;;
+		*) printf 'npm:%s\n' "$*" >>"$calls"; return 97 ;;
+		esac
+	}
+
+	upgrade_npm 12.0.2 || return 1
+	[[ ! -s "$calls" ]]
+)
+
+test_npm_failed_postcheck_sets_retryable_failed_step() (
+	local installed=12.0.1 output="$TEST_HARNESS_ROOT/npm-failed-step.output"
+	_load_nvm() { :; }
+	nvm() { return 0; }
+	npm() {
+		case "$*" in
+		--version) printf '%s\n' "$installed" ;;
+		'install -g npm@12.0.2 --engine-strict --allow-remote=all') return 0 ;;
+		*) return 97 ;;
+		esac
+	}
+	C_BOLD='' C_YELLOW='' C_RED=$'\033[31m' C_RESET=$'\033[0m'
+
+	_run_upgrade_step 'npm' 'npm install -g npm@12.0.2 --engine-strict --allow-remote=all' upgrade_npm 12.0.2 >"$output" 2>&1
+	[[ "${UPGRADE_STEP_RESULT[npm]}" == failed ]] || return 1
+	grep -Fq 'retry manually: npm install -g npm@12.0.2 --engine-strict --allow-remote=all' "$output"
 )
 
 test_unverifiable_cli_probes_label_latest_unchecked() (
@@ -250,15 +376,16 @@ test_graphify_probe_reports_uv_owned_and_external_states() (
 
 test_graphify_probe_skips_when_not_installed() (
 	local output
-	unset -f graphify 2>/dev/null || true
+	graphify_command() { return 1; }
 	output="$(check_graphify_cli || true)"
 	[[ "$output" == 'Graphify CLI|not installed|—|skip' ]]
 )
 
 test_graphify_upgrade_uses_uv_tool_upgrade() (
-	local calls="$TEST_HARNESS_ROOT/graphify-upgrade.calls"
+	local output calls="$TEST_HARNESS_ROOT/graphify-upgrade.calls"
 	: >"$calls"
 	graphify() { [[ "$1" == --version ]] && printf 'graphify 1.2.3\n'; }
+	agentbot() { printf 'agentbot:%s\n' "$*" >>"$calls"; return 97; }
 	uv() {
 		printf 'uv:%s\n' "$*" >>"$calls"
 		case "$*" in
@@ -267,8 +394,11 @@ test_graphify_upgrade_uses_uv_tool_upgrade() (
 		*) return 97 ;;
 		esac
 	}
-	upgrade_graphify_cli
-	grep -Fqx 'uv:tool upgrade graphifyy' "$calls"
+	output="$(upgrade_graphify_cli)" || return 1
+	grep -Fqx 'uv:tool upgrade graphifyy' "$calls" || return 1
+	! grep -Fq 'agentbot:' "$calls" || return 1
+	grep -Fq "If Agentbot's Graphify integration is enabled, run agentbot graphify setup" <<<"$output" || return 1
+	grep -Fq 'or agentbot update to refresh the installed skill.' <<<"$output"
 )
 
 test_graphify_upgrade_failure_has_copyable_retry_command() (
@@ -286,7 +416,8 @@ test_graphify_upgrade_failure_has_copyable_retry_command() (
 	C_RED=$'\033[31m' C_RESET=$'\033[0m'
 	output="$(_run_upgrade_step 'Graphify CLI' 'uv tool upgrade graphifyy' upgrade_graphify_cli 2>&1)"
 	grep -Fqx 'uv:tool upgrade graphifyy' "$calls"
-	grep -Fq 'retry manually: uv tool upgrade graphifyy' <<<"$output"
+	grep -Fq 'retry manually: uv tool upgrade graphifyy' <<<"$output" || return 1
+	! grep -Fq "Agentbot's Graphify integration" <<<"$output"
 )
 
 test_upgrade_step_marks_failures_in_red_with_retry_command() (
@@ -616,7 +747,14 @@ expect_success 'cmd_update executes stopped current ahead and relaunch outcomes'
 expect_success 'downstream execution runs apt refresh first and honors --all' test_downstream_executes_apt_first_and_all_matrix
 expect_success 'Node.js probe follows nvm default instead of a stale shell PATH' test_node_probe_uses_nvm_default_when_shell_path_is_stale
 expect_success 'npm probe reports upgrade current and missing states' test_npm_probe_reports_upgrade_current_and_missing_states
-expect_success 'npm upgrade uses nvm latest compatible release' test_npm_upgrade_uses_nvm_latest_compatible_release
+expect_success 'npm version verification accepts only safe equal or newer versions' test_npm_version_reached_requires_a_safe_equal_or_newer_version
+expect_success 'npm upgrade accepts a verified NVM result' test_npm_upgrade_accepts_verified_nvm_result
+expect_success 'npm upgrade uses the exact fallback after false NVM success' test_npm_upgrade_falls_back_after_false_nvm_success
+expect_success 'npm fallback can recover from NVM failure' test_npm_upgrade_fallback_can_recover_from_nvm_failure
+expect_success 'npm upgrade fails when the fallback command fails' test_npm_upgrade_fails_when_fallback_command_fails
+expect_success 'npm upgrade fails when fallback leaves the old version installed' test_npm_upgrade_fails_when_fallback_leaves_old_version
+expect_success 'npm upgrade skips NVM and npm install when already current' test_npm_upgrade_skips_commands_when_already_current
+expect_success 'npm failed post-check records a copyable failed step' test_npm_failed_postcheck_sets_retryable_failed_step
 expect_success 'unverifiable CLI probes label latest freshness unchecked' test_unverifiable_cli_probes_label_latest_unchecked
 expect_success 'Graphify update probe distinguishes uv-owned and external installs' test_graphify_probe_reports_uv_owned_and_external_states
 expect_success 'Graphify update probe skips an absent CLI' test_graphify_probe_skips_when_not_installed
