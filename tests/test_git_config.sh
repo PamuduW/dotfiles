@@ -33,6 +33,7 @@ test_submodule_defaults_are_configured_without_gcm() (
 
 	[[ "$(git config --global --get submodule.recurse)" == true ]] || return 1
 	[[ "$(git config --global --get fetch.recurseSubmodules)" == on-demand ]] || return 1
+	[[ "$(git config --global --get push.recurseSubmodules)" == check ]] || return 1
 	[[ "$(git config --global --get status.submoduleSummary)" == true ]] || return 1
 	[[ -z "$(git config --global --get-all credential.helper || true)" ]]
 )
@@ -59,6 +60,7 @@ test_detected_gcm_and_submodule_defaults_are_all_configured() (
 		'/mnt/c/Program Files/Git/mingw64/bin/git-credential-manager.exe' ]] || return 1
 	[[ "$(git config --global --get submodule.recurse)" == true ]] || return 1
 	[[ "$(git config --global --get fetch.recurseSubmodules)" == on-demand ]] || return 1
+	[[ "$(git config --global --get push.recurseSubmodules)" == check ]] || return 1
 	[[ "$(git config --global --get status.submoduleSummary)" == true ]]
 )
 
@@ -67,6 +69,7 @@ test_probe_distinguishes_complete_partial_and_incomplete_configuration() (
 	git config --global credential.helper libsecret
 	git config --global submodule.recurse true
 	git config --global fetch.recurseSubmodules on-demand
+	git config --global push.recurseSubmodules check
 	git config --global status.submoduleSummary true
 	[[ "$(_comp_probe_git_credential)" == \
 		'configured|credential helper + recursive submodule defaults' ]] || return 1

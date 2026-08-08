@@ -107,8 +107,9 @@ find_windows_git_credential_manager() {
 configure_git_submodule_defaults() {
 	git config --global submodule.recurse true
 	git config --global fetch.recurseSubmodules on-demand
+	git config --global push.recurseSubmodules check
 	git config --global status.submoduleSummary true
-	log_ok "Git submodule defaults: recurse, on-demand fetch, status summary"
+	log_ok "Git submodule defaults: recurse, on-demand fetch, checked push, status summary"
 }
 
 configure_git_settings() {

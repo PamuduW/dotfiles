@@ -259,7 +259,8 @@ test_component_registry_has_exact_21_with_graphify() {
 	git_config_idx="$(comp_key_index git_credential)" || return 1
 	[[ "${COMP_LABELS[$git_config_idx]}" == 'Git config (credentials + submodules)' ]] || return 1
 	description="$(comp_description git_credential)"
-	for setting in credential.helper submodule.recurse fetch.recurseSubmodules status.submoduleSummary; do
+	for setting in credential.helper submodule.recurse fetch.recurseSubmodules \
+		push.recurseSubmodules status.submoduleSummary; do
 		[[ "$description" == *"$setting"* ]] || return 1
 	done
 }

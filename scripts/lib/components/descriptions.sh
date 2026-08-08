@@ -105,7 +105,7 @@ _comp_desc_wsl_conf() {
 
 _comp_desc_git_credential() {
 	echo "Sets credential.helper to Windows GCM for HTTPS when available."
-	echo "Sets submodule.recurse, fetch.recurseSubmodules, and status.submoduleSummary."
+	echo "Sets submodule.recurse, fetch.recurseSubmodules, push.recurseSubmodules=check, and status.submoduleSummary."
 }
 
 _comp_menu_desc_fn() {

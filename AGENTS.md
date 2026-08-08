@@ -122,7 +122,7 @@ find scripts -name '*.sh' -print0 | xargs -0 -n1 bash -n   # shell syntax check
 - Menu changes: extend `scripts/lib/menu_*.sh` and wire in `scripts/menus/`.
 - Component installs: registry in `scripts/lib/components/`; keep probes honest for status tables.
 - Keep the `git_credential` component key stable. Its displayed label is
-  `Git config (credentials + submodules)`; it always applies the three
+  `Git config (credentials + submodules)`; it always applies the four
   documented submodule defaults and configures Windows GCM only when found.
   Missing GCM must not erase another helper or block submodule configuration.
 - Prefer minimal diffs; match existing bash patterns (`set -euo pipefail`, `shellcheck`).
