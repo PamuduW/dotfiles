@@ -40,7 +40,7 @@ run_status_action() {
 
 _dotfiles_install_repo_decision() {
 	printf '\n%s%s==Repository update==%s\n\n' \
-		"${C_BOLD:-}" "${C_YELLOW:-}" "${C_RESET:-}"
+		"${C_BOLD:-}" "${C_ORANGE:-}" "${C_RESET:-}"
 	ui_confirm_yes_no "$1"
 }
 

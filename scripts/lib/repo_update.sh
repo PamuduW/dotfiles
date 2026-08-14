@@ -62,7 +62,7 @@ repo_update_classify_history() {
 }
 
 repo_update_gate() {
-	local repo_dir="$1" confirm_fn="$2" fetch_output=''
+	local repo_dir="$1" confirm_fn="$2" fetch_output='' pull_output=''
 	REPO_UPDATE_OUTCOME=stopped
 	repo_update_inspect "$repo_dir" || return 0
 	if ! fetch_output="$(git -C "$repo_dir" fetch --prune 2>&1)"; then
@@ -90,9 +90,11 @@ repo_update_gate() {
 	behind)
 		if ! "$confirm_fn" "Pull ${REPO_UPDATE_BEHIND} commit(s) with --ff-only?"; then
 			printf 'Pull declined; update stopped.\n'
-		elif git -C "$repo_dir" pull --ff-only; then
+		elif pull_output="$(git -C "$repo_dir" pull --ff-only 2>&1)"; then
+			[[ -n "$pull_output" ]] && _repo_update_print_fetch_output "$pull_output"
 			REPO_UPDATE_OUTCOME=relaunch_required
 		else
+			[[ -n "$pull_output" ]] && printf '%s\n' "$pull_output" >&2
 			printf 'Fast-forward pull failed; resolve the repository manually.\n' >&2
 		fi
 		;;

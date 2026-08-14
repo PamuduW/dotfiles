@@ -1258,7 +1258,7 @@ _print_repo_update_table() {
 		esac
 	fi
 
-	printf '\n%s%s==Repository update==%s\n\n' "$C_BOLD" "$C_YELLOW" "$C_RESET"
+	printf '\n%s%s==Repository update==%s\n\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
 	_print_update_table_header action
 	if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
 		_print_repo_update_row 'dotfiles repo' "${branch}@${local_rev}" "${change_count} local change(s)" "$action"
