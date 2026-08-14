@@ -38,6 +38,12 @@ run_status_action() {
 	print_status_summary_all
 }
 
+_dotfiles_install_repo_decision() {
+	printf '\n%s%s==Repository update==%s\n\n' \
+		"${C_BOLD:-}" "${C_YELLOW:-}" "${C_RESET:-}"
+	ui_confirm_yes_no "$1"
+}
+
 _dotfiles_install_repo_gate() {
 	local outcome
 
@@ -45,10 +51,16 @@ _dotfiles_install_repo_gate() {
 		return 0
 	fi
 
-	repo_update_gate "$DOTFILES_DIR" ui_confirm_yes_no
+	repo_update_gate "$DOTFILES_DIR" _dotfiles_install_repo_decision
 	outcome="${REPO_UPDATE_OUTCOME:-stopped}"
 	case "$outcome" in
 	current | ahead_continue) return 0 ;;
+	relaunch_required)
+		printf '%sRepository fast-forward succeeded; reloading Dotfiles.%s\n' \
+			"${C_GREEN:-}" "${C_RESET:-}"
+		repo_update_relaunch "$DOTFILES_DIR/install.sh"
+		return $?
+		;;
 	*)
 		printf '%sInstall stopped; the Dotfiles repository is not ready for setup.%s\n' \
 			"${C_YELLOW:-}" "${C_RESET:-}" >&2

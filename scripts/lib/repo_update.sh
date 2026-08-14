@@ -16,6 +16,13 @@ _repo_update_stop() {
 	return 1
 }
 
+_repo_update_print_fetch_output() {
+	local output="$1" line
+	while IFS= read -r line; do
+		printf '%s%s%s\n' "${C_CYAN:-}" "$line" "${C_RESET:-}"
+	done <<<"$output"
+}
+
 repo_update_inspect() {
 	local repo_dir="$1" upstream
 	REPO_UPDATE_STATE=invalid
@@ -66,7 +73,7 @@ repo_update_gate() {
 		return 0
 	fi
 	if [[ -n "$fetch_output" ]]; then
-		printf '%s%s%s\n' "${C_CYAN:-}" "$fetch_output" "${C_RESET:-}"
+		_repo_update_print_fetch_output "$fetch_output"
 	fi
 	repo_update_classify_history "$repo_dir" || return 0
 	if [[ "$REPO_UPDATE_DIRTY" == 1 ]]; then

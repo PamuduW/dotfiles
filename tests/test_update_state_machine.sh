@@ -674,6 +674,14 @@ test_repository_fetch_notice_uses_cyan() (
 	grep -Fq $'\033[36mFrom github.com:PamuduW/dotfiles' <<<"$output"
 )
 
+test_repository_fetch_notice_colors_each_line() (
+	local output
+	C_CYAN=$'\033[36m' C_RESET=$'\033[0m'
+	output="$(_repo_update_print_fetch_output $'From github.com:PamuduW/dotfiles\n   42abceb..9a0f501  main -> origin/main')"
+	[[ "$output" == *$'\033[36mFrom github.com:PamuduW/dotfiles\033[0m'* ]] || return 1
+	[[ "$output" == *$'\033[36m   42abceb..9a0f501  main -> origin/main\033[0m'* ]]
+)
+
 test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan() (
 	local output
 	repo_update_gate() { REPO_UPDATE_OUTCOME=current; }
@@ -866,6 +874,7 @@ expect_success 'update rows align a Unicode em-dash available cell' test_update_
 expect_success 'repository update preview uses semantic colors' test_repository_update_preview_uses_semantic_colors
 expect_success 'update subtopics use the report yellow palette' test_update_topics_use_submenu_yellow
 expect_success 'repository fetch notices use cyan' test_repository_fetch_notice_uses_cyan
+expect_success 'repository fetch notices color each line independently' test_repository_fetch_notice_colors_each_line
 expect_success 'update apply uses a high-level Upgrade heading without opt-in plan noise' test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan
 expect_success 'upgrade summary marks the repo gate as handled' test_upgrade_summary_marks_repo_gate_as_handled
 expect_success 'TUI runs shared update directly without a submenu' test_tui_runs_shared_update_without_submenu

@@ -145,6 +145,28 @@ test_install_dispatch_blocks_when_repository_is_not_ready() (
 	[[ "$(<"$calls")" == 'gate' ]]
 )
 
+test_install_repo_gate_uses_repository_update_topic() (
+	local output
+	DOTFILES_DIR=/tmp/dotfiles-test-repo
+	repo_update_gate() {
+		"$2" 'Pull 1 commit(s) with --ff-only?' || return 1
+		REPO_UPDATE_OUTCOME=current
+	}
+	ui_confirm_yes_no() { return 0; }
+	output="$(_dotfiles_install_repo_gate 2>&1)" || return 1
+	[[ "$output" == *'==Repository update=='* ]]
+)
+
+test_install_repo_gate_relaunches_after_fast_forward() (
+	local calls="$TEST_HARNESS_ROOT/install-relaunch.calls"
+	: >"$calls"
+	DOTFILES_DIR=/tmp/dotfiles-test-repo
+	repo_update_gate() { REPO_UPDATE_OUTCOME=relaunch_required; }
+	repo_update_relaunch() { printf '%s\n' "$*" >>"$calls"; }
+	_dotfiles_install_repo_gate || return 1
+	[[ "$(<"$calls")" == '/tmp/dotfiles-test-repo/install.sh' ]]
+)
+
 test_required_breadcrumb_literals() {
 	local status_fn component_fn plan_fn
 	status_fn="$(declare -f print_status_summary_all)"
@@ -311,6 +333,8 @@ expect_success 'root title, breadcrumb, and hint are normalized' test_root_bread
 expect_success 'status, install, and update dispatch directly' test_direct_status_install_update_dispatch
 expect_success 'install gates the repository before opening setup' test_install_dispatch_gates_repository_before_menu
 expect_success 'install blocks when the repository gate is not ready' test_install_dispatch_blocks_when_repository_is_not_ready
+expect_success 'install repository gate shows the update topic' test_install_repo_gate_uses_repository_update_topic
+expect_success 'install relaunches after repository fast-forward' test_install_repo_gate_relaunches_after_fast_forward
 expect_success 'status, picker, and plan breadcrumbs are exact' test_required_breadcrumb_literals
 expect_success 'root cancel redraws and explicit Quit returns cleanly' test_cancel_redraws_and_quit_returns
 expect_success 'failed direct action pauses exactly once and returns failure' test_failed_action_pauses_once
