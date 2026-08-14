@@ -12,6 +12,8 @@ test_harness_init
 # Source only the owned menu units; dependencies are stubbed per test.
 # shellcheck source=scripts/menus/main.sh
 source "$REPO_DIR/scripts/menus/main.sh"
+# shellcheck source=scripts/lib/repo_update.sh
+source "$REPO_DIR/scripts/lib/repo_update.sh"
 # shellcheck source=scripts/menus/initial_setup.sh
 source "$REPO_DIR/scripts/menus/initial_setup.sh"
 # shellcheck source=scripts/lib/components/menu.sh
@@ -148,13 +150,18 @@ test_install_dispatch_blocks_when_repository_is_not_ready() (
 test_install_repo_gate_uses_repository_update_topic() (
 	local output
 	DOTFILES_DIR=/tmp/dotfiles-test-repo
+	C_BOLD=$'\033[1m' C_CYAN=$'\033[36m' C_YELLOW=$'\033[33m' C_RESET=$'\033[0m'
+	REPO_UPDATE_STATE=behind REPO_UPDATE_BEHIND=1 REPO_UPDATE_UPSTREAM=origin/main
 	repo_update_gate() {
 		"$2" 'Pull 1 commit(s) with --ff-only?' || return 1
 		REPO_UPDATE_OUTCOME=current
 	}
 	ui_confirm_yes_no() { return 0; }
 	output="$(_dotfiles_install_repo_gate 2>&1)" || return 1
-	[[ "$output" == *'==Repository update=='* ]]
+	[[ "$output" == *$'\033[33mRepository update\033[0m'* ]] || return 1
+	[[ "$output" != *'==Repository update=='* ]] || return 1
+	[[ "$output" == *'component'* && "$output" == *'dotfiles repo'* && "$output" == *'origin/main'* ]] || return 1
+	[[ "$output" == *$'\033[33m1 commit(s) behind\033[0m'* && "$output" == *$'\033[36mpull --ff-only\033[0m'* ]]
 )
 
 test_install_repo_gate_relaunches_after_fast_forward() (

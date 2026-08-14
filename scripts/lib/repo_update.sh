@@ -61,6 +61,153 @@ repo_update_classify_history() {
 	REPO_UPDATE_REASON="$REPO_UPDATE_STATE"
 }
 
+_repo_update_change_count() {
+	if [[ -z "${REPO_UPDATE_CHANGES:-}" ]]; then
+		printf '0\n'
+		return
+	fi
+	awk 'END { print NR }' <<<"$REPO_UPDATE_CHANGES"
+}
+
+_repo_update_history_detail() {
+	case "${REPO_UPDATE_STATE:-stopped}" in
+	current) printf 'current' ;;
+	ahead) printf '%s local commit(s) ahead' "${REPO_UPDATE_AHEAD:-0}" ;;
+	behind) printf '%s commit(s) behind' "${REPO_UPDATE_BEHIND:-0}" ;;
+	diverged) printf '%s ahead / %s behind' "${REPO_UPDATE_AHEAD:-0}" "${REPO_UPDATE_BEHIND:-0}" ;;
+	*) printf 'freshness unknown' ;;
+	esac
+}
+
+_repo_update_fit_text() {
+	local text="$1" width="$2"
+	if ((${#text} > width)); then
+		if ((width <= 3)); then
+			printf '%s' "${text:0:width}"
+		else
+			printf '%s...' "${text:0:$((width - 3))}"
+		fi
+	else
+		printf '%s' "$text"
+	fi
+}
+
+_repo_update_table_rule() {
+	local width="$1" rule
+	printf -v rule '%*s' "$width" ''
+	printf '%s' "${rule// /-}"
+}
+
+_repo_update_print_plain_cell() {
+	local text="$1" width="$2" fit padding
+	fit="$(_repo_update_fit_text "$text" "$width")"
+	printf '%s' "$fit"
+	padding=$((width - ${#fit}))
+	if ((padding > 0)); then
+		printf '%*s' "$padding" ''
+	fi
+}
+
+_repo_update_color_available() {
+	local available="$1"
+	case "$available" in
+	none | — | up\ to\ date) printf '%s%s%s' "${C_DIM:-}" "$available" "${C_RESET:-}" ;;
+	*behind | *ahead | update* | *review*) printf '%s%s%s' "${C_YELLOW:-}" "$available" "${C_RESET:-}" ;;
+	*) printf '%s%s%s' "${C_CYAN:-}" "$available" "${C_RESET:-}" ;;
+	esac
+}
+
+_repo_update_color_action() {
+	local action="$1"
+	case "$action" in
+	up\ to\ date | skip | current) printf '%s%s%s' "${C_GREEN:-}" "$action" "${C_RESET:-}" ;;
+	latest\ unchecked) printf '%s%s%s' "${C_DIM:-}" "$action" "${C_RESET:-}" ;;
+	upgrade* | refresh | continue | check) printf '%s%s%s' "${C_YELLOW:-}" "$action" "${C_RESET:-}" ;;
+	pull* | verified) printf '%s%s%s' "${C_CYAN:-}" "$action" "${C_RESET:-}" ;;
+	unchecked) printf '%s%s%s' "${C_YELLOW:-}" "$action" "${C_RESET:-}" ;;
+	blocked) printf '%s%s%s' "${C_RED:-}" "$action" "${C_RESET:-}" ;;
+	*) printf '%s' "$action" ;;
+	esac
+}
+
+_repo_update_print_colored_cell() {
+	local text="$1" width="$2" color_fn="$3" fit padding
+	fit="$(_repo_update_fit_text "$text" "$width")"
+	"$color_fn" "$fit"
+	padding=$((width - ${#fit}))
+	if ((padding > 0)); then
+		printf '%*s' "$padding" ''
+	fi
+}
+
+_repo_update_print_table_header() {
+	local last_col="$1"
+	printf '%s%-*s | %-*s | %-*s | %-*s%s\n' \
+		"${C_BOLD:-}" \
+		18 component \
+		28 installed \
+		22 available \
+		16 "$last_col" \
+		"${C_RESET:-}"
+	printf '%s%s-+-%s-+-%s-+-%s%s\n' \
+		"${C_DIM:-}" \
+		"$(_repo_update_table_rule 18)" \
+		"$(_repo_update_table_rule 28)" \
+		"$(_repo_update_table_rule 22)" \
+		"$(_repo_update_table_rule 16)" \
+		"${C_RESET:-}"
+}
+
+_repo_update_print_table_row() {
+	local component="$1" installed="$2" available="$3" action="$4"
+	_repo_update_print_plain_cell "$component" 18
+	printf ' | '
+	_repo_update_print_plain_cell "$installed" 28
+	printf ' | '
+	_repo_update_print_colored_cell "$available" 22 _repo_update_color_available
+	printf ' | '
+	_repo_update_print_colored_cell "$action" 16 _repo_update_color_action
+	printf '\n'
+}
+
+repo_update_print_report() {
+	local repo_dir="$1" heading_style="${2:-update}"
+	local branch local_rev available action upstream change_count remote_action
+	branch="$(git -C "$repo_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+	local_rev="$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+	available="$(_repo_update_history_detail)"
+	upstream="${REPO_UPDATE_UPSTREAM:-upstream}"
+	change_count="$(_repo_update_change_count)"
+	case "${REPO_UPDATE_STATE:-stopped}" in
+	current | ahead | behind | diverged) remote_action='verified' ;;
+	*) remote_action='unchecked' ;;
+	esac
+	if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
+		action='blocked'
+	else
+		case "${REPO_UPDATE_STATE:-stopped}" in
+		behind) action='pull --ff-only' ;;
+		ahead) action='continue' ;;
+		current) action='current' ;;
+		*) action='check' ;;
+		esac
+	fi
+
+	if [[ "$heading_style" == install ]]; then
+		printf '\n%s%sRepository update%s\n\n' "${C_BOLD:-}" "${C_YELLOW:-}" "${C_RESET:-}"
+	else
+		printf '\n%s%s==Repository update==%s\n\n' "${C_BOLD:-}" "${C_ORANGE:-}" "${C_RESET:-}"
+	fi
+	_repo_update_print_table_header action
+	if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
+		_repo_update_print_table_row 'dotfiles repo' "${branch}@${local_rev}" "${change_count} local change(s)" "$action"
+	else
+		_repo_update_print_table_row 'dotfiles repo' "${branch}@${local_rev}" "$available" "$action"
+	fi
+	_repo_update_print_table_row "$upstream" 'remote history' "$available" "$remote_action"
+	printf '\n'
+}
+
 repo_update_gate() {
 	local repo_dir="$1" confirm_fn="$2" fetch_output='' pull_output=''
 	REPO_UPDATE_OUTCOME=stopped

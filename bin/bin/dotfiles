@@ -1237,36 +1237,7 @@ _print_repo_update_changes() {
 }
 
 _print_repo_update_table() {
-	local branch local_rev available action upstream change_count remote_action
-	branch="$(git -C "$DOTFILES_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
-	local_rev="$(git -C "$DOTFILES_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
-	available="$(_repo_update_history_detail)"
-	upstream="${REPO_UPDATE_UPSTREAM:-upstream}"
-	change_count="$(_repo_update_change_count)"
-	case "${REPO_UPDATE_STATE:-stopped}" in
-	current|ahead|behind|diverged) remote_action='verified' ;;
-	*) remote_action='unchecked' ;;
-	esac
-	if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
-		action='blocked'
-	else
-		case "${REPO_UPDATE_STATE:-stopped}" in
-		behind) action='pull --ff-only' ;;
-		ahead) action='continue' ;;
-		current) action='current' ;;
-		*) action='check' ;;
-		esac
-	fi
-
-	printf '\n%s%s==Repository update==%s\n\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
-	_print_update_table_header action
-	if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
-		_print_repo_update_row 'dotfiles repo' "${branch}@${local_rev}" "${change_count} local change(s)" "$action"
-	else
-		_print_repo_update_row 'dotfiles repo' "${branch}@${local_rev}" "$available" "$action"
-	fi
-	_print_repo_update_row "$upstream" 'remote history' "$available" "$remote_action"
-	printf '\n'
+	repo_update_print_report "$DOTFILES_DIR" update
 }
 
 _print_repo_update_stopped_report() {
