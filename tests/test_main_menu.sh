@@ -196,11 +196,12 @@ test_libraries_menu_contains_command_and_package_libs() {
 	local capture="$TEST_HARNESS_ROOT/libraries-menu.capture"
 	menu_simple_run() {
 		printf '%s|%s|%s|%s\n' "$MENU_SIMPLE_TITLE" "$MENU_SIMPLE_BREADCRUMB" \
-			"${MENU_SIMPLE_LABELS[*]}" "${MENU_SIMPLE_KEYS[*]}" >"$capture"
+			"${MENU_SIMPLE_LABELS[*]}" "${MENU_SIMPLE_KEYS[*]}" >>"$capture"
+		printf '%s\n' "${MENU_SIMPLE_HINT:-}" >>"$capture"
 		return 1
 	}
 	libraries_menu
-	[[ "$(<"$capture")" == 'Libraries|Dotfiles › Libraries|Command Lib Package Lib|command_lib package_lib' ]]
+	[[ "$(<"$capture")" == $'Libraries|Dotfiles › Libraries|Command Lib Package Lib|command_lib package_lib\nUp/Down navigate   Enter confirm   q back' ]]
 }
 
 test_agentbot_is_deterministic_unavailable_and_non_mutating() {

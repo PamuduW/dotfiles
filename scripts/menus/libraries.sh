@@ -7,6 +7,7 @@ libraries_menu() {
 	while true; do
 		MENU_SIMPLE_TITLE='Libraries'
 		MENU_SIMPLE_BREADCRUMB='Dotfiles › Libraries'
+		MENU_SIMPLE_HINT='Up/Down navigate   Enter confirm   q back'
 		MENU_SIMPLE_LABELS=('Command Lib' 'Package Lib')
 		MENU_SIMPLE_KEYS=(command_lib package_lib)
 		MENU_SIMPLE_DESCS=(

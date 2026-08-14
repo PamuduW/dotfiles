@@ -118,10 +118,22 @@ ui_color_input_hint() {
 	hint="${hint//\[c\]onfirm/${key_start}[c]${key_end}onfirm}"
 	hint="${hint//\[e\]dit/${key_start}[e]${key_end}dit}"
 	hint="${hint//\[q\] back/${key_start}[q]${key_end} back}"
+	hint="${hint//\[c\] confirm/${key_start}[c]${key_end} confirm}"
+	hint="${hint//\[e\] edit/${key_start}[e]${key_end} edit}"
+	hint="${hint//\[q\] back_to_menu/${key_start}[q]${key_end} back_to_menu}"
 	hint="${hint//   a all/   ${key_start}a${key_end} all}"
 	hint="${hint//   n none/   ${key_start}n${key_end} none}"
 	hint="${hint//   q back/   ${key_start}q${key_end} back}"
 	printf '%s' "$hint"
+}
+
+ui_install_confirm_prompt() {
+	printf '%s  %sc%s%s confirm   %se%s%s edit   %sq%s%s back_to_menu : %s' \
+		"${C_DIM:-}" \
+		"${C_CYAN:-}" "${C_RESET:-}" "${C_DIM:-}" \
+		"${C_CYAN:-}" "${C_RESET:-}" "${C_DIM:-}" \
+		"${C_CYAN:-}" "${C_RESET:-}" "${C_DIM:-}" \
+		"${C_RESET:-}"
 }
 
 ui_color_word() {

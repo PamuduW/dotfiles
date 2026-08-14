@@ -220,13 +220,22 @@ test_command_lib_details_fit_narrow_terminal() {
 }
 
 test_command_details_use_orange_sections_and_yellow_topics() {
-	local output
-	output="$(NO_COLOR='' FORCE_COLOR=1 dotfiles_command_print_details 100)"
-	[[ "$output" == *"${C_BOLD}${C_ORANGE}=== Command details ===${C_RESET}"* ]] || return 1
-	[[ "$output" == *"${C_BOLD}${C_YELLOW}menu${C_RESET}"* ]] || return 1
-	[[ "$output" == *"${C_BOLD}${C_ORANGE}=== Configuration and environment ===${C_RESET}"* ]] || return 1
-	[[ "$output" == *"${C_BOLD}${C_ORANGE}=== System surfaces ===${C_RESET}"* ]] || return 1
-	[[ "$output" == *"${C_BOLD}${C_ORANGE}=== Integrations ===${C_RESET}"* ]]
+	local output colored_output heading_index config_index
+	colored_output="$(NO_COLOR='' FORCE_COLOR=1 dotfiles_command_print_details 100)"
+	[[ "$colored_output" == *"${C_BOLD}${C_ORANGE}=== Command details ===${C_RESET}"* ]] || return 1
+	[[ "$colored_output" == *"${C_BOLD}${C_YELLOW}Command: menu${C_RESET}"* ]] || return 1
+	[[ "$colored_output" == *"${C_BOLD}${C_ORANGE}=== Configuration and environment ===${C_RESET}"* ]] || return 1
+	[[ "$colored_output" == *"${C_BOLD}${C_ORANGE}=== System surfaces ===${C_RESET}"* ]] || return 1
+	[[ "$colored_output" == *"${C_BOLD}${C_ORANGE}=== Integrations ===${C_RESET}"* ]] || return 1
+	NO_COLOR=1
+	ui_init_colors
+	output="$(dotfiles_command_print_details 100)"
+	heading_index="$(printf '%s\n' "$output" | grep -n '^  === Command details ===$' | cut -d: -f1)"
+	[[ "$(printf '%s\n' "$output" | sed -n "$((heading_index + 1))p")" == '' ]] || return 1
+	[[ "$(printf '%s\n' "$output" | sed -n "$((heading_index + 2))p")" == '  Command: menu' ]] || return 1
+	config_index="$(printf '%s\n' "$output" | grep -n '^  === Configuration and environment ===$' | cut -d: -f1)"
+	[[ "$(printf '%s\n' "$output" | sed -n "$((config_index + 1))p")" != '' ]] || return 1
+	[[ "$output" == *"Command: menu"* ]] || return 1
 }
 
 test_command_lib_colors_behavior_cells_when_enabled() {
