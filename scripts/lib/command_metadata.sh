@@ -295,7 +295,7 @@ _dotfiles_command_print_section() {
 	local label="$1" first="${2:-false}"
 	_rt_ensure_colors
 	if [[ "$first" == true ]]; then
-		printf '\n  %s%s=== %s ===%s\n\n' "$C_BOLD" "$C_ORANGE" "$label" "$C_RESET"
+		printf '\n  %s%s=== %s ===%s\n' "$C_BOLD" "$C_ORANGE" "$label" "$C_RESET"
 	else
 		printf '\n  %s%s=== %s ===%s\n' "$C_BOLD" "$C_ORANGE" "$label" "$C_RESET"
 	fi

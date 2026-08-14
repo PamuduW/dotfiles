@@ -231,8 +231,7 @@ test_command_details_use_orange_sections_and_yellow_topics() {
 	ui_init_colors
 	output="$(dotfiles_command_print_details 100)"
 	heading_index="$(printf '%s\n' "$output" | grep -n '^  === Command details ===$' | cut -d: -f1)"
-	[[ "$(printf '%s\n' "$output" | sed -n "$((heading_index + 1))p")" == '' ]] || return 1
-	[[ "$(printf '%s\n' "$output" | sed -n "$((heading_index + 2))p")" == '  Command: menu' ]] || return 1
+	[[ "$(printf '%s\n' "$output" | sed -n "$((heading_index + 1))p")" == '  Command: menu' ]] || return 1
 	config_index="$(printf '%s\n' "$output" | grep -n '^  === Configuration and environment ===$' | cut -d: -f1)"
 	[[ "$(printf '%s\n' "$output" | sed -n "$((config_index + 1))p")" != '' ]] || return 1
 	[[ "$output" == *"Command: menu"* ]] || return 1
