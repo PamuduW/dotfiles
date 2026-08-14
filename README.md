@@ -26,7 +26,7 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 .
 ├── bash/
 │   ├── .bashrc
-│   └── .bash_aliases
+│   └── .bash_aliases 
 ├── bin/
 │   └── bin/
 │       ├── ex          # open Windows Explorer from WSL
