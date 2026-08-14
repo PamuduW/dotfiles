@@ -133,7 +133,7 @@ ui_install_confirm_prompt() {
 		"${C_CYAN:-}" "${C_RESET:-}" "${C_DIM:-}" \
 		"${C_CYAN:-}" "${C_RESET:-}" "${C_DIM:-}" \
 		"${C_CYAN:-}" "${C_RESET:-}" "${C_DIM:-}" \
-		"${C_DIM:-}"
+		"${C_RESET:-}"
 }
 
 ui_color_word() {
