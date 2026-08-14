@@ -127,13 +127,22 @@ ui_color_input_hint() {
 	printf '%s' "$hint"
 }
 
+ui_color_shortcut_hint() {
+	local hint="$1"
+	local key_start="${C_RESET:-}${C_CYAN:-}"
+	local key_end="${C_RESET:-}${C_DIM:-}"
+	hint="${hint//c confirm/${key_start}c${key_end} confirm}"
+	hint="${hint//e edit/${key_start}e${key_end} edit}"
+	hint="${hint//q back_to_menu/${key_start}q${key_end} back_to_menu}"
+	hint="${hint//s Save or replace/${key_start}s${key_end} Save or replace}"
+	hint="${hint//r Reveal once/${key_start}r${key_end} Reveal once}"
+	hint="${hint//d Remove/${key_start}d${key_end} Remove}"
+	hint="${hint//q Back/${key_start}q${key_end} Back}"
+	printf '%s%s%s' "${C_DIM:-}" "$hint" "${C_RESET:-}"
+}
+
 ui_install_confirm_prompt() {
-	printf '%s  %sc%s%s confirm   %se%s%s edit   %sq%s%s back_to_menu : %s' \
-		"${C_DIM:-}" \
-		"${C_CYAN:-}" "${C_RESET:-}" "${C_DIM:-}" \
-		"${C_CYAN:-}" "${C_RESET:-}" "${C_DIM:-}" \
-		"${C_CYAN:-}" "${C_RESET:-}" "${C_DIM:-}" \
-		"${C_RESET:-}"
+	ui_color_shortcut_hint '  c confirm   e edit   q back_to_menu : '
 }
 
 ui_color_word() {

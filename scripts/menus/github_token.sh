@@ -57,18 +57,8 @@ _github_token_menu_render() {
 		"${C_DIM:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
 	printf '  %sNo repository scopes are needed for this workflow.%s\n\n' \
 		"${C_DIM:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
-	printf '  %s' "${C_DIM:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
-	printf '%s%s%s%s%s Save or replace   ' \
-		"${C_BOLD:-}" "${C_CYAN:-}" s "${C_RESET:-}" "${C_DIM:-}" \
-		>&"$GITHUB_TOKEN_MENU_OUT_FD"
-	printf '%s%s%s%s%s Reveal once   ' \
-		"${C_BOLD:-}" "${C_CYAN:-}" r "${C_RESET:-}" "${C_DIM:-}" \
-		>&"$GITHUB_TOKEN_MENU_OUT_FD"
-	printf '%s%s%s%s%s Remove   ' \
-		"${C_BOLD:-}" "${C_CYAN:-}" d "${C_RESET:-}" "${C_DIM:-}" \
-		>&"$GITHUB_TOKEN_MENU_OUT_FD"
-	printf '%s%s%s%s%s Back%s\n' \
-		"${C_BOLD:-}" "${C_CYAN:-}" q "${C_RESET:-}" "${C_DIM:-}" "${C_RESET:-}" \
+	printf '  %s\n' \
+		"$(ui_color_shortcut_hint 's Save or replace   r Reveal once   d Remove   q Back')" \
 		>&"$GITHUB_TOKEN_MENU_OUT_FD"
 	printf '\n' >&"$GITHUB_TOKEN_MENU_OUT_FD"
 }
