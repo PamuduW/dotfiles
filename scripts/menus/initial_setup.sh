@@ -38,8 +38,28 @@ run_status_action() {
 	print_status_summary_all
 }
 
+_dotfiles_install_repo_gate() {
+	local outcome
+
+	if ! declare -F repo_update_gate >/dev/null || [[ -z "${DOTFILES_DIR:-}" ]]; then
+		return 0
+	fi
+
+	repo_update_gate "$DOTFILES_DIR" ui_confirm_yes_no
+	outcome="${REPO_UPDATE_OUTCOME:-stopped}"
+	case "$outcome" in
+	current | ahead_continue) return 0 ;;
+	*)
+		printf '%sInstall stopped; the Dotfiles repository is not ready for setup.%s\n' \
+			"${C_YELLOW:-}" "${C_RESET:-}" >&2
+		return 1
+		;;
+	esac
+}
+
 run_install_action() {
 	ui_clear
+	_dotfiles_install_repo_gate || return 1
 	run_initial_setup_flow
 }
 

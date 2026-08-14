@@ -115,6 +115,36 @@ test_direct_status_install_update_dispatch() (
 	[[ "$clears" -eq 4 ]]
 )
 
+test_install_dispatch_gates_repository_before_menu() (
+	local calls="$TEST_HARNESS_ROOT/install-gate.calls"
+	: >"$calls"
+	repo_update_gate() {
+		printf 'gate:%s\n' "$1" >>"$calls"
+		REPO_UPDATE_OUTCOME=current
+	}
+	run_initial_setup_flow() { printf 'setup\n' >>"$calls"; }
+	ui_clear() { :; }
+	ui_pause() { :; }
+	DOTFILES_DIR=/tmp/dotfiles-test-repo
+	_main_menu_dispatch install || return 1
+	[[ "$(<"$calls")" == $'gate:/tmp/dotfiles-test-repo\nsetup' ]]
+)
+
+test_install_dispatch_blocks_when_repository_is_not_ready() (
+	local calls="$TEST_HARNESS_ROOT/install-gate-blocked.calls"
+	: >"$calls"
+	repo_update_gate() {
+		printf 'gate\n' >>"$calls"
+		REPO_UPDATE_OUTCOME=stopped
+	}
+	run_initial_setup_flow() { printf 'setup\n' >>"$calls"; }
+	ui_clear() { :; }
+	ui_pause() { :; }
+	DOTFILES_DIR=/tmp/dotfiles-test-repo
+	_main_menu_dispatch install && return 1
+	[[ "$(<"$calls")" == 'gate' ]]
+)
+
 test_required_breadcrumb_literals() {
 	local status_fn component_fn plan_fn
 	status_fn="$(declare -f print_status_summary_all)"
@@ -279,6 +309,8 @@ test_caller_guard_hides_agentbot_entry() {
 expect_success 'root labels and keys match the exact eight-action contract' test_exact_root_contract
 expect_success 'root title, breadcrumb, and hint are normalized' test_root_breadcrumb_is_dotfiles
 expect_success 'status, install, and update dispatch directly' test_direct_status_install_update_dispatch
+expect_success 'install gates the repository before opening setup' test_install_dispatch_gates_repository_before_menu
+expect_success 'install blocks when the repository gate is not ready' test_install_dispatch_blocks_when_repository_is_not_ready
 expect_success 'status, picker, and plan breadcrumbs are exact' test_required_breadcrumb_literals
 expect_success 'root cancel redraws and explicit Quit returns cleanly' test_cancel_redraws_and_quit_returns
 expect_success 'failed direct action pauses exactly once and returns failure' test_failed_action_pauses_once
