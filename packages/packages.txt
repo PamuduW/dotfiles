@@ -26,6 +26,7 @@ fzf  # Interactive fuzzy finder
 zoxide  # Smarter directory navigation
 eza  # Modern directory listing tool
 jq  # Command-line JSON processor
+gh  # GitHub command-line interface
 moreutils  # Additional Unix command-line utilities
 
 # @system

@@ -67,8 +67,8 @@ package_metadata_load() {
 		PACKAGE_LIB_DESCRIPTIONS+=("$description")
 	done <"$file"
 
-	[[ "${#PACKAGE_LIB_NAMES[@]}" -eq 29 ]] || {
-		printf 'Expected 29 packages, found %d\n' "${#PACKAGE_LIB_NAMES[@]}" >&2
+	[[ "${#PACKAGE_LIB_NAMES[@]}" -eq 30 ]] || {
+		printf 'Expected 30 packages, found %d\n' "${#PACKAGE_LIB_NAMES[@]}" >&2
 		return 1
 	}
 }

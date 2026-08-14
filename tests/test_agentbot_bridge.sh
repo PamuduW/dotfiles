@@ -20,6 +20,7 @@ prepare_existing() {
 	DOTFILES_AGENTBOT_URL='git@github.com:PamuduW/agent_bootstrap.git'
 	test_harness_configure_fake git 0 "${1:-git@github.com:PamuduW/agent_bootstrap.git}"
 	test_harness_configure_fake sibling-install 0 ''
+	dotfiles_agentbot_update_all() { :; }
 	export AGENTBOT_HOME DOTFILES_AGENTBOT_URL
 	test_harness_reset_logs
 }
@@ -30,6 +31,25 @@ test_existing_launches_with_caller() {
 	dotfiles_launch_agentbot >/dev/null
 	grep -Fqx 'sibling-install' "$TEST_COMMAND_LOG" &&
 		[[ "$DOTFILES_AGENTBOT_EXITED" == true ]]
+}
+
+test_existing_launch_requires_both_repository_gates() {
+	prepare_existing
+	local gates="$TEST_HARNESS_ROOT/repo-gates"
+	: >"$gates"
+	dotfiles_agentbot_update_all() { printf '%s\n' gated >>"$gates"; }
+	dotfiles_launch_agentbot >/dev/null
+	[[ "$(<"$gates")" == gated ]] && grep -Fqx 'sibling-install' "$TEST_COMMAND_LOG"
+}
+
+test_repository_gate_failure_stops_child_launch() {
+	prepare_existing
+	dotfiles_agentbot_update_all() { return 23; }
+	set +e
+	dotfiles_launch_agentbot >/dev/null 2>&1
+	local rc=$?
+	set -e
+	[[ "$rc" -eq 23 ]] && ! grep -Fqx 'sibling-install' "$TEST_COMMAND_LOG"
 }
 
 prepare_git_alias_repo() {
@@ -93,6 +113,8 @@ test_clone_failure_stops() {
 }
 
 check 'existing allowlisted Agentbot launches with SETUP_CALLER=dotfiles' test_existing_launches_with_caller
+check 'existing Agentbot launch gates both repositories first' test_existing_launch_requires_both_repository_gates
+check 'repository gate failure stops Agentbot child launch' test_repository_gate_failure_stops_child_launch
 check 'configured SSH alias resolving to Agentbot is allowed' test_configured_ssh_alias_is_allowed
 check 'configured SSH alias resolving to another path is rejected' test_configured_ssh_alias_wrong_path_is_rejected
 check 'wrong or token-bearing Agentbot origin is rejected' test_wrong_origin_stops

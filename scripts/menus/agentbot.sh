@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 
+# shellcheck source=scripts/lib/repo_update.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../lib" && pwd)/repo_update.sh"
+
 DOTFILES_AGENTBOT_URL="${DOTFILES_AGENTBOT_URL:-git@github.com:PamuduW/agent_bootstrap.git}"
 
 dotfiles_agentbot_home() {
@@ -67,6 +70,40 @@ dotfiles_agentbot_validate() {
 	fi
 }
 
+dotfiles_agentbot_update_decision() {
+	local prompt answer=''
+	case "$1" in
+	pull-behind) prompt='Pull the repository commit(s) with --ff-only?' ;;
+	continue-ahead) prompt='The repository is ahead. Continue with Agentbot?' ;;
+	*) return 1 ;;
+	esac
+	if [[ -n "${DOTFILES_UPDATE_CONFIRM:-}" ]]; then
+		[[ "$DOTFILES_UPDATE_CONFIRM" == yes ]]
+		return
+	fi
+	printf '%s [y/N] ' "$prompt" >/dev/tty || return 1
+	IFS= read -r answer </dev/tty || return 1
+	case "$answer" in y|Y|yes|YES) return 0 ;; esac
+	return 1
+}
+
+dotfiles_agentbot_update_all() {
+	local home repo outcome reason
+	home="$(dotfiles_agentbot_home)"
+	for repo in "$DOTFILES_DIR" "$home"; do
+		repo_update_gate "$repo" dotfiles_agentbot_update_decision
+		outcome="$REPO_UPDATE_OUTCOME"
+		reason="$REPO_UPDATE_REASON"
+		case "$outcome" in
+		current|ahead_continue|relaunch_required) ;;
+		*)
+			printf 'Repository update check stopped: %s (%s).\n' "$repo" "$reason" >&2
+			return 1
+			;;
+		esac
+	done
+}
+
 dotfiles_agentbot_confirm() {
 	local answer=''
 	if [[ -n "${DOTFILES_AGENTBOT_CONFIRM:-}" ]]; then
@@ -94,6 +131,7 @@ dotfiles_launch_agentbot() {
 		}
 	fi
 	dotfiles_agentbot_validate "$home" || return 1
+	dotfiles_agentbot_update_all || return $?
 	(
 		cd "$home" || exit 1
 		SETUP_CALLER=dotfiles ./install.sh
