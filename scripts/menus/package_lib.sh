@@ -160,34 +160,66 @@ package_lib_render_packages_page() {
 	done
 }
 
+package_lib_render_packages_all() {
+	local cols="${1:-$(menu_tty_cols)}"
+	local package_w=18 tag_w=10 description_w available
+	local package_rule tag_rule description_rule package_fit tag_fit description_fit
+	local i
+
+	if ((${#PACKAGE_LIB_NAMES[@]} == 0)); then
+		package_metadata_load "${PKG_FILE:-}" || return 1
+	fi
+	_package_lib_header "Package Lib" "Dotfiles › Package Lib" "$cols"
+	_rt_ensure_colors
+	available=$((cols - 2 - 6))
+	description_w=$((available - package_w - tag_w))
+	if ((description_w < 18)); then
+		package_w=17
+		tag_w=9
+		description_w=$((available - package_w - tag_w))
+	fi
+	((description_w < 1)) && description_w=1
+
+	package_fit="$(_package_lib_fit package "$package_w")"
+	tag_fit="$(_package_lib_fit category "$tag_w")"
+	description_fit="$(_package_lib_fit description "$description_w")"
+	printf '  %s%-*s | %-*s | %-*s%s\n' \
+		"$C_BOLD" "$package_w" "$package_fit" \
+		"$tag_w" "$tag_fit" "$description_w" "$description_fit" "$C_RESET"
+	package_rule="$(printf '%*s' "$package_w" '')"; package_rule="${package_rule// /-}"
+	tag_rule="$(printf '%*s' "$tag_w" '')"; tag_rule="${tag_rule// /-}"
+	description_rule="$(printf '%*s' "$description_w" '')"; description_rule="${description_rule// /-}"
+	printf '  %s-+-%s-+-%s\n' "$package_rule" "$tag_rule" "$description_rule"
+	for i in "${!PACKAGE_LIB_NAMES[@]}"; do
+		package_fit="$(_package_lib_fit "${PACKAGE_LIB_NAMES[$i]}" "$package_w")"
+		tag_fit="$(_package_lib_fit "${PACKAGE_LIB_TAGS[$i]}" "$tag_w")"
+		description_fit="$(_package_lib_fit "${PACKAGE_LIB_DESCRIPTIONS[$i]}" "$description_w")"
+		printf '  %-*s | ' "$package_w" "$package_fit"
+		case "${PACKAGE_LIB_TAGS[$i]}" in
+		core) printf '%s%s%s' "$C_CYAN" "$tag_fit" "$C_RESET" ;;
+		python) printf '%s%s%s' "$C_GREEN" "$tag_fit" "$C_RESET" ;;
+		cli) printf '%s%s%s' "$C_YELLOW" "$tag_fit" "$C_RESET" ;;
+		system) printf '%s%s%s' "$C_DIM" "$tag_fit" "$C_RESET" ;;
+		*) printf '%s' "$tag_fit" ;;
+		esac
+		if ((tag_w > ${#tag_fit})); then printf '%*s' "$((tag_w - ${#tag_fit}))" ''; fi
+		printf ' | %-*s\n' "$description_w" "$description_fit"
+	done
+}
+
 package_lib_packages_menu() {
-	local rows cols page_size page=0 page_count action
+	local cols
 
 	package_metadata_load "${PKG_FILE:-}" || {
 		ui_pause
 		return 1
 	}
-	rows="$(menu_tty_rows)"
 	cols="$(menu_tty_cols)"
-	page_size="$(menu_page_size "$rows" 8)"
-	page_count="$(menu_page_count "${#PACKAGE_LIB_NAMES[@]}" "$page_size")"
-
-	while true; do
-		{
-			ui_clear
-			package_lib_render_packages_page "$page" "$page_size" "$cols"
-		} >/dev/tty
-		action="$(menu_read_key)"
-		case "$action" in
-		cancel) return 0 ;;
-		down | right | page_down)
-			((page + 1 < page_count)) && page=$((page + 1))
-			;;
-		up | left | page_up)
-			((page > 0)) && page=$((page - 1))
-			;;
-		esac
-	done
+	{
+		ui_clear
+		package_lib_render_packages_all "$cols"
+		ui_pause
+	} >/dev/tty
 }
 
 package_lib_menu() {

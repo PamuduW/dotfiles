@@ -19,13 +19,9 @@ _main_menu_desc_fn() {
 		echo "Configure the optional shared GitHub API token."
 		echo "Missing or malformed state falls back to anonymous access."
 		;;
-	command_lib)
-		echo "Show Dotfiles commands and their usage."
-		echo "Read-only command and mutation matrix."
-		;;
-	package_lib)
-		echo "Browse the complete system package catalog."
-		echo "Read-only package metadata; no probes or installers run."
+	libraries)
+		echo "Open the Dotfiles command and package libraries."
+		echo "Read-only references for commands and supported packages."
 		;;
 	agentbot)
 		echo "Open the standalone Agentbot setup."
@@ -42,12 +38,11 @@ _main_menu_labels=(
 	"Install Dotfiles"
 	"Update"
 	"GitHub Token Config"
-	"Command Lib"
-	"Package Lib"
+	"Libraries"
 	"Agentbot"
 	"Quit"
 )
-_main_menu_keys=(status install update github_token command_lib package_lib agentbot quit)
+_main_menu_keys=(status install update github_token libraries agentbot quit)
 
 _main_menu_unavailable() {
 	local message="$1"
@@ -104,13 +99,9 @@ _main_menu_dispatch() {
 		_main_menu_dispatch_optional github_token_menu \
 			"GitHub Token Config is not available in this phase."
 		;;
-	command_lib)
-		_main_menu_dispatch_optional command_lib_menu \
-			"Command Lib is not available in this phase."
-		;;
-	package_lib)
-		_main_menu_dispatch_optional package_lib_menu \
-			"Package Lib is not available in this phase."
+	libraries)
+		_main_menu_dispatch_optional libraries_menu \
+			"Libraries are not available in this phase."
 		;;
 	agentbot)
 		if declare -F dotfiles_launch_agentbot >/dev/null; then
@@ -136,8 +127,8 @@ main_menu_loop() {
 	labels=("${_main_menu_labels[@]}")
 	keys=("${_main_menu_keys[@]}")
 	if [[ "${SETUP_CALLER:-}" == agentbot ]]; then
-		labels=("Check Status" "Install Dotfiles" "Update" "GitHub Token Config" "Command Lib" "Package Lib" "Quit")
-		keys=(status install update github_token command_lib package_lib quit)
+		labels=("Check Status" "Install Dotfiles" "Update" "GitHub Token Config" "Libraries" "Quit")
+		keys=(status install update github_token libraries quit)
 	fi
 
 	while true; do

@@ -25,7 +25,13 @@ _log_prefix() {
 }
 
 _log_legend_line() {
-	printf '%s\n' '[Legend] STEP=starting  OK=completed  SKIP=already satisfied  WARN=needs attention'
+	if declare -F _rt_ensure_colors >/dev/null; then
+		_rt_ensure_colors
+	else
+		C_RESET='' C_CYAN='' C_GREEN='' C_DIM='' C_YELLOW=''
+	fi
+	printf '[Legend] %sSTEP=starting%s  %sOK=completed%s  %sSKIP=already satisfied%s  %sWARN=needs attention%s\n' \
+		"$C_CYAN" "$C_RESET" "$C_GREEN" "$C_RESET" "$C_DIM" "$C_RESET" "$C_YELLOW" "$C_RESET"
 }
 
 log_step() { _log_prefix STEP "$1"; }

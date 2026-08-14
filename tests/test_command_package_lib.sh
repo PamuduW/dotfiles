@@ -24,6 +24,7 @@ source "$REPO_DIR/scripts/lib/ui.sh"
 source "$REPO_DIR/scripts/lib/menu_paging.sh"
 source "$REPO_DIR/scripts/lib/components/registry.sh"
 source "$REPO_DIR/scripts/lib/components/descriptions.sh"
+source "$REPO_DIR/scripts/lib/components/probes.sh"
 ui_init_colors
 
 [[ -f "$REPO_DIR/scripts/lib/command_metadata.sh" ]] && source "$REPO_DIR/scripts/lib/command_metadata.sh"
@@ -218,6 +219,16 @@ test_command_lib_details_fit_narrow_terminal() {
 	done <<<"$output"
 }
 
+test_command_details_use_orange_sections_and_yellow_topics() {
+	local output
+	output="$(NO_COLOR='' FORCE_COLOR=1 dotfiles_command_print_details 100)"
+	[[ "$output" == *"${C_BOLD}${C_ORANGE}=== Command details ===${C_RESET}"* ]] || return 1
+	[[ "$output" == *"${C_BOLD}${C_YELLOW}menu${C_RESET}"* ]] || return 1
+	[[ "$output" == *"${C_BOLD}${C_ORANGE}=== Configuration and environment ===${C_RESET}"* ]] || return 1
+	[[ "$output" == *"${C_BOLD}${C_ORANGE}=== System surfaces ===${C_RESET}"* ]] || return 1
+	[[ "$output" == *"${C_BOLD}${C_ORANGE}=== Integrations ===${C_RESET}"* ]]
+}
+
 test_command_lib_colors_behavior_cells_when_enabled() {
 	local output
 	NO_COLOR='' FORCE_COLOR=1 output="$(dotfiles_command_print_table 80)"
@@ -350,6 +361,35 @@ test_package_menu_opens_system_packages_directly() (
 	[[ "$calls" -eq 1 ]]
 )
 
+test_package_lib_all_view_has_no_paging_controls() (
+	package_metadata_load "$PKG_FILE" || return 1
+	local output="$TEST_HARNESS_ROOT/package-all.output"
+	package_lib_render_packages_all 100 >"$output" || return 1
+	grep -Fq '=== Package Lib ===' "$output" || return 1
+	grep -Fq 'package            | category   | description' "$output" || return 1
+	[[ "$(grep -c 'Page ' "$output")" -eq 0 ]] || return 1
+	[[ "$(grep -c '^  [^|].*|' "$output")" -ge 31 ]] || return 1
+)
+
+test_install_summary_uses_report_table_alignment() (
+	local output="$TEST_HARNESS_ROOT/install-summary.output"
+	NO_COLOR=1
+	ui_init_colors
+	COMP_KEYS=(git_identity system_packages)
+	COMP_LABELS=('Git identity' 'System packages')
+	is_on() { return 0; }
+	_install_summary_probe() {
+		case "$1" in
+		git_identity) printf 'configured|Pamudu Wijesingha <pamuduwijesingha2k20@gmail.com>\n' ;;
+		system_packages) printf 'installed|30 apt packages\n' ;;
+		esac
+	}
+	print_install_summary >"$output" || return 1
+	grep -Fq '  component              | detail                                   | result' "$output" || return 1
+	grep -Fq '  Git identity           | Pamudu Wijesingha <pamuduwijesingha2k...' "$output" || return 1
+	grep -Fq '  System packages        | 30 apt packages                          | ' "$output" || return 1
+)
+
 test_narrow_reports_remain_bounded() {
 	declare -F command_lib_render >/dev/null || return 1
 	declare -F package_lib_render_components >/dev/null || return 1
@@ -374,6 +414,7 @@ expect_success 'report path shortening preserves the fixed detail width' test_re
 expect_success 'Command Lib renders all metadata once without side effects' test_command_lib_is_metadata_only
 expect_success 'Command Lib documents the full command/config catalog' test_command_lib_documents_full_help_catalog
 expect_success 'Command Lib wraps details to the terminal width' test_command_lib_details_fit_narrow_terminal
+expect_success 'Command details use orange sections and yellow topics' test_command_details_use_orange_sections_and_yellow_topics
 expect_success 'Command Lib colors mutating and read-only behavior cells' test_command_lib_colors_behavior_cells_when_enabled
 expect_success 'topic headers use the orange palette' test_topic_headers_use_orange
 expect_success 'table column headers remain bold white' test_table_column_headers_are_bold_white
@@ -383,6 +424,8 @@ expect_success 'package metadata contains 30 unique described names in 9/3/9/9 t
 expect_success 'Package Lib renders all 21 components without probes or side effects' test_package_lib_components_are_metadata_only
 expect_success 'System package pages cover all 30 names exactly once' test_package_pages_cover_all_30_once
 expect_success 'Package Lib opens the system package table directly' test_package_menu_opens_system_packages_directly
+expect_success 'Package Lib all view has no paging controls' test_package_lib_all_view_has_no_paging_controls
+expect_success 'install summary uses the report table alignment' test_install_summary_uses_report_table_alignment
 expect_success 'Command and Package Lib narrow rendering remains bounded' test_narrow_reports_remain_bounded
 
 printf '%d test(s) passed; %d failed\n' "$passed" "$failed"

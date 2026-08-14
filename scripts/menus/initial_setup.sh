@@ -92,7 +92,7 @@ confirm_loop() {
 		fi
 		{
 			show_plan
-			read_tty_line answer "  [c]onfirm  [e]dit  [q] back to menu: "
+			read_tty_line answer "$(ui_color_input_hint '  [c]onfirm  [e]dit  [q] back to menu'): "
 		} >/dev/tty
 		case "$answer" in
 		c | C) return 0 ;;

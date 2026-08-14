@@ -254,11 +254,11 @@ _comp_probe_git_credential() {
 print_install_summary() {
 	local i key label row result detail short_label
 	local ok_count=0 miss_count=0
+	local cols
 
-	echo ""
-	printf '%s=== Install summary ===%s\n' "${C_ORANGE:-}" "${C_RESET:-}"
-	printf '%-22s | %-32s | %s\n' "component" "detail" "result"
-	printf '%s\n' "----------------------+----------------------------------+-----------"
+	cols="$(menu_tty_cols)"
+	ui_print_report_header "Install summary" "" "$cols"
+	ui_print_report_table_columns
 
 	for i in "${!COMP_KEYS[@]}"; do
 		key="${COMP_KEYS[$i]}"
@@ -271,7 +271,7 @@ print_install_summary() {
 		installed | configured) ((++ok_count)) ;;
 		missing | check) ((++miss_count)) ;;
 		esac
-		ui_print_component_table_row "$short_label" "$detail" "$result"
+		ui_print_report_table_row "$short_label" "$detail" "$result"
 	done
 
 	echo ""

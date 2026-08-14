@@ -19,6 +19,7 @@ _COMP_DESC_LINES=2
 source "$REPO_DIR/scripts/lib/components/menu.sh"
 # shellcheck source=scripts/lib/components/plan.sh
 source "$REPO_DIR/scripts/lib/components/plan.sh"
+[[ -f "$REPO_DIR/scripts/menus/libraries.sh" ]] && source "$REPO_DIR/scripts/menus/libraries.sh"
 
 passed=0
 failed=0
@@ -59,13 +60,12 @@ test_exact_root_contract() {
 		"Install Dotfiles"
 		"Update"
 		"GitHub Token Config"
-		"Command Lib"
-		"Package Lib"
+		"Libraries"
 		"Agentbot"
 		"Quit"
 	)
 	# shellcheck disable=SC2034  # Read through a nameref in assert_array_equals.
-	local expected_keys=(status install update github_token command_lib package_lib agentbot quit)
+	local expected_keys=(status install update github_token libraries agentbot quit)
 	assert_array_equals _main_menu_labels expected_labels || return 1
 	assert_array_equals _main_menu_keys expected_keys || return 1
 	local i description
@@ -167,15 +167,15 @@ test_relaunched_update_skips_stale_parent_pause() (
 
 test_deferred_actions_are_safe_when_undefined() {
 	local pauses=0 action output output_file="$TEST_HARNESS_ROOT/deferred.output"
-	unset -f github_token_menu command_lib_menu package_lib_menu 2>/dev/null || true
+	unset -f github_token_menu libraries_menu 2>/dev/null || true
 	ui_pause() { pauses=$((pauses + 1)); }
 	test_harness_reset_logs
-	for action in github_token command_lib package_lib; do
+	for action in github_token libraries; do
 		_main_menu_dispatch "$action" >"$output_file" || return 1
 		output="$(<"$output_file")"
 		[[ "$output" == *'not available'* ]] || return 1
 	done
-	[[ "$pauses" -eq 3 ]] || return 1
+	[[ "$pauses" -eq 2 ]] || return 1
 	[[ ! -s "$TEST_COMMAND_LOG" && ! -s "$TEST_URL_LOG" ]]
 }
 
@@ -185,13 +185,22 @@ test_deferred_actions_call_defined_hooks() {
 	# shellcheck disable=SC2317  # Test doubles invoked indirectly by menu dispatch.
 	github_token_menu() { printf '%s\n' github_token >>"$calls"; }
 	# shellcheck disable=SC2317
-	command_lib_menu() { printf '%s\n' command_lib >>"$calls"; }
+	libraries_menu() { printf '%s\n' libraries >>"$calls"; }
 	# shellcheck disable=SC2317
-	package_lib_menu() { printf '%s\n' package_lib >>"$calls"; }
 	_main_menu_dispatch github_token || return 1
-	_main_menu_dispatch command_lib || return 1
-	_main_menu_dispatch package_lib || return 1
-	[[ "$(<"$calls")" == $'github_token\ncommand_lib\npackage_lib' ]]
+	_main_menu_dispatch libraries || return 1
+	[[ "$(<"$calls")" == $'github_token\nlibraries' ]]
+}
+
+test_libraries_menu_contains_command_and_package_libs() {
+	local capture="$TEST_HARNESS_ROOT/libraries-menu.capture"
+	menu_simple_run() {
+		printf '%s|%s|%s|%s\n' "$MENU_SIMPLE_TITLE" "$MENU_SIMPLE_BREADCRUMB" \
+			"${MENU_SIMPLE_LABELS[*]}" "${MENU_SIMPLE_KEYS[*]}" >"$capture"
+		return 1
+	}
+	libraries_menu
+	[[ "$(<"$capture")" == 'Libraries|Dotfiles › Libraries|Command Lib Package Lib|command_lib package_lib' ]]
 }
 
 test_agentbot_is_deterministic_unavailable_and_non_mutating() {

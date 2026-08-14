@@ -65,6 +65,8 @@ source "$DOTFILES_DIR/scripts/menus/github_token.sh"
 source "$DOTFILES_DIR/scripts/menus/command_lib.sh"
 # shellcheck source=scripts/menus/package_lib.sh
 source "$DOTFILES_DIR/scripts/menus/package_lib.sh"
+# shellcheck source=scripts/menus/libraries.sh
+source "$DOTFILES_DIR/scripts/menus/libraries.sh"
 # shellcheck source=scripts/menus/agentbot.sh
 source "$DOTFILES_DIR/scripts/menus/agentbot.sh"
 

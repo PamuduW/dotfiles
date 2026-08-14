@@ -294,11 +294,7 @@ _dotfiles_command_print_token_field() {
 _dotfiles_command_print_section() {
 	local label="$1"
 	_rt_ensure_colors
-	if declare -F rt_print_section >/dev/null; then
-		rt_print_section "$label"
-	else
-		printf '\n  %s%s%s\n' "$C_BOLD$C_YELLOW" "$label" "$C_RESET"
-	fi
+	printf '\n\n  %s%s=== %s ===%s\n\n' "$C_BOLD" "$C_ORANGE" "$label" "$C_RESET"
 }
 
 _dotfiles_command_print_options() {
@@ -316,7 +312,7 @@ dotfiles_command_print_details() {
 	_dotfiles_command_print_section 'Command details'
 	for key in "${DOTFILES_COMMAND_KEYS[@]}"; do
 		_rt_ensure_colors
-		printf '\n  %sCommand: %s%s\n' "$C_BOLD$C_ORANGE" "$key" "$C_RESET"
+		printf '\n  %sCommand: %s%s%s\n' "$C_BOLD" "$C_YELLOW" "$key" "$C_RESET"
 		_dotfiles_command_print_field 'Usage' "$(dotfiles_command_display_usage "$key")" "$cols"
 		_dotfiles_command_print_field 'Behavior' "${DOTFILES_COMMAND_CLASS[$key]}" "$cols"
 		_dotfiles_command_print_field 'Purpose' "${DOTFILES_COMMAND_DESCRIPTION[$key]}" "$cols"

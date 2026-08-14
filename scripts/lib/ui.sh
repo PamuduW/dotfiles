@@ -43,7 +43,7 @@ ui_clear() {
 ui_pause() {
 	local _ui_pause_reply=''
 	printf '\n' >/dev/tty
-	read_tty_line _ui_pause_reply "Press Enter to continue: "
+	read_tty_line _ui_pause_reply "${C_YELLOW:-}Press Enter to continue:${C_RESET:-} "
 }
 
 ui_confirm_yes_no() {
@@ -115,6 +115,9 @@ ui_color_input_hint() {
 	hint="${hint//Space toggle/${key_start}Space${key_end} toggle}"
 	hint="${hint//Enter confirm/${key_start}Enter${key_end} confirm}"
 	hint="${hint//Enter system package details/${key_start}Enter${key_end} system package details}"
+	hint="${hint//\[c\]onfirm/${key_start}[c]${key_end}onfirm}"
+	hint="${hint//\[e\]dit/${key_start}[e]${key_end}dit}"
+	hint="${hint//\[q\] back/${key_start}[q]${key_end} back}"
 	hint="${hint//   a all/   ${key_start}a${key_end} all}"
 	hint="${hint//   n none/   ${key_start}n${key_end} none}"
 	hint="${hint//   q back/   ${key_start}q${key_end} back}"
