@@ -284,7 +284,7 @@ test_menu_presentation_uses_semantic_colors() (
 	NO_COLOR='' FORCE_COLOR=1 ui_init_colors
 	run_menu_script $'q\n' "$output" || return 1
 	grep -Fq $'\033[32m' "$output" || return 1
-	grep -Fq $'\033[36ms\033[0m' "$output" || return 1
+	grep -Fq $'\033[1m\033[36ms\033[0m' "$output" || return 1
 	grep -Fq $'\033[2m' "$output"
 )
 
