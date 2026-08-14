@@ -40,7 +40,7 @@ test_install_confirm_prompt_colors_full_action_text() {
 	local output
 	NO_COLOR='' FORCE_COLOR=1 ui_init_colors
 	output="$(ui_install_confirm_prompt)"
-	[[ "$output" == "${C_DIM}  ${C_CYAN}c${C_RESET}${C_DIM} confirm   ${C_CYAN}e${C_RESET}${C_DIM} edit   ${C_CYAN}q${C_RESET}${C_DIM} back_to_menu : ${C_RESET}" ]]
+	[[ "$output" == "${C_DIM}  ${C_CYAN}c${C_RESET}${C_DIM} confirm   ${C_CYAN}e${C_RESET}${C_DIM} edit   ${C_CYAN}q${C_RESET}${C_DIM} back_to_menu : ${C_DIM}" ]]
 }
 
 expect_success 'install legend uses semantic status colors' test_install_legend_uses_status_colors

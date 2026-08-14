@@ -113,6 +113,7 @@ confirm_loop() {
 		{
 			show_plan
 			read_tty_line answer "$(ui_install_confirm_prompt)"
+			printf '%s' "${C_RESET:-}" >/dev/tty
 		} >/dev/tty
 		case "$answer" in
 		c | C) return 0 ;;

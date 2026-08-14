@@ -57,9 +57,11 @@ _github_token_menu_render() {
 		"${C_DIM:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
 	printf '  %sNo repository scopes are needed for this workflow.%s\n\n' \
 		"${C_DIM:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
-	printf '  %s[s]%s Save or replace   %s[r]%s Reveal once   %s[d]%s Remove   %s[q]%s Back\n' \
-		"${C_CYAN:-}" "${C_RESET:-}" "${C_CYAN:-}" "${C_RESET:-}" \
-		"${C_CYAN:-}" "${C_RESET:-}" "${C_CYAN:-}" "${C_RESET:-}" \
+	printf '  %s%ss%s%s Save or replace   %sr%s%s Reveal once   %sd%s%s Remove   %sq%s%s Back%s\n' \
+		"${C_DIM:-}" "${C_CYAN:-}" "${C_RESET:-}" "${C_DIM:-}" \
+		"${C_CYAN:-}" "${C_RESET:-}" "${C_DIM:-}" \
+		"${C_CYAN:-}" "${C_RESET:-}" "${C_DIM:-}" \
+		"${C_CYAN:-}" "${C_RESET:-}" "${C_DIM:-}" "${C_RESET:-}" \
 		>&"$GITHUB_TOKEN_MENU_OUT_FD"
 	printf '\n' >&"$GITHUB_TOKEN_MENU_OUT_FD"
 }

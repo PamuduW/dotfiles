@@ -273,7 +273,7 @@ test_menu_presentation_separates_action_prompt() (
 	reset_token_state
 	local output="$TEST_HARNESS_ROOT/presentation-spacing.menu"
 	run_menu_script $'q\n' "$output" || return 1
-	grep -Fq $'  [q] Back\n\n  Select action:' "$output"
+	grep -Fq $'  q Back\n\n  Select action:' "$output"
 )
 
 test_menu_presentation_uses_semantic_colors() (
@@ -284,7 +284,7 @@ test_menu_presentation_uses_semantic_colors() (
 	NO_COLOR='' FORCE_COLOR=1 ui_init_colors
 	run_menu_script $'q\n' "$output" || return 1
 	grep -Fq $'\033[32m' "$output" || return 1
-	grep -Fq $'\033[36m[s]' "$output" || return 1
+	grep -Fq $'\033[36ms\033[0m' "$output" || return 1
 	grep -Fq $'\033[2m' "$output"
 )
 
