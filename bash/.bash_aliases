@@ -86,13 +86,14 @@ dclean() {
 # Shell productivity
 # ------------------------------------
 alias reload='source ~/.bashrc'                  # reload shell config
-shfmt-format() {
+shfmt_format() {
 	if (($# == 0)); then
-		echo 'Usage: shfmt-format FILE...'
+		echo 'Usage: shfmt_format FILE...'
 		return 2
 	fi
 	shfmt -w "$@"
 }
+alias shfmt-format='shfmt_format'
 
 # ------------------------------------
 # System maintenance
