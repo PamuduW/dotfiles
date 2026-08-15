@@ -21,7 +21,19 @@ _run_quiet_command() {
 _log_prefix() {
 	local level="$1"
 	local message="$2"
-	printf '[%s] %s\n' "$level" "$message"
+	local color=''
+	if declare -F _rt_ensure_colors >/dev/null 2>&1; then
+		_rt_ensure_colors
+	else
+		C_RESET='' C_CYAN='' C_GREEN='' C_DIM='' C_YELLOW=''
+	fi
+	case "$level" in
+	STEP) color="$C_CYAN" ;;
+	OK) color="$C_GREEN" ;;
+	SKIP) color="$C_DIM" ;;
+	WARN) color="$C_YELLOW" ;;
+	esac
+	printf '%s[%s]%s %s\n' "$color" "$level" "$C_RESET" "$message"
 }
 
 _log_legend_line() {

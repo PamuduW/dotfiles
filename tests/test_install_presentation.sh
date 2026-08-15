@@ -38,6 +38,19 @@ test_install_legend_uses_status_colors() {
 	[[ "$output" == *"${C_YELLOW}WARN=needs attention${C_RESET}"* ]]
 }
 
+test_install_status_markers_use_semantic_colors() {
+	local output
+	NO_COLOR='' FORCE_COLOR=1 ui_init_colors
+	output="$(log_step 'starting')"
+	[[ "$output" == "${C_CYAN}[STEP]${C_RESET} starting" ]] || return 1
+	output="$(log_ok 'completed')"
+	[[ "$output" == "${C_GREEN}[OK]${C_RESET} completed" ]] || return 1
+	output="$(log_skip 'already satisfied')"
+	[[ "$output" == "${C_DIM}[SKIP]${C_RESET} already satisfied" ]] || return 1
+	output="$(log_warn 'needs attention')"
+	[[ "$output" == "${C_YELLOW}[WARN]${C_RESET} needs attention" ]]
+}
+
 test_confirm_hint_uses_colored_action_keys() {
 	local output
 	output="$(ui_color_input_hint '  [c]onfirm  [e]dit  [q] back to menu')"
@@ -54,6 +67,7 @@ test_install_confirm_prompt_colors_full_action_text() {
 }
 
 expect_success 'install legend uses semantic status colors' test_install_legend_uses_status_colors
+expect_success 'install status markers use semantic colors' test_install_status_markers_use_semantic_colors
 expect_success 'confirmation hint colors its action keys' test_confirm_hint_uses_colored_action_keys
 expect_success 'install confirmation prompt colors full action text' test_install_confirm_prompt_colors_full_action_text
 printf '%d test(s) passed; %d failed\n' "$passed" "$failed"
