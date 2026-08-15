@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Keyboard input decoder for interactive menus on /dev/tty.
+# Keyboard input decoder for the shared terminal input adapter.
 
 _menu_keys_decode_escape_sequence() {
 	local seq="$1"
@@ -33,16 +33,17 @@ _menu_keys_decode_escape_sequence() {
 }
 
 menu_read_key() {
-	local key seq='' next
+	local key seq='' next tty_in
+	tty_in="$(tty_input_path)"
 
-	IFS= read -rsn1 key </dev/tty || {
+	IFS= read -rsn1 key <"$tty_in" || {
 		printf '%s\n' 'confirm'
 		return 0
 	}
 
 	case "$key" in
 	$'\e')
-		while IFS= read -rsn1 -t 0.01 next </dev/tty; do
+		while IFS= read -rsn1 -t 0.01 next <"$tty_in"; do
 			seq+="$next"
 			((${#seq} >= 16)) && break
 		done

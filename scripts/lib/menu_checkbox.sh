@@ -185,7 +185,7 @@ menu_checkbox_run() {
 	local count="${#MENU_CB_LABELS[@]}"
 	local cursor=0
 	local status_msg=''
-	local rows cols page_size page menu_lines action
+	local rows cols page_size page menu_lines action tty_out
 	local i prev_page=-1 prev_lines=0
 
 	if ((count == 0)); then
@@ -195,6 +195,7 @@ menu_checkbox_run() {
 	rows="$(menu_tty_rows)"
 	cols="$(menu_tty_cols)"
 	page_size="$(_menu_cb_page_size "$rows")"
+	tty_out="$(tty_output_path)"
 
 	{
 		menu_cursor_hide
@@ -272,7 +273,7 @@ menu_checkbox_run() {
 		done
 
 		menu_cursor_show
-	} >/dev/tty
+	} >"$tty_out"
 
 	return 0
 }

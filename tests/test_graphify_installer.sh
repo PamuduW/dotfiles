@@ -9,9 +9,19 @@ test_harness_init
 
 passed=0
 failed=0
-pass() { printf 'ok - %s\n' "$1"; passed=$((passed + 1)); }
-fail() { printf 'not ok - %s\n' "$1" >&2; failed=$((failed + 1)); }
-expect_success() { local name="$1"; shift; if "$@"; then pass "$name"; else fail "$name"; fi; }
+pass() {
+	printf 'ok - %s\n' "$1"
+	passed=$((passed + 1))
+}
+fail() {
+	printf 'not ok - %s\n' "$1" >&2
+	failed=$((failed + 1))
+}
+expect_success() {
+	local name="$1"
+	shift
+	if "$@"; then pass "$name"; else fail "$name"; fi
+}
 
 source "$ROOT/scripts/lib/installers/logging.sh"
 source "$ROOT/scripts/lib/installers/graphify.sh"

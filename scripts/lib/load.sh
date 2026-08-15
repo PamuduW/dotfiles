@@ -14,6 +14,8 @@ source "$_LIB_DIR/tty.sh"
 source "$_LIB_DIR/repo_update.sh"
 # shellcheck source=scripts/lib/report_table.sh
 source "$_LIB_DIR/report_table.sh"
+# shellcheck source=scripts/lib/wsl_conf.sh
+source "$_LIB_DIR/wsl_conf.sh"
 # shellcheck source=scripts/lib/command_metadata.sh
 source "$_LIB_DIR/command_metadata.sh"
 # shellcheck source=scripts/lib/github_token.sh

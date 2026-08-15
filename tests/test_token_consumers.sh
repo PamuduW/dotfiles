@@ -10,8 +10,14 @@ source "$TEST_DIR/lib/test_harness.sh"
 passed=0
 failed=0
 
-pass() { printf 'ok - %s\n' "$1"; passed=$((passed + 1)); }
-fail() { printf 'not ok - %s\n' "$1" >&2; failed=$((failed + 1)); }
+pass() {
+	printf 'ok - %s\n' "$1"
+	passed=$((passed + 1))
+}
+fail() {
+	printf 'not ok - %s\n' "$1" >&2
+	failed=$((failed + 1))
+}
 expect_success() {
 	local name="$1"
 	shift
@@ -181,10 +187,17 @@ test_proc_cmdline_has_no_secret() {
 	github_curl -fsSL https://api.github.com/example >/dev/null 2>&1 &
 	job=$!
 	for _ in {1..100}; do
-		[[ -s "$TEST_CURL_PID_FILE" ]] && { pid="$(<"$TEST_CURL_PID_FILE")"; break; }
+		[[ -s "$TEST_CURL_PID_FILE" ]] && {
+			pid="$(<"$TEST_CURL_PID_FILE")"
+			break
+		}
 		sleep 0.01
 	done
-	[[ -n "$pid" && -r "/proc/$pid/cmdline" ]] || { touch "$TEST_CURL_RELEASE_FILE"; wait "$job"; return 1; }
+	[[ -n "$pid" && -r "/proc/$pid/cmdline" ]] || {
+		touch "$TEST_CURL_RELEASE_FILE"
+		wait "$job"
+		return 1
+	}
 	cmdline="$(tr '\0' ' ' <"/proc/$pid/cmdline")"
 	touch "$TEST_CURL_RELEASE_FILE"
 	wait "$job"
@@ -276,10 +289,10 @@ test_fonts_and_asdf_routed() {
 
 test_global_dotfiles_routed() {
 	local file="$REPO_DIR/bin/bin/dotfiles"
-	[[ "$(grep -c 'github_curl -fsSL' "$file")" -eq 5 ]] || return 1
 	# shellcheck disable=SC2016  # The source expression is the literal contract under test.
 	grep -Fq 'source "$_GITHUB_TOKEN_LIB"' "$file" || return 1
-	assert_sensitive_urls_use_boundary "$file"
+	grep -Fq 'source "$_GITHUB_RELEASE_LIB"' "$file" || return 1
+	! rg -q 'https://(api\.github\.com/|github\.com/.*/releases/download/)' "$file"
 }
 
 test_complete_consumer_inventory() {
@@ -288,7 +301,6 @@ test_complete_consumer_inventory() {
 		"$REPO_DIR/scripts/lib/installers/github_release.sh"
 		"$REPO_DIR/scripts/lib/installers/fonts.sh"
 		"$REPO_DIR/scripts/lib/installers/cli_tools.sh"
-		"$REPO_DIR/bin/bin/dotfiles"
 	)
 	assert_sensitive_urls_use_boundary "${files[@]}" || return 1
 	local found
@@ -298,10 +310,8 @@ test_complete_consumer_inventory() {
 
 test_excluded_downloads_unchanged() {
 	local file="$REPO_DIR/scripts/lib/installers/cli_tools.sh"
-	grep -Fq 'curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/' "$file" || return 1
-	grep -Fq 'curl -fsSL https://cursor.com/install' "$file" || return 1
-	grep -Fq 'curl -fsSL https://claude.ai/install.sh' "$file" || return 1
-	grep -Fq 'curl -fsSL https://gh.io/copilot-install' "$file"
+	[[ "$(grep -c 'run_vendor_shell_installer' "$file")" -eq 5 ]] || return 1
+	! rg -q 'curl[^|]*\|[[:space:]]*(bash|sh)' "$file"
 }
 
 test_isolation_and_fake_network() {
@@ -335,7 +345,7 @@ expect_success 'Monaspace and asdf release archives use the boundary' test_fonts
 expect_success 'global dotfiles release downloads use the boundary' test_global_dotfiles_routed
 expect_success 'all active GitHub API and release URLs have no direct-curl bypass' test_complete_consumer_inventory
 expect_success 'structural scanner rejects a direct curl bypass near github_curl' test_scanner_rejects_nearby_direct_curl_bypass
-expect_success 'raw and non-GitHub installer calls remain direct and untouched' test_excluded_downloads_unchanged
+expect_success 'vendor shell installers use the downloaded-script boundary' test_excluded_downloads_unchanged
 expect_success 'tests remain isolated behind the fail-closed curl fake' test_isolation_and_fake_network
 
 printf '%d test(s) passed; %d failed\n' "$passed" "$failed"

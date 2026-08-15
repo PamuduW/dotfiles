@@ -20,7 +20,7 @@ dotfiles_agentbot_origin_allowed() {
 
 	case "$origin" in
 	*://*@*) return 1 ;;
-	git@github.com:PamuduW/agent_bootstrap.git|https://github.com/PamuduW/agent_bootstrap.git)
+	git@github.com:PamuduW/agent_bootstrap.git | https://github.com/PamuduW/agent_bootstrap.git)
 		return 0
 		;;
 	esac
@@ -31,19 +31,19 @@ dotfiles_agentbot_origin_allowed() {
 		prefix="${prefix%.insteadof}"
 		[[ -n "$prefix" ]] || continue
 		case "$origin" in
-			"$prefix"*)
-				if ((${#prefix} > ${#matched_prefix})); then
-					matched_prefix="$prefix"
-					matched_target="$target"
-				fi
-				;;
+		"$prefix"*)
+			if ((${#prefix} > ${#matched_prefix})); then
+				matched_prefix="$prefix"
+				matched_target="$target"
+			fi
+			;;
 		esac
 	done <<<"$rewrite_rules"
 
 	[[ -n "$matched_prefix" ]] || return 1
 	resolved="${matched_target}${origin#"$matched_prefix"}"
 	case "$resolved" in
-	git@github.com:PamuduW/agent_bootstrap.git|https://github.com/PamuduW/agent_bootstrap.git)
+	git@github.com:PamuduW/agent_bootstrap.git | https://github.com/PamuduW/agent_bootstrap.git)
 		return 0
 		;;
 	*) return 1 ;;
@@ -71,37 +71,58 @@ dotfiles_agentbot_validate() {
 }
 
 dotfiles_agentbot_update_decision() {
-	local prompt answer=''
-	case "$1" in
-	pull-behind) prompt='Pull the repository commit(s) with --ff-only?' ;;
-	continue-ahead) prompt='The repository is ahead. Continue with Agentbot?' ;;
+	local event="$1" prompt="$2" answer=''
+	case "$event" in
+	pull-behind | continue-ahead) ;;
 	*) return 1 ;;
 	esac
 	if [[ -n "${DOTFILES_UPDATE_CONFIRM:-}" ]]; then
 		[[ "$DOTFILES_UPDATE_CONFIRM" == yes ]]
 		return
 	fi
-	printf '%s [y/N] ' "$prompt" >/dev/tty || return 1
-	IFS= read -r answer </dev/tty || return 1
-	case "$answer" in y|Y|yes|YES) return 0 ;; esac
+	read_tty_line answer "$prompt [y/N] " || return 1
+	case "$answer" in y | Y | yes | YES) return 0 ;; esac
 	return 1
 }
 
 dotfiles_agentbot_update_all() {
-	local home repo outcome reason
+	local home result_name outcome dotfiles_relaunch=false
+	local -A dotfiles_result=() agentbot_result=()
 	home="$(dotfiles_agentbot_home)"
-	for repo in "$DOTFILES_DIR" "$home"; do
-		repo_update_gate "$repo" dotfiles_agentbot_update_decision
-		outcome="$REPO_UPDATE_OUTCOME"
-		reason="$REPO_UPDATE_REASON"
-		case "$outcome" in
-		current|ahead_continue|relaunch_required) ;;
-		*)
-			printf 'Repository update check stopped: %s (%s).\n' "$repo" "$reason" >&2
+
+	# Preflight every repository before requesting approval or pulling either one.
+	repo_update_preflight "$DOTFILES_DIR" 'dotfiles repo' dotfiles_result
+	repo_update_preflight "$home" 'agentbot repo' agentbot_result
+	for result_name in dotfiles_result agentbot_result; do
+		local -n result_ref="$result_name"
+		if [[ "${result_ref[safe]}" != 1 ]]; then
+			repo_update_print_result "$result_name"
+			printf 'Repository update check stopped: %s (%s).\n' \
+				"${result_ref[dir]}" "${result_ref[reason]}" >&2
 			return 1
-			;;
-		esac
+		fi
 	done
+
+	# Collect all decisions before mutating either repository.
+	for result_name in dotfiles_result agentbot_result; do
+		repo_update_request_approval "$result_name" dotfiles_agentbot_update_decision || return 1
+	done
+
+	# Update Agentbot first and Dotfiles last. A Dotfiles pull requires a reload so
+	# the updated bridge code is used before Agentbot is launched.
+	for result_name in agentbot_result dotfiles_result; do
+		repo_update_apply "$result_name" || return 1
+		local -n result_ref="$result_name"
+		outcome="${result_ref[outcome]}"
+		[[ "$result_name" == dotfiles_result && "$outcome" == relaunch_required ]] && dotfiles_relaunch=true
+	done
+
+	if [[ "$dotfiles_relaunch" == true ]]; then
+		printf '%sRepository fast-forward succeeded; reloading Dotfiles.%s\n' \
+			"${C_GREEN:-}" "${C_RESET:-}"
+		repo_update_wait_for_reload
+		repo_update_relaunch "$DOTFILES_DIR/install.sh" --agents
+	fi
 }
 
 dotfiles_agentbot_confirm() {
@@ -110,9 +131,8 @@ dotfiles_agentbot_confirm() {
 		[[ "$DOTFILES_AGENTBOT_CONFIRM" == yes ]]
 		return
 	fi
-	printf '  Clone Agentbot from %s to %s? [y/N]: ' "$DOTFILES_AGENTBOT_URL" "$(dotfiles_agentbot_home)" >/dev/tty
-	IFS= read -r answer </dev/tty || answer=n
-	case "$answer" in y|Y|yes|YES) return 0 ;; esac
+	read_tty_line answer "  Clone Agentbot from $DOTFILES_AGENTBOT_URL to $(dotfiles_agentbot_home)? [y/N]: " || answer=n
+	case "$answer" in y | Y | yes | YES) return 0 ;; esac
 	return 1
 }
 

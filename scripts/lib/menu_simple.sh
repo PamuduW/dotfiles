@@ -97,7 +97,7 @@ _menu_simple_draw() {
 
 menu_simple_run() {
 	local count="${#MENU_SIMPLE_LABELS[@]}"
-	local cursor cols menu_lines action
+	local cursor cols menu_lines action tty_out
 
 	if ((count == 0)); then
 		MENU_SIMPLE_RESULT=''
@@ -111,6 +111,7 @@ menu_simple_run() {
 
 	cols="$(menu_tty_cols)"
 	menu_lines="$(_menu_simple_menu_lines "$count")"
+	tty_out="$(tty_output_path)"
 
 	{
 		menu_cursor_hide
@@ -145,7 +146,7 @@ menu_simple_run() {
 		done
 
 		menu_cursor_show
-	} >/dev/tty
+	} >"$tty_out"
 
 	MENU_SIMPLE_RESULT="${MENU_SIMPLE_KEYS[$cursor]}"
 	printf '%s\n' "$MENU_SIMPLE_RESULT"

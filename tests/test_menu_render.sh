@@ -155,7 +155,7 @@ test_component_menu_redraw_count_matches_rendered_frame() {
 	local -a lines=()
 	COMP_KEYS=(alpha beta)
 	COMP_LABELS=('Alpha' 'Beta')
-	COMP_DEPS=(-1 -1)
+	declare -gA COMP_DEPENDS_ON=()
 	declare -A COMP_ON=()
 	COMP_ON=([alpha]=1 [beta]=1)
 	_draw_component_menu 0 2 '' 80 >"$output_file"

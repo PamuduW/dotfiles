@@ -19,7 +19,7 @@ _comp_probe_git_identity() {
 	if [[ -n "$name" && -n "$email" ]]; then
 		printf 'configured|%s <%s>\n' "$name" "$email"
 	else
-		printf 'skipped|not configured\n'
+		printf 'missing|not configured\n'
 	fi
 }
 
@@ -54,6 +54,18 @@ _comp_probe_system_packages() {
 }
 
 _comp_probe_python() {
+	command -v python3 >/dev/null 2>&1 || {
+		printf 'missing|python3 not on PATH\n'
+		return
+	}
+	python3 -m pip --version >/dev/null 2>&1 || {
+		printf 'missing|python3-pip unavailable\n'
+		return
+	}
+	python3 -m venv --help >/dev/null 2>&1 || {
+		printf 'missing|python3-venv unavailable\n'
+		return
+	}
 	printf 'installed|python3 pip venv\n'
 }
 
@@ -83,12 +95,20 @@ _comp_probe_go() {
 	local ver
 	if command -v go >/dev/null 2>&1; then
 		ver="$(go version 2>/dev/null | grep -oE 'go[0-9.]+' | head -n1 || true)"
-		printf 'installed|%s\n' "${ver:-go}"
-	elif command -v asdf >/dev/null 2>&1; then
+		if [[ -n "$ver" ]]; then
+			printf 'installed|%s\n' "$ver"
+			return
+		fi
+	fi
+	if command -v asdf >/dev/null 2>&1; then
 		ver="$(asdf current golang 2>/dev/null | awk '$1=="golang" {print $2; exit}')"
-		printf 'installed|%s\n' "${ver:-asdf golang}"
+		if [[ -n "$ver" && "$ver" != system ]]; then
+			printf 'installed|go%s (asdf)\n' "$ver"
+		else
+			printf 'missing|asdf has no selected Go version\n'
+		fi
 	else
-		printf 'missing|go not on PATH\n'
+		printf 'missing|working Go installation not found\n'
 	fi
 }
 
@@ -213,20 +233,37 @@ _comp_probe_ssh_key() {
 	if [[ -f "$HOME/.ssh/id_ed25519" || -f "$HOME/.ssh/id_rsa" ]]; then
 		printf 'installed|~/.ssh key present\n'
 	else
-		printf 'skipped|no default key found\n'
+		printf 'missing|no default key found\n'
 	fi
 }
 
 _comp_probe_dotfiles() {
-	if [[ -e "$HOME/bin/dotfiles" || -e "$HOME/bin/ex" ]]; then
+	local repo_dir="${DOTFILES_DIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd)}"
+	local target expected missing=0
+	while IFS='|' read -r target expected; do
+		if [[ ! -L "$target" || "$(readlink -f "$target" 2>/dev/null || true)" != "$expected" ]]; then
+			missing=$((missing + 1))
+		fi
+	done <<EOF
+$HOME/.bashrc|$repo_dir/bash/.bashrc
+$HOME/.bash_aliases|$repo_dir/bash/.bash_aliases
+$HOME/.inputrc|$repo_dir/readline/.inputrc
+$HOME/bin/ex|$repo_dir/bin/bin/ex
+$HOME/bin/clip|$repo_dir/bin/bin/clip
+$HOME/bin/dotfiles|$repo_dir/bin/bin/dotfiles
+EOF
+	if ((missing == 0)); then
 		printf 'installed|stow bash bin readline\n'
 	else
-		printf 'check|~/bin symlinks missing\n'
+		printf 'missing|%d managed stow target(s) missing or incorrect\n' "$missing"
 	fi
 }
 
 _comp_probe_wsl_conf() {
-	if [[ -f /etc/wsl.conf ]] && grep -q '^systemd=true' /etc/wsl.conf 2>/dev/null; then
+	local conf="${DOTFILES_WSL_CONF:-/etc/wsl.conf}"
+	if [[ -f "$conf" ]] &&
+		wsl_conf_has_setting "$conf" boot systemd true &&
+		wsl_conf_has_setting "$conf" interop appendWindowsPath true; then
 		printf 'configured|systemd + appendWindowsPath\n'
 	else
 		printf 'check|/etc/wsl.conf not as expected\n'
@@ -240,11 +277,11 @@ _comp_probe_git_credential() {
 	fetch="$(git config --global --get fetch.recurseSubmodules 2>/dev/null || true)"
 	push="$(git config --global --get push.recurseSubmodules 2>/dev/null || true)"
 	summary="$(git config --global --get status.submoduleSummary 2>/dev/null || true)"
-	if [[ -n "$helper" && "$recurse" == true && "$fetch" == on-demand \
-		&& "$push" == check && "$summary" == true ]]; then
+	if [[ -n "$helper" && "$recurse" == true && "$fetch" == on-demand &&
+		"$push" == check && "$summary" == true ]]; then
 		printf 'configured|credential helper + recursive submodule defaults\n'
-	elif [[ -z "$helper" && "$recurse" == true && "$fetch" == on-demand \
-		&& "$push" == check && "$summary" == true ]]; then
+	elif [[ -z "$helper" && "$recurse" == true && "$fetch" == on-demand &&
+		"$push" == check && "$summary" == true ]]; then
 		printf 'check|submodule defaults set; credential helper not configured\n'
 	else
 		printf 'check|Git configuration incomplete\n'

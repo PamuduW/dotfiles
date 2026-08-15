@@ -32,10 +32,9 @@ github_curl() (
 	trap 'rm -f -- "$stderr_file"' EXIT
 
 	if curl --config - "$@" \
-		2>"$stderr_file" <<EOF
+		2>"$stderr_file" <<EOF; then
 header = "Authorization: Bearer ${token}"
 EOF
-	then
 		rc=0
 	else
 		rc=$?

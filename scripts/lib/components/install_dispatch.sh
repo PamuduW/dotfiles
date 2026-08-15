@@ -16,22 +16,22 @@ _comp_install_python() {
 }
 
 _comp_install_graphify_cli() {
-	install_graphify_cli || echo "  Warning: Graphify CLI install failed."
+	install_graphify_cli
 }
 
 _comp_install_powershell() {
-	install_powershell || echo "  Warning: PowerShell install failed."
+	install_powershell
 }
 
 _comp_install_go() {
-	install_go_via_asdf || echo "  Warning: Go install via asdf failed."
+	install_go_via_asdf
 }
 
 _comp_install_lazygit() {
 	if command -v lazygit >/dev/null 2>&1; then
 		log_skip "lazygit already installed"
 	else
-		install_lazygit_from_github || echo "  Warning: lazygit install failed."
+		install_lazygit_from_github
 	fi
 }
 
@@ -39,7 +39,7 @@ _comp_install_lazydocker() {
 	if command -v lazydocker >/dev/null 2>&1; then
 		log_skip "lazydocker already installed"
 	else
-		install_lazydocker_from_github || echo "  Warning: lazydocker install failed."
+		install_lazydocker_from_github
 	fi
 }
 
@@ -64,28 +64,28 @@ _comp_install_nodejs() {
 }
 
 _comp_install_direnv() {
-	install_direnv || echo "  Warning: direnv install failed."
+	install_direnv
 	ensure_direnv_hook_in_bashrc
 }
 
 _comp_install_cursor_cli() {
-	install_cursor_cli || echo "  Warning: Cursor CLI install failed."
+	install_cursor_cli
 }
 
 _comp_install_codex_cli() {
-	install_codex_cli || echo "  Warning: Codex CLI install failed."
+	install_codex_cli
 }
 
 _comp_install_claude_cli() {
-	install_claude_cli || echo "  Warning: Claude CLI install failed."
+	install_claude_cli
 }
 
 _comp_install_copilot_cli() {
-	install_copilot_cli || echo "  Warning: Copilot CLI install failed."
+	install_copilot_cli
 }
 
 _comp_install_monaspace_fonts() {
-	install_monaspace_fonts || echo "  Warning: Monaspace fonts install failed."
+	install_monaspace_fonts
 }
 
 _comp_install_ssh_key() {
@@ -113,7 +113,8 @@ _run_install_preamble() {
 }
 
 run_install() {
-	local key
+	local key failures=0
+	declare -gA INSTALL_COMPONENT_RESULT=()
 
 	echo ""
 	printf '%s=== Installing ===%s\n' "${C_ORANGE:-}" "${C_RESET:-}"
@@ -124,7 +125,13 @@ run_install() {
 
 	for key in "${COMP_INSTALL_ORDER[@]}"; do
 		is_on "$key" || continue
-		comp_install "$key"
+		if comp_install "$key"; then
+			INSTALL_COMPONENT_RESULT["$key"]=completed
+		else
+			INSTALL_COMPONENT_RESULT["$key"]=failed
+			failures=$((failures + 1))
+			log_warn "Component install failed: $key"
+		fi
 	done
 
 	print_install_summary
@@ -132,4 +139,5 @@ run_install() {
 	echo ""
 	echo "Done. Log saved to: $LOG_FILE"
 	echo "Open a new terminal, or run: source ~/.bashrc"
+	((failures == 0))
 }

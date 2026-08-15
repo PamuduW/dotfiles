@@ -10,6 +10,8 @@ source "$(cd -- "$_INSTALL_LIB_DIR/.." && pwd)/github_api.sh"
 
 # shellcheck source=scripts/lib/installers/logging.sh
 source "$_INSTALL_LIB_DIR/logging.sh"
+# shellcheck source=scripts/lib/installers/remote_script.sh
+source "$_INSTALL_LIB_DIR/remote_script.sh"
 # shellcheck source=scripts/lib/installers/apt.sh
 source "$_INSTALL_LIB_DIR/apt.sh"
 # shellcheck source=scripts/lib/installers/github_release.sh

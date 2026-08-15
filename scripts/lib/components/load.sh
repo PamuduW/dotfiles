@@ -15,4 +15,6 @@ source "$_COMPONENTS_LIB_DIR/install_dispatch.sh"
 # shellcheck source=scripts/lib/components/menu.sh
 source "$_COMPONENTS_LIB_DIR/menu.sh"
 
+comp_registry_validate_contract
+
 comp_registry_init

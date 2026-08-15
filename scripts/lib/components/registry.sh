@@ -50,9 +50,15 @@ COMP_LABELS=(
 	"Git config (credentials + submodules)"
 )
 
-# Dependency: index of required component, -1 = none
-#              gid sys py  gr  psh go  njs dir doc por lg  ld  cur cdx cla cop mon ssh dot wsl gcr
-COMP_DEPS=(-1 -1 -1 2 -1 -1 -1 -1 -1 8 -1 8 -1 6 -1 -1 -1 -1 1 -1 -1)
+# Dependencies use stable component keys so display-order changes cannot silently
+# change their meaning.
+declare -A COMP_DEPENDS_ON=(
+	[graphify_cli]=python
+	[portainer]=docker
+	[lazydocker]=docker
+	[codex_cli]=nodejs
+	[dotfiles]=system_packages
+)
 
 # Install execution order (differs from menu display order).
 COMP_INSTALL_ORDER=(
@@ -63,11 +69,11 @@ COMP_INSTALL_ORDER=(
 	powershell
 	go
 	lazygit
-	lazydocker
 	wsl_conf
 	git_credential
 	docker
 	portainer
+	lazydocker
 	nodejs
 	direnv
 	cursor_cli
@@ -80,6 +86,78 @@ COMP_INSTALL_ORDER=(
 )
 
 declare -A COMP_ON
+
+comp_dependency() {
+	printf '%s\n' "${COMP_DEPENDS_ON[$1]:-}"
+}
+
+comp_index_of() {
+	local wanted="$1" i
+	for i in "${!COMP_KEYS[@]}"; do
+		[[ "${COMP_KEYS[$i]}" == "$wanted" ]] && {
+			printf '%s\n' "$i"
+			return 0
+		}
+	done
+	return 1
+}
+
+comp_registry_validate() {
+	local key dependency previous_index current_index
+	local -A known=() ordered=()
+	for key in "${COMP_KEYS[@]}"; do
+		[[ -z "${known[$key]+x}" ]] || {
+			printf 'duplicate component key: %s\n' "$key" >&2
+			return 1
+		}
+		known[$key]=1
+	done
+	[[ "${#COMP_KEYS[@]}" -eq "${#COMP_LABELS[@]}" ]] || {
+		printf 'component key/label count mismatch\n' >&2
+		return 1
+	}
+	for key in "${!COMP_DEPENDS_ON[@]}"; do
+		dependency="${COMP_DEPENDS_ON[$key]}"
+		[[ -n "${known[$key]+x}" && -n "${known[$dependency]+x}" ]] || {
+			printf 'invalid dependency: %s -> %s\n' "$key" "$dependency" >&2
+			return 1
+		}
+	done
+	for key in "${COMP_INSTALL_ORDER[@]}"; do
+		[[ -n "${known[$key]+x}" && -z "${ordered[$key]+x}" ]] || {
+			printf 'invalid or duplicate install-order key: %s\n' "$key" >&2
+			return 1
+		}
+		ordered[$key]="${#ordered[@]}"
+	done
+	[[ "${#ordered[@]}" -eq "${#known[@]}" ]] || {
+		printf 'install order does not contain every component\n' >&2
+		return 1
+	}
+	for key in "${!COMP_DEPENDS_ON[@]}"; do
+		dependency="${COMP_DEPENDS_ON[$key]}"
+		current_index="${ordered[$key]}"
+		previous_index="${ordered[$dependency]}"
+		((previous_index < current_index)) || {
+			printf 'dependency must be installed first: %s -> %s\n' "$key" "$dependency" >&2
+			return 1
+		}
+	done
+}
+
+comp_registry_validate_contract() {
+	local key operation function_name
+	comp_registry_validate || return 1
+	for key in "${COMP_KEYS[@]}"; do
+		for operation in desc plan probe install; do
+			function_name="_comp_${operation}_${key}"
+			declare -F "$function_name" >/dev/null 2>&1 || {
+				printf 'component contract missing: %s\n' "$function_name" >&2
+				return 1
+			}
+		done
+	done
+}
 
 comp_registry_init() {
 	local _key

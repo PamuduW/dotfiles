@@ -32,8 +32,14 @@ passed=0
 failed=0
 TOKEN_SEQ=0
 
-pass() { printf 'ok - %s\n' "$1"; passed=$((passed + 1)); }
-fail() { printf 'not ok - %s\n' "$1" >&2; failed=$((failed + 1)); }
+pass() {
+	printf 'ok - %s\n' "$1"
+	passed=$((passed + 1))
+}
+fail() {
+	printf 'not ok - %s\n' "$1" >&2
+	failed=$((failed + 1))
+}
 expect_success() {
 	local name="$1"
 	shift
@@ -149,7 +155,8 @@ test_strict_parser_rejects_malformed_content_without_execution() (
 test_atomic_private_write_replacement_removal_and_unsafe_rejection() (
 	reset_token_state
 	local first second external="$TEST_HARNESS_ROOT/external-target" stderr="$TEST_HARNESS_ROOT/write.err"
-	first="$(make_token first)"; second="$(make_token second)"
+	first="$(make_token first)"
+	second="$(make_token second)"
 	github_token_write "$first" 2>"$stderr" || return 1
 	[[ "$(stat -c %a "$(active_dir)")" == 700 ]] || return 1
 	[[ "$(stat -c %a "$(github_token_file)")" == 600 ]] || return 1
@@ -170,7 +177,8 @@ test_atomic_private_write_replacement_removal_and_unsafe_rejection() (
 test_legacy_migration_matrix() (
 	reset_token_state
 	local one two stderr="$TEST_HARNESS_ROOT/migrate.err"
-	one="$(make_token one)"; two="$(make_token two)"
+	one="$(make_token one)"
+	two="$(make_token two)"
 	github_token_migrate_legacy 2>"$stderr" || return 1
 	[[ ! -e "$(github_token_file)" && ! -s "$stderr" ]] || return 1
 	write_raw_file "$(legacy_file)" "GITHUB_TOKEN=${one}\n"

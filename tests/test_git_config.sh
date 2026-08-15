@@ -11,9 +11,19 @@ export PATH
 
 passed=0
 failed=0
-pass() { printf 'ok - %s\n' "$1"; passed=$((passed + 1)); }
-fail() { printf 'not ok - %s\n' "$1" >&2; failed=$((failed + 1)); }
-expect_success() { local name="$1"; shift; if "$@"; then pass "$name"; else fail "$name"; fi; }
+pass() {
+	printf 'ok - %s\n' "$1"
+	passed=$((passed + 1))
+}
+fail() {
+	printf 'not ok - %s\n' "$1" >&2
+	failed=$((failed + 1))
+}
+expect_success() {
+	local name="$1"
+	shift
+	if "$@"; then pass "$name"; else fail "$name"; fi
+}
 
 DOTFILES_DIR="$ROOT"
 export DOTFILES_DIR
@@ -56,8 +66,7 @@ test_detected_gcm_and_submodule_defaults_are_all_configured() (
 
 	configure_git_settings >/dev/null || return 1
 
-	[[ "$(git config --global --get credential.helper)" == \
-		'/mnt/c/Program Files/Git/mingw64/bin/git-credential-manager.exe' ]] || return 1
+	[[ "$(git config --global --get credential.helper)" == '/mnt/c/Program Files/Git/mingw64/bin/git-credential-manager.exe' ]] || return 1
 	[[ "$(git config --global --get submodule.recurse)" == true ]] || return 1
 	[[ "$(git config --global --get fetch.recurseSubmodules)" == on-demand ]] || return 1
 	[[ "$(git config --global --get push.recurseSubmodules)" == check ]] || return 1
@@ -71,16 +80,13 @@ test_probe_distinguishes_complete_partial_and_incomplete_configuration() (
 	git config --global fetch.recurseSubmodules on-demand
 	git config --global push.recurseSubmodules check
 	git config --global status.submoduleSummary true
-	[[ "$(_comp_probe_git_credential)" == \
-		'configured|credential helper + recursive submodule defaults' ]] || return 1
+	[[ "$(_comp_probe_git_credential)" == 'configured|credential helper + recursive submodule defaults' ]] || return 1
 
 	git config --global --unset-all credential.helper
-	[[ "$(_comp_probe_git_credential)" == \
-		'check|submodule defaults set; credential helper not configured' ]] || return 1
+	[[ "$(_comp_probe_git_credential)" == 'check|submodule defaults set; credential helper not configured' ]] || return 1
 
 	git config --global --unset-all status.submoduleSummary
-	[[ "$(_comp_probe_git_credential)" == \
-		'check|Git configuration incomplete' ]]
+	[[ "$(_comp_probe_git_credential)" == 'check|Git configuration incomplete' ]]
 )
 
 expect_success 'submodule defaults do not depend on Windows GCM' test_submodule_defaults_are_configured_without_gcm

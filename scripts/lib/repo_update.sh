@@ -1,5 +1,23 @@
 # shellcheck shell=bash
 
+if [[ "${_DOTFILES_REPO_UPDATE_LOADED:-0}" == 1 ]]; then
+	return 0
+fi
+_DOTFILES_REPO_UPDATE_LOADED=1
+
+if ! declare -F tty_available >/dev/null 2>&1; then
+	_REPO_UPDATE_LIB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+	# shellcheck source=scripts/lib/tty.sh
+	source "$_REPO_UPDATE_LIB_DIR/tty.sh"
+fi
+if ! declare -F rt_print_four_column_header >/dev/null 2>&1; then
+	_REPO_UPDATE_LIB_DIR="${_REPO_UPDATE_LIB_DIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)}"
+	# shellcheck source=scripts/lib/report_table.sh
+	source "$_REPO_UPDATE_LIB_DIR/report_table.sh"
+fi
+
+# Compatibility state for existing callers. New code should use the named
+# associative result passed to repo_update_preflight/request_approval/apply.
 REPO_UPDATE_OUTCOME=stopped
 REPO_UPDATE_STATE=invalid
 REPO_UPDATE_AHEAD=0
@@ -9,10 +27,33 @@ REPO_UPDATE_CHANGES=''
 REPO_UPDATE_UPSTREAM=''
 REPO_UPDATE_REASON=''
 
-_repo_update_stop() {
-	REPO_UPDATE_STATE="$1"
-	REPO_UPDATE_REASON="$1"
-	printf '%s\n' "$2" >&2
+_repo_update_result_init() {
+	local result_name="$1" repo_dir="$2" repo_label="$3"
+	local -n result_ref="$result_name"
+	result_ref=(
+		[dir]="$repo_dir"
+		[label]="$repo_label"
+		[state]=invalid
+		[ahead]=0
+		[behind]=0
+		[dirty]=0
+		[changes]=''
+		[upstream]=''
+		[reason]=''
+		[safe]=0
+		[approved]=0
+		[outcome]=stopped
+	)
+}
+
+_repo_update_result_stop() {
+	local result_name="$1" state="$2" message="$3"
+	local -n result_ref="$result_name"
+	result_ref[state]="$state"
+	result_ref[reason]="$state"
+	result_ref[safe]=0
+	result_ref[outcome]=stopped
+	printf '%s\n' "$message" >&2
 	return 1
 }
 
@@ -23,89 +64,107 @@ _repo_update_print_fetch_output() {
 	done <<<"$output"
 }
 
-repo_update_inspect() {
-	local repo_dir="$1" upstream
-	REPO_UPDATE_STATE=invalid
-	REPO_UPDATE_AHEAD=0
-	REPO_UPDATE_BEHIND=0
-	REPO_UPDATE_DIRTY=0
-	REPO_UPDATE_CHANGES=''
-	REPO_UPDATE_UPSTREAM=''
-	REPO_UPDATE_REASON=''
-	command -v git >/dev/null 2>&1 || { _repo_update_stop invalid 'Git is not installed.'; return 1; }
-	[[ "$(git -C "$repo_dir" rev-parse --is-inside-work-tree 2>/dev/null || true)" == true ]] || { _repo_update_stop invalid 'Not a Git worktree.'; return 1; }
-	[[ "$(git -C "$repo_dir" rev-parse --is-bare-repository 2>/dev/null || true)" == false ]] || { _repo_update_stop invalid 'Bare repositories cannot be updated.'; return 1; }
-	git -C "$repo_dir" remote get-url origin >/dev/null 2>&1 || { _repo_update_stop no-origin 'No origin remote is configured.'; return 1; }
-	git -C "$repo_dir" symbolic-ref -q --short HEAD >/dev/null 2>&1 || { _repo_update_stop detached 'HEAD is detached; check out a branch first.'; return 1; }
-	upstream="$(git -C "$repo_dir" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)" || { _repo_update_stop no-upstream 'No upstream is configured; set the branch upstream first.'; return 1; }
-	[[ "${upstream%%/*}" == origin ]] || { _repo_update_stop non-origin-upstream 'The current branch upstream must use the origin remote.'; return 1; }
-	REPO_UPDATE_UPSTREAM="$upstream"
-	if ! REPO_UPDATE_CHANGES="$(git -C "$repo_dir" status --short --untracked-files=all 2>/dev/null)"; then
-		_repo_update_stop status-failed 'Could not inspect local repository changes.'
-		return 1
+repo_update_preflight() {
+	local repo_dir="$1" repo_label="$2" result_name="$3"
+	local upstream counts fetch_output=''
+	local -n result_ref="$result_name"
+	_repo_update_result_init "$result_name" "$repo_dir" "$repo_label"
+
+	command -v git >/dev/null 2>&1 || {
+		_repo_update_result_stop "$result_name" invalid 'Git is not installed.'
+		return 0
+	}
+	[[ "$(git -C "$repo_dir" rev-parse --is-inside-work-tree 2>/dev/null || true)" == true ]] || {
+		_repo_update_result_stop "$result_name" invalid "Not a Git worktree: $repo_dir"
+		return 0
+	}
+	[[ "$(git -C "$repo_dir" rev-parse --is-bare-repository 2>/dev/null || true)" == false ]] || {
+		_repo_update_result_stop "$result_name" invalid 'Bare repositories cannot be updated.'
+		return 0
+	}
+	git -C "$repo_dir" remote get-url origin >/dev/null 2>&1 || {
+		_repo_update_result_stop "$result_name" no-origin 'No origin remote is configured.'
+		return 0
+	}
+	git -C "$repo_dir" symbolic-ref -q --short HEAD >/dev/null 2>&1 || {
+		_repo_update_result_stop "$result_name" detached 'HEAD is detached; check out a branch first.'
+		return 0
+	}
+	upstream="$(git -C "$repo_dir" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)" || {
+		_repo_update_result_stop "$result_name" no-upstream 'No upstream is configured; set the branch upstream first.'
+		return 0
+	}
+	[[ "${upstream%%/*}" == origin ]] || {
+		_repo_update_result_stop "$result_name" non-origin-upstream 'The current branch upstream must use the origin remote.'
+		return 0
+	}
+	result_ref[upstream]="$upstream"
+
+	if ! result_ref[changes]="$(git -C "$repo_dir" status --short --untracked-files=all 2>/dev/null)"; then
+		_repo_update_result_stop "$result_name" status-failed 'Could not inspect local repository changes.'
+		return 0
 	fi
-	[[ -n "$REPO_UPDATE_CHANGES" ]] && REPO_UPDATE_DIRTY=1
-	return 0
+	[[ -n "${result_ref[changes]}" ]] && result_ref[dirty]=1
+
+	if ! fetch_output="$(git -C "$repo_dir" fetch --prune 2>&1)"; then
+		[[ -n "$fetch_output" ]] && printf '%s\n' "$fetch_output" >&2
+		_repo_update_result_stop "$result_name" fetch-failed 'Git fetch failed; remote freshness is unknown.'
+		return 0
+	fi
+	[[ -n "$fetch_output" ]] && _repo_update_print_fetch_output "$fetch_output"
+
+	counts="$(git -C "$repo_dir" rev-list --left-right --count 'HEAD...@{upstream}' 2>/dev/null)" || {
+		_repo_update_result_stop "$result_name" invalid 'Could not classify local and upstream history.'
+		return 0
+	}
+	read -r result_ref[ahead] result_ref[behind] <<<"$counts"
+	if [[ ! "${result_ref[ahead]}" =~ ^[0-9]+$ || ! "${result_ref[behind]}" =~ ^[0-9]+$ ]]; then
+		_repo_update_result_stop "$result_name" invalid-counts 'Git returned invalid ahead/behind counts.'
+		return 0
+	fi
+
+	if ((result_ref[ahead] > 0 && result_ref[behind] > 0)); then
+		result_ref[state]=diverged
+	elif ((result_ref[ahead] > 0)); then
+		result_ref[state]=ahead
+	elif ((result_ref[behind] > 0)); then
+		result_ref[state]=behind
+	else
+		result_ref[state]=current
+	fi
+
+	if [[ "${result_ref[dirty]}" == 1 ]]; then
+		result_ref[reason]=dirty
+		return 0
+	fi
+	if [[ "${result_ref[state]}" == diverged ]]; then
+		result_ref[reason]=diverged
+		return 0
+	fi
+	result_ref[reason]="${result_ref[state]}"
+	result_ref[safe]=1
 }
 
-repo_update_classify_history() {
-	local repo_dir="$1" counts
-	counts="$(git -C "$repo_dir" rev-list --left-right --count 'HEAD...@{upstream}' 2>/dev/null)" || { _repo_update_stop invalid 'Could not classify local and upstream history.'; return 1; }
-	read -r REPO_UPDATE_AHEAD REPO_UPDATE_BEHIND <<<"$counts"
-	[[ "$REPO_UPDATE_AHEAD" =~ ^[0-9]+$ && "$REPO_UPDATE_BEHIND" =~ ^[0-9]+$ ]] || { _repo_update_stop invalid-counts 'Git returned invalid ahead/behind counts.'; return 1; }
-	if ((REPO_UPDATE_AHEAD > 0 && REPO_UPDATE_BEHIND > 0)); then REPO_UPDATE_STATE=diverged
-	elif ((REPO_UPDATE_AHEAD > 0)); then REPO_UPDATE_STATE=ahead
-	elif ((REPO_UPDATE_BEHIND > 0)); then REPO_UPDATE_STATE=behind
-	else REPO_UPDATE_STATE=current
-	fi
-	REPO_UPDATE_REASON="$REPO_UPDATE_STATE"
-}
-
-_repo_update_change_count() {
-	if [[ -z "${REPO_UPDATE_CHANGES:-}" ]]; then
+_repo_update_change_count_for() {
+	local result_name="$1"
+	local -n result_ref="$result_name"
+	if [[ -z "${result_ref[changes]:-}" ]]; then
 		printf '0\n'
-		return
+	else
+		awk 'END { print NR }' <<<"${result_ref[changes]}"
 	fi
-	awk 'END { print NR }' <<<"$REPO_UPDATE_CHANGES"
 }
 
-_repo_update_history_detail() {
-	case "${REPO_UPDATE_STATE:-stopped}" in
+_repo_update_history_detail_for() {
+	local result_name="$1"
+	local -n result_ref="$result_name"
+	case "${result_ref[state]:-stopped}" in
 	current) printf 'current' ;;
-	ahead) printf '%s local commit(s) ahead' "${REPO_UPDATE_AHEAD:-0}" ;;
-	behind) printf '%s commit(s) behind' "${REPO_UPDATE_BEHIND:-0}" ;;
-	diverged) printf '%s ahead / %s behind' "${REPO_UPDATE_AHEAD:-0}" "${REPO_UPDATE_BEHIND:-0}" ;;
+	ahead) printf '%s local commit(s) ahead' "${result_ref[ahead]:-0}" ;;
+	behind) printf '%s commit(s) behind' "${result_ref[behind]:-0}" ;;
+	diverged) printf '%s ahead / %s behind' "${result_ref[ahead]:-0}" "${result_ref[behind]:-0}" ;;
 	*) printf 'freshness unknown' ;;
 	esac
-}
-
-_repo_update_fit_text() {
-	local text="$1" width="$2"
-	if ((${#text} > width)); then
-		if ((width <= 3)); then
-			printf '%s' "${text:0:width}"
-		else
-			printf '%s...' "${text:0:$((width - 3))}"
-		fi
-	else
-		printf '%s' "$text"
-	fi
-}
-
-_repo_update_table_rule() {
-	local width="$1" rule
-	printf -v rule '%*s' "$width" ''
-	printf '%s' "${rule// /-}"
-}
-
-_repo_update_print_plain_cell() {
-	local text="$1" width="$2" fit padding
-	fit="$(_repo_update_fit_text "$text" "$width")"
-	printf '%s' "$fit"
-	padding=$((width - ${#fit}))
-	if ((padding > 0)); then
-		printf '%*s' "$padding" ''
-	fi
 }
 
 _repo_update_color_available() {
@@ -130,130 +189,226 @@ _repo_update_color_action() {
 	esac
 }
 
-_repo_update_print_colored_cell() {
-	local text="$1" width="$2" color_fn="$3" fit padding
-	fit="$(_repo_update_fit_text "$text" "$width")"
-	"$color_fn" "$fit"
-	padding=$((width - ${#fit}))
-	if ((padding > 0)); then
-		printf '%*s' "$padding" ''
-	fi
-}
-
 _repo_update_print_table_header() {
 	local last_col="$1"
-	printf '%s%-*s | %-*s | %-*s | %-*s%s\n' \
-		"${C_BOLD:-}" \
-		18 component \
-		28 installed \
-		22 available \
-		16 "$last_col" \
-		"${C_RESET:-}"
-	printf '%s%s-+-%s-+-%s-+-%s%s\n' \
-		"${C_DIM:-}" \
-		"$(_repo_update_table_rule 18)" \
-		"$(_repo_update_table_rule 28)" \
-		"$(_repo_update_table_rule 22)" \
-		"$(_repo_update_table_rule 16)" \
-		"${C_RESET:-}"
+	rt_print_four_column_header 18 component 28 installed 22 available 16 "$last_col"
 }
 
 _repo_update_print_table_row() {
 	local component="$1" installed="$2" available="$3" action="$4"
-	_repo_update_print_plain_cell "$component" 18
-	printf ' | '
-	_repo_update_print_plain_cell "$installed" 28
-	printf ' | '
-	_repo_update_print_colored_cell "$available" 22 _repo_update_color_available
-	printf ' | '
-	_repo_update_print_colored_cell "$action" 16 _repo_update_color_action
-	printf '\n'
+	rt_print_four_column_row 18 "$component" 28 "$installed" 22 "$available" 16 "$action" \
+		_repo_update_color_available _repo_update_color_action
 }
 
-repo_update_print_report() {
-	local repo_dir="$1"
-	local branch local_rev available action upstream change_count remote_action
-	branch="$(git -C "$repo_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
-	local_rev="$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null || echo unknown)"
-	available="$(_repo_update_history_detail)"
-	upstream="${REPO_UPDATE_UPSTREAM:-upstream}"
-	change_count="$(_repo_update_change_count)"
-	case "${REPO_UPDATE_STATE:-stopped}" in
-	current | ahead | behind | diverged) remote_action='verified' ;;
-	*) remote_action='unchecked' ;;
-	esac
-	if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
-		action='blocked'
+repo_update_print_result() {
+	local result_name="$1"
+	local -n result_ref="$result_name"
+	local branch local_rev available action change_count remote_action
+	branch="$(git -C "${result_ref[dir]}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+	local_rev="$(git -C "${result_ref[dir]}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+	available="$(_repo_update_history_detail_for "$result_name")"
+	change_count="$(_repo_update_change_count_for "$result_name")"
+	case "${result_ref[state]}" in current | ahead | behind | diverged) remote_action=verified ;; *) remote_action=unchecked ;; esac
+	if [[ "${result_ref[dirty]}" == 1 ]]; then
+		action=blocked
 	else
-		case "${REPO_UPDATE_STATE:-stopped}" in
-		behind) action='pull --ff-only' ;;
-		ahead) action='continue' ;;
-		current) action='current' ;;
-		*) action='check' ;;
-		esac
+		case "${result_ref[state]}" in behind) action='pull --ff-only' ;; ahead) action='continue' ;; current) action='current' ;; *) action='check' ;; esac
 	fi
 
 	printf '\n%s%sRepository update%s\n\n' "${C_BOLD:-}" "${C_YELLOW:-}" "${C_RESET:-}"
 	_repo_update_print_table_header action
-	if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
-		_repo_update_print_table_row 'dotfiles repo' "${branch}@${local_rev}" "${change_count} local change(s)" "$action"
+	if [[ "${result_ref[dirty]}" == 1 ]]; then
+		_repo_update_print_table_row "${result_ref[label]}" "${branch}@${local_rev}" "${change_count} local change(s)" "$action"
 	else
-		_repo_update_print_table_row 'dotfiles repo' "${branch}@${local_rev}" "$available" "$action"
+		_repo_update_print_table_row "${result_ref[label]}" "${branch}@${local_rev}" "$available" "$action"
 	fi
-	_repo_update_print_table_row "$upstream" 'remote history' "$available" "$remote_action"
+	_repo_update_print_table_row "${result_ref[upstream]:-upstream}" 'remote history' "$available" "$remote_action"
 	printf '\n'
 }
 
-repo_update_confirm() {
-	local repo_dir="$1" confirm_fn="$2" prompt="$3"
-	repo_update_print_report "$repo_dir"
-	"$confirm_fn" "$prompt"
+repo_update_print_changes() {
+	local result_name="$1" max_lines=20 total shown=0 omitted quoted_repo line
+	local -n result_ref="$result_name"
+	[[ -n "${result_ref[changes]:-}" ]] || return 0
+	total="$(awk 'END { print NR }' <<<"${result_ref[changes]}")"
+	printf '  Local changes:\n'
+	while IFS= read -r line; do
+		((shown >= max_lines)) && break
+		printf '  %s\n' "$line"
+		shown=$((shown + 1))
+	done <<<"${result_ref[changes]}"
+	omitted=$((total - shown))
+	if ((omitted > 0)); then
+		printf '  ... %d more local change(s)\n' "$omitted"
+	fi
+	printf -v quoted_repo '%q' "${result_ref[dir]}"
+	printf '  Full list: git -C %s status --short --untracked-files=all\n' "$quoted_repo"
 }
 
-repo_update_gate() {
-	local repo_dir="$1" confirm_fn="$2" fetch_output='' pull_output=''
-	REPO_UPDATE_OUTCOME=stopped
-	repo_update_inspect "$repo_dir" || return 0
-	if ! fetch_output="$(git -C "$repo_dir" fetch --prune 2>&1)"; then
-		[[ -n "$fetch_output" ]] && printf '%s\n' "$fetch_output" >&2
-		printf 'Git fetch failed; remote freshness is unknown.\n' >&2
-		REPO_UPDATE_STATE=stopped
-		REPO_UPDATE_REASON=fetch-failed
+repo_update_print_stopped() {
+	local result_name="$1"
+	local -n result_ref="$result_name"
+	case "${result_ref[reason]:-unknown}" in
+	behind-declined | ahead-declined) return 0 ;;
+	esac
+	repo_update_print_result "$result_name"
+	repo_update_print_changes "$result_name"
+	case "${result_ref[reason]:-unknown}" in
+	dirty)
+		printf '%sRepository pull and downstream updates stopped.%s\n' "${C_RED:-}" "${C_RESET:-}" >&2
+		printf '%sResolve the local changes, then retry.%s\n' "${C_RED:-}" "${C_RESET:-}" >&2
+		;;
+	fetch-failed)
+		printf '%sRepository pull and downstream updates stopped because remote freshness is unknown.%s\n' \
+			"${C_RED:-}" "${C_RESET:-}" >&2
+		;;
+	*)
+		printf '%sRepository pull and downstream updates stopped: %s.%s\n' \
+			"${C_RED:-}" "${result_ref[reason]:-unknown}" "${C_RESET:-}" >&2
+		;;
+	esac
+}
+
+repo_update_request_approval() {
+	local result_name="$1" confirm_fn="$2" event prompt
+	local -n result_ref="$result_name"
+	result_ref[approved]=0
+	if [[ "${result_ref[safe]}" != 1 ]]; then
+		result_ref[outcome]=stopped
+		return 1
+	fi
+	case "${result_ref[state]}" in
+	current)
+		result_ref[approved]=1
+		result_ref[outcome]=current
 		return 0
-	fi
-	if [[ -n "$fetch_output" ]]; then
-		_repo_update_print_fetch_output "$fetch_output"
-	fi
-	repo_update_classify_history "$repo_dir" || return 0
-	if [[ "$REPO_UPDATE_DIRTY" == 1 ]]; then
-		REPO_UPDATE_OUTCOME=stopped
-		REPO_UPDATE_REASON=dirty
-		return 0
-	fi
-	case "$REPO_UPDATE_STATE" in
-	current) REPO_UPDATE_OUTCOME=current ;;
+		;;
 	ahead)
-		if "$confirm_fn" 'Local branch is ahead. Continue with downstream updates?'; then REPO_UPDATE_OUTCOME=ahead_continue
-		else
-			REPO_UPDATE_REASON=ahead-declined
-			printf '\n\nUpdate stopped; no downstream work was run.\n'
-		fi
+		event=continue-ahead
+		prompt='Local branch is ahead. Continue with downstream updates?'
 		;;
 	behind)
-		if ! "$confirm_fn" "Pull ${REPO_UPDATE_BEHIND} commit(s) with --ff-only?"; then
-			REPO_UPDATE_REASON=behind-declined
-			printf '\n\nPull declined; update stopped.\n'
-		elif pull_output="$(git -C "$repo_dir" pull --ff-only 2>&1)"; then
+		event=pull-behind
+		prompt="Pull ${result_ref[behind]} commit(s) with --ff-only?"
+		;;
+	*) return 1 ;;
+	esac
+	repo_update_print_result "$result_name"
+	if "$confirm_fn" "$event" "$prompt"; then
+		result_ref[approved]=1
+		[[ "${result_ref[state]}" == ahead ]] && result_ref[outcome]=ahead_continue
+		return 0
+	fi
+	result_ref[reason]="${result_ref[state]}-declined"
+	result_ref[outcome]=stopped
+	if [[ "${result_ref[state]}" == behind ]]; then
+		printf '\n\n%sPull declined; update stopped.%s\n' "${C_RED:-}" "${C_RESET:-}"
+	else
+		printf '\n\n%sUpdate stopped; no downstream work was run.%s\n' "${C_RED:-}" "${C_RESET:-}"
+	fi
+	return 1
+}
+
+repo_update_apply() {
+	local result_name="$1" pull_output=''
+	local -n result_ref="$result_name"
+	[[ "${result_ref[approved]}" == 1 ]] || {
+		result_ref[outcome]=stopped
+		return 1
+	}
+	case "${result_ref[state]}" in
+	current) result_ref[outcome]=current ;;
+	ahead) result_ref[outcome]=ahead_continue ;;
+	behind)
+		if pull_output="$(git -C "${result_ref[dir]}" pull --ff-only 2>&1)"; then
 			[[ -n "$pull_output" ]] && _repo_update_print_fetch_output "$pull_output"
-			REPO_UPDATE_OUTCOME=relaunch_required
+			result_ref[outcome]=relaunch_required
 		else
 			[[ -n "$pull_output" ]] && printf '%s\n' "$pull_output" >&2
 			printf 'Fast-forward pull failed; resolve the repository manually.\n' >&2
+			result_ref[reason]=pull-failed
+			result_ref[outcome]=stopped
+			return 1
 		fi
 		;;
-	diverged) printf 'Local and upstream histories diverged; resolve them manually.\n' >&2 ;;
-	*) printf 'Repository state is unsafe for update.\n' >&2 ;;
+	*)
+		result_ref[outcome]=stopped
+		return 1
+		;;
 	esac
+}
+
+_repo_update_sync_globals() {
+	local result_name="$1"
+	local -n result_ref="$result_name"
+	REPO_UPDATE_OUTCOME="${result_ref[outcome]}"
+	REPO_UPDATE_STATE="${result_ref[state]}"
+	REPO_UPDATE_AHEAD="${result_ref[ahead]}"
+	REPO_UPDATE_BEHIND="${result_ref[behind]}"
+	REPO_UPDATE_DIRTY="${result_ref[dirty]}"
+	REPO_UPDATE_CHANGES="${result_ref[changes]}"
+	REPO_UPDATE_UPSTREAM="${result_ref[upstream]}"
+	REPO_UPDATE_REASON="${result_ref[reason]}"
+}
+
+# Complete the single-repository workflow. Every caller gets the same
+# preflight, report, approval, pull, and stopped-state presentation.
+repo_update_run() {
+	local repo_dir="$1" repo_label="$2" confirm_fn="$3" result_name="$4"
+	repo_update_preflight "$repo_dir" "$repo_label" "$result_name"
+	local -n result_ref="$result_name"
+	if [[ "${result_ref[safe]}" != 1 ]]; then
+		repo_update_print_stopped "$result_name"
+		_repo_update_sync_globals "$result_name"
+		return 1
+	fi
+	if ! repo_update_request_approval "$result_name" "$confirm_fn"; then
+		_repo_update_sync_globals "$result_name"
+		return 1
+	fi
+	if ! repo_update_apply "$result_name"; then
+		_repo_update_sync_globals "$result_name"
+		return 1
+	fi
+	_repo_update_sync_globals "$result_name"
+}
+
+repo_update_gate() {
+	local repo_dir="$1" confirm_fn="$2" repo_label="${3:-dotfiles repo}"
+	local -A result=()
+	repo_update_run "$repo_dir" "$repo_label" "$confirm_fn" result || true
+}
+
+# Compatibility renderers used while callers migrate to named results.
+_repo_update_result_from_globals() {
+	local result_name="$1" repo_dir="$2" repo_label="${3:-dotfiles repo}"
+	local -n result_ref="$result_name"
+	result_ref=(
+		[dir]="$repo_dir" [label]="$repo_label" [state]="$REPO_UPDATE_STATE"
+		[ahead]="$REPO_UPDATE_AHEAD" [behind]="$REPO_UPDATE_BEHIND"
+		[dirty]="$REPO_UPDATE_DIRTY" [changes]="$REPO_UPDATE_CHANGES"
+		[upstream]="$REPO_UPDATE_UPSTREAM" [reason]="$REPO_UPDATE_REASON"
+		[safe]=1 [approved]=0 [outcome]="$REPO_UPDATE_OUTCOME"
+	)
+}
+
+repo_update_print_report() {
+	local repo_dir="$1" repo_label="${2:-dotfiles repo}"
+	local -A result=()
+	_repo_update_result_from_globals result "$repo_dir" "$repo_label"
+	repo_update_print_result result
+}
+
+repo_update_confirm() {
+	local repo_dir="$1" confirm_fn="$2" prompt="$3" repo_label="${4:-dotfiles repo}"
+	repo_update_print_report "$repo_dir" "$repo_label"
+	"$confirm_fn" "$prompt"
+}
+
+repo_update_wait_for_reload() {
+	local answer=''
+	tty_available || return 0
+	read_tty_line answer 'Press Enter to reload the updated Dotfiles menu: ' || true
 }
 
 repo_update_relaunch() {

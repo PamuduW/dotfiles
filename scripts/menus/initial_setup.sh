@@ -39,37 +39,39 @@ run_status_action() {
 }
 
 _dotfiles_install_repo_decision() {
-	repo_update_confirm "$DOTFILES_DIR" ui_confirm_yes_no "$1"
+	local _event="$1" prompt="$2"
+	ui_confirm_yes_no "$prompt"
 }
 
 _dotfiles_install_repo_gate() {
 	local outcome
+	local -A result=()
 
-	if ! declare -F repo_update_gate >/dev/null || [[ -z "${DOTFILES_DIR:-}" ]]; then
+	if ! declare -F repo_update_run >/dev/null || [[ -z "${DOTFILES_DIR:-}" ]]; then
 		return 0
 	fi
 
-	repo_update_gate "$DOTFILES_DIR" _dotfiles_install_repo_decision
-	outcome="${REPO_UPDATE_OUTCOME:-stopped}"
+	repo_update_run "$DOTFILES_DIR" 'dotfiles repo' _dotfiles_install_repo_decision result || return 1
+	outcome="${result[outcome]}"
 	case "$outcome" in
 	current | ahead_continue) return 0 ;;
 	relaunch_required)
 		printf '%sRepository fast-forward succeeded; reloading Dotfiles.%s\n' \
 			"${C_GREEN:-}" "${C_RESET:-}"
+		repo_update_wait_for_reload
 		repo_update_relaunch "$DOTFILES_DIR/install.sh"
 		return $?
 		;;
-	*)
-		printf '%sInstall stopped; the Dotfiles repository is not ready for setup.%s\n' \
-			"${C_YELLOW:-}" "${C_RESET:-}" >&2
-		return 1
-		;;
+	*) return 1 ;;
 	esac
 }
 
 run_install_action() {
 	ui_clear
-	_dotfiles_install_repo_gate || return 1
+	# A declined or blocked repository check is a handled menu outcome. The
+	# shared gate already printed the reason; return to the menu without adding a
+	# second generic "Action failed" message.
+	_dotfiles_install_repo_gate || return 0
 	run_initial_setup_flow
 }
 
@@ -95,7 +97,9 @@ _run_setup_header() {
 }
 
 run_initial_setup_flow() {
+	local tty_out
 	if [[ "$DOTFILES_INTERACTIVE_TTY" != true ]]; then
+		_dotfiles_install_repo_gate || return 1
 		apply_dotfiles_components_env
 		_apply_noninteractive_git_defaults
 		_run_setup_header
@@ -104,9 +108,8 @@ run_initial_setup_flow() {
 		return 0
 	fi
 
-	{
-		_run_setup_header
-	} >/dev/tty
+	tty_out="$(tty_output_path)"
+	_run_setup_header >"$tty_out"
 	component_menu || return 0
 	confirm_loop || return 0
 	run_install
@@ -120,11 +123,9 @@ confirm_loop() {
 			prompt_git_identity
 			need_git_prompt=false
 		fi
-		{
-			show_plan
-			read_tty_line answer "$(ui_install_confirm_prompt)"
-			printf '%s' "${C_RESET:-}" >/dev/tty
-		} >/dev/tty
+		show_plan
+		read_tty_line answer "$(ui_install_confirm_prompt)"
+		tty_printf '%s' "${C_RESET:-}"
 		case "$answer" in
 		c | C) return 0 ;;
 		e | E)
@@ -132,10 +133,10 @@ confirm_loop() {
 			need_git_prompt=true
 			;;
 		q | Q)
-			printf '%s\n' "Returning to Dotfiles menu." >/dev/tty
+			tty_printf '%s\n' "Returning to Dotfiles menu."
 			return 1
 			;;
-		*) printf '%s\n' "    Invalid choice." >/dev/tty ;;
+		*) tty_printf '%s\n' "    Invalid choice." ;;
 		esac
 	done
 }
@@ -143,7 +144,7 @@ confirm_loop() {
 print_status_summary_all() {
 	local i key label row result detail short_label
 	local ok_count=0 check_count=0 miss_count=0
-	local cols status_output="${DOTFILES_STATUS_OUTPUT:-/dev/tty}"
+	local cols status_output="${DOTFILES_STATUS_OUTPUT:-$(tty_output_path)}"
 
 	cols="$(menu_tty_cols)"
 

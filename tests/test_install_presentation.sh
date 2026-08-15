@@ -14,9 +14,19 @@ source "$REPO_DIR/scripts/lib/installers/logging.sh"
 ui_init_colors
 
 passed=0 failed=0
-pass() { printf 'ok - %s\n' "$1"; passed=$((passed + 1)); }
-fail() { printf 'not ok - %s\n' "$1" >&2; failed=$((failed + 1)); }
-expect_success() { local name="$1"; shift; if "$@"; then pass "$name"; else fail "$name"; fi; }
+pass() {
+	printf 'ok - %s\n' "$1"
+	passed=$((passed + 1))
+}
+fail() {
+	printf 'not ok - %s\n' "$1" >&2
+	failed=$((failed + 1))
+}
+expect_success() {
+	local name="$1"
+	shift
+	if "$@"; then pass "$name"; else fail "$name"; fi
+}
 
 test_install_legend_uses_status_colors() {
 	local output

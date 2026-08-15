@@ -21,7 +21,7 @@ configure_docker_daemon() {
 	if sudo test -f "$daemon_json"; then
 		# Do not replace a user's daemon configuration. Merge only our logging
 		# defaults, preserve unrelated keys, and refuse conflicting log settings.
-		if sudo python3 - "$daemon_json" "$tmp_file" <<'PY'
+		if sudo python3 - "$daemon_json" "$tmp_file" <<'PY'; then
 import json
 import sys
 
@@ -61,7 +61,6 @@ with open(destination, "w", encoding="utf-8") as handle:
     json.dump(config, handle, indent=2, sort_keys=True)
     handle.write("\n")
 PY
-		then
 			:
 		else
 			merge_status=$?
@@ -99,7 +98,7 @@ EOF
 	if command -v dockerd >/dev/null 2>&1; then
 		if ! sudo dockerd --validate --config-file "$tmp_file"; then
 			log_warn "Docker rejected the proposed daemon configuration; leaving $daemon_json unchanged"
-				sudo rm -f "$tmp_file"
+			sudo rm -f "$tmp_file"
 			return 1
 		fi
 	else
@@ -174,6 +173,7 @@ DOCKEREOF
 }
 
 install_portainer() {
+	local portainer_image="${PORTAINER_IMAGE:-portainer/portainer-ce:2.43.0}"
 	if run_docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qw portainer; then
 		log_skip "Portainer container already exists"
 		return 0
@@ -188,7 +188,7 @@ install_portainer() {
 		--restart unless-stopped \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v portainer_data:/data \
-		portainer/portainer-ce:latest
+		"$portainer_image"
 	run_docker stop portainer
 	log_ok "Portainer installed (stopped — use 'dpot' to start, 'dpotstop' to stop)"
 }

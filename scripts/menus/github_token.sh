@@ -1,8 +1,8 @@
 # shellcheck shell=bash
 
 _github_token_menu_open_fds() {
-	local in_path="${GITHUB_TOKEN_TTY_INPUT:-/dev/tty}"
-	local out_path="${GITHUB_TOKEN_TTY_OUTPUT:-/dev/tty}"
+	local in_path="${GITHUB_TOKEN_TTY_INPUT:-$(tty_input_path)}"
+	local out_path="${GITHUB_TOKEN_TTY_OUTPUT:-$(tty_output_path)}"
 	exec {GITHUB_TOKEN_MENU_IN_FD}<"$in_path"
 	exec {GITHUB_TOKEN_MENU_OUT_FD}>"$out_path"
 }

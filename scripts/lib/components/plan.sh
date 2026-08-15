@@ -23,93 +23,93 @@ _comp_plan_system_packages() {
 }
 
 _comp_plan_python() {
-	is_on python \
-		&& ui_print_plan_row "Python" "python3, pip, venv" 1 \
-		|| ui_print_plan_row "Python" "skip" 0
+	is_on python &&
+		ui_print_plan_row "Python" "python3, pip, venv" 1 ||
+		ui_print_plan_row "Python" "skip" 0
 }
 
 _comp_plan_graphify_cli() {
-	is_on graphify_cli \
-		&& ui_print_plan_row "Graphify CLI" "uv tool install graphifyy (optional)" 1 \
-		|| ui_print_plan_row "Graphify CLI" "skip (opt-in)" 0
+	is_on graphify_cli &&
+		ui_print_plan_row "Graphify CLI" "uv tool install graphifyy (optional)" 1 ||
+		ui_print_plan_row "Graphify CLI" "skip (opt-in)" 0
 }
 
 _comp_plan_powershell() {
-	is_on powershell \
-		&& ui_print_plan_row "PowerShell" "Microsoft repo + powershell" 1 \
-		|| ui_print_plan_row "PowerShell" "skip" 0
+	is_on powershell &&
+		ui_print_plan_row "PowerShell" "Microsoft repo + powershell" 1 ||
+		ui_print_plan_row "PowerShell" "skip" 0
 }
 
 _comp_plan_go() {
-	is_on go \
-		&& ui_print_plan_row "Go" "asdf golang latest" 1 \
-		|| ui_print_plan_row "Go" "skip" 0
+	is_on go &&
+		ui_print_plan_row "Go" "asdf golang latest" 1 ||
+		ui_print_plan_row "Go" "skip" 0
 }
 
 _comp_plan_nodejs() {
-	is_on nodejs \
-		&& ui_print_plan_row "Node.js" "v24 via nvm" 1 \
-		|| ui_print_plan_row "Node.js" "skip" 0
+	is_on nodejs &&
+		ui_print_plan_row "Node.js" "v24 via nvm" 1 ||
+		ui_print_plan_row "Node.js" "skip" 0
 }
 
 _comp_plan_direnv() {
-	is_on direnv \
-		&& ui_print_plan_row "direnv" "install/update + bash hook" 1 \
-		|| ui_print_plan_row "direnv" "skip" 0
+	is_on direnv &&
+		ui_print_plan_row "direnv" "install/update + bash hook" 1 ||
+		ui_print_plan_row "direnv" "skip" 0
 }
 
 _comp_plan_docker() {
-	is_on docker \
-		&& ui_print_plan_row "Docker" "Docker Engine CE + docker group" 1 \
-		|| ui_print_plan_row "Docker" "skip" 0
+	is_on docker &&
+		ui_print_plan_row "Docker" "Docker Engine CE + docker group" 1 ||
+		ui_print_plan_row "Docker" "skip" 0
 }
 
 _comp_plan_portainer() {
-	is_on portainer \
-		&& ui_print_plan_row "Portainer" "Portainer CE (stopped by default)" 1 \
-		|| ui_print_plan_row "Portainer" "skip" 0
+	is_on portainer &&
+		ui_print_plan_row "Portainer" "Portainer CE (stopped by default)" 1 ||
+		ui_print_plan_row "Portainer" "skip" 0
 }
 
 _comp_plan_lazygit() {
-	is_on lazygit \
-		&& ui_print_plan_row "lazygit" "latest from GitHub" 1 \
-		|| ui_print_plan_row "lazygit" "skip" 0
+	is_on lazygit &&
+		ui_print_plan_row "lazygit" "latest from GitHub" 1 ||
+		ui_print_plan_row "lazygit" "skip" 0
 }
 
 _comp_plan_lazydocker() {
-	is_on lazydocker \
-		&& ui_print_plan_row "lazydocker" "latest from GitHub" 1 \
-		|| ui_print_plan_row "lazydocker" "skip" 0
+	is_on lazydocker &&
+		ui_print_plan_row "lazydocker" "latest from GitHub" 1 ||
+		ui_print_plan_row "lazydocker" "skip" 0
 }
 
 _comp_plan_cursor_cli() {
-	is_on cursor_cli \
-		&& ui_print_plan_row "Cursor CLI" "cursor.com installer" 1 \
-		|| ui_print_plan_row "Cursor CLI" "skip" 0
+	is_on cursor_cli &&
+		ui_print_plan_row "Cursor CLI" "cursor.com installer" 1 ||
+		ui_print_plan_row "Cursor CLI" "skip" 0
 }
 
 _comp_plan_codex_cli() {
-	is_on codex_cli \
-		&& ui_print_plan_row "Codex CLI" "npm @openai/codex" 1 \
-		|| ui_print_plan_row "Codex CLI" "skip" 0
+	is_on codex_cli &&
+		ui_print_plan_row "Codex CLI" "npm @openai/codex" 1 ||
+		ui_print_plan_row "Codex CLI" "skip" 0
 }
 
 _comp_plan_claude_cli() {
-	is_on claude_cli \
-		&& ui_print_plan_row "Claude CLI" "claude.ai installer" 1 \
-		|| ui_print_plan_row "Claude CLI" "skip" 0
+	is_on claude_cli &&
+		ui_print_plan_row "Claude CLI" "claude.ai installer" 1 ||
+		ui_print_plan_row "Claude CLI" "skip" 0
 }
 
 _comp_plan_copilot_cli() {
-	is_on copilot_cli \
-		&& ui_print_plan_row "Copilot CLI" "gh.io/copilot-install" 1 \
-		|| ui_print_plan_row "Copilot CLI" "skip" 0
+	is_on copilot_cli &&
+		ui_print_plan_row "Copilot CLI" "gh.io/copilot-install" 1 ||
+		ui_print_plan_row "Copilot CLI" "skip" 0
 }
 
 _comp_plan_monaspace_fonts() {
-	is_on monaspace_fonts \
-		&& ui_print_plan_row "Monaspace fonts" "Monaspace Nerd Fonts -> ~/.local/share/fonts/" 1 \
-		|| ui_print_plan_row "Monaspace fonts" "skip" 0
+	is_on monaspace_fonts &&
+		ui_print_plan_row "Monaspace fonts" "Monaspace Nerd Fonts -> ~/.local/share/fonts/" 1 ||
+		ui_print_plan_row "Monaspace fonts" "skip" 0
 }
 
 _comp_plan_ssh_key() {
@@ -125,27 +125,28 @@ _comp_plan_ssh_key() {
 }
 
 _comp_plan_dotfiles() {
-	is_on dotfiles \
-		&& ui_print_plan_row "Dotfiles" "stow bash, bin, readline" 1 \
-		|| ui_print_plan_row "Dotfiles" "skip" 0
+	is_on dotfiles &&
+		ui_print_plan_row "Dotfiles" "stow bash, bin, readline" 1 ||
+		ui_print_plan_row "Dotfiles" "skip" 0
 }
 
 _comp_plan_wsl_conf() {
-	is_on wsl_conf \
-		&& ui_print_plan_row "WSL config" "systemd=true, appendWindowsPath=true" 1 \
-		|| ui_print_plan_row "WSL config" "skip" 0
+	is_on wsl_conf &&
+		ui_print_plan_row "WSL config" "systemd=true, appendWindowsPath=true" 1 ||
+		ui_print_plan_row "WSL config" "skip" 0
 }
 
 _comp_plan_git_credential() {
-	is_on git_credential \
-		&& ui_print_plan_row "Git config" "GCM + recursive submodule defaults" 1 \
-		|| ui_print_plan_row "Git config" "skip" 0
+	is_on git_credential &&
+		ui_print_plan_row "Git config" "GCM + recursive submodule defaults" 1 ||
+		ui_print_plan_row "Git config" "skip" 0
 }
 
 show_plan() {
-	local cols i key
+	local cols i key tty_out
 
 	cols="$(menu_tty_cols)"
+	tty_out="$(tty_output_path)"
 
 	{
 		ui_clear
@@ -158,5 +159,5 @@ show_plan() {
 		done
 
 		printf '\n'
-	} >/dev/tty
+	} >"$tty_out"
 }

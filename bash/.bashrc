@@ -103,12 +103,22 @@ codex-host() {
 
 # Preserve any existing PROMPT_COMMAND; keep ours first so $? is correct.
 if declare -p PROMPT_COMMAND 2>/dev/null | grep -q 'declare \-a'; then
-	PROMPT_COMMAND=(__dotfiles_prompt_command "${PROMPT_COMMAND[@]}")
+	_dotfiles_prompt_registered=false
+	for _dotfiles_prompt_entry in "${PROMPT_COMMAND[@]}"; do
+		[[ "$_dotfiles_prompt_entry" == __dotfiles_prompt_command ]] && _dotfiles_prompt_registered=true
+	done
+	if [[ "$_dotfiles_prompt_registered" == false ]]; then
+		PROMPT_COMMAND=(__dotfiles_prompt_command "${PROMPT_COMMAND[@]}")
+	fi
 elif [ -n "${PROMPT_COMMAND:-}" ]; then
-	PROMPT_COMMAND="__dotfiles_prompt_command; ${PROMPT_COMMAND}"
+	case ";${PROMPT_COMMAND// /};" in
+	*';__dotfiles_prompt_command;'*) ;;
+	*) PROMPT_COMMAND="__dotfiles_prompt_command; ${PROMPT_COMMAND}" ;;
+	esac
 else
 	PROMPT_COMMAND="__dotfiles_prompt_command"
 fi
+unset _dotfiles_prompt_registered _dotfiles_prompt_entry
 
 # --- nvm (Node Version Manager) ---
 export NVM_DIR="$HOME/.nvm"

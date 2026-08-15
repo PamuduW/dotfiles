@@ -7,9 +7,19 @@ source "$TEST_DIR/lib/test_harness.sh"
 test_harness_init
 
 passed=0 failed=0
-pass() { printf 'ok - %s\n' "$1"; passed=$((passed + 1)); }
-fail() { printf 'not ok - %s\n' "$1" >&2; failed=$((failed + 1)); }
-expect_success() { local name="$1"; shift; if "$@"; then pass "$name"; else fail "$name"; fi; }
+pass() {
+	printf 'ok - %s\n' "$1"
+	passed=$((passed + 1))
+}
+fail() {
+	printf 'not ok - %s\n' "$1" >&2
+	failed=$((failed + 1))
+}
+expect_success() {
+	local name="$1"
+	shift
+	if "$@"; then pass "$name"; else fail "$name"; fi
+}
 
 install_state_git_fake() {
 	rm -f "$TEST_FAKE_BIN/git"
@@ -61,13 +71,19 @@ FAKE
 }
 
 confirm_state() { [[ "${TEST_CONFIRM:-no}" == yes ]]; }
-run_gate() { TEST_REPO_STATE="$1" TEST_CONFIRM="${2:-no}"; export TEST_REPO_STATE TEST_CONFIRM; repo_update_gate "$TEST_HARNESS_ROOT/repo" confirm_state >/dev/null 2>&1; }
+run_gate() {
+	TEST_REPO_STATE="$1" TEST_CONFIRM="${2:-no}"
+	export TEST_REPO_STATE TEST_CONFIRM
+	repo_update_gate "$TEST_HARNESS_ROOT/repo" confirm_state >/dev/null 2>&1
+}
 pull_count() { grep -c $'git\t-C\t.*\tpull\t--ff-only$' "$TEST_COMMAND_LOG" || true; }
 
 test_state_table_outcomes() {
 	local pair state expected
 	for pair in current:current dirty:stopped detached:stopped no-upstream:stopped other-remote:stopped diverged:stopped fetch-failure:stopped; do
-		state="${pair%%:*}" expected="${pair#*:}"; test_harness_reset_logs; run_gate "$state" no
+		state="${pair%%:*}" expected="${pair#*:}"
+		test_harness_reset_logs
+		run_gate "$state" no
 		if [[ "$REPO_UPDATE_OUTCOME" != "$expected" ]]; then
 			printf 'state %s: expected %s, got %s (%s)\n' "$state" "$expected" "$REPO_UPDATE_OUTCOME" "${REPO_UPDATE_REASON:-none}" >&2
 			return 1
@@ -120,14 +136,24 @@ test_git_sequence_captures_changes_before_fetch_and_classification() {
 }
 
 test_only_confirmed_behind_pulls() {
-	test_harness_reset_logs; run_gate behind no; [[ "$REPO_UPDATE_OUTCOME" == stopped && "$(pull_count)" -eq 0 ]] || return 1
-	test_harness_reset_logs; run_gate behind yes; [[ "$REPO_UPDATE_OUTCOME" == relaunch_required && "$(pull_count)" -eq 1 ]]
+	test_harness_reset_logs
+	run_gate behind no
+	[[ "$REPO_UPDATE_OUTCOME" == stopped && "$(pull_count)" -eq 0 ]] || return 1
+	test_harness_reset_logs
+	run_gate behind yes
+	[[ "$REPO_UPDATE_OUTCOME" == relaunch_required && "$(pull_count)" -eq 1 ]]
 }
 
 test_blocked_states_never_pull() {
 	local state
-	for state in dirty detached no-upstream other-remote diverged fetch-failure; do test_harness_reset_logs; run_gate "$state" yes; [[ "$(pull_count)" -eq 0 ]] || return 1; done
-	test_harness_reset_logs; run_gate pull-failure yes; [[ "$REPO_UPDATE_OUTCOME" == stopped && "$(pull_count)" -eq 1 ]]
+	for state in dirty detached no-upstream other-remote diverged fetch-failure; do
+		test_harness_reset_logs
+		run_gate "$state" yes
+		[[ "$(pull_count)" -eq 0 ]] || return 1
+	done
+	test_harness_reset_logs
+	run_gate pull-failure yes
+	[[ "$REPO_UPDATE_OUTCOME" == stopped && "$(pull_count)" -eq 1 ]]
 }
 
 test_non_origin_upstream_stops_before_fetch() {
@@ -138,12 +164,17 @@ test_non_origin_upstream_stops_before_fetch() {
 }
 
 test_ahead_requires_continue() {
-	test_harness_reset_logs; run_gate ahead no; [[ "$REPO_UPDATE_OUTCOME" == stopped && "$(pull_count)" -eq 0 ]] || return 1
-	test_harness_reset_logs; run_gate ahead yes; [[ "$REPO_UPDATE_OUTCOME" == ahead_continue && "$(pull_count)" -eq 0 ]]
+	test_harness_reset_logs
+	run_gate ahead no
+	[[ "$REPO_UPDATE_OUTCOME" == stopped && "$(pull_count)" -eq 0 ]] || return 1
+	test_harness_reset_logs
+	run_gate ahead yes
+	[[ "$REPO_UPDATE_OUTCOME" == ahead_continue && "$(pull_count)" -eq 0 ]]
 }
 
 test_success_requires_relaunch_without_old_work() {
-	test_harness_reset_logs; run_gate behind yes
+	test_harness_reset_logs
+	run_gate behind yes
 	[[ "$REPO_UPDATE_OUTCOME" == relaunch_required ]] || return 1
 	! grep -Eq $'^(apt-get|sudo|stow|curl|npx)\t' "$TEST_COMMAND_LOG"
 }
@@ -158,7 +189,12 @@ test_relaunch_is_injectable() (
 test_cmd_update_executes_outcome_contract() (
 	local events="$TEST_HARNESS_ROOT/cmd-update.events" replies=''
 	: >"$events"
-	repo_update_gate() { printf 'gate\n' >>"$events"; REPO_UPDATE_OUTCOME="${TEST_GATE_OUTCOME:?}"; }
+	repo_update_run() {
+		local -n result_ref="$4"
+		printf 'gate\n' >>"$events"
+		result_ref=([outcome]="${TEST_GATE_OUTCOME:?}")
+		[[ "$TEST_GATE_OUTCOME" != stopped ]]
+	}
 	_dotfiles_confirm() {
 		local answer="${replies%% *}"
 		[[ "$replies" == *' '* ]] && replies="${replies#* }" || replies=''
@@ -169,30 +205,41 @@ test_cmd_update_executes_outcome_contract() (
 	print_upgrade_summary() { printf 'summary:%s\n' "$1" >>"$events"; }
 	_run_update_downstream() { printf 'downstream:%s\n' "$1" >>"$events"; }
 	repo_update_relaunch() { printf 'relaunch:%s|%s\n' "$*" "${SETUP_CALLER:-}" >>"$events"; }
-	_dotfiles_wait_for_reload() { printf 'wait\n' >>"$events"; }
+	repo_update_wait_for_reload() { printf 'wait\n' >>"$events"; }
 
 	TEST_GATE_OUTCOME=stopped
 	if cmd_update >/dev/null 2>&1; then return 1; fi
 	[[ "$(<"$events")" == gate ]] || return 1
 
-	: >"$events"; TEST_GATE_OUTCOME=current; replies=no
+	: >"$events"
+	TEST_GATE_OUTCOME=current
+	replies=no
 	cmd_update >/dev/null || return 1
 	[[ "$(sed -n '1p' "$events")" == gate && "$(sed -n '2p' "$events")" == report && "$(sed -n '3p' "$events")" == confirm:* ]] || return 1
 
-	: >"$events"; TEST_GATE_OUTCOME=current; replies='yes no'
+	: >"$events"
+	TEST_GATE_OUTCOME=current
+	replies='yes no'
 	cmd_update >/dev/null || return 1
 	[[ "$(sed -n '1p' "$events")" == gate && "$(sed -n '2p' "$events")" == report && "$(sed -n '3p' "$events")" == confirm:* && "$(sed -n '4p' "$events")" == confirm:* && "$(sed -n '5p' "$events")" == downstream:false && "$(sed -n '6p' "$events")" == summary:false ]] || return 1
 	grep -Fqx 'confirm:Include Node.js, npm, Go, and Monaspace fonts (--all)?' "$events" || return 1
 
-	: >"$events"; TEST_GATE_OUTCOME=current; replies='yes yes'
+	: >"$events"
+	TEST_GATE_OUTCOME=current
+	replies='yes yes'
 	cmd_update >/dev/null || return 1
 	[[ "$(sed -n '5p' "$events")" == downstream:true && "$(sed -n '6p' "$events")" == summary:true ]] || return 1
 
-	: >"$events"; TEST_GATE_OUTCOME=ahead_continue; replies=yes
+	: >"$events"
+	TEST_GATE_OUTCOME=ahead_continue
+	replies=yes
 	cmd_update --all >/dev/null || return 1
 	[[ "$(sed -n '3p' "$events")" == confirm:* && "$(sed -n '4p' "$events")" == downstream:true && "$(sed -n '5p' "$events")" == summary:true ]] || return 1
 
-	: >"$events"; TEST_GATE_OUTCOME=relaunch_required; replies=yes; SETUP_CALLER=dotfiles
+	: >"$events"
+	TEST_GATE_OUTCOME=relaunch_required
+	replies=yes
+	SETUP_CALLER=dotfiles
 	cmd_update --all >/dev/null || return 1
 	grep -Fq "wait" "$events" || return 1
 	grep -Fq "relaunch:${DOTFILES_DIR}/install.sh|dotfiles" "$events" || return 1
@@ -200,18 +247,21 @@ test_cmd_update_executes_outcome_contract() (
 )
 
 test_cmd_update_reports_dirty_paths_and_remote_state_before_stopping() (
-	repo_update_gate() {
-		REPO_UPDATE_OUTCOME=stopped
-		REPO_UPDATE_REASON=dirty
-		REPO_UPDATE_STATE=behind
-		REPO_UPDATE_AHEAD=0
-		REPO_UPDATE_BEHIND=3
-		REPO_UPDATE_DIRTY=1
-		REPO_UPDATE_UPSTREAM=origin/main
-		REPO_UPDATE_CHANGES=$' M scripts/example.sh\n?? local-change'
+	repo_update_run() {
+		local -n result_ref="$4"
+		result_ref=(
+			[dir]="$DOTFILES_DIR" [label]='dotfiles repo' [outcome]=stopped
+			[reason]=dirty [state]=behind [ahead]=0 [behind]=3 [dirty]=1
+			[upstream]=origin/main [changes]=$' M scripts/example.sh\n?? local-change'
+		)
+		repo_update_print_stopped "$4"
+		return 1
 	}
 	local output rc
-	set +e; output="$(cmd_update 2>&1)"; rc=$?; set -e
+	set +e
+	output="$(cmd_update 2>&1)"
+	rc=$?
+	set -e
 	[[ "$rc" -ne 0 && "$output" == *'Repository update'* ]] || return 1
 	[[ "$output" == *'2 local change(s)'* && "$output" == *'blocked'* ]] || return 1
 	[[ "$output" == *'origin/main'* && "$output" == *'3 commit(s) behind'* ]] || return 1
@@ -222,6 +272,8 @@ test_cmd_update_reports_dirty_paths_and_remote_state_before_stopping() (
 test_declined_repository_pull_prints_one_report_and_one_pause_boundary() (
 	local output clean_output rc
 	TEST_REPO_STATE=behind
+	C_RED=$'\033[31m' C_RESET=$'\033[0m'
+	export C_RED C_RESET
 	export TEST_REPO_STATE
 	set +e
 	output="$(printf 'n\n' | cmd_update 2>&1)"
@@ -231,10 +283,11 @@ test_declined_repository_pull_prints_one_report_and_one_pause_boundary() (
 	[[ "$rc" -ne 0 ]] || return 1
 	[[ "$(grep -c '^Repository update$' <<<"$clean_output")" -eq 1 ]] || return 1
 	[[ "$clean_output" == *'Pull 3 commit(s) with --ff-only? [y/N]: '*$'\n\n''Pull declined; update stopped.'* ]] || return 1
+	[[ "$output" == *$'\033[31mPull declined; update stopped.\033[0m'* ]] || return 1
 	[[ "$clean_output" != *'Repository pull and downstream updates stopped: behind.'* ]]
 )
 
-test_declined_install_repository_pull_keeps_install_context() (
+test_declined_install_repository_pull_uses_shared_failure_output() (
 	local output clean_output rc
 	TEST_REPO_STATE=behind
 	export TEST_REPO_STATE
@@ -250,15 +303,16 @@ test_declined_install_repository_pull_keeps_install_context() (
 	[[ "$rc" -ne 0 ]] || return 1
 	[[ "$(grep -c '^Repository update$' <<<"$clean_output")" -eq 1 ]] || return 1
 	[[ "$clean_output" == *'Pull 3 commit(s) with --ff-only? [y/N]: '*$'\n\n''Pull declined; update stopped.'* ]] || return 1
-	[[ "$clean_output" == *'Install stopped; the Dotfiles repository is not ready for setup.'* ]] || return 1
+	[[ "$clean_output" != *'Install stopped; the Dotfiles repository is not ready for setup.'* ]] || return 1
 	[[ "$clean_output" != *'Repository pull and downstream updates stopped: behind.'* ]]
 )
 
 test_dirty_change_report_is_bounded_and_copyable() (
 	local i output status_lines='' printed
+	local -A result=([dir]="$DOTFILES_DIR")
 	for i in $(seq 1 22); do status_lines+="?? path-${i}"$'\n'; done
-	REPO_UPDATE_CHANGES="${status_lines%$'\n'}"
-	output="$(_print_repo_update_changes)"
+	result[changes]="${status_lines%$'\n'}"
+	output="$(repo_update_print_changes result)"
 	printed="$(grep -c '^  ?? path-' <<<"$output")"
 	[[ "$printed" -eq 20 && "$output" == *'... 2 more local change(s)'* ]] || return 1
 	[[ "$output" == *'git -C '* && "$output" == *' status --short --untracked-files=all'* ]]
@@ -355,10 +409,16 @@ test_npm_upgrade_accepts_verified_nvm_result() (
 	npm() {
 		case "$*" in
 		--version) printf '%s\n' "$installed" ;;
-		*) printf 'npm:%s\n' "$*" >>"$calls"; return 97 ;;
+		*)
+			printf 'npm:%s\n' "$*" >>"$calls"
+			return 97
+			;;
 		esac
 	}
-	nvm() { printf 'nvm:%s\n' "$*" >>"$calls"; installed=12.0.2; }
+	nvm() {
+		printf 'nvm:%s\n' "$*" >>"$calls"
+		installed=12.0.2
+	}
 
 	upgrade_npm 12.0.2 || return 1
 	grep -Fqx 'nvm:install-latest-npm' "$calls" || return 1
@@ -369,7 +429,10 @@ test_npm_upgrade_falls_back_after_false_nvm_success() (
 	local installed=12.0.1 calls="$TEST_HARNESS_ROOT/npm-false-success.calls"
 	: >"$calls"
 	_load_nvm() { :; }
-	nvm() { printf 'nvm:%s\n' "$*" >>"$calls"; return 0; }
+	nvm() {
+		printf 'nvm:%s\n' "$*" >>"$calls"
+		return 0
+	}
 	npm() {
 		case "$*" in
 		--version) printf '%s\n' "$installed" ;;
@@ -434,11 +497,17 @@ test_npm_upgrade_skips_commands_when_already_current() (
 	local installed=12.0.2 calls="$TEST_HARNESS_ROOT/npm-current.calls"
 	: >"$calls"
 	_load_nvm() { :; }
-	nvm() { printf 'nvm:%s\n' "$*" >>"$calls"; return 97; }
+	nvm() {
+		printf 'nvm:%s\n' "$*" >>"$calls"
+		return 97
+	}
 	npm() {
 		case "$*" in
 		--version) printf '%s\n' "$installed" ;;
-		*) printf 'npm:%s\n' "$*" >>"$calls"; return 97 ;;
+		*)
+			printf 'npm:%s\n' "$*" >>"$calls"
+			return 97
+			;;
 		esac
 	}
 
@@ -508,7 +577,10 @@ test_graphify_upgrade_uses_uv_tool_upgrade() (
 	local output calls="$TEST_HARNESS_ROOT/graphify-upgrade.calls"
 	: >"$calls"
 	graphify() { [[ "$1" == --version ]] && printf 'graphify 1.2.3\n'; }
-	agentbot() { printf 'agentbot:%s\n' "$*" >>"$calls"; return 97; }
+	agentbot() {
+		printf 'agentbot:%s\n' "$*" >>"$calls"
+		return 97
+	}
 	uv() {
 		printf 'uv:%s\n' "$*" >>"$calls"
 		case "$*" in
@@ -604,14 +676,20 @@ test_cursor_update_falls_back_to_official_installer() (
 	}
 	curl() {
 		printf 'curl:%s\n' "$*" >>"$calls"
-		printf '%s\n' 'printf "official-installer\n"'
+		local output_file='' previous='' argument
+		for argument in "$@"; do
+			[[ "$previous" == -o ]] && output_file="$argument"
+			previous="$argument"
+		done
+		printf '%s\n' 'printf "official-installer\n"' >"$output_file"
 	}
 
 	if ! upgrade_cursor_cli >"$output" 2>&1; then
 		return 1
 	fi
 	grep -Fqx 'agent:update' "$calls" || return 1
-	grep -Fqx 'curl:-fsSL https://cursor.com/install' "$calls" || return 1
+	grep -Fq 'curl:-fsSL --proto =https --tlsv1.2 -o ' "$calls" || return 1
+	grep -Fq ' https://cursor.com/install' "$calls" || return 1
 	grep -Fqx 'official-installer' "$output" || return 1
 	grep -Fq $'\033[31m>> FAILED (exit 7) — retry manually: agent update <<\033[0m' "$output"
 )
@@ -619,7 +697,10 @@ test_cursor_update_falls_back_to_official_installer() (
 test_apt_report_probe_uses_cached_indices_without_sudo() (
 	local count sudo_calls=0
 	apt-get() { printf '%s\n' 'Inst cached-package'; }
-	sudo() { sudo_calls=$((sudo_calls + 1)); return 99; }
+	sudo() {
+		sudo_calls=$((sudo_calls + 1))
+		return 99
+	}
 	count="$(apt_upgradable_count)"
 	[[ "$count" -eq 1 ]] || return 1
 	[[ "$sudo_calls" -eq 0 ]]
@@ -667,7 +748,7 @@ test_repository_update_preview_uses_semantic_colors() (
 	REPO_UPDATE_STATE=behind
 	REPO_UPDATE_BEHIND=2
 	C_BOLD=$'\033[1m' C_CYAN=$'\033[36m' C_ORANGE=$'\033[38;5;208m' C_DIM=$'\033[2m' C_YELLOW=$'\033[33m' C_RESET=$'\033[0m'
-	output="$(_print_repo_update_table)"
+	output="$(repo_update_print_report "$DOTFILES_DIR")"
 	grep -Fq $'\033[1m\033[33mRepository update\033[0m' <<<"$output" || return 1
 	! grep -Fq '==Repository update==' <<<"$output" || return 1
 	grep -Fq $'\033[1mcomponent' <<<"$output" || return 1
@@ -692,7 +773,10 @@ test_update_topics_use_submenu_yellow() (
 	output="$(_run_upgrade_step lazygit 'dotfiles update' _upgrade_topic_probe)"
 	grep -Fq $'\033[33m== lazygit ==' <<<"$output" || return 1
 
-	repo_update_gate() { REPO_UPDATE_OUTCOME=current; }
+	repo_update_run() {
+		local -n result_ref="$4"
+		result_ref=([outcome]=current)
+	}
 	print_report_table() { :; }
 	_dotfiles_confirm() { return 0; }
 	_run_update_downstream() { :; }
@@ -720,7 +804,10 @@ test_repository_fetch_notice_colors_each_line() (
 
 test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan() (
 	local output
-	repo_update_gate() { REPO_UPDATE_OUTCOME=current; }
+	repo_update_run() {
+		local -n result_ref="$4"
+		result_ref=([outcome]=current)
+	}
 	print_report_table() { :; }
 	_dotfiles_confirm() { return 0; }
 	_run_update_downstream() { printf '%s\n' '== apt packages =='; }
@@ -775,13 +862,15 @@ FAKE
 )
 
 test_stopped_paths_have_no_downstream() {
-	test_harness_reset_logs; run_gate dirty yes
+	test_harness_reset_logs
+	run_gate dirty yes
 	! grep -Eq $'^(apt-get|sudo|stow|curl|npx)\t' "$TEST_COMMAND_LOG"
 }
 
 test_status_is_strictly_local() {
 	local output="$TEST_HARNESS_ROOT/status.out"
-	test_harness_reset_logs; TEST_REPO_STATE=current "$REPO_DIR/bin/bin/dotfiles" status >"$output"
+	test_harness_reset_logs
+	TEST_REPO_STATE=current "$REPO_DIR/bin/bin/dotfiles" status >"$output"
 	grep -Fqi unchecked "$output" || return 1
 	! grep -Eq $'git\t.*\t(fetch|pull|ls-remote)(\t|$)|^(curl|npx|sudo|stow|apt-get)\t' "$TEST_COMMAND_LOG"
 }
@@ -840,7 +929,10 @@ test_retained_capability_coverage() {
 test_removed_commands_have_guidance() {
 	local cmd output rc
 	for cmd in summary upgrade self; do
-		set +e; output="$("$REPO_DIR/bin/bin/dotfiles" "$cmd" 2>&1)"; rc=$?; set -e
+		set +e
+		output="$("$REPO_DIR/bin/bin/dotfiles" "$cmd" 2>&1)"
+		rc=$?
+		set -e
 		[[ "$rc" -ne 0 ]] || return 1
 		case "$cmd" in summary) [[ "$output" == *'use dotfiles status'* ]] ;; upgrade) [[ "$output" == *'use dotfiles update [--all]'* ]] ;; self) [[ "$output" == *'use dotfiles update'* && "$output" == *restow* ]] ;; esac || return 1
 	done
@@ -866,7 +958,10 @@ source "$REPO_DIR/scripts/lib/menu_runner.sh"
 source "$REPO_DIR/scripts/menus/initial_setup.sh"
 source "$REPO_DIR/scripts/menus/update.sh"
 REPO_UPDATE_OUTCOME="${REPO_UPDATE_OUTCOME:-missing}"
-declare -F repo_update_gate >/dev/null || repo_update_gate() { REPO_UPDATE_OUTCOME=missing; return 1; }
+declare -F repo_update_gate >/dev/null || repo_update_gate() {
+	REPO_UPDATE_OUTCOME=missing
+	return 1
+}
 declare -F repo_update_relaunch >/dev/null || repo_update_relaunch() { return 1; }
 expect_success 'repository state table returns stable outcomes' test_state_table_outcomes
 expect_success 'dirty current ahead behind and diverged states fetch classify and stop' test_dirty_history_matrix_fetches_classifies_and_stops
@@ -882,7 +977,7 @@ expect_success 'relaunch wrapper is injectable without a fake exec command' test
 expect_success 'cmd_update executes stopped current ahead and relaunch outcomes' test_cmd_update_executes_outcome_contract
 expect_success 'cmd_update reports dirty paths and verified remote state before stopping' test_cmd_update_reports_dirty_paths_and_remote_state_before_stopping
 expect_success 'declined repository pulls print one report before the pause boundary' test_declined_repository_pull_prints_one_report_and_one_pause_boundary
-expect_success 'declined install pulls keep the install stop context' test_declined_install_repository_pull_keeps_install_context
+expect_success 'declined install pulls use shared failure output' test_declined_install_repository_pull_uses_shared_failure_output
 expect_success 'dirty path report is bounded and includes a copyable full-list command' test_dirty_change_report_is_bounded_and_copyable
 expect_success 'downstream execution runs apt refresh first and honors --all' test_downstream_executes_apt_first_and_all_matrix
 expect_success 'Node.js probe follows nvm default instead of a stale shell PATH' test_node_probe_uses_nvm_default_when_shell_path_is_stale

@@ -47,42 +47,44 @@ EOF
 }
 
 configure_wsl() {
-	local conf="/etc/wsl.conf"
-	local needs_systemd=true
-	local needs_interop=true
+	local conf="${DOTFILES_WSL_CONF:-/etc/wsl.conf}" rendered backup_file
 
-	if [[ -f "$conf" ]]; then
-		grep -q 'systemd\s*=\s*true' "$conf" 2>/dev/null && needs_systemd=false
-		grep -q 'appendWindowsPath\s*=\s*true' "$conf" 2>/dev/null && needs_interop=false
-	fi
-
-	if [[ "$needs_systemd" == "false" && "$needs_interop" == "false" ]]; then
-		log_skip "/etc/wsl.conf already configured"
+	if [[ -f "$conf" ]] &&
+		wsl_conf_has_setting "$conf" boot systemd true &&
+		wsl_conf_has_setting "$conf" interop appendWindowsPath true; then
+		log_skip "$conf already configured"
 		return 0
 	fi
 
-	log_step "Configure /etc/wsl.conf"
-	[[ -f "$conf" ]] && sudo cp "$conf" "${conf}.bak"
-
-	if [[ "$needs_systemd" == "true" ]]; then
-		if [[ -f "$conf" ]] && grep -qP '^\s*systemd\s*=' "$conf"; then
-			sudo sed -i 's/^\(\s*\)systemd\s*=.*/\1systemd=true/' "$conf"
-		elif [[ -f "$conf" ]] && grep -q '^\[boot\]' "$conf"; then
-			sudo sed -i '/^\[boot\]/a systemd=true' "$conf"
-		else
-			printf '\n[boot]\nsystemd=true\n' | sudo tee -a "$conf" >/dev/null
-		fi
+	log_step "Configure $conf"
+	rendered="$(mktemp)" || return 1
+	if ! wsl_conf_render_required "$conf" >"$rendered"; then
+		rm -f "$rendered"
+		log_warn "Could not render a safe WSL configuration"
+		return 1
 	fi
 
-	if [[ "$needs_interop" == "true" ]]; then
-		if [[ -f "$conf" ]] && grep -qP '^\s*appendWindowsPath\s*=' "$conf"; then
-			sudo sed -i 's/^\(\s*\)appendWindowsPath\s*=.*/\1appendWindowsPath=true/' "$conf"
-		elif [[ -f "$conf" ]] && grep -q '^\[interop\]' "$conf"; then
-			sudo sed -i '/^\[interop\]/a appendWindowsPath=true' "$conf"
-		else
-			printf '\n[interop]\nappendWindowsPath=true\n' | sudo tee -a "$conf" >/dev/null
+	if [[ "$conf" == /etc/* ]]; then
+		if [[ -f "$conf" ]]; then
+			backup_file="${conf}.bak.$(date +%Y%m%d_%H%M%S)"
+			sudo cp "$conf" "$backup_file" || {
+				rm -f "$rendered"
+				return 1
+			}
+			log_ok "Backed up existing WSL config to $backup_file"
 		fi
+		sudo install -m 0644 "$rendered" "$conf" || {
+			rm -f "$rendered"
+			return 1
+		}
+	else
+		[[ -f "$conf" ]] && cp "$conf" "${conf}.bak"
+		install -m 0644 "$rendered" "$conf" || {
+			rm -f "$rendered"
+			return 1
+		}
 	fi
+	rm -f "$rendered"
 
 	log_ok "WSL config updated (restart WSL to apply: wsl --shutdown)"
 }
@@ -131,66 +133,67 @@ post_install_fixes() {
 	fi
 }
 
+DOTFILES_BACKUP_DIR=''
+
+_dotfiles_managed_targets() {
+	printf '%s\n' \
+		"$HOME/.bashrc|.bashrc" \
+		"$HOME/.bash_aliases|.bash_aliases" \
+		"$HOME/.inputrc|.inputrc" \
+		"$HOME/bin/ex|bin/ex" \
+		"$HOME/bin/clip|bin/clip" \
+		"$HOME/bin/dotfiles|bin/dotfiles"
+}
+
 backup_existing_dotfiles() {
-	local backup_dir="$DOTFILES_DIR/old_bash"
-	local timestamp
+	local timestamp target relative files_backed_up=0
+	DOTFILES_BACKUP_DIR=''
 	timestamp="$(date +%Y%m%d_%H%M%S)"
-	local files_backed_up=0
 
-	local needs_backup=false
-	[[ -f "$HOME/.bashrc" && ! -L "$HOME/.bashrc" ]] && needs_backup=true
-	[[ -f "$HOME/.bash_aliases" && ! -L "$HOME/.bash_aliases" ]] && needs_backup=true
-	[[ -f "$HOME/.inputrc" && ! -L "$HOME/.inputrc" ]] && needs_backup=true
-	[[ -f "$HOME/bin/ex" && ! -L "$HOME/bin/ex" ]] && needs_backup=true
-	[[ -f "$HOME/bin/clip" && ! -L "$HOME/bin/clip" ]] && needs_backup=true
+	while IFS='|' read -r target relative; do
+		[[ -e "$target" && ! -L "$target" ]] || continue
+		if [[ -z "$DOTFILES_BACKUP_DIR" ]]; then
+			DOTFILES_BACKUP_DIR="$DOTFILES_DIR/old_bash_${timestamp}"
+			mkdir -p "$DOTFILES_BACKUP_DIR"
+			log_step "Back up existing dotfiles to: $DOTFILES_BACKUP_DIR"
+		fi
+		mkdir -p "$(dirname "$DOTFILES_BACKUP_DIR/$relative")"
+		mv "$target" "$DOTFILES_BACKUP_DIR/$relative" || return 1
+		log_ok "Backed up $relative"
+		files_backed_up=$((files_backed_up + 1))
+	done < <(_dotfiles_managed_targets)
 
-	if [[ "$needs_backup" == "false" ]]; then return 0; fi
-
-	backup_dir="${backup_dir}_${timestamp}"
-	mkdir -p "$backup_dir"
-	log_step "Back up existing dotfiles to: $backup_dir"
-
-	if [[ -f "$HOME/.bashrc" && ! -L "$HOME/.bashrc" ]]; then
-		mv "$HOME/.bashrc" "$backup_dir/.bashrc"
-		log_ok "Backed up .bashrc"
-		((++files_backed_up))
+	if ((files_backed_up > 0)); then
+		log_ok "Backed up $files_backed_up file(s) in: $DOTFILES_BACKUP_DIR"
 	fi
+}
 
-	if [[ -f "$HOME/.bash_aliases" && ! -L "$HOME/.bash_aliases" ]]; then
-		mv "$HOME/.bash_aliases" "$backup_dir/.bash_aliases"
-		log_ok "Backed up .bash_aliases"
-		((++files_backed_up))
-	fi
-
-	if [[ -f "$HOME/.inputrc" && ! -L "$HOME/.inputrc" ]]; then
-		mv "$HOME/.inputrc" "$backup_dir/.inputrc"
-		log_ok "Backed up .inputrc"
-		((++files_backed_up))
-	fi
-
-	if [[ -f "$HOME/bin/ex" && ! -L "$HOME/bin/ex" ]]; then
-		mkdir -p "$backup_dir/bin"
-		mv "$HOME/bin/ex" "$backup_dir/bin/ex"
-		log_ok "Backed up bin/ex"
-		((++files_backed_up))
-	fi
-
-	if [[ -f "$HOME/bin/clip" && ! -L "$HOME/bin/clip" ]]; then
-		mkdir -p "$backup_dir/bin"
-		mv "$HOME/bin/clip" "$backup_dir/bin/clip"
-		log_ok "Backed up bin/clip"
-		((++files_backed_up))
-	fi
-
-	if [[ $files_backed_up -gt 0 ]]; then
-		log_ok "Backed up $files_backed_up file(s) in: $backup_dir"
-	fi
+restore_dotfiles_backup() {
+	local target relative backup resolved
+	[[ -n "$DOTFILES_BACKUP_DIR" && -d "$DOTFILES_BACKUP_DIR" ]] || return 0
+	while IFS='|' read -r target relative; do
+		backup="$DOTFILES_BACKUP_DIR/$relative"
+		[[ -e "$backup" ]] || continue
+		if [[ -L "$target" ]]; then
+			resolved="$(readlink -f "$target" 2>/dev/null || true)"
+			[[ "$resolved" == "$DOTFILES_DIR/"* ]] && rm -f -- "$target"
+		fi
+		if [[ -e "$target" || -L "$target" ]]; then
+			printf 'Error: cannot restore %s because the target is occupied. Backup remains at %s.\n' \
+				"$target" "$backup" >&2
+			continue
+		fi
+		mkdir -p "$(dirname "$target")"
+		mv "$backup" "$target"
+	done < <(_dotfiles_managed_targets)
+	find "$DOTFILES_BACKUP_DIR" -depth -type d -empty -delete 2>/dev/null || true
+	[[ -d "$DOTFILES_BACKUP_DIR" ]] || DOTFILES_BACKUP_DIR=''
 }
 
 stow_dotfiles() {
 	if ! command -v stow >/dev/null 2>&1; then
 		echo "Error: 'stow' is not installed." >&2
-		exit 1
+		return 1
 	fi
 
 	log_step "Apply stow packages: bash, bin, readline"
@@ -198,7 +201,8 @@ stow_dotfiles() {
 		log_ok "Dotfiles stowed successfully"
 	else
 		echo "Error: stow failed. See output above." >&2
-		exit 1
+		restore_dotfiles_backup
+		return 1
 	fi
 }
 
@@ -207,18 +211,21 @@ ensure_bash_profile_sources_bashrc() {
 
 	touch "$bash_profile"
 
+	# shellcheck disable=SC2016  # Search for and write literal shell source lines.
 	if grep -Fq '. "$HOME/.bashrc"' "$bash_profile" ||
 		grep -Fq '. ~/.bashrc' "$bash_profile" ||
 		grep -Fq 'source "$HOME/.bashrc"' "$bash_profile" ||
 		grep -Fq 'source ~/.bashrc' "$bash_profile"; then
-		log_skip "~/.bash_profile already sources ~/.bashrc"
+		log_skip "$HOME/.bash_profile already sources $HOME/.bashrc"
 		return 0
 	fi
 
 	{
 		echo ""
 		echo "# Load interactive bash settings for login shells"
+		# shellcheck disable=SC2016  # Write a portable literal for the target shell.
 		echo 'if [ -f "$HOME/.bashrc" ]; then'
+		# shellcheck disable=SC2016  # Write a portable literal for the target shell.
 		echo '	. "$HOME/.bashrc"'
 		echo 'fi'
 	} >>"$bash_profile"

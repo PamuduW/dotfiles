@@ -27,7 +27,7 @@ _draw_component_menu() {
 		mark="x"
 		[[ "${COMP_ON[$key]}" -eq 0 ]] && mark=" "
 		note=""
-		[[ "${COMP_DEPS[$i]}" -ne -1 ]] && note="  (requires #$((COMP_DEPS[i] + 1)))"
+		[[ -n "$(comp_dependency "$key")" ]] && note="  (requires $(comp_dependency "$key"))"
 		prefix=' '
 		[[ $i -eq $cur ]] && prefix='>'
 		row="$(printf '%s%2d. [%s] %s%s' "$prefix" "$((i + 1))" "$mark" "${COMP_LABELS[$i]}" "$note")"
@@ -62,7 +62,7 @@ component_menu() {
 	local count="${#COMP_KEYS[@]}"
 	local cursor=0
 	local status_msg=""
-	local rows cols page_size menu_lines action page
+	local rows cols page_size menu_lines action page tty_out
 	local cancelled=false
 	local prev_page=-1 prev_lines=0
 
@@ -71,6 +71,7 @@ component_menu() {
 	page_size="$(menu_page_size "$rows" "$_COMP_MENU_FIXED_ROWS")"
 	page="$(menu_page_for_cursor "$cursor" "$page_size")"
 	menu_lines="$(menu_page_render_lines "$count" "$page_size" "$page" "$_COMP_MENU_FIXED_ROWS")"
+	tty_out="$(tty_output_path)"
 
 	{
 		tput civis 2>/dev/null || true
@@ -123,7 +124,7 @@ component_menu() {
 			_draw_component_menu "$cursor" "$page_size" "$status_msg" "$cols"
 		done
 		tput cnorm 2>/dev/null || true
-	} >/dev/tty
+	} >"$tty_out"
 
 	[[ "$cancelled" == true ]] && return 1
 	return 0

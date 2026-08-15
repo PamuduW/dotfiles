@@ -8,6 +8,13 @@ _RT_RESULT_W=10
 
 _rt_ensure_colors() {
 	if [[ -n "${C_RESET:-}" ]]; then
+		C_BOLD="${C_BOLD:-}"
+		C_DIM="${C_DIM:-}"
+		C_GREEN="${C_GREEN:-}"
+		C_YELLOW="${C_YELLOW:-}"
+		C_ORANGE="${C_ORANGE:-}"
+		C_RED="${C_RED:-}"
+		C_CYAN="${C_CYAN:-}"
 		return 0
 	fi
 	if [[ -z "${NO_COLOR:-}" ]] && { [[ -t 1 ]] || [[ -t 0 ]] || [[ -n "${FORCE_COLOR:-}" ]]; }; then
@@ -42,7 +49,7 @@ _rt_shorten_path() {
 	if [[ "$path" == "$home" ]]; then
 		path='~'
 	elif [[ "$path" == "$home"/* ]]; then
-		path="~${path#$home}"
+		path="~${path#"$home"}"
 	fi
 	if ((max > 0 && ${#path} > max)); then
 		if ((max <= 8)); then
@@ -68,6 +75,45 @@ _rt_fit_line() {
 	else
 		printf '%s...' "${text:0:$((max - 3))}"
 	fi
+}
+
+_rt_rule() {
+	local width="$1" rule
+	printf -v rule '%*s' "$width" ''
+	printf '%s' "${rule// /-}"
+}
+
+_rt_print_fixed_cell() {
+	local text="$1" width="$2" color_fn="${3:-}" fit padding
+	fit="$(_rt_fit_line "$text" "$width")"
+	if [[ -n "$color_fn" ]]; then
+		"$color_fn" "$fit"
+	else
+		printf '%s' "$fit"
+	fi
+	padding=$((width - ${#fit}))
+	((padding > 0)) && printf '%*s' "$padding" ''
+	return 0
+}
+
+rt_print_four_column_header() {
+	local w1="$1" h1="$2" w2="$3" h2="$4" w3="$5" h3="$6" w4="$7" h4="$8"
+	_rt_ensure_colors
+	printf '%s%-*s | %-*s | %-*s | %-*s%s\n' "$C_BOLD" "$w1" "$h1" "$w2" "$h2" "$w3" "$h3" "$w4" "$h4" "$C_RESET"
+	printf '%s%s-+-%s-+-%s-+-%s%s\n' "$C_DIM" "$(_rt_rule "$w1")" "$(_rt_rule "$w2")" "$(_rt_rule "$w3")" "$(_rt_rule "$w4")" "$C_RESET"
+}
+
+rt_print_four_column_row() {
+	local w1="$1" t1="$2" w2="$3" t2="$4" w3="$5" t3="$6" w4="$7" t4="$8"
+	local color3="${9:-}" color4="${10:-}"
+	_rt_print_fixed_cell "$t1" "$w1"
+	printf ' | '
+	_rt_print_fixed_cell "$t2" "$w2"
+	printf ' | '
+	_rt_print_fixed_cell "$t3" "$w3" "$color3"
+	printf ' | '
+	_rt_print_fixed_cell "$t4" "$w4" "$color4"
+	printf '\n'
 }
 
 _rt_color_result() {

@@ -41,8 +41,11 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 ├── log/                # install logs (gitignored)
 ├── scripts/
 │   ├── install.sh      # real installer
-│   ├── lib/            # TUI, bootstrap helpers 
+│   ├── validate.sh     # syntax, static analysis, formatting, and test gate
+│   ├── lib/            # TUI, component, update, and installer modules
 │   └── menus/          # main + submenus
+├── tests/
+│   └── run.sh          # discovers and runs every shell test file
 ├── install.sh          # shim → scripts/install.sh
 └── README.md
 ```
@@ -85,8 +88,7 @@ The main menu **loops** until you choose Quit:
   Install Dotfiles
   Update
   GitHub Token Config
-  Command Lib
-  Package Lib
+  Libraries
   Agentbot
   Quit
 ```
@@ -98,11 +100,10 @@ Use arrow keys to navigate and Enter to select.
 | Option | Submenu / action |
 | ------ | ---------------- |
 | Check Status | Read-only local component and repository report; remote and apt freshness are labelled unchecked. |
-| Install Dotfiles | Select components, review the execution plan, and apply setup.  |
+| Install Dotfiles | Run the shared repository gate, then select components, review the execution plan, and apply setup. |
 | Update | Repo-first fetch/classify/pull gate, then confirmed downstream updates. |
 | GitHub Token Config | Configure the optional shared API token without blocking anonymous use. |
-| Command Lib | Read-only full command, option, configuration, and integration reference. |
-| Package Lib | Read-only component and system-package catalog. |
+| Libraries | Opens the read-only Command Lib and Package Lib submenu; `q` returns. |
 | Agentbot | Validate/clone the sibling `agent_bootstrap` repository, then launch it as a child. |
 | Quit | Exit |
 
@@ -111,7 +112,7 @@ Use arrow keys to navigate and Enter to select.
 Skip the boot menu with explicit flags:
 
 ```bash
-./install.sh --status       # Read-only status
+dotfiles status             # Read-only status
 ./install.sh --update       # Update submenu
 ./install.sh --agents       # Agentbot sibling bridge
 ./install.sh --help         # Usage
@@ -122,7 +123,7 @@ Skip the boot menu with explicit flags:
 | Invocation | Behavior |
 | ---------- | -------- |
 | `./install.sh` (no flag, no TTY) | Runs the explicit non-interactive install path |
-| `./install.sh --status` (no TTY) | Prints local status without fetch, apt refresh, or writes |
+| `dotfiles status` | Prints local status without fetch, apt refresh, or writes |
 | `./install.sh --update` | Runs update flow (non-interactive where applicable) |
 | `./install.sh --agents` | Launches Agentbot as a sibling child after validation |
 
@@ -203,8 +204,9 @@ existing `DOTFILES_COMPONENTS` automation.
 
 ## Security notes
 
-- Some tools are installed via `curl … | bash` from their official vendor channels (Cursor, Claude, Copilot, nvm, direnv). These are not checksum-verified; review the upstream scripts if you need stronger supply-chain guarantees.
+- Vendor shell installers (Cursor, Claude, Copilot, nvm, direnv) are downloaded over HTTPS to a temporary file and syntax-checked before Bash executes them. The vendor URLs are still moving channels rather than checksum-pinned artifacts; review upstream when stronger provenance is required.
 - GitHub-release binaries (lazygit, lazydocker) are checksum-verified during install.
+- Portainer uses an explicit image version (`portainer/portainer-ce:2.43.0` by default); set `PORTAINER_IMAGE` deliberately to override it.
 - The generated SSH key prompts for a passphrase (press Enter to skip).
 
 ---
@@ -227,7 +229,6 @@ After stowing:
 Global command (stowed to `~/bin/dotfiles`, on PATH like `ex` and `clip`):
 
 | Subcommand | Action |
-| ---------- | ------ |
 | `dotfiles` | On a TTY, opens the boot menu; otherwise prints help |
 | `dotfiles menu` | Boot menu (same as `./install.sh`) |
 | `dotfiles update` | **Apply after confirmation** — repo-first gate, then apt/CLI/tool changes |
@@ -256,8 +257,9 @@ already-enabled Agentbot integration: run `agentbot graphify setup` or
 otherwise remain temporarily out of sync; Dotfiles never calls Agentbot or
 enables the skill automatically.
 
-The interactive Update action clears the menu before starting. It validates the
-repository and upstream, captures local changes, fetches `origin`, and then
+Install and Update call the same repository-update service before doing any
+setup or downstream work. It validates the repository and upstream, captures
+local changes, fetches `origin`, and then
 classifies the verified ahead/behind state. Any tracked or untracked local
 change stops both the repository pull and every downstream update, even when
 the fetched upstream is current. The stopped report shows the verified remote
@@ -401,7 +403,21 @@ stow -D bash bin readline
 
 ## Logging
 
-Every run of `install.sh` writes a timestamped log to `log/` (gitignored). Useful for debugging failed installs.
+Mutating and interactive runs of `install.sh` write a timestamped log to `log/`
+(gitignored). `--help` exits before log initialization.
+
+## Development validation
+
+Run the complete local gate before committing:
+
+```bash
+scripts/validate.sh
+```
+
+It checks Bash syntax, runs ShellCheck, verifies `shfmt` formatting, and
+discovers every test through `tests/run.sh`. Use `scripts/validate.sh --format`
+to format shell sources before running the same gate. GitHub Actions runs the
+same command.
 
 ---
 

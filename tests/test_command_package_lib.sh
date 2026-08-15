@@ -212,7 +212,7 @@ test_command_lib_details_fit_narrow_terminal() {
 	local output line
 	output="$(NO_COLOR=1 dotfiles_command_print_table 48)"
 	while IFS= read -r line; do
-		(( ${#line} <= 48 )) || {
+		((${#line} <= 48)) || {
 			printf 'line exceeds 48 columns (%d): %s\n' "${#line}" "$line" >&2
 			return 1
 		}
@@ -288,7 +288,7 @@ test_graphify_component_is_default_off_and_depends_on_python() {
 	local graphify_idx python_idx
 	graphify_idx="$(comp_key_index graphify_cli)" || return 1
 	python_idx="$(comp_key_index python)" || return 1
-	[[ "${COMP_DEPS[$graphify_idx]}" -eq "$python_idx" ]] || return 1
+	[[ "$(comp_dependency graphify_cli)" == python ]] || return 1
 	comp_registry_init
 	[[ "${COMP_ON[graphify_cli]:-}" -eq 0 ]] || return 1
 }
@@ -314,7 +314,7 @@ test_package_metadata_has_exact_30_with_descriptions() {
 		description="${PACKAGE_LIB_DESCRIPTIONS[$i]}"
 		[[ -z "${seen[$name]+x}" ]] || return 1
 		seen["$name"]=1
-		actual_counts["$tag"]=$(( ${actual_counts[$tag]:-0} + 1 ))
+		actual_counts["$tag"]=$((${actual_counts[$tag]:-0} + 1))
 		[[ -n "$description" ]] || return 1
 	done
 	for tag in core python cli system; do

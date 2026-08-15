@@ -80,7 +80,7 @@ _comp_desc_claude_cli() {
 
 _comp_desc_copilot_cli() {
 	echo "Installs GitHub Copilot CLI via the official installer script."
-	echo "Runs: curl -fsSL https://gh.io/copilot-install | bash"
+	echo "Downloads and validates the vendor script before executing it."
 }
 
 _comp_desc_monaspace_fonts() {

@@ -19,8 +19,9 @@ install_node_via_nvm() {
 		wsl_clean_path="$(echo "$PATH" | tr ':' '\n' | grep -v '^/mnt/' | tr '\n' ':' | sed 's/:$//')"
 		local nvm_tmp
 		nvm_tmp="$(mktemp)"
-		if ! { curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh |
-			PROFILE=/dev/null PATH="$wsl_clean_path" bash; } >"$nvm_tmp" 2>&1; then
+		if ! run_vendor_shell_installer \
+			'https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh' 'nvm' \
+			"PROFILE=/dev/null" "PATH=$wsl_clean_path" >"$nvm_tmp" 2>&1; then
 			echo "  Error during nvm install:" >&2
 			cat "$nvm_tmp" >&2
 			rm -f "$nvm_tmp"
@@ -144,7 +145,7 @@ install_go_via_asdf() {
 }
 
 install_cursor_cli() {
-	if command -v agent >/dev/null 2>&1 || command -v cursor >/dev/null 2>&1; then
+	if command -v agent >/dev/null 2>&1 || command -v cursor >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/agent" ]]; then
 		if [[ ! -x "$HOME/bin/agent" && -x "$HOME/.local/bin/agent" ]]; then
 			mkdir -p "$HOME/bin"
 			ln -sf "$HOME/.local/bin/agent" "$HOME/bin/agent"
@@ -155,7 +156,7 @@ install_cursor_cli() {
 	log_step "Install Cursor CLI"
 	local cursor_tmp
 	cursor_tmp="$(mktemp)"
-	if ! { curl -fsSL https://cursor.com/install | bash; } >"$cursor_tmp" 2>&1; then
+	if ! run_vendor_shell_installer 'https://cursor.com/install' 'Cursor CLI' >"$cursor_tmp" 2>&1; then
 		echo "  Error during Cursor CLI install:" >&2
 		cat "$cursor_tmp" >&2
 		rm -f "$cursor_tmp"
@@ -184,14 +185,14 @@ install_codex_cli() {
 }
 
 install_claude_cli() {
-	if command -v claude >/dev/null 2>&1; then
+	if command -v claude >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/claude" ]]; then
 		log_skip "Claude CLI already installed"
 		return 0
 	fi
 	log_step "Install Claude CLI"
 	local claude_tmp
 	claude_tmp="$(mktemp)"
-	if ! { curl -fsSL https://claude.ai/install.sh | bash; } >"$claude_tmp" 2>&1; then
+	if ! run_vendor_shell_installer 'https://claude.ai/install.sh' 'Claude CLI' >"$claude_tmp" 2>&1; then
 		echo "  Error during Claude CLI install:" >&2
 		cat "$claude_tmp" >&2
 		rm -f "$claude_tmp"
@@ -209,7 +210,8 @@ install_copilot_cli() {
 	log_step "Install Copilot CLI"
 	local copilot_tmp
 	copilot_tmp="$(mktemp)"
-	if ! { curl -fsSL https://gh.io/copilot-install | PREFIX="$HOME/.local" PATH="$HOME/.local/bin:$PATH" bash; } >"$copilot_tmp" 2>&1; then
+	if ! run_vendor_shell_installer 'https://gh.io/copilot-install' 'Copilot CLI' \
+		"PREFIX=$HOME/.local" "PATH=$HOME/.local/bin:$PATH" >"$copilot_tmp" 2>&1; then
 		echo "  Error during Copilot CLI install:" >&2
 		cat "$copilot_tmp" >&2
 		rm -f "$copilot_tmp"
@@ -291,7 +293,8 @@ install_direnv() {
 	mkdir -p "$HOME/.local/bin"
 	local direnv_tmp
 	direnv_tmp="$(mktemp)"
-	if ! { bin_path="$HOME/.local/bin" curl -sfL https://direnv.net/install.sh | bash; } >"$direnv_tmp" 2>&1; then
+	if ! run_vendor_shell_installer 'https://direnv.net/install.sh' 'direnv' \
+		"bin_path=$HOME/.local/bin" >"$direnv_tmp" 2>&1; then
 		echo "  Error during direnv install:" >&2
 		cat "$direnv_tmp" >&2
 		rm -f "$direnv_tmp"

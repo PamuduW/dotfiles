@@ -5,8 +5,14 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 PASS=0
 FAIL=0
 
-pass() { printf 'ok - %s\n' "$1"; PASS=$((PASS + 1)); }
-fail() { printf 'not ok - %s\n' "$1" >&2; FAIL=$((FAIL + 1)); }
+pass() {
+	printf 'ok - %s\n' "$1"
+	PASS=$((PASS + 1))
+}
+fail() {
+	printf 'not ok - %s\n' "$1" >&2
+	FAIL=$((FAIL + 1))
+}
 
 expect_success() {
 	local name="$1"
@@ -210,7 +216,7 @@ test_github_token_config_is_private_and_scoped() {
 		github_token_load
 		[[ "$GITHUB_TOKEN" == "test_token_fixture_abcdefghijklmnopqrstuvwxyz1234567890" ]]
 	' _ "$ROOT" 2>&1)" || return 1
-		[[ "$output" != *"test_token_fixture_abcdefghijklmnopqrstuvwxyz1234567890"* ]]
+	[[ "$output" != *"test_token_fixture_abcdefghijklmnopqrstuvwxyz1234567890"* ]]
 }
 
 main() {

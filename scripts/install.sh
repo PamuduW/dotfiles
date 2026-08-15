@@ -15,6 +15,27 @@ DOTFILES_DIR="$SCRIPT_DIR"
 if [[ "$(basename "$SCRIPT_DIR")" == "scripts" ]]; then
 	DOTFILES_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 fi
+
+print_usage() {
+	cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Options:
+  --initial     Open initial setup submenu (or run setup non-interactively)
+  --update      Open update workflow
+  --agents      Open Agentbot workflow
+  --help        Show this help and exit
+
+Without options on an interactive terminal, shows the main menu (loops until Quit).
+Non-interactive runs (no TTY stdin, CI, piped) default to initial setup.
+EOF
+}
+
+if [[ $# -eq 1 && ("$1" == --help || "$1" == -h) ]]; then
+	print_usage
+	exit 0
+fi
+
 # shellcheck disable=SC2034  # Consumed by sourced component/install modules.
 PKG_FILE="$DOTFILES_DIR/packages/packages.txt"
 
@@ -93,46 +114,27 @@ prompt_git_identity() {
 toggle_component() {
 	local idx="$1"
 	local key="${COMP_KEYS[$idx]}"
+	local dependency dependent_key
 	TOGGLE_MSG=""
 
 	if [[ "${COMP_ON[$key]}" -eq 1 ]]; then
 		COMP_ON["$key"]=0
-		local i
-		for i in "${!COMP_DEPS[@]}"; do
-			if [[ "${COMP_DEPS[$i]}" -eq "$idx" ]]; then
-				local dep_key="${COMP_KEYS[$i]}"
-				if [[ "${COMP_ON[$dep_key]}" -eq 1 ]]; then
-					COMP_ON["$dep_key"]=0
-					TOGGLE_MSG+="auto-disabled: ${COMP_LABELS[$i]}  "
-				fi
+		for dependent_key in "${!COMP_DEPENDS_ON[@]}"; do
+			if [[ "${COMP_DEPENDS_ON[$dependent_key]}" == "$key" && "${COMP_ON[$dependent_key]}" -eq 1 ]]; then
+				COMP_ON["$dependent_key"]=0
+				TOGGLE_MSG+="auto-disabled: ${COMP_LABELS[$(comp_index_of "$dependent_key")]}  "
 			fi
 		done
 	else
 		COMP_ON["$key"]=1
-		local req="${COMP_DEPS[$idx]}"
-		if [[ "$req" -ne -1 ]]; then
-			local req_key="${COMP_KEYS[$req]}"
-			if [[ "${COMP_ON[$req_key]}" -eq 0 ]]; then
-				COMP_ON["$req_key"]=1
-				TOGGLE_MSG+="auto-enabled: ${COMP_LABELS[$req]}"
+		dependency="$(comp_dependency "$key")"
+		if [[ -n "$dependency" ]]; then
+			if [[ "${COMP_ON[$dependency]}" -eq 0 ]]; then
+				COMP_ON["$dependency"]=1
+				TOGGLE_MSG+="auto-enabled: ${COMP_LABELS[$(comp_index_of "$dependency")]}"
 			fi
 		fi
 	fi
-}
-
-print_usage() {
-	cat <<EOF
-Usage: $(basename "$0") [OPTIONS]
-
-Options:
-  --initial     Open initial setup submenu (or run setup non-interactively)
-  --update      Open update submenu
-  --agents      Open agents bootstrap submenu
-  --help        Show this help and exit
-
-Without options on an interactive terminal, shows the main menu (loops until Quit).
-Non-interactive runs (no TTY stdin, CI, piped) default to initial setup.
-EOF
 }
 
 main() {

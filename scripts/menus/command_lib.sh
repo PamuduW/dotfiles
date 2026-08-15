@@ -12,7 +12,9 @@ command_lib_render() {
 }
 
 command_lib_menu() {
+	local tty_out
+	tty_out="$(tty_output_path)"
 	ui_clear
-	command_lib_render "$(menu_tty_cols)" >/dev/tty
+	command_lib_render "$(menu_tty_cols)" >"$tty_out"
 	ui_pause
 }

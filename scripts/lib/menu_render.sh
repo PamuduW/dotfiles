@@ -1,9 +1,20 @@
 # shellcheck shell=bash
 # Terminal geometry, line fitting, cursor control, and redraw helpers.
 
+if ! declare -F tty_input_path >/dev/null 2>&1; then
+	_MENU_RENDER_LIB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+	# shellcheck source=scripts/lib/tty.sh
+	source "$_MENU_RENDER_LIB_DIR/tty.sh"
+fi
+
 menu_tty_cols() {
-	local cols size
-	size="$(stty size </dev/tty 2>/dev/null || true)"
+	local cols size tty_in
+	tty_in="$(tty_input_path)"
+	if tty_available; then
+		size="$(stty size <"$tty_in" 2>/dev/null || true)"
+	else
+		size=''
+	fi
 	if [[ -n "$size" ]]; then
 		cols="${size##* }"
 	else
@@ -15,8 +26,13 @@ menu_tty_cols() {
 }
 
 menu_tty_rows() {
-	local rows size
-	size="$(stty size </dev/tty 2>/dev/null || true)"
+	local rows size tty_in
+	tty_in="$(tty_input_path)"
+	if tty_available; then
+		size="$(stty size <"$tty_in" 2>/dev/null || true)"
+	else
+		size=''
+	fi
 	if [[ -n "$size" ]]; then
 		rows="${size%% *}"
 	else

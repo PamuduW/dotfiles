@@ -90,7 +90,7 @@ test_root_breadcrumb_is_dotfiles() {
 		mv -f -- "$rest" "$queue"
 		printf '%s\n' "$choice"
 	}
-	( main_menu_loop )
+	(main_menu_loop)
 	[[ "$(sed -n '1p' "$captured")" == 'Dotfiles' ]] || return 1
 	[[ "$(sed -n '2p' "$captured")" == 'Dotfiles' ]] || return 1
 	[[ "$(sed -n '3p' "$captured")" == 'Up/Down navigate   Enter confirm' ]]
@@ -120,9 +120,10 @@ test_direct_status_install_update_dispatch() (
 test_install_dispatch_gates_repository_before_menu() (
 	local calls="$TEST_HARNESS_ROOT/install-gate.calls"
 	: >"$calls"
-	repo_update_gate() {
+	repo_update_run() {
 		printf 'gate:%s\n' "$1" >>"$calls"
-		REPO_UPDATE_OUTCOME=current
+		local -n result_ref="$4"
+		result_ref=([outcome]=current)
 	}
 	run_initial_setup_flow() { printf 'setup\n' >>"$calls"; }
 	ui_clear() { :; }
@@ -135,15 +136,17 @@ test_install_dispatch_gates_repository_before_menu() (
 test_install_dispatch_blocks_when_repository_is_not_ready() (
 	local calls="$TEST_HARNESS_ROOT/install-gate-blocked.calls"
 	: >"$calls"
-	repo_update_gate() {
+	repo_update_run() {
 		printf 'gate\n' >>"$calls"
-		REPO_UPDATE_OUTCOME=stopped
+		local -n result_ref="$4"
+		result_ref=([outcome]=stopped)
+		return 1
 	}
 	run_initial_setup_flow() { printf 'setup\n' >>"$calls"; }
 	ui_clear() { :; }
 	ui_pause() { :; }
 	DOTFILES_DIR=/tmp/dotfiles-test-repo
-	_main_menu_dispatch install && return 1
+	_main_menu_dispatch install || return 1
 	[[ "$(<"$calls")" == 'gate' ]]
 )
 
@@ -151,10 +154,13 @@ test_install_repo_gate_uses_repository_update_topic() (
 	local output
 	DOTFILES_DIR=/tmp/dotfiles-test-repo
 	C_BOLD=$'\033[1m' C_CYAN=$'\033[36m' C_YELLOW=$'\033[33m' C_RESET=$'\033[0m'
-	REPO_UPDATE_STATE=behind REPO_UPDATE_BEHIND=1 REPO_UPDATE_UPSTREAM=origin/main
-	repo_update_gate() {
-		"$2" 'Pull 1 commit(s) with --ff-only?' || return 1
-		REPO_UPDATE_OUTCOME=current
+	repo_update_preflight() {
+		local -n result_ref="$3"
+		result_ref=([safe]=1 [state]=behind [outcome]=stopped [reason]=behind [approved]=0 [dirty]=0 [changes]='' [upstream]=origin/main [dir]="$1" [label]="$2" [ahead]=0 [behind]=1)
+	}
+	repo_update_apply() {
+		local -n result_ref="$1"
+		result_ref[outcome]=current
 	}
 	ui_confirm_yes_no() { return 0; }
 	output="$(_dotfiles_install_repo_gate 2>&1)" || return 1
@@ -168,10 +174,22 @@ test_install_repo_gate_relaunches_after_fast_forward() (
 	local calls="$TEST_HARNESS_ROOT/install-relaunch.calls"
 	: >"$calls"
 	DOTFILES_DIR=/tmp/dotfiles-test-repo
-	repo_update_gate() { REPO_UPDATE_OUTCOME=relaunch_required; }
+	repo_update_preflight() {
+		local -n result_ref="$3"
+		result_ref=([safe]=1 [state]=current [outcome]=current [reason]=current [approved]=0 [dirty]=0 [changes]='' [upstream]=origin/main [dir]="$1" [label]="$2" [ahead]=0 [behind]=0)
+	}
+	repo_update_request_approval() {
+		local -n result_ref="$1"
+		result_ref[approved]=1
+	}
+	repo_update_apply() {
+		local -n result_ref="$1"
+		result_ref[outcome]=relaunch_required
+	}
+	repo_update_wait_for_reload() { printf 'wait\n' >>"$calls"; }
 	repo_update_relaunch() { printf '%s\n' "$*" >>"$calls"; }
 	_dotfiles_install_repo_gate || return 1
-	[[ "$(<"$calls")" == '/tmp/dotfiles-test-repo/install.sh' ]]
+	[[ "$(<"$calls")" == $'wait\n/tmp/dotfiles-test-repo/install.sh' ]]
 )
 
 test_required_breadcrumb_literals() {
@@ -197,7 +215,10 @@ test_cancel_redraws_and_quit_returns() {
 		fi
 		printf '%s\n' "$choice"
 	}
-	output="$({ main_menu_loop; printf '%s\n' LOOP_RETURNED; })"
+	output="$({
+		main_menu_loop
+		printf '%s\n' LOOP_RETURNED
+	})"
 	[[ "$output" == *LOOP_RETURNED* ]] || return 1
 	[[ ! -s "$queue" ]]
 }
@@ -205,7 +226,10 @@ test_cancel_redraws_and_quit_returns() {
 test_failed_action_pauses_once() {
 	local pauses=0 rc
 	# shellcheck disable=SC2317  # Test double invoked indirectly by menu dispatch.
-	print_status_summary_all() { printf '%s\n' 'status failed' >&2; return 42; }
+	print_status_summary_all() {
+		printf '%s\n' 'status failed' >&2
+		return 42
+	}
 	ui_pause() { pauses=$((pauses + 1)); }
 	set +e
 	_main_menu_dispatch status >/dev/null 2>&1
@@ -217,7 +241,10 @@ test_failed_action_pauses_once() {
 
 test_relaunched_update_skips_stale_parent_pause() (
 	local pauses=0
-	run_update_flow() { DOTFILES_UPDATE_RELAUNCHED=true; return 0; }
+	run_update_flow() {
+		DOTFILES_UPDATE_RELAUNCHED=true
+		return 0
+	}
 	ui_clear() { :; }
 	ui_pause() { pauses=$((pauses + 1)); }
 	_main_menu_run_direct_action run_update_flow || return 1

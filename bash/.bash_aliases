@@ -86,7 +86,13 @@ dclean() {
 # Shell productivity
 # ------------------------------------
 alias reload='source ~/.bashrc'                  # reload shell config
-alias shfmt-format='shfmt -i 2 -bn -ci -sr -w .' # format shell scripts
+shfmt-format() {
+	if (($# == 0)); then
+		echo 'Usage: shfmt-format FILE...'
+		return 2
+	fi
+	shfmt -w "$@"
+}
 
 # ------------------------------------
 # System maintenance
@@ -103,7 +109,7 @@ alias update-claude='claude update'
 alias update-copilot='copilot update'
 
 update-all() {
-	dotfiles upgrade
+	dotfiles update --all
 }
 
 # ------------------------------------

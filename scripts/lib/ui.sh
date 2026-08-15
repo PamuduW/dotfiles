@@ -36,13 +36,13 @@ ui_init_colors() {
 
 ui_clear() {
 	if [[ -t 0 ]]; then
-		tput clear 2>/dev/null || printf '\033[2J\033[H' >/dev/tty
+		tput clear 2>/dev/null || tty_printf '\033[2J\033[H'
 	fi
 }
 
 ui_pause() {
 	local _ui_pause_reply=''
-	printf '\n' >/dev/tty
+	tty_printf '\n'
 	read_tty_line _ui_pause_reply "${C_YELLOW:-}Press Enter to continue:${C_RESET:-} "
 }
 
@@ -70,9 +70,9 @@ ui_confirm_destructive() {
 	local message="$1"
 	local answer=''
 
-	printf '\n' >/dev/tty
-	printf '  %s%s%s\n' "$C_RED" "$message" "$C_RESET" >/dev/tty
-	printf '\n' >/dev/tty
+	tty_printf '\n'
+	tty_printf '  %s%s%s\n' "$C_RED" "$message" "$C_RESET"
+	tty_printf '\n'
 	read_tty_line answer "  ${C_RED}Proceed? [y/N]:${C_RESET} "
 	case "$answer" in
 	y | Y | yes | YES) return 0 ;;
@@ -239,10 +239,10 @@ _ui_status_table_layout() {
 	_out_label_w=22
 	_out_mid_w=10
 	_out_path_w=$((cols - _out_label_w - _out_mid_w - 9))
-	if (( _out_path_w < 28 )); then
+	if ((_out_path_w < 28)); then
 		_out_path_w=28
 	fi
-	if (( _out_path_w > 48 )); then
+	if ((_out_path_w > 48)); then
 		_out_path_w=48
 	fi
 }

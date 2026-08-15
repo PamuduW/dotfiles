@@ -27,7 +27,7 @@ dotfiles_repo_root() {
 
 # Canonical location: immediate parent of dotfiles + agent_bootstrap.
 agent_bootstrap_sibling_home() {
-	local dotfiles_root="${1:-}"
+	local dotfiles_root=''
 	local sibling
 
 	if [[ -z "$dotfiles_root" ]]; then

@@ -134,9 +134,12 @@ package_lib_render_packages_page() {
 		printf '  %-*s | %-*s | %-*s\n' \
 			"$package_w" "$package_fit" "$tag_w" "$tag_fit" "$description_w" "$description_fit"
 	fi
-	package_rule="$(printf '%*s' "$package_w" '')"; package_rule="${package_rule// /-}"
-	tag_rule="$(printf '%*s' "$tag_w" '')"; tag_rule="${tag_rule// /-}"
-	description_rule="$(printf '%*s' "$description_w" '')"; description_rule="${description_rule// /-}"
+	package_rule="$(printf '%*s' "$package_w" '')"
+	package_rule="${package_rule// /-}"
+	tag_rule="$(printf '%*s' "$tag_w" '')"
+	tag_rule="${tag_rule// /-}"
+	description_rule="$(printf '%*s' "$description_w" '')"
+	description_rule="${description_rule// /-}"
 	printf '  %s-+-%s-+-%s\n' "$package_rule" "$tag_rule" "$description_rule"
 	for ((i = start; i <= end; i++)); do
 		package_fit="$(_package_lib_fit "${PACKAGE_LIB_NAMES[$i]}" "$package_w")"
@@ -186,9 +189,12 @@ package_lib_render_packages_all() {
 	printf '  %s%-*s | %-*s | %-*s%s\n' \
 		"$C_BOLD" "$package_w" "$package_fit" \
 		"$tag_w" "$tag_fit" "$description_w" "$description_fit" "$C_RESET"
-	package_rule="$(printf '%*s' "$package_w" '')"; package_rule="${package_rule// /-}"
-	tag_rule="$(printf '%*s' "$tag_w" '')"; tag_rule="${tag_rule// /-}"
-	description_rule="$(printf '%*s' "$description_w" '')"; description_rule="${description_rule// /-}"
+	package_rule="$(printf '%*s' "$package_w" '')"
+	package_rule="${package_rule// /-}"
+	tag_rule="$(printf '%*s' "$tag_w" '')"
+	tag_rule="${tag_rule// /-}"
+	description_rule="$(printf '%*s' "$description_w" '')"
+	description_rule="${description_rule// /-}"
 	printf '  %s-+-%s-+-%s\n' "$package_rule" "$tag_rule" "$description_rule"
 	for i in "${!PACKAGE_LIB_NAMES[@]}"; do
 		package_fit="$(_package_lib_fit "${PACKAGE_LIB_NAMES[$i]}" "$package_w")"
@@ -208,18 +214,19 @@ package_lib_render_packages_all() {
 }
 
 package_lib_packages_menu() {
-	local cols
+	local cols tty_out
 
 	package_metadata_load "${PKG_FILE:-}" || {
 		ui_pause
 		return 1
 	}
 	cols="$(menu_tty_cols)"
+	tty_out="$(tty_output_path)"
 	{
 		ui_clear
 		package_lib_render_packages_all "$cols"
 		ui_pause
-	} >/dev/tty
+	} >"$tty_out"
 }
 
 package_lib_menu() {

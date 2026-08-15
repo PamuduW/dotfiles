@@ -129,7 +129,7 @@ github_token_write() {
 		_github_token_warn "private temporary token file could not be created"
 		return 1
 	}
-	if ! printf 'GITHUB_TOKEN=%s\n' "$token" >"$temp_file" || \
+	if ! printf 'GITHUB_TOKEN=%s\n' "$token" >"$temp_file" ||
 		! chmod 600 -- "$temp_file" || ! mv -f -- "$temp_file" "$file"; then
 		rm -f -- "$temp_file"
 		umask "$old_umask"

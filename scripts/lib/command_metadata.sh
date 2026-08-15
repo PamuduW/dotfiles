@@ -239,12 +239,15 @@ _dotfiles_command_wrap_words() {
 
 	while IFS= read -r paragraph || [[ -n "$paragraph" ]]; do
 		if [[ -z "$paragraph" ]]; then
-			[[ -n "$line" ]] && { printf '%s\n' "$line"; line=''; }
+			[[ -n "$line" ]] && {
+				printf '%s\n' "$line"
+				line=''
+			}
 			printf '\n'
 			continue
 		fi
 		for word in $paragraph; do
-			if [[ -n "$line" && $(( ${#line} + 1 + ${#word} )) -le $width ]]; then
+			if [[ -n "$line" && $((${#line} + 1 + ${#word})) -le $width ]]; then
 				line+=" $word"
 				continue
 			fi
@@ -331,7 +334,7 @@ dotfiles_command_print_details() {
 		_dotfiles_command_print_field 'Effects' "${DOTFILES_COMMAND_EFFECTS[$key]}" "$cols"
 		_dotfiles_command_print_field 'Example' "${DOTFILES_COMMAND_EXAMPLES[$key]}" "$cols"
 		_dotfiles_command_print_field 'Related' "${DOTFILES_COMMAND_RELATED[$key]}" "$cols"
-		[[ -n "${DOTFILES_COMMAND_NOTE[$key]}" ]] && \
+		[[ -n "${DOTFILES_COMMAND_NOTE[$key]}" ]] &&
 			_dotfiles_command_print_field 'Note' "${DOTFILES_COMMAND_NOTE[$key]}" "$cols"
 	done
 
@@ -387,9 +390,12 @@ dotfiles_command_print_table() {
 		"$C_BOLD" "$class_w" "$class_fit" "$C_RESET" \
 		"$description_w" "$description_fit"
 	local usage_rule class_rule description_rule
-	usage_rule="$(printf '%*s' "$usage_w" '')"; usage_rule="${usage_rule// /-}"
-	class_rule="$(printf '%*s' "$class_w" '')"; class_rule="${class_rule// /-}"
-	description_rule="$(printf '%*s' "$description_w" '')"; description_rule="${description_rule// /-}"
+	usage_rule="$(printf '%*s' "$usage_w" '')"
+	usage_rule="${usage_rule// /-}"
+	class_rule="$(printf '%*s' "$class_w" '')"
+	class_rule="${class_rule// /-}"
+	description_rule="$(printf '%*s' "$description_w" '')"
+	description_rule="${description_rule// /-}"
 	printf '  %s-+-%s-+-%s\n' "$usage_rule" "$class_rule" "$description_rule"
 	for key in "${DOTFILES_COMMAND_KEYS[@]}"; do
 		usage="$(dotfiles_command_display_usage "$key")"
