@@ -55,7 +55,7 @@ Stow packages: `bash`, `bin`, `readline`
 
 ```bash
 git clone <repo-url> ~/dotfiles
-cd ~/dotfiles
+cd ~/dotfiles 
 chmod +x install.sh bin/bin/ex bin/bin/clip bin/bin/dotfiles
 ./install.sh
 ```
