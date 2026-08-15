@@ -1237,7 +1237,7 @@ _print_repo_update_changes() {
 }
 
 _print_repo_update_table() {
-	repo_update_print_report "$DOTFILES_DIR" update
+	repo_update_print_report "$DOTFILES_DIR"
 }
 
 _print_repo_update_stopped_report() {

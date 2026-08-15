@@ -39,7 +39,7 @@ run_status_action() {
 }
 
 _dotfiles_install_repo_decision() {
-	repo_update_print_report "$DOTFILES_DIR" install
+	repo_update_print_report "$DOTFILES_DIR"
 	ui_confirm_yes_no "$1"
 }
 

@@ -171,7 +171,7 @@ _repo_update_print_table_row() {
 }
 
 repo_update_print_report() {
-	local repo_dir="$1" heading_style="${2:-update}"
+	local repo_dir="$1"
 	local branch local_rev available action upstream change_count remote_action
 	branch="$(git -C "$repo_dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
 	local_rev="$(git -C "$repo_dir" rev-parse --short HEAD 2>/dev/null || echo unknown)"
@@ -193,11 +193,7 @@ repo_update_print_report() {
 		esac
 	fi
 
-	if [[ "$heading_style" == install ]]; then
-		printf '\n%s%sRepository update%s\n\n' "${C_BOLD:-}" "${C_YELLOW:-}" "${C_RESET:-}"
-	else
-		printf '\n%s%s==Repository update==%s\n\n' "${C_BOLD:-}" "${C_ORANGE:-}" "${C_RESET:-}"
-	fi
+	printf '\n%s%sRepository update%s\n\n' "${C_BOLD:-}" "${C_YELLOW:-}" "${C_RESET:-}"
 	_repo_update_print_table_header action
 	if [[ "${REPO_UPDATE_DIRTY:-0}" == 1 ]]; then
 		_repo_update_print_table_row 'dotfiles repo' "${branch}@${local_rev}" "${change_count} local change(s)" "$action"
