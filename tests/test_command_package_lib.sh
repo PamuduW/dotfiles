@@ -284,13 +284,22 @@ test_component_registry_has_exact_21_with_graphify() {
 	done
 }
 
-test_graphify_component_is_default_off_and_depends_on_python() {
-	local graphify_idx python_idx
-	graphify_idx="$(comp_key_index graphify_cli)" || return 1
-	python_idx="$(comp_key_index python)" || return 1
-	[[ "$(comp_dependency graphify_cli)" == python ]] || return 1
+test_install_defaults_match_requested_selection() {
+	local key
 	comp_registry_init
-	[[ "${COMP_ON[graphify_cli]:-}" -eq 0 ]] || return 1
+	[[ "${#COMP_KEYS[@]}" -eq 21 ]] || return 1
+	for key in "${COMP_KEYS[@]}"; do
+		case "$key" in
+		git_identity | ssh_key)
+			[[ "${COMP_ON[$key]:-}" -eq 0 ]] || return 1
+			;;
+		*)
+			[[ "${COMP_ON[$key]:-}" -eq 1 ]] || return 1
+			;;
+		esac
+	done
+	[[ "$(comp_dependency graphify_cli)" == python ]] || return 1
+	[[ "${COMP_ON[graphify_cli]:-}" -eq 1 && "${COMP_ON[python]:-}" -eq 1 ]]
 }
 
 test_package_metadata_has_exact_30_with_descriptions() {
@@ -427,7 +436,7 @@ expect_success 'Command Lib colors mutating and read-only behavior cells' test_c
 expect_success 'topic headers use the orange palette' test_topic_headers_use_orange
 expect_success 'table column headers remain bold white' test_table_column_headers_are_bold_white
 expect_success 'component registry exposes the exact 21 described component IDs' test_component_registry_has_exact_21_with_graphify
-expect_success 'Graphify is default-off and depends on Python' test_graphify_component_is_default_off_and_depends_on_python
+expect_success 'install defaults enable all components except Git identity and SSH key' test_install_defaults_match_requested_selection
 expect_success 'package metadata contains 30 unique described names in 9/3/9/9 tags' test_package_metadata_has_exact_30_with_descriptions
 expect_success 'Package Lib renders all 21 components without probes or side effects' test_package_lib_components_are_metadata_only
 expect_success 'System package pages cover all 30 names exactly once' test_package_pages_cover_all_30_once

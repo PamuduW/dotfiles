@@ -31,7 +31,7 @@ _comp_plan_python() {
 _comp_plan_graphify_cli() {
 	is_on graphify_cli &&
 		ui_print_plan_row "Graphify CLI" "uv tool install graphifyy (optional)" 1 ||
-		ui_print_plan_row "Graphify CLI" "skip (opt-in)" 0
+		ui_print_plan_row "Graphify CLI" "skip" 0
 }
 
 _comp_plan_powershell() {

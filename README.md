@@ -11,7 +11,7 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 - Better readline: case-insensitive completion, arrow-key history search
 - Docker Engine + Portainer CE (with `dpot`/`dpotstop` shortcuts)
 - Node.js via nvm, Python 3, Go (asdf), PowerShell, direnv
-- Optional Graphify CLI (`graphifyy` through `uv`; default-off)
+- Optional Graphify CLI (`graphifyy` through `uv`; selected by default)
 - AI CLI tools: Cursor, Codex, Claude, Copilot (updated through the explicit `dotfiles update` workflow)
 - SSH key generation with GitHub setup notes
 - WSL-specific config: systemd, Windows PATH interop (`appendWindowsPath=true`), Git credentials and recursive-submodule defaults, clipboard helper
@@ -144,7 +144,7 @@ When you choose **Run setup** interactively (TTY), the installer will:
 | Git identity    | Set global `user.name` / `user.email` (auto-disabled if `includeIf` detected) |
 | System packages | Core CLI tools from apt (@core, @cli, @system)                                |
 | Python          | python3, pip, venv                                                            |
-| Graphify CLI    | Optional `graphifyy` package through `uv`; exposes the `graphify` command (default OFF) |
+| Graphify CLI    | Optional `graphifyy` package through `uv`; exposes the `graphify` command (selected by default) |
 | PowerShell      | Microsoft PowerShell from official Microsoft apt repository                   |
 | Go              | Latest Go via asdf                                                            |
 | Node.js         | v24 LTS via nvm                                                               |
@@ -167,7 +167,7 @@ Dependencies are enforced automatically (e.g., disabling Docker also disables Po
 
 ### Optional Graphify CLI
 
-`graphify_cli` is a selectable, default-off component. It requires Python
+`graphify_cli` is a selectable component enabled by default. It requires Python
 3.10+ and installs the official Graphify package as a user tool with
 `uv tool install graphifyy`; the installed command is `graphify`. If `uv` is
 missing, the component may install it through Astral's official installer.

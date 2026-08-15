@@ -165,12 +165,10 @@ comp_registry_init() {
 		COMP_ON["$_key"]=1
 	done
 
-	if git config --global --list 2>/dev/null | grep -q '^includeif\.'; then
-		COMP_ON[git_identity]=0
-	fi
-	# Graphify is intentionally opt-in; selecting all components remains an
-	# explicit action in the interactive picker.
-	COMP_ON[graphify_cli]=0
+	# Safe defaults: identity and key generation are user-specific decisions;
+	# all other setup components, including optional Graphify, start selected.
+	COMP_ON[git_identity]=0
+	COMP_ON[ssh_key]=0
 }
 
 # Non-interactive: honor DOTFILES_COMPONENTS (comma-separated COMP_KEYS); default = all on.
