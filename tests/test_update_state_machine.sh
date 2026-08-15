@@ -706,21 +706,21 @@ test_upgrade_summary_marks_repo_gate_as_handled() (
 
 test_tui_runs_shared_update_without_submenu() (
 	local fake_dotfiles="$TEST_HARNESS_ROOT/fake-dotfiles"
-	local events="$TEST_HARNESS_ROOT/tui-update.events" tty_output="$TEST_HARNESS_ROOT/tui-update.tty"
+	local events="$TEST_HARNESS_ROOT/tui-update.events"
 	cat >"$fake_dotfiles" <<'FAKE'
 #!/usr/bin/env bash
 printf 'dotfiles:%s\n' "$*" >>"${TEST_TUI_EVENTS:?}"
 exit "${TEST_DOTFILES_RC:-0}"
 FAKE
 	chmod 700 "$fake_dotfiles"
-	export TEST_TUI_EVENTS="$events" DOTFILES_TTY_PATH="$tty_output"
+	export TEST_TUI_EVENTS="$events"
 	: >"$events"
 	resolve_dotfiles_cmd() { printf '%s\n' "$fake_dotfiles"; }
-	ui_print_header() { printf 'header:%s|%s\n' "$1" "$2"; }
+	ui_print_header() { printf 'header:%s|%s\n' "$1" "$2" >>"$events"; }
 
 	run_update_flow || return 1
 	[[ "$(sed -n '1p' "$events")" == 'dotfiles:update' && "$(wc -l <"$events")" -eq 1 ]] || return 1
-	grep -Fq 'header:Update|Dotfiles › Update' "$tty_output" || return 1
+	! grep -Fq 'header:Update|Dotfiles › Update' "$events" || return 1
 	! declare -F update_menu >/dev/null 2>&1
 )
 
