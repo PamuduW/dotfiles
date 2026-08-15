@@ -98,7 +98,7 @@ Use arrow keys to navigate and Enter to select.
 | Option | Submenu / action |
 | ------ | ---------------- |
 | Check Status | Read-only local component and repository report; remote and apt freshness are labelled unchecked. |
-| Install Dotfiles | Select components, review the execution plan, and apply setup. |
+| Install Dotfiles | Select components, review the execution plan, and apply setup.  |
 | Update | Repo-first fetch/classify/pull gate, then confirmed downstream updates. |
 | GitHub Token Config | Configure the optional shared API token without blocking anonymous use. |
 | Command Lib | Read-only full command, option, configuration, and integration reference. |
