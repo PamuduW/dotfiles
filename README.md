@@ -67,7 +67,7 @@ The **Agentbot** action expects `agent_bootstrap` as a **sibling** of this repo 
 ```text
 parent/
 ├── dotfiles/           # this repo
-└── agent_bootstrap/    # sibling target for Agentbot
+└── agent_bootstrap/    # sibling target for Agentbot 
 ```
 
 Clone manually or use **Agentbot**. The bridge validates `install.sh` and the Git origin before launching. A standalone `agent_bootstrap` clone still works when launched directly.
