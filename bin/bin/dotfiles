@@ -1241,6 +1241,9 @@ _print_repo_update_table() {
 }
 
 _print_repo_update_stopped_report() {
+	case "${REPO_UPDATE_REASON:-unknown}" in
+	behind-declined | ahead-declined) return 0 ;;
+	esac
 	_print_repo_update_table
 	_print_repo_update_changes
 	case "${REPO_UPDATE_REASON:-unknown}" in
@@ -1256,8 +1259,7 @@ _print_repo_update_stopped_report() {
 }
 
 _dotfiles_confirm_repo_update() {
-	_print_repo_update_table
-	_dotfiles_confirm "$1"
+	repo_update_confirm "$DOTFILES_DIR" _dotfiles_confirm "$1"
 }
 
 _dotfiles_wait_for_reload() {

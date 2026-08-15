@@ -219,6 +219,41 @@ test_cmd_update_reports_dirty_paths_and_remote_state_before_stopping() (
 	[[ "$output" == *'Repository pull and downstream updates stopped.'* ]]
 )
 
+test_declined_repository_pull_prints_one_report_and_one_pause_boundary() (
+	local output clean_output rc
+	TEST_REPO_STATE=behind
+	export TEST_REPO_STATE
+	set +e
+	output="$(printf 'n\n' | cmd_update 2>&1)"
+	rc=$?
+	set -e
+	clean_output="$(sed -E $'s/\033\\[[0-9;]*m//g' <<<"$output")"
+	[[ "$rc" -ne 0 ]] || return 1
+	[[ "$(grep -c '^Repository update$' <<<"$clean_output")" -eq 1 ]] || return 1
+	[[ "$clean_output" == *'Pull 3 commit(s) with --ff-only? [y/N]: '*$'\n\n''Pull declined; update stopped.'* ]] || return 1
+	[[ "$clean_output" != *'Repository pull and downstream updates stopped: behind.'* ]]
+)
+
+test_declined_install_repository_pull_keeps_install_context() (
+	local output clean_output rc
+	TEST_REPO_STATE=behind
+	export TEST_REPO_STATE
+	ui_confirm_yes_no() {
+		printf '%s [y/N]: ' "$1"
+		return 1
+	}
+	set +e
+	output="$(_dotfiles_install_repo_gate 2>&1)"
+	rc=$?
+	set -e
+	clean_output="$(sed -E $'s/\033\\[[0-9;]*m//g' <<<"$output")"
+	[[ "$rc" -ne 0 ]] || return 1
+	[[ "$(grep -c '^Repository update$' <<<"$clean_output")" -eq 1 ]] || return 1
+	[[ "$clean_output" == *'Pull 3 commit(s) with --ff-only? [y/N]: '*$'\n\n''Pull declined; update stopped.'* ]] || return 1
+	[[ "$clean_output" == *'Install stopped; the Dotfiles repository is not ready for setup.'* ]] || return 1
+	[[ "$clean_output" != *'Repository pull and downstream updates stopped: behind.'* ]]
+)
+
 test_dirty_change_report_is_bounded_and_copyable() (
 	local i output status_lines='' printed
 	for i in $(seq 1 22); do status_lines+="?? path-${i}"$'\n'; done
@@ -846,6 +881,8 @@ expect_success 'successful pull requires relaunch and stops old-process work' te
 expect_success 'relaunch wrapper is injectable without a fake exec command' test_relaunch_is_injectable
 expect_success 'cmd_update executes stopped current ahead and relaunch outcomes' test_cmd_update_executes_outcome_contract
 expect_success 'cmd_update reports dirty paths and verified remote state before stopping' test_cmd_update_reports_dirty_paths_and_remote_state_before_stopping
+expect_success 'declined repository pulls print one report before the pause boundary' test_declined_repository_pull_prints_one_report_and_one_pause_boundary
+expect_success 'declined install pulls keep the install stop context' test_declined_install_repository_pull_keeps_install_context
 expect_success 'dirty path report is bounded and includes a copyable full-list command' test_dirty_change_report_is_bounded_and_copyable
 expect_success 'downstream execution runs apt refresh first and honors --all' test_downstream_executes_apt_first_and_all_matrix
 expect_success 'Node.js probe follows nvm default instead of a stale shell PATH' test_node_probe_uses_nvm_default_when_shell_path_is_stale

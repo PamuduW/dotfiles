@@ -204,6 +204,12 @@ repo_update_print_report() {
 	printf '\n'
 }
 
+repo_update_confirm() {
+	local repo_dir="$1" confirm_fn="$2" prompt="$3"
+	repo_update_print_report "$repo_dir"
+	"$confirm_fn" "$prompt"
+}
+
 repo_update_gate() {
 	local repo_dir="$1" confirm_fn="$2" fetch_output='' pull_output=''
 	REPO_UPDATE_OUTCOME=stopped
@@ -228,11 +234,15 @@ repo_update_gate() {
 	current) REPO_UPDATE_OUTCOME=current ;;
 	ahead)
 		if "$confirm_fn" 'Local branch is ahead. Continue with downstream updates?'; then REPO_UPDATE_OUTCOME=ahead_continue
-		else printf 'Update stopped; no downstream work was run.\n'; fi
+		else
+			REPO_UPDATE_REASON=ahead-declined
+			printf '\n\nUpdate stopped; no downstream work was run.\n'
+		fi
 		;;
 	behind)
 		if ! "$confirm_fn" "Pull ${REPO_UPDATE_BEHIND} commit(s) with --ff-only?"; then
-			printf 'Pull declined; update stopped.\n'
+			REPO_UPDATE_REASON=behind-declined
+			printf '\n\nPull declined; update stopped.\n'
 		elif pull_output="$(git -C "$repo_dir" pull --ff-only 2>&1)"; then
 			[[ -n "$pull_output" ]] && _repo_update_print_fetch_output "$pull_output"
 			REPO_UPDATE_OUTCOME=relaunch_required
