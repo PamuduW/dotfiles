@@ -35,8 +35,8 @@ install_node_via_nvm() {
 	[[ -s "$NVM_DIR/nvm.sh" ]] && . "$NVM_DIR/nvm.sh"
 
 	log_step "Install Node.js ${NVM_MIN_NODE} via nvm"
-	_run_quiet_command "Node.js install" nvm install "$NVM_MIN_NODE"
-	_run_quiet_command "Node.js default alias" nvm alias default "$NVM_MIN_NODE"
+	_run_quiet_command "Node.js install" nvm install "$NVM_MIN_NODE" || return $?
+	_run_quiet_command "Node.js default alias" nvm alias default "$NVM_MIN_NODE" || return $?
 	log_ok "Node.js $(node --version) installed via nvm"
 }
 
@@ -103,13 +103,13 @@ ensure_asdf_installed() {
 		mkdir -p "$asdf_dir/bin"
 		rm -f "$asdf_bin"
 		if ! tar -xzf "$tmp/asdf.tar.gz" -C "$asdf_dir/bin" asdf 2>/dev/null; then
-			tar -xzf "$tmp/asdf.tar.gz" -C "$tmp"
+			tar -xzf "$tmp/asdf.tar.gz" -C "$tmp" || return $?
 			extracted="$(find "$tmp" -maxdepth 3 -type f -name asdf | head -n1 || true)"
 			[[ -n "$extracted" ]] || {
 				echo "  Failed to extract asdf binary." >&2
 				return 1
 			}
-			install -m 0755 "$extracted" "$asdf_bin"
+			install -m 0755 "$extracted" "$asdf_bin" || return $?
 		fi
 		chmod +x "$asdf_bin"
 		rm -rf "$tmp"
@@ -134,12 +134,12 @@ install_go_via_asdf() {
 
 	if ! asdf plugin list 2>/dev/null | grep -qx 'golang'; then
 		log_step "Add asdf golang plugin"
-		asdf plugin add golang
+		asdf plugin add golang || return $?
 	fi
 
 	log_step "Install Go latest via asdf"
-	_run_quiet_command "Go install" asdf install golang latest
-	_run_quiet_command "Go version selection" asdf set -u golang latest
+	_run_quiet_command "Go install" asdf install golang latest || return $?
+	_run_quiet_command "Go version selection" asdf set -u golang latest || return $?
 	asdf reshim golang 2>/dev/null || true
 	log_ok "Go installed and set for user via asdf"
 }
@@ -180,7 +180,7 @@ install_codex_cli() {
 		return 1
 	}
 	log_step "Install Codex CLI"
-	npm i -g @openai/codex
+	npm i -g @openai/codex || return $?
 	log_ok "Codex CLI installed"
 }
 
@@ -256,24 +256,24 @@ install_powershell() {
 	fi
 
 	log_step "Install PowerShell from Microsoft packages repo"
-	sudo apt-get update -qq
+	sudo apt-get update -qq || return $?
 	# HTTPS transport is built into supported modern apt releases; the legacy
 	# apt-transport-https package is unnecessary and may not exist on newer systems.
-	sudo apt-get -o Dpkg::Use-Pty=0 install -y wget software-properties-common
+	sudo apt-get -o Dpkg::Use-Pty=0 install -y wget software-properties-common || return $?
 
 	if [[ ! -f /etc/apt/sources.list.d/microsoft-prod.list && ! -f /etc/apt/sources.list.d/microsoft-prod.sources ]]; then
 		local deb_file
 		deb_file="$(mktemp /tmp/packages-microsoft-prod.XXXXXX.deb)"
-		wget -q "https://packages.microsoft.com/config/${distro}/${version_id}/packages-microsoft-prod.deb" -O "$deb_file"
-		sudo dpkg -i "$deb_file"
+		wget -q "https://packages.microsoft.com/config/${distro}/${version_id}/packages-microsoft-prod.deb" -O "$deb_file" || return $?
+		sudo dpkg -i "$deb_file" || return $?
 		rm -f "$deb_file"
 		log_ok "Added Microsoft apt repository"
 	else
 		log_skip "Microsoft apt repository already configured"
 	fi
 
-	sudo apt-get update -qq
-	sudo apt-get -o Dpkg::Use-Pty=0 install -y powershell
+	sudo apt-get update -qq || return $?
+	sudo apt-get -o Dpkg::Use-Pty=0 install -y powershell || return $?
 
 	if command -v pwsh >/dev/null 2>&1; then
 		log_ok "PowerShell installed ($(pwsh --version 2>/dev/null || echo 'unknown'))"

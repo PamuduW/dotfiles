@@ -14,7 +14,10 @@ Each package entry uses `package-name  # concise description`. The installer
 strips the inline comment before invoking apt, while the read-only Package Lib
 uses it as display metadata. Package names remain the authoritative install set.
 
-When you run `./install.sh` (root shim to `scripts/install.sh`), the interactive installer lets you toggle which tag groups to install. Only selected groups are passed to `apt-get install`. The installer also:
+When you run `./install.sh` (root shim to `scripts/install.sh`), the interactive
+installer exposes package-backed components. **System packages** owns the
+`@core`, `@cli`, and `@system` groups; **Python** owns `@python`. Installation
+and status probes read that same ownership metadata. The installer also:
 
 - Adds small compatibility fixes for Debian/Ubuntu quirks:
   - `fd-find` installs the `fdfind` binary (because `fd` is already taken)

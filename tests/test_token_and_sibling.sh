@@ -28,23 +28,8 @@ fi
 # shellcheck source=scripts/menus/main.sh
 source "$REPO_DIR/scripts/menus/main.sh"
 
-passed=0
-failed=0
+test_harness_report_init
 TOKEN_SEQ=0
-
-pass() {
-	printf 'ok - %s\n' "$1"
-	passed=$((passed + 1))
-}
-fail() {
-	printf 'not ok - %s\n' "$1" >&2
-	failed=$((failed + 1))
-}
-expect_success() {
-	local name="$1"
-	shift
-	if "$@"; then pass "$name"; else fail "$name"; fi
-}
 
 make_token() {
 	local label="${1:-default}"
@@ -223,13 +208,14 @@ test_canary_never_leaks_outside_confirmed_reveal() (
 	unset TEST_CANARY_SECRET GITHUB_TOKEN
 )
 
-test_visible_entry_requires_save_confirmation() (
+test_hidden_entry_requires_save_confirmation() (
 	reset_token_state
 	local token output="$TEST_HARNESS_ROOT/no-save.menu"
 	token="$(make_token)"
 	run_menu_script $'s\n'"${token}"$'\nn\nq\n' "$output" || return 1
 	[[ ! -e "$(github_token_file)" ]] || return 1
-	grep -Fq 'Input is visible' "$output" || return 1
+	grep -Fq 'Input is hidden' "$output" || return 1
+	! grep -Fq 'Input is visible' "$output" || return 1
 	! grep -Fq "$token" "$output"
 )
 
@@ -361,7 +347,7 @@ expect_success 'strict parser rejects malformed content without execution' test_
 expect_success 'atomic private write, replacement, removal, and unsafe rejection work' test_atomic_private_write_replacement_removal_and_unsafe_rejection
 expect_success 'legacy migration handles absent, valid, identical, conflict, and unsafe states' test_legacy_migration_matrix
 expect_success 'canary is absent outside confirmed reveal output' test_canary_never_leaks_outside_confirmed_reveal
-expect_success 'visible entry does not write before save confirmation' test_visible_entry_requires_save_confirmation
+expect_success 'hidden entry does not write before save confirmation' test_hidden_entry_requires_save_confirmation
 expect_success 'menu save, entry cancel, remove confirm/cancel, and q preserve state' test_menu_save_cancel_remove_and_q_state_machine
 expect_success 'existing token is fingerprinted and Reveal is warned, confirmed, and one-time' test_fingerprint_and_warned_one_time_reveal
 expect_success 'token screen header, breadcrumb, path, and optional no-scope copy are complete' test_menu_presentation_is_complete
@@ -372,5 +358,4 @@ expect_success 'migration and export consolidate one bad-target warning per atte
 expect_success 'root github_token hook reaches screen without reorder or extra pause' test_root_hook_reaches_token_menu_without_reordering
 expect_success 'original-home legacy and active token paths remain unchanged' test_original_home_token_paths_remain_unchanged
 
-printf '%d test(s) passed; %d failed\n' "$passed" "$failed"
-((failed == 0))
+finish_tests

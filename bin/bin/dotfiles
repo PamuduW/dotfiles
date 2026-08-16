@@ -17,13 +17,10 @@ if [[ -f "$_COMMAND_METADATA_LIB" ]]; then
 fi
 
 _COMPONENT_REGISTRY_LIB="${DOTFILES_DIR}/scripts/lib/components/registry.sh"
-_COMPONENT_DESCRIPTIONS_LIB="${DOTFILES_DIR}/scripts/lib/components/descriptions.sh"
 _PACKAGE_LIB="${DOTFILES_DIR}/scripts/menus/package_lib.sh"
-if [[ -f "$_COMPONENT_REGISTRY_LIB" && -f "$_COMPONENT_DESCRIPTIONS_LIB" && -f "$_PACKAGE_LIB" ]]; then
+if [[ -f "$_COMPONENT_REGISTRY_LIB" && -f "$_PACKAGE_LIB" ]]; then
 	# shellcheck source=/dev/null
 	source "$_COMPONENT_REGISTRY_LIB"
-	# shellcheck source=/dev/null
-	source "$_COMPONENT_DESCRIPTIONS_LIB"
 	# shellcheck source=/dev/null
 	source "$_PACKAGE_LIB"
 fi
@@ -57,10 +54,6 @@ if [[ -f "$_GITHUB_API_LIB" ]]; then
 	# shellcheck source=/dev/null
 	source "$_GITHUB_API_LIB"
 fi
-
-_dotfiles_tui_mode() {
-	[[ -n "${DOTFILES_TUI:-}" ]]
-}
 
 # --- TTY colors ---
 _dotfiles_use_color() {
@@ -112,6 +105,16 @@ source "$_GITHUB_RELEASE_LIB"
 # shellcheck source=scripts/lib/installers/fonts.sh
 source "$_FONT_INSTALLER_LIB"
 
+_APT_INSTALLER_LIB="${DOTFILES_DIR}/scripts/lib/installers/apt.sh"
+_WSL_CONF_LIB="${DOTFILES_DIR}/scripts/lib/wsl_conf.sh"
+_COMPONENT_PROBES_LIB="${DOTFILES_DIR}/scripts/lib/components/probes.sh"
+# shellcheck source=scripts/lib/installers/apt.sh
+source "$_APT_INSTALLER_LIB"
+# shellcheck source=scripts/lib/wsl_conf.sh
+source "$_WSL_CONF_LIB"
+# shellcheck source=scripts/lib/components/probes.sh
+source "$_COMPONENT_PROBES_LIB"
+
 _UPDATE_COMPONENTS_LIB="${DOTFILES_DIR}/scripts/lib/update_components.sh"
 _UPDATE_WORKFLOW_LIB="${DOTFILES_DIR}/scripts/lib/update_workflow.sh"
 # shellcheck source=scripts/lib/update_components.sh
@@ -120,21 +123,25 @@ source "$_UPDATE_COMPONENTS_LIB"
 source "$_UPDATE_WORKFLOW_LIB"
 
 cmd_status() {
-	printf '%s%s=== Installed versions ===%s\n\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
+	local row component detail result
+	local -a rows=()
+	local ok_count=0 check_count=0 miss_count=0
+	collect_component_status_rows rows
+	rt_print_header "Check Status" "Dotfiles › Check Status"
+	rt_print_table_columns
+	for row in "${rows[@]}"; do
+		IFS='|' read -r component detail result <<<"$row"
+		case "$result" in
+		installed | configured) ((++ok_count)) ;;
+		missing) ((++miss_count)) ;;
+		*) ((++check_count)) ;;
+		esac
+		rt_print_table_row "$component" "$detail" "$result"
+	done
+	rt_print_rollup "$ok_count" "$check_count" "$miss_count"
 
-	printf '  %-20s %s\n' "apt:" "$(command -v apt-get >/dev/null 2>&1 && echo "available (freshness unchecked)" || echo "$NOT_INSTALLED")"
-	printf '  %-20s %s\n' "Graphify CLI:" "$(graphify_installed_version)"
-	printf '  %-20s %s\n' "Cursor CLI:" "$(cursor_installed_version)"
-	printf '  %-20s %s\n' "Codex CLI:" "$(codex_installed_version)"
-	printf '  %-20s %s\n' "Claude CLI:" "$(claude_installed_version)"
-	printf '  %-20s %s\n' "Copilot CLI:" "$(copilot_installed_version)"
-	printf '  %-20s %s\n' "lazygit:" "$(lazygit_installed_version)"
-	printf '  %-20s %s\n' "lazydocker:" "$(lazydocker_installed_version)"
-	printf '  %-20s %s\n' "Node.js:" "$(node_installed_version)"
-	printf '  %-20s %s\n' "Go:" "$(go_installed_version)"
-	printf '  %-20s %s\n' "Monaspace:" "$(monaspace_installed_version)"
-
-	printf '\n%s%s=== Dotfiles repo ===%s\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
+	printf '\n'
+	rt_print_section "Repository"
 	if command -v git >/dev/null 2>&1; then
 		git -C "$DOTFILES_DIR" status -sb
 		_msg "Remote freshness: unchecked (run dotfiles update)"
@@ -168,6 +175,7 @@ cmd_restow() {
 	_msg "Dotfiles restowed."
 }
 
+# shellcheck disable=SC2120  # Called indirectly through the command-handler map.
 cmd_menu() {
 	local installer="${DOTFILES_DIR}/install.sh"
 	if [[ ! -f "$installer" ]]; then
@@ -198,35 +206,30 @@ EOF
 }
 
 main() {
-	case "${1:-}" in
-	menu)
-		shift
-		cmd_menu "$@"
-		;;
-	update)
-		shift
-		cmd_update "$@"
-		;;
-	status) cmd_status ;;
-	commands) cmd_commands ;;
-	packages) cmd_packages ;;
-	restow) cmd_restow ;;
-	help | -h | --help) cmd_help ;;
+	local command="${1:-}" handler
+	case "$command" in
+	-h | --help) command=help ;;
 	'')
 		if [[ -t 1 ]]; then
-			cmd_menu
+			cmd_menu "$@"
 		else
 			cmd_help
 		fi
+		return
 		;;
-	*)
-		if removed_command_guidance "$1"; then exit 1; fi
-		_err "Unknown command: $1"
+	esac
+
+	handler="${DOTFILES_COMMAND_HANDLERS[$command]:-}"
+	if [[ -n "$handler" ]]; then
+		shift
+		"$handler" "$@"
+	else
+		if removed_command_guidance "$command"; then exit 1; fi
+		_err "Unknown command: $command"
 		_msg ""
 		cmd_help
 		exit 1
-		;;
-	esac
+	fi
 }
 
 main "$@"

@@ -4,8 +4,6 @@ _COMPONENTS_LIB_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # shellcheck source=scripts/lib/components/registry.sh
 source "$_COMPONENTS_LIB_DIR/registry.sh"
-# shellcheck source=scripts/lib/components/descriptions.sh
-source "$_COMPONENTS_LIB_DIR/descriptions.sh"
 # shellcheck source=scripts/lib/components/plan.sh
 source "$_COMPONENTS_LIB_DIR/plan.sh"
 # shellcheck source=scripts/lib/components/probes.sh

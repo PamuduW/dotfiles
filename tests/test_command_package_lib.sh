@@ -23,7 +23,6 @@ source "$REPO_DIR/scripts/lib/report_table.sh"
 source "$REPO_DIR/scripts/lib/ui.sh"
 source "$REPO_DIR/scripts/lib/menu_paging.sh"
 source "$REPO_DIR/scripts/lib/components/registry.sh"
-source "$REPO_DIR/scripts/lib/components/descriptions.sh"
 source "$REPO_DIR/scripts/lib/components/probes.sh"
 ui_init_colors
 
@@ -31,28 +30,7 @@ ui_init_colors
 [[ -f "$REPO_DIR/scripts/menus/command_lib.sh" ]] && source "$REPO_DIR/scripts/menus/command_lib.sh"
 [[ -f "$REPO_DIR/scripts/menus/package_lib.sh" ]] && source "$REPO_DIR/scripts/menus/package_lib.sh"
 
-passed=0
-failed=0
-
-pass() {
-	printf 'ok - %s\n' "$1"
-	passed=$((passed + 1))
-}
-
-fail() {
-	printf 'not ok - %s\n' "$1" >&2
-	failed=$((failed + 1))
-}
-
-expect_success() {
-	local name="$1"
-	shift
-	if "$@"; then
-		pass "$name"
-	else
-		fail "$name"
-	fi
-}
+test_harness_report_init
 
 count_exact_line() {
 	local expected="$1" file="$2"
@@ -93,55 +71,26 @@ test_removed_commands_report_migration_guidance() {
 
 test_help_commands_and_dispatch_share_metadata() {
 	declare -F dotfiles_command_print_table >/dev/null || return 1
-	declare -F dotfiles_command_dispatch_keys >/dev/null || return 1
-	declare -F dotfiles_command_metadata_validate_dispatch >/dev/null || return 1
 	local expected_table_file="$TEST_HARNESS_ROOT/commands.expected"
 	local help_output="$TEST_HARNESS_ROOT/help.output"
 	local commands_output="$TEST_HARNESS_ROOT/commands.output"
-	local -a dispatch_keys=()
 	dotfiles_command_print_table >"$expected_table_file"
 	"$REPO_DIR/bin/bin/dotfiles" help >"$help_output" || return 1
 	"$REPO_DIR/bin/bin/dotfiles" commands >"$commands_output" || return 1
 	grep -Fq "$(sed -n '1p' "$expected_table_file")" "$help_output" || return 1
 	cmp -s "$expected_table_file" "$commands_output" || return 1
-	dotfiles_command_metadata_validate_dispatch "$REPO_DIR/bin/bin/dotfiles" || return 1
-	mapfile -t dispatch_keys < <(dotfiles_command_dispatch_keys "$REPO_DIR/bin/bin/dotfiles")
-	[[ "${#dispatch_keys[@]}" -eq "${#DOTFILES_COMMAND_KEYS[@]}" ]] || return 1
-	local i
-	for i in "${!DOTFILES_COMMAND_KEYS[@]}"; do
-		[[ "${dispatch_keys[$i]}" == "${DOTFILES_COMMAND_KEYS[$i]}" ]] || return 1
-	done
+	dotfiles_command_metadata_validate || return 1
 }
 
-test_dispatch_parity_rejects_extra_duplicate_and_missing_keys() {
-	declare -F dotfiles_command_metadata_validate_dispatch >/dev/null || return 1
-	local valid="$TEST_HARNESS_ROOT/dispatch-valid.sh"
-	local duplicate="$TEST_HARNESS_ROOT/dispatch-duplicate.sh"
-	local extra="$TEST_HARNESS_ROOT/dispatch-extra.sh"
-	local missing="$TEST_HARNESS_ROOT/dispatch-missing.sh"
-	local key
-
-	{
-		printf '%s\n' 'main() {' "  case \"\${1:-}\" in"
-		for key in "${DOTFILES_COMMAND_KEYS[@]}"; do
-			if [[ "$key" == help ]]; then
-				printf '%s\n' '    help | -h | --help) : ;;'
-			else
-				printf '    %s) : ;;\n' "$key"
-			fi
-		done
-		printf '%s\n' "    '') : ;;" '    *) : ;;' '  esac' '}'
-	} >"$valid"
-	cp "$valid" "$duplicate"
-	sed -i '/^[[:space:]]*menu)/a\    menu) : ;;' "$duplicate"
-	cp "$valid" "$extra"
-	sed -i '/^[[:space:]]*help /i\    surprise) : ;;' "$extra"
-	grep -v '^[[:space:]]*status)' "$valid" >"$missing"
-
-	dotfiles_command_metadata_validate_dispatch "$valid" || return 1
-	if dotfiles_command_metadata_validate_dispatch "$duplicate"; then return 1; fi
-	if dotfiles_command_metadata_validate_dispatch "$extra"; then return 1; fi
-	if dotfiles_command_metadata_validate_dispatch "$missing"; then return 1; fi
+test_dispatch_parity_rejects_missing_or_invalid_handlers() {
+	dotfiles_command_metadata_validate || return 1
+	local saved="${DOTFILES_COMMAND_HANDLERS[status]}"
+	unset 'DOTFILES_COMMAND_HANDLERS[status]'
+	if dotfiles_command_metadata_validate; then return 1; fi
+	DOTFILES_COMMAND_HANDLERS[status]='not a handler'
+	if dotfiles_command_metadata_validate; then return 1; fi
+	DOTFILES_COMMAND_HANDLERS[status]="$saved"
+	dotfiles_command_metadata_validate
 }
 
 test_status_is_local_read_only() {
@@ -275,7 +224,7 @@ test_component_registry_has_exact_21_with_graphify() {
 		comp_description "${COMP_KEYS[$i]}" >/dev/null || return 1
 	done
 	local git_config_idx description
-	git_config_idx="$(comp_key_index git_credential)" || return 1
+	git_config_idx="$(comp_index_of git_credential)" || return 1
 	[[ "${COMP_LABELS[$git_config_idx]}" == 'Git config (credentials + submodules)' ]] || return 1
 	description="$(comp_description git_credential)"
 	for setting in credential.helper submodule.recurse fetch.recurseSubmodules \
@@ -349,26 +298,6 @@ test_package_lib_components_are_metadata_only() (
 	[[ ! -s "$TEST_COMMAND_LOG" && ! -s "$TEST_URL_LOG" ]]
 )
 
-test_package_pages_cover_all_30_once() {
-	declare -F package_lib_render_packages_page >/dev/null || return 1
-	package_metadata_load "$PKG_FILE" || return 1
-	local output="$TEST_HARNESS_ROOT/package-pages.output"
-	local page page_count page_size=7
-	: >"$output"
-	page_count="$(menu_page_count "${#PACKAGE_LIB_NAMES[@]}" "$page_size")"
-	for ((page = 0; page < page_count; page++)); do
-		package_lib_render_packages_page "$page" "$page_size" 52 >>"$output" || return 1
-	done
-	local name
-	for name in "${PACKAGE_LIB_NAMES[@]}"; do
-		[[ "$(grep -Ec "^[[:space:]]*${name}([[:space:]]|$)" "$output")" -eq 1 ]] || return 1
-	done
-	[[ "$(grep -c 'Page ' "$output")" -eq "$page_count" ]]
-	grep -Fq 'package' "$output" || return 1
-	grep -Fq 'category' "$output" || return 1
-	grep -Fq 'description' "$output"
-}
-
 test_package_menu_opens_system_packages_directly() (
 	declare -F package_lib_menu >/dev/null || return 1
 	local calls=0
@@ -424,7 +353,7 @@ test_narrow_reports_remain_bounded() {
 
 expect_success 'command metadata exactly matches the seven-command dispatch contract' test_authoritative_command_metadata
 expect_success 'help, commands output, and dispatch consume authoritative metadata' test_help_commands_and_dispatch_share_metadata
-expect_success 'dispatch parity rejects extra, duplicate, and missing command keys' test_dispatch_parity_rejects_extra_duplicate_and_missing_keys
+expect_success 'dispatch parity rejects missing or invalid command handlers' test_dispatch_parity_rejects_missing_or_invalid_handlers
 expect_success 'removed commands fail with migration guidance' test_removed_commands_report_migration_guidance
 expect_success 'dotfiles status is local-only and reports freshness unchecked' test_status_is_local_read_only
 expect_success 'report path shortening preserves the fixed detail width' test_report_path_shortening_preserves_exact_width
@@ -439,11 +368,9 @@ expect_success 'component registry exposes the exact 21 described component IDs'
 expect_success 'install defaults enable all components except Git identity and SSH key' test_install_defaults_match_requested_selection
 expect_success 'package metadata contains 30 unique described names in 9/3/9/9 tags' test_package_metadata_has_exact_30_with_descriptions
 expect_success 'Package Lib renders all 21 components without probes or side effects' test_package_lib_components_are_metadata_only
-expect_success 'System package pages cover all 30 names exactly once' test_package_pages_cover_all_30_once
 expect_success 'Package Lib opens the system package table directly' test_package_menu_opens_system_packages_directly
 expect_success 'Package Lib all view has no paging controls' test_package_lib_all_view_has_no_paging_controls
 expect_success 'install summary uses the report table alignment' test_install_summary_uses_report_table_alignment
 expect_success 'Command and Package Lib narrow rendering remains bounded' test_narrow_reports_remain_bounded
 
-printf '%d test(s) passed; %d failed\n' "$passed" "$failed"
-((failed == 0))
+finish_tests

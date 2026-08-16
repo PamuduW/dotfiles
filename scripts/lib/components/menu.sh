@@ -1,131 +1,59 @@
 # shellcheck shell=bash
-# Interactive component selection menu (dependency-aware toggles).
+# Component selection adapter over the shared checkbox menu.
 
-# Non-item rows: ui_print_header(3) + nav hint(1) + page line(2) + status(1) + descriptions.
-# Header (title, breadcrumb, spacer) + hint + page line/spacer + status row.
-_COMP_MENU_FIXED_ROWS=$((7 + _COMP_DESC_LINES))
+_COMP_DESC_LINES=2
 
-_draw_component_menu() {
-	local cur=$1
-	local page_size=$2
-	local status=$3
-	local cols=$4
-	local count="${#COMP_KEYS[@]}"
-	local page total_pages start end
-	local i key mark note row
+_comp_menu_desc_fn() {
+	comp_description "${COMP_KEYS[$1]}"
+}
 
-	page="$(menu_page_for_cursor "$cur" "$page_size")"
-	total_pages="$(menu_page_count "$count" "$page_size")"
-	read -r start end < <(menu_page_range "$count" "$page_size" "$page")
-
-	ui_print_header "Install Dotfiles" "Dotfiles › Install Dotfiles" "$cols"
-	printf '  %s%s%s\e[K\n' "$C_DIM" "$(ui_color_input_hint "$(_fit_menu_line_with_indent "Up/Down navigate   Space toggle   a all   n none   Enter confirm   q back" "$cols" 2)")" "$C_RESET"
-	printf '  %s%s%s\e[K\n\n' "$C_DIM" "$(_fit_menu_line_with_indent "Page $((page + 1))/$total_pages   Showing $((start + 1))-$((end + 1)) of $count" "$cols" 2)" "$C_RESET"
-
-	for ((i = start; i <= end; i++)); do
+_component_menu_sync_checked() {
+	local i key
+	for i in "${!COMP_KEYS[@]}"; do
 		key="${COMP_KEYS[$i]}"
-		mark="x"
-		[[ "${COMP_ON[$key]}" -eq 0 ]] && mark=" "
-		note=""
-		[[ -n "$(comp_dependency "$key")" ]] && note="  (requires $(comp_dependency "$key"))"
-		prefix=' '
-		[[ $i -eq $cur ]] && prefix='>'
-		row="$(printf '%s%2d. [%s] %s%s' "$prefix" "$((i + 1))" "$mark" "${COMP_LABELS[$i]}" "$note")"
-
-		if [[ $i -eq $cur ]]; then
-			if [[ "${COMP_ON[$key]}" -eq 1 ]]; then
-				printf '  %s%s%s\e[K\n' "$C_BOLD" "$(_fit_menu_line "$row" "$((cols - 2))")" "$C_RESET"
-			else
-				printf '  %s%s%s%s\e[K\n' "$C_BOLD" "$C_DIM" "$(_fit_menu_line "$row" "$((cols - 2))")" "$C_RESET"
-			fi
-		else
-			if [[ "${COMP_ON[$key]}" -eq 1 ]]; then
-				printf '  %s\e[K\n' "$(_fit_menu_line "$row" "$((cols - 2))")"
-			else
-				printf '  %s%s%s\e[K\n' "$C_DIM" "$(_fit_menu_line "$row" "$((cols - 2))")" "$C_RESET"
-			fi
-		fi
+		MENU_CB_CHECKED[i]="${COMP_ON[$key]}"
 	done
+}
 
-	if [[ -n "$status" ]]; then
-		printf '  %s%s%s\e[K\n' "$C_YELLOW" "$(_fit_menu_line_with_indent "$status" "$cols" 2)" "$C_RESET"
-	else
-		printf '\e[K\n'
-	fi
+_component_menu_toggle() {
+	toggle_component "$1"
+	_component_menu_sync_checked
+	MENU_CB_STATUS_MESSAGE="$TOGGLE_MSG"
+}
 
-	# shellcheck disable=SC2034  # Consumed by menu_desc_print_footer.
-	COMP_DESC_FN=_comp_menu_desc_fn
-	menu_desc_print_footer COMP "$cur" "$cols"
+_component_menu_all() {
+	local key
+	for key in "${COMP_KEYS[@]}"; do COMP_ON["$key"]=1; done
+	_component_menu_sync_checked
+}
+
+_component_menu_none() {
+	local key
+	for key in "${COMP_KEYS[@]}"; do COMP_ON["$key"]=0; done
+	_component_menu_sync_checked
 }
 
 component_menu() {
-	local count="${#COMP_KEYS[@]}"
-	local cursor=0
-	local status_msg=""
-	local rows cols page_size menu_lines action page tty_out
-	local cancelled=false
-	local prev_page=-1 prev_lines=0
+	local i key dependency
+	declare -g -a MENU_CB_LABELS=() MENU_CB_STATUS=() MENU_CB_CHECKED=()
+	for i in "${!COMP_KEYS[@]}"; do
+		key="${COMP_KEYS[$i]}"
+		dependency="$(comp_dependency "$key")"
+		MENU_CB_LABELS[i]="${COMP_LABELS[i]}"
+		[[ -n "$dependency" ]] && MENU_CB_LABELS[i]+="  (requires $dependency)"
+		MENU_CB_STATUS[i]=''
+	done
+	_component_menu_sync_checked
 
-	rows="$(_menu_tty_rows)"
-	cols="$(_menu_tty_cols)"
-	page_size="$(menu_page_size "$rows" "$_COMP_MENU_FIXED_ROWS")"
-	page="$(menu_page_for_cursor "$cursor" "$page_size")"
-	menu_lines="$(menu_page_render_lines "$count" "$page_size" "$page" "$_COMP_MENU_FIXED_ROWS")"
-	tty_out="$(tty_output_path)"
-
-	{
-		tput civis 2>/dev/null || true
-		_menu_clear_screen
-		_draw_component_menu "$cursor" "$page_size" "" "$cols"
-		prev_page="$page"
-		prev_lines="$menu_lines"
-
-		while true; do
-			action="$(_read_component_menu_key)"
-
-			case "$action" in
-			up)
-				[[ $cursor -gt 0 ]] && cursor=$((cursor - 1))
-				status_msg=""
-				;;
-			down)
-				[[ $cursor -lt $((count - 1)) ]] && cursor=$((cursor + 1))
-				status_msg=""
-				;;
-			toggle)
-				toggle_component "$cursor"
-				status_msg="$TOGGLE_MSG"
-				;;
-			confirm)
-				break
-				;;
-			cancel)
-				cancelled=true
-				break
-				;;
-			all)
-				for k in "${COMP_KEYS[@]}"; do COMP_ON["$k"]=1; done
-				status_msg="All components enabled"
-				;;
-			none)
-				for k in "${COMP_KEYS[@]}"; do COMP_ON["$k"]=0; done
-				status_msg="All components disabled"
-				;;
-			ignore)
-				continue
-				;;
-			esac
-
-			prev_page="$page"
-			prev_lines="$menu_lines"
-			page="$(menu_page_for_cursor "$cursor" "$page_size")"
-			menu_lines="$(menu_page_render_lines "$count" "$page_size" "$page" "$_COMP_MENU_FIXED_ROWS")"
-			menu_redraw_prepare "$prev_lines" "$menu_lines" "$prev_page" "$page"
-			_draw_component_menu "$cursor" "$page_size" "$status_msg" "$cols"
-		done
-		tput cnorm 2>/dev/null || true
-	} >"$tty_out"
-
-	[[ "$cancelled" == true ]] && return 1
-	return 0
+	MENU_CB_TITLE='Install Dotfiles'
+	MENU_CB_BREADCRUMB='Dotfiles › Install Dotfiles'
+	MENU_CB_HINT='Up/Down navigate   Space toggle   a all   n none   Enter confirm   q back'
+	MENU_CB_DESC_FN=_comp_menu_desc_fn
+	MENU_CB_COMPACT=true
+	MENU_CB_TOGGLE_FN=_component_menu_toggle
+	MENU_CB_ALL_FN=_component_menu_all
+	MENU_CB_NONE_FN=_component_menu_none
+	MENU_CB_ALL_MESSAGE='All components enabled'
+	MENU_CB_NONE_MESSAGE='All components disabled'
+	menu_checkbox_run
 }

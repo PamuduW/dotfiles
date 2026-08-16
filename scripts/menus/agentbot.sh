@@ -2,52 +2,20 @@
 # shellcheck shell=bash
 
 # shellcheck source=scripts/lib/repo_update.sh
-source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../lib" && pwd)/repo_update.sh"
+_DOTFILES_AGENTBOT_LIB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../lib" && pwd)"
+source "$_DOTFILES_AGENTBOT_LIB_DIR/repo_update.sh"
+# shellcheck source=scripts/lib/agent_bootstrap_paths.sh
+source "$_DOTFILES_AGENTBOT_LIB_DIR/agent_bootstrap_paths.sh"
 
 DOTFILES_AGENTBOT_URL="${DOTFILES_AGENTBOT_URL:-git@github.com:PamuduW/agent_bootstrap.git}"
 
 dotfiles_agentbot_home() {
-	if [[ -n "${AGENTBOT_HOME:-}" ]]; then
-		printf '%s\n' "$AGENTBOT_HOME"
-	else
-		printf '%s\n' "$(dirname "$DOTFILES_DIR")/agent_bootstrap"
-	fi
+	resolve_agent_bootstrap_home 2>/dev/null || agent_bootstrap_clone_home
 }
 
 dotfiles_agentbot_origin_allowed() {
 	local origin="$1" rewrite_rules="${2:-}"
-	local key target prefix matched_prefix='' matched_target='' resolved
-
-	case "$origin" in
-	*://*@*) return 1 ;;
-	git@github.com:PamuduW/agent_bootstrap.git | https://github.com/PamuduW/agent_bootstrap.git)
-		return 0
-		;;
-	esac
-
-	while IFS=$' \t' read -r key target; do
-		[[ "$key" == url.*.insteadof ]] || continue
-		prefix="${key#url.}"
-		prefix="${prefix%.insteadof}"
-		[[ -n "$prefix" ]] || continue
-		case "$origin" in
-		"$prefix"*)
-			if ((${#prefix} > ${#matched_prefix})); then
-				matched_prefix="$prefix"
-				matched_target="$target"
-			fi
-			;;
-		esac
-	done <<<"$rewrite_rules"
-
-	[[ -n "$matched_prefix" ]] || return 1
-	resolved="${matched_target}${origin#"$matched_prefix"}"
-	case "$resolved" in
-	git@github.com:PamuduW/agent_bootstrap.git | https://github.com/PamuduW/agent_bootstrap.git)
-		return 0
-		;;
-	*) return 1 ;;
-	esac
+	repo_update_origin_allowed "$origin" 'PamuduW/agent_bootstrap' "$rewrite_rules"
 }
 
 dotfiles_agentbot_validate() {
@@ -91,8 +59,8 @@ dotfiles_agentbot_update_all() {
 	home="$(dotfiles_agentbot_home)"
 
 	# Preflight every repository before requesting approval or pulling either one.
-	repo_update_preflight "$DOTFILES_DIR" 'dotfiles repo' dotfiles_result
-	repo_update_preflight "$home" 'agentbot repo' agentbot_result
+	repo_update_preflight "$DOTFILES_DIR" 'dotfiles repo' dotfiles_result 'PamuduW/dotfiles'
+	repo_update_preflight "$home" 'agentbot repo' agentbot_result 'PamuduW/agent_bootstrap'
 	for result_name in dotfiles_result agentbot_result; do
 		local -n result_ref="$result_name"
 		if [[ "${result_ref[safe]}" != 1 ]]; then
@@ -138,6 +106,7 @@ dotfiles_agentbot_confirm() {
 
 dotfiles_launch_agentbot() {
 	local home rc=0
+	declare -F start_action_log >/dev/null 2>&1 && start_action_log
 	home="$(dotfiles_agentbot_home)"
 	if [[ ! -e "$home/install.sh" ]]; then
 		printf 'Agentbot is not cloned at %s.\n' "$home"
@@ -145,6 +114,7 @@ dotfiles_launch_agentbot() {
 			printf 'Agentbot launch cancelled.\n'
 			return 0
 		}
+		agent_bootstrap_repo_url_allowed "$DOTFILES_AGENTBOT_URL" || return 1
 		git clone "$DOTFILES_AGENTBOT_URL" "$home" || {
 			printf 'Agentbot clone failed.\n' >&2
 			return 1

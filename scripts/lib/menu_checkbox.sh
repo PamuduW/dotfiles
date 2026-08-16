@@ -47,10 +47,6 @@ _menu_cb_page_range() {
 	menu_page_range "$@"
 }
 
-_menu_cb_visible_count() {
-	menu_page_visible_count "$@"
-}
-
 _menu_cb_render_lines() {
 	menu_page_render_lines "$1" "$2" "$3" "$(_menu_cb_fixed_rows)"
 }
@@ -97,6 +93,21 @@ _menu_cb_draw_row() {
 	checked="${MENU_CB_CHECKED[$idx]:-0}"
 	selected=0
 	[[ $idx -eq $cur ]] && selected=1
+
+	if [[ "${MENU_CB_COMPACT:-false}" == true ]]; then
+		local compact_prefix=' '
+		[[ "$selected" -eq 1 ]] && compact_prefix='>'
+		head="$(printf '%s%2d. [%s] %s' "$compact_prefix" "$((idx + 1))" "$mark" "$label")"
+		if [[ "$checked" -eq 0 ]]; then
+			printf '  %s%s' "$C_DIM" "$([[ "$selected" -eq 1 ]] && printf '%s' "$C_BOLD")"
+		elif [[ "$selected" -eq 1 ]]; then
+			printf '  %s' "$C_BOLD"
+		else
+			printf '  '
+		fi
+		printf '%s%s\e[K\n' "$(menu_fit_line "$head" "$((cols - 2))")" "$C_RESET"
+		return
+	fi
 
 	index_w="$(_menu_cb_index_width "${#MENU_CB_LABELS[@]}")"
 	status_w="$(_menu_cb_status_col_width)"
@@ -233,24 +244,31 @@ menu_checkbox_run() {
 				status_msg=''
 				;;
 			toggle)
-				if [[ "${MENU_CB_CHECKED[cursor]:-0}" -eq 1 ]]; then
+				if [[ -n "${MENU_CB_TOGGLE_FN:-}" ]]; then
+					MENU_CB_STATUS_MESSAGE=''
+					"$MENU_CB_TOGGLE_FN" "$cursor"
+					status_msg="${MENU_CB_STATUS_MESSAGE:-}"
+				elif [[ "${MENU_CB_CHECKED[cursor]:-0}" -eq 1 ]]; then
 					MENU_CB_CHECKED[cursor]=0
 				else
 					MENU_CB_CHECKED[cursor]=1
 				fi
-				status_msg=''
 				;;
 			all)
-				for ((i = 0; i < count; i++)); do
-					MENU_CB_CHECKED[i]=1
-				done
-				status_msg='All items selected'
+				if [[ -n "${MENU_CB_ALL_FN:-}" ]]; then
+					"$MENU_CB_ALL_FN"
+				else
+					for ((i = 0; i < count; i++)); do MENU_CB_CHECKED[i]=1; done
+				fi
+				status_msg="${MENU_CB_ALL_MESSAGE:-All items selected}"
 				;;
 			none)
-				for ((i = 0; i < count; i++)); do
-					MENU_CB_CHECKED[i]=0
-				done
-				status_msg='All items cleared'
+				if [[ -n "${MENU_CB_NONE_FN:-}" ]]; then
+					"$MENU_CB_NONE_FN"
+				else
+					for ((i = 0; i < count; i++)); do MENU_CB_CHECKED[i]=0; done
+				fi
+				status_msg="${MENU_CB_NONE_MESSAGE:-All items cleared}"
 				;;
 			confirm)
 				break

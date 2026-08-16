@@ -54,17 +54,3 @@ read_tty_line() {
 	IFS= read -r value <"$input_path" || return 1
 	printf -v "$__var_name" '%s' "$value"
 }
-
-read_tty_secret() {
-	local __var_name="$1"
-	local prompt="$2"
-	local value='' input_path output_path
-
-	tty_available || return 1
-	input_path="$(tty_input_path)"
-	output_path="$(tty_output_path)"
-	printf '%s' "$prompt" >"$output_path"
-	IFS= read -r -s value <"$input_path" || return 1
-	printf '\n' >"$output_path"
-	printf -v "$__var_name" '%s' "$value"
-}

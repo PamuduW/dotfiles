@@ -16,15 +16,6 @@ _color_action() {
 	esac
 }
 
-_color_available() {
-	local available="$1"
-	case "$available" in
-	none | — | up\ to\ date) printf '%s%s%s' "$C_DIM" "$available" "$C_RESET" ;;
-	*behind | *ahead | update* | *review*) printf '%s%s%s' "$C_YELLOW" "$available" "$C_RESET" ;;
-	*) printf '%s%s%s' "$C_CYAN" "$available" "$C_RESET" ;;
-	esac
-}
-
 _color_result() {
 	local result="$1"
 	case "$result" in
@@ -36,35 +27,17 @@ _color_result() {
 	esac
 }
 
-# Color a numeric status cell: 0 stays green, non-zero uses severity.
-# Optional width right-pads the digits before applying color (ANSI-safe).
-_color_count() {
-	local n="$1"
-	local severity="${2:-warn}"
-	local width="${3:-0}"
-	local text="$n"
-
-	if [[ "$width" -gt 0 ]]; then
-		printf -v text "%${width}s" "$n"
-	fi
-
-	if [[ "$n" -eq 0 ]]; then
-		printf '%s%s%s' "$C_GREEN" "$text" "$C_RESET"
-		return
-	fi
-	case "$severity" in
-	err) printf '%s%s%s' "$C_RED" "$text" "$C_RESET" ;;
-	warn) printf '%s%s%s' "$C_YELLOW" "$text" "$C_RESET" ;;
-	*) printf '%s' "$text" ;;
-	esac
-}
-
 _collect_check_rows() {
+	local repo_result_name="${1:-}"
 	_load_nvm
 	local -a rows=()
 	local fn row
 	for fn in "${CHECK_FUNCS[@]}"; do
-		row="$("$fn" || true)"
+		if [[ "$fn" == dotfiles_repo_status ]]; then
+			row="$("$fn" "$repo_result_name" || true)"
+		else
+			row="$("$fn" || true)"
+		fi
 		rows+=("$row")
 	done
 	printf '%s\n' "${rows[@]}"
@@ -103,25 +76,13 @@ _print_check_table_row() {
 		"$_UPDATE_ACTION_W" "$last_col" '' "$color_fn"
 }
 
-_print_repo_update_row() {
-	local component="$1"
-	local installed="$2"
-	local available="$3"
-	local action="$4"
-
-	rt_print_four_column_row \
-		"$_UPDATE_LABEL_W" "$component" \
-		"$_UPDATE_INSTALLED_W" "$installed" \
-		"$_UPDATE_AVAILABLE_W" "$available" \
-		"$_UPDATE_ACTION_W" "$action" _color_available _color_action
-}
-
 print_report_table() {
+	local repo_result_name="${1:-}"
 	local -a rows=()
 	local row component installed available action
 	local upgrade_count=0
 
-	mapfile -t rows < <(_collect_check_rows)
+	mapfile -t rows < <(_collect_check_rows "$repo_result_name")
 
 	for row in "${rows[@]}"; do
 		IFS='|' read -r _ _ _ action <<<"$row"
@@ -153,11 +114,12 @@ print_report_table() {
 
 print_upgrade_summary() {
 	local upgrade_all="${1:-false}"
+	local repo_result_name="${2:-}"
 	local -a rows=()
 	local row component installed available _action result
 	local ok_count=0 fail_count=0
 
-	mapfile -t rows < <(_collect_check_rows)
+	mapfile -t rows < <(_collect_check_rows "$repo_result_name")
 
 	printf '\n%s%s==Upgrade summary==%s\n\n' "$C_BOLD" "$C_YELLOW" "$C_RESET"
 	_print_update_table_header result
@@ -193,24 +155,6 @@ print_upgrade_summary() {
 	else
 		printf '%sUpgrade finished with %d failure(s)%s — see log above.\n' "$C_RED" "$fail_count" "$C_RESET"
 	fi
-}
-
-print_status_table() {
-	local title="${1:-Status summary}"
-	local -a rows=()
-	local row component installed available action
-
-	mapfile -t rows < <(_collect_check_rows)
-
-	printf '\n%s%s%s\n' "$C_BOLD" "$title" "$C_RESET"
-	printf '%s%-18s | %-28s | %-22s | %s\n' "$C_BOLD" "component" "installed" "available" "status"
-	printf '%s\n' "-------------------+------------------------------+------------------------+----------"
-
-	for row in "${rows[@]}"; do
-		IFS='|' read -r component installed available action <<<"$row"
-		_print_check_table_row "$component" "$installed" "$available" "$action" action
-	done
-	printf '\n'
 }
 
 # --- Subcommands ---
@@ -291,7 +235,7 @@ cmd_update() {
 		esac
 	done
 
-	if ! repo_update_run "$DOTFILES_DIR" 'dotfiles repo' _dotfiles_confirm_repo_update repo_result; then
+	if ! repo_update_run "$DOTFILES_DIR" 'dotfiles repo' _dotfiles_confirm_repo_update repo_result 'PamuduW/dotfiles'; then
 		return 1
 	fi
 	outcome="${repo_result[outcome]}"
@@ -312,7 +256,7 @@ cmd_update() {
 		;;
 	esac
 
-	print_report_table
+	print_report_table repo_result
 	if ! _dotfiles_confirm "Proceed with apt refresh and downstream updates?"; then
 		_msg 'Downstream updates skipped.'
 		return 0
@@ -323,6 +267,6 @@ cmd_update() {
 	printf '\n%s%s=== Upgrade ===%s\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
 	local downstream_rc=0
 	_run_update_downstream "$upgrade_all" || downstream_rc=$?
-	print_upgrade_summary "$upgrade_all"
+	print_upgrade_summary "$upgrade_all" repo_result
 	return "$downstream_rc"
 }

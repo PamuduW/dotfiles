@@ -5,28 +5,7 @@ TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=tests/lib/test_harness.sh
 source "$TEST_DIR/lib/test_harness.sh"
 
-passed=0
-failed=0
-
-pass() {
-	printf 'ok - %s\n' "$1"
-	passed=$((passed + 1))
-}
-
-fail() {
-	printf 'not ok - %s\n' "$1" >&2
-	failed=$((failed + 1))
-}
-
-expect_success() {
-	local name="$1"
-	shift
-	if "$@"; then
-		pass "$name"
-	else
-		fail "$name"
-	fi
-}
+test_harness_report_init
 
 test_cleanup_runs_after_success() {
 	local root
@@ -222,5 +201,4 @@ expect_success 'relaunch uses an injectable shell wrapper' test_relaunch_wrapper
 expect_success 'path guard rejects writes outside isolated homes' test_path_guard_rejects_outside_writes
 expect_success 'canary secret is absent from output and logs' test_canary_is_redacted_everywhere
 
-printf '%d test(s) passed; %d failed\n' "$passed" "$failed"
-((failed == 0))
+finish_tests

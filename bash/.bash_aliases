@@ -77,15 +77,15 @@ dclean() {
 	echo "This will remove ALL unused Docker data (images, containers, networks) AND volumes."
 	read -r -p "Are you sure? [y/N] " _reply
 	case "$_reply" in
-		[yY][eE][sS]|[yY]) docker system prune -a --volumes -f ;;
-		*) echo "Aborted." ;;
+	[yY][eE][sS] | [yY]) docker system prune -a --volumes -f ;;
+	*) echo "Aborted." ;;
 	esac
 }
 
 # ------------------------------------
 # Shell productivity
 # ------------------------------------
-alias reload='source ~/.bashrc'                  # reload shell config
+alias reload='source ~/.bashrc' # reload shell config
 shfmt_format() {
 	if (($# == 0)); then
 		echo 'Usage: shfmt_format FILE...'

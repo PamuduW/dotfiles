@@ -7,22 +7,7 @@ REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
 # shellcheck source=tests/lib/test_harness.sh
 source "$TEST_DIR/lib/test_harness.sh"
 
-passed=0
-failed=0
-
-pass() {
-	printf 'ok - %s\n' "$1"
-	passed=$((passed + 1))
-}
-fail() {
-	printf 'not ok - %s\n' "$1" >&2
-	failed=$((failed + 1))
-}
-expect_success() {
-	local name="$1"
-	shift
-	if "$@"; then pass "$name"; else fail "$name"; fi
-}
+test_harness_report_init
 
 install_private_curl_fake() {
 	rm -f -- "$TEST_FAKE_BIN/curl"
@@ -348,5 +333,4 @@ expect_success 'structural scanner rejects a direct curl bypass near github_curl
 expect_success 'vendor shell installers use the downloaded-script boundary' test_excluded_downloads_unchanged
 expect_success 'tests remain isolated behind the fail-closed curl fake' test_isolation_and_fake_network
 
-printf '%d test(s) passed; %d failed\n' "$passed" "$failed"
-((failed == 0))
+finish_tests

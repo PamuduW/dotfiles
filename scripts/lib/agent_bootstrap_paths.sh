@@ -43,6 +43,10 @@ agent_bootstrap_sibling_home() {
 
 # Where clone/update should target.
 agent_bootstrap_clone_home() {
+	if [[ -n "${AGENTBOT_HOME:-}" ]]; then
+		printf '%s\n' "$AGENTBOT_HOME"
+		return 0
+	fi
 	if [[ -n "${AGENT_BOOTSTRAP_CLONE_HOME:-}" ]]; then
 		printf '%s\n' "$AGENT_BOOTSTRAP_CLONE_HOME"
 		return 0
@@ -52,13 +56,20 @@ agent_bootstrap_clone_home() {
 
 # Installed repo: only the canonical sibling (ignore stale AGENT_BOOTSTRAP_HOME elsewhere).
 resolve_agent_bootstrap_home() {
-	local canonical
+	local canonical configured allow_override
 
 	canonical="$(agent_bootstrap_sibling_home)" || return 1
+	if [[ -n "${AGENTBOT_HOME:-}" ]]; then
+		[[ -x "$AGENTBOT_HOME/install.sh" ]] || return 1
+		printf '%s\n' "$AGENTBOT_HOME"
+		return 0
+	fi
+	configured="${AGENT_BOOTSTRAP_HOME:-}"
+	allow_override="${AGENT_BOOTSTRAP_ALLOW_OVERRIDE:-0}"
 
-	if [[ -n "${AGENT_BOOTSTRAP_HOME:-}" && "$AGENT_BOOTSTRAP_HOME" != "$canonical" ]]; then
-		if [[ "${AGENT_BOOTSTRAP_ALLOW_OVERRIDE:-}" == 1 && -x "${AGENT_BOOTSTRAP_HOME}/install.sh" ]]; then
-			printf '%s\n' "$AGENT_BOOTSTRAP_HOME"
+	if [[ -n "$configured" && "$configured" != "$canonical" ]]; then
+		if [[ "$allow_override" == 1 && -x "${configured}/install.sh" ]]; then
+			printf '%s\n' "$configured"
 			return 0
 		fi
 	fi
@@ -74,7 +85,7 @@ resolve_agent_bootstrap_home() {
 agent_bootstrap_repo_url_allowed() {
 	local url="${1:-}"
 
-	if [[ "${AGENT_BOOTSTRAP_REPO_URL_ALLOW_ANY:-}" == 1 ]]; then
+	if [[ "${AGENTBOT_URL_ALLOW_ANY:-${AGENT_BOOTSTRAP_REPO_URL_ALLOW_ANY:-0}}" == 1 ]]; then
 		return 0
 	fi
 
@@ -84,35 +95,9 @@ agent_bootstrap_repo_url_allowed() {
 		;;
 	esac
 
-	echo "Warning: AGENT_BOOTSTRAP_REPO_URL is not on the allowlist: ${url}" >&2
+	echo "Warning: DOTFILES_AGENTBOT_URL is not on the allowlist: ${url}" >&2
 	echo "  Allowed: git@github.com:PamuduW/agent_bootstrap.git" >&2
 	echo "         or https://github.com/PamuduW/agent_bootstrap.git" >&2
-	echo "  Set AGENT_BOOTSTRAP_REPO_URL_ALLOW_ANY=1 to bypass (unsafe)." >&2
-	return 1
-}
-
-# Existing clones must meet the same origin allowlist as new clones before an
-# update fetches code. The documented bypass applies to both paths.
-agent_bootstrap_existing_origin_allowed() {
-	local repo="$1" origin
-
-	origin="$(git -C "$repo" remote get-url origin 2>/dev/null)" || {
-		echo "Warning: agent_bootstrap clone has no readable origin remote: ${repo}" >&2
-		return 1
-	}
-	agent_bootstrap_repo_url_allowed "$origin"
-}
-
-# Re-export AGENT_BOOTSTRAP_HOME only when install.sh exists at the canonical sibling.
-sync_agent_bootstrap_home_env() {
-	local resolved
-
-	resolved="$(resolve_agent_bootstrap_home 2>/dev/null || true)"
-	if [[ -n "$resolved" ]]; then
-		export AGENT_BOOTSTRAP_HOME="$resolved"
-		return 0
-	fi
-
-	unset AGENT_BOOTSTRAP_HOME
+	echo "  Set AGENTBOT_URL_ALLOW_ANY=1 to bypass (unsafe)." >&2
 	return 1
 }

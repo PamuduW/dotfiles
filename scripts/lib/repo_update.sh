@@ -16,17 +16,6 @@ if ! declare -F rt_print_four_column_header >/dev/null 2>&1; then
 	source "$_REPO_UPDATE_LIB_DIR/report_table.sh"
 fi
 
-# Compatibility state for existing callers. New code should use the named
-# associative result passed to repo_update_preflight/request_approval/apply.
-REPO_UPDATE_OUTCOME=stopped
-REPO_UPDATE_STATE=invalid
-REPO_UPDATE_AHEAD=0
-REPO_UPDATE_BEHIND=0
-REPO_UPDATE_DIRTY=0
-REPO_UPDATE_CHANGES=''
-REPO_UPDATE_UPSTREAM=''
-REPO_UPDATE_REASON=''
-
 _repo_update_result_init() {
 	local result_name="$1" repo_dir="$2" repo_label="$3"
 	local -n result_ref="$result_name"
@@ -64,9 +53,41 @@ _repo_update_print_fetch_output() {
 	done <<<"$output"
 }
 
+repo_update_origin_allowed() {
+	local origin="$1" expected_slug="$2" rewrite_rules="${3:-}"
+	local key target prefix matched_prefix='' matched_target='' resolved
+	case "$expected_slug" in
+	PamuduW/dotfiles) [[ "${DOTFILES_REPO_URL_ALLOW_ANY:-0}" == 1 ]] && return 0 ;;
+	PamuduW/agent_bootstrap) [[ "${AGENTBOT_URL_ALLOW_ANY:-${AGENT_BOOTSTRAP_REPO_URL_ALLOW_ANY:-0}}" == 1 ]] && return 0 ;;
+	esac
+	case "$origin" in *://*@*) return 1 ;; esac
+	case "$origin" in
+	"git@github.com:${expected_slug}" | "git@github.com:${expected_slug}.git" | "https://github.com/${expected_slug}" | "https://github.com/${expected_slug}.git") return 0 ;;
+	esac
+	while IFS=$' \t' read -r key target; do
+		[[ "$key" == url.*.insteadof ]] || continue
+		prefix="${key#url.}"
+		prefix="${prefix%.insteadof}"
+		case "$origin" in
+		"$prefix"*)
+			if ((${#prefix} > ${#matched_prefix})); then
+				matched_prefix="$prefix"
+				matched_target="$target"
+			fi
+			;;
+		esac
+	done <<<"$rewrite_rules"
+	[[ -n "$matched_prefix" ]] || return 1
+	resolved="${matched_target}${origin#"$matched_prefix"}"
+	case "$resolved" in
+	"git@github.com:${expected_slug}" | "git@github.com:${expected_slug}.git" | "https://github.com/${expected_slug}" | "https://github.com/${expected_slug}.git") return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
 repo_update_preflight() {
-	local repo_dir="$1" repo_label="$2" result_name="$3"
-	local upstream counts fetch_output=''
+	local repo_dir="$1" repo_label="$2" result_name="$3" expected_slug="${4:-}"
+	local upstream counts fetch_output='' origin rewrite_rules=''
 	local -n result_ref="$result_name"
 	_repo_update_result_init "$result_name" "$repo_dir" "$repo_label"
 
@@ -82,10 +103,18 @@ repo_update_preflight() {
 		_repo_update_result_stop "$result_name" invalid 'Bare repositories cannot be updated.'
 		return 0
 	}
-	git -C "$repo_dir" remote get-url origin >/dev/null 2>&1 || {
+	origin="$(git -C "$repo_dir" remote get-url origin 2>/dev/null)" || {
 		_repo_update_result_stop "$result_name" no-origin 'No origin remote is configured.'
 		return 0
 	}
+	result_ref[origin]="$origin"
+	if [[ -n "$expected_slug" ]]; then
+		rewrite_rules="$(git config --global --get-regexp '^url\..*\.insteadof$' 2>/dev/null || true)"
+		repo_update_origin_allowed "$origin" "$expected_slug" "$rewrite_rules" || {
+			_repo_update_result_stop "$result_name" wrong-origin "Origin is not the expected repository: $origin"
+			return 0
+		}
+	fi
 	git -C "$repo_dir" symbolic-ref -q --short HEAD >/dev/null 2>&1 || {
 		_repo_update_result_stop "$result_name" detached 'HEAD is detached; check out a branch first.'
 		return 0
@@ -338,71 +367,23 @@ repo_update_apply() {
 	esac
 }
 
-_repo_update_sync_globals() {
-	local result_name="$1"
-	local -n result_ref="$result_name"
-	REPO_UPDATE_OUTCOME="${result_ref[outcome]}"
-	REPO_UPDATE_STATE="${result_ref[state]}"
-	REPO_UPDATE_AHEAD="${result_ref[ahead]}"
-	REPO_UPDATE_BEHIND="${result_ref[behind]}"
-	REPO_UPDATE_DIRTY="${result_ref[dirty]}"
-	REPO_UPDATE_CHANGES="${result_ref[changes]}"
-	REPO_UPDATE_UPSTREAM="${result_ref[upstream]}"
-	REPO_UPDATE_REASON="${result_ref[reason]}"
-}
-
 # Complete the single-repository workflow. Every caller gets the same
 # preflight, report, approval, pull, and stopped-state presentation.
 repo_update_run() {
-	local repo_dir="$1" repo_label="$2" confirm_fn="$3" result_name="$4"
-	repo_update_preflight "$repo_dir" "$repo_label" "$result_name"
+	local repo_dir="$1" repo_label="$2" confirm_fn="$3" result_name="$4" expected_slug="${5:-}"
+	repo_update_preflight "$repo_dir" "$repo_label" "$result_name" "$expected_slug"
 	local -n result_ref="$result_name"
 	if [[ "${result_ref[safe]}" != 1 ]]; then
 		repo_update_print_stopped "$result_name"
-		_repo_update_sync_globals "$result_name"
 		return 1
 	fi
 	if ! repo_update_request_approval "$result_name" "$confirm_fn"; then
-		_repo_update_sync_globals "$result_name"
 		return 1
 	fi
 	if ! repo_update_apply "$result_name"; then
-		_repo_update_sync_globals "$result_name"
 		return 1
 	fi
-	_repo_update_sync_globals "$result_name"
-}
-
-repo_update_gate() {
-	local repo_dir="$1" confirm_fn="$2" repo_label="${3:-dotfiles repo}"
-	local -A result=()
-	repo_update_run "$repo_dir" "$repo_label" "$confirm_fn" result || true
-}
-
-# Compatibility renderers used while callers migrate to named results.
-_repo_update_result_from_globals() {
-	local result_name="$1" repo_dir="$2" repo_label="${3:-dotfiles repo}"
-	local -n result_ref="$result_name"
-	result_ref=(
-		[dir]="$repo_dir" [label]="$repo_label" [state]="$REPO_UPDATE_STATE"
-		[ahead]="$REPO_UPDATE_AHEAD" [behind]="$REPO_UPDATE_BEHIND"
-		[dirty]="$REPO_UPDATE_DIRTY" [changes]="$REPO_UPDATE_CHANGES"
-		[upstream]="$REPO_UPDATE_UPSTREAM" [reason]="$REPO_UPDATE_REASON"
-		[safe]=1 [approved]=0 [outcome]="$REPO_UPDATE_OUTCOME"
-	)
-}
-
-repo_update_print_report() {
-	local repo_dir="$1" repo_label="${2:-dotfiles repo}"
-	local -A result=()
-	_repo_update_result_from_globals result "$repo_dir" "$repo_label"
-	repo_update_print_result result
-}
-
-repo_update_confirm() {
-	local repo_dir="$1" confirm_fn="$2" prompt="$3" repo_label="${4:-dotfiles repo}"
-	repo_update_print_report "$repo_dir" "$repo_label"
-	"$confirm_fn" "$prompt"
+	return 0
 }
 
 repo_update_wait_for_reload() {

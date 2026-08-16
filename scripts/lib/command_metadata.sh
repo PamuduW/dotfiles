@@ -13,6 +13,11 @@ DOTFILES_COMMAND_KEYS=(
 	help
 )
 
+declare -A DOTFILES_COMMAND_HANDLERS=(
+	[menu]=cmd_menu [update]=cmd_update [status]=cmd_status
+	[commands]=cmd_commands [packages]=cmd_packages [restow]=cmd_restow [help]=cmd_help
+)
+
 declare -A DOTFILES_COMMAND_USAGE=(
 	[menu]=''
 	[update]='[--all]'
@@ -36,7 +41,7 @@ declare -A DOTFILES_COMMAND_CLASS=(
 declare -A DOTFILES_COMMAND_DESCRIPTION=(
 	[menu]='Open interactive install and update workflows.'
 	[update]='Safely update the repo, then packages and tools.'
-	[status]='Show local versions and repository state only.'
+	[status]='Show local component and repository state only.'
 	[commands]='Show this authoritative command library.'
 	[packages]='Show component and package metadata.'
 	[restow]='Re-apply bash, bin, and readline stow links.'
@@ -104,15 +109,19 @@ declare -A DOTFILES_COMMAND_RELATED=(
 )
 
 DOTFILES_CONFIG_KEYS=(
-	DOTFILES_COMPONENTS AGENT_BOOTSTRAP_HOME AGENT_BOOTSTRAP_CLONE_HOME
-	AGENT_BOOTSTRAP_ALLOW_OVERRIDE XDG_CONFIG_HOME GITHUB_TOKEN NO_COLOR FORCE_COLOR DOTFILES_TUI
+	DOTFILES_COMPONENTS AGENTBOT_HOME DOTFILES_AGENTBOT_URL AGENTBOT_URL_ALLOW_ANY
+	AGENT_BOOTSTRAP_HOME AGENT_BOOTSTRAP_CLONE_HOME AGENT_BOOTSTRAP_ALLOW_OVERRIDE
+	XDG_CONFIG_HOME GITHUB_TOKEN NO_COLOR FORCE_COLOR DOTFILES_TUI
 )
 
 declare -A DOTFILES_CONFIG_DESCRIPTION=(
 	[DOTFILES_COMPONENTS]='Comma-separated component IDs for non-interactive component selection.'
-	[AGENT_BOOTSTRAP_HOME]='Explicit Agentbot sibling path considered when resolving the integration.'
-	[AGENT_BOOTSTRAP_CLONE_HOME]='Clone target used when the Agentbot sibling needs to be installed.'
-	[AGENT_BOOTSTRAP_ALLOW_OVERRIDE]='Allows a non-canonical AGENT_BOOTSTRAP_HOME override when set to 1.'
+	[AGENTBOT_HOME]='Canonical Agentbot checkout and clone destination override.'
+	[DOTFILES_AGENTBOT_URL]='Agentbot clone URL; rejected before clone unless allowlisted.'
+	[AGENTBOT_URL_ALLOW_ANY]='Unsafe opt-out from the Agentbot clone/origin allowlist.'
+	[AGENT_BOOTSTRAP_HOME]='Legacy Agentbot checkout input retained for shell compatibility.'
+	[AGENT_BOOTSTRAP_CLONE_HOME]='Legacy Agentbot clone destination input.'
+	[AGENT_BOOTSTRAP_ALLOW_OVERRIDE]='Allows a legacy non-sibling checkout when set to 1.'
 	[XDG_CONFIG_HOME]='Base directory for shared private Agentbot configuration.'
 	[GITHUB_TOKEN]='Optional GitHub API credential; its value is never rendered by Command Lib.'
 	[NO_COLOR]='Disables ANSI styling when set.'
@@ -122,9 +131,12 @@ declare -A DOTFILES_CONFIG_DESCRIPTION=(
 
 declare -A DOTFILES_CONFIG_DEFAULT=(
 	[DOTFILES_COMPONENTS]='Unset; interactive selection or all enabled components apply.'
-	[AGENT_BOOTSTRAP_HOME]='Unset; canonical sibling resolution wins unless override is allowed.'
-	[AGENT_BOOTSTRAP_CLONE_HOME]='Unset; the sibling path next to Dotfiles is used.'
-	[AGENT_BOOTSTRAP_ALLOW_OVERRIDE]='Unset/0; non-canonical overrides are rejected.'
+	[AGENTBOT_HOME]='Unset; the sibling agent_bootstrap path is used.'
+	[DOTFILES_AGENTBOT_URL]='git@github.com:PamuduW/agent_bootstrap.git.'
+	[AGENTBOT_URL_ALLOW_ANY]='Unset/0; only the expected repository is accepted.'
+	[AGENT_BOOTSTRAP_HOME]='Unset; used only when the canonical variable is absent.'
+	[AGENT_BOOTSTRAP_CLONE_HOME]='Unset; used only when the canonical variable is absent.'
+	[AGENT_BOOTSTRAP_ALLOW_OVERRIDE]='Unset/0; legacy non-sibling overrides are rejected.'
 	[XDG_CONFIG_HOME]='$HOME/.config when unset.'
 	[GITHUB_TOKEN]='Unset; GitHub API calls remain unauthenticated.'
 	[NO_COLOR]='Unset; colors follow TTY/TUI detection.'
@@ -134,9 +146,12 @@ declare -A DOTFILES_CONFIG_DEFAULT=(
 
 declare -A DOTFILES_CONFIG_LOCATION=(
 	[DOTFILES_COMPONENTS]='Process environment; comma-separated component IDs.'
-	[AGENT_BOOTSTRAP_HOME]='Process environment; validated sibling repository path.'
-	[AGENT_BOOTSTRAP_CLONE_HOME]='Process environment; clone destination path.'
-	[AGENT_BOOTSTRAP_ALLOW_OVERRIDE]='Process environment; value 1 enables the override.'
+	[AGENTBOT_HOME]='Process environment; canonical checkout and clone destination.'
+	[DOTFILES_AGENTBOT_URL]='Process environment; validated before clone.'
+	[AGENTBOT_URL_ALLOW_ANY]='Process environment; value 1 bypasses repository identity checks.'
+	[AGENT_BOOTSTRAP_HOME]='Legacy process environment input normalized by the bridge.'
+	[AGENT_BOOTSTRAP_CLONE_HOME]='Legacy process environment clone input.'
+	[AGENT_BOOTSTRAP_ALLOW_OVERRIDE]='Legacy process environment override switch.'
 	[XDG_CONFIG_HOME]='Process environment; ${XDG_CONFIG_HOME:-$HOME/.config}/agentbot/.'
 	[GITHUB_TOKEN]='Process environment or ${XDG_CONFIG_HOME:-$HOME/.config}/agentbot/github.env.'
 	[NO_COLOR]='Process environment only.'
@@ -148,14 +163,14 @@ DOTFILES_SURFACE_KEYS=(repo links components agentbot)
 declare -A DOTFILES_SURFACE_DESCRIPTION=(
 	[repo]='The Dotfiles repository, package manifests, installers, and logs.'
 	[links]='Stow-managed bash, bin, and readline links in the home directory.'
-	[components]='Component registry, descriptions, package metadata, and selected installers.'
+	[components]='Component catalog, package metadata, probes, and selected installers.'
 	[agentbot]='Sibling Agentbot clone, bridge menu, canonical policy sources, and rendered outputs.'
 )
 declare -A DOTFILES_SURFACE_LOCATION=(
 	[repo]='DOTFILES_DIR and its packages/, scripts/, bin/, and log/ directories.'
 	[links]='$HOME via GNU Stow packages bash, bin, and readline.'
 	[components]='scripts/lib/components/ and packages/packages.txt.'
-	[agentbot]='AGENT_BOOTSTRAP_HOME or the canonical sibling repository; global outputs under ~/.codex and ~/.claude.'
+	[agentbot]='AGENTBOT_HOME or the canonical sibling repository; global outputs under ~/.codex and ~/.claude.'
 )
 
 dotfiles_command_metadata_validate() {
@@ -175,6 +190,7 @@ dotfiles_command_metadata_validate() {
 		[[ -n "${DOTFILES_COMMAND_EFFECTS[$key]:-}" ]] || return 1
 		[[ -n "${DOTFILES_COMMAND_EXAMPLES[$key]:-}" ]] || return 1
 		[[ -n "${DOTFILES_COMMAND_RELATED[$key]:-}" ]] || return 1
+		[[ "${DOTFILES_COMMAND_HANDLERS[$key]:-}" =~ ^cmd_[a-z_]+$ ]] || return 1
 		while IFS='|' read -r option description default; do
 			[[ -z "$option" && -z "$description" && -z "$default" ]] && continue
 			[[ -n "$option" && -n "$description" && -n "$default" ]] || return 1
@@ -352,7 +368,7 @@ dotfiles_command_print_details() {
 
 	_dotfiles_command_print_section 'Integrations'
 	_dotfiles_command_print_field 'Agentbot integration' \
-		'Dotfiles resolves the sibling Agentbot repository through AGENT_BOOTSTRAP_HOME or the canonical sibling path, then exposes Agentbot setup from the Agents menu. Agentbot renders canonical policy files into global Codex/Claude locations and selected repository surfaces.' "$cols"
+		'Dotfiles resolves Agentbot through AGENTBOT_HOME or the canonical sibling path. Legacy AGENT_BOOTSTRAP_* inputs are normalized only for compatibility. Agentbot renders canonical policy files into global Codex/Claude locations and selected repository surfaces.' "$cols"
 }
 
 dotfiles_command_print_table() {
@@ -408,58 +424,4 @@ dotfiles_command_print_table() {
 		printf ' | %-*s\n' "$description_w" "$description_fit"
 	done
 	dotfiles_command_print_details "$cols"
-}
-
-dotfiles_command_dispatch_keys() {
-	local file="${1:?dispatcher file is required}"
-	local line pattern part key
-	local in_main=false in_case=false
-	local -a parts=()
-
-	[[ -f "$file" ]] || return 1
-	while IFS= read -r line || [[ -n "$line" ]]; do
-		if [[ "$line" == 'main() {' ]]; then
-			in_main=true
-			continue
-		fi
-		[[ "$in_main" == true ]] || continue
-		if [[ "$in_case" == false && "$line" =~ ^[[:space:]]*case[[:space:]].*[[:space:]]in[[:space:]]*$ ]]; then
-			in_case=true
-			continue
-		fi
-		[[ "$in_case" == true ]] || continue
-		[[ "$line" =~ ^[[:space:]]*esac ]] && return 0
-		if [[ "$line" =~ ^[[:space:]]*([^\)]*)\) ]]; then
-			pattern="${BASH_REMATCH[1]}"
-			IFS='|' read -r -a parts <<<"$pattern"
-			for part in "${parts[@]}"; do
-				key="${part#"${part%%[![:space:]]*}"}"
-				key="${key%"${key##*[![:space:]]}"}"
-				key="${key//\'/}"
-				key="${key//\"/}"
-				case "$key" in
-				'' | '*' | -h | --help) continue ;;
-				esac
-				printf '%s\n' "$key"
-			done
-		fi
-	done <"$file"
-	return 1
-}
-
-dotfiles_command_metadata_validate_dispatch() {
-	local file="${1:?dispatcher file is required}"
-	local -a dispatch_keys=()
-	local -A seen=()
-	local i key
-
-	dotfiles_command_metadata_validate || return 1
-	mapfile -t dispatch_keys < <(dotfiles_command_dispatch_keys "$file") || return 1
-	[[ "${#dispatch_keys[@]}" -eq "${#DOTFILES_COMMAND_KEYS[@]}" ]] || return 1
-	for i in "${!dispatch_keys[@]}"; do
-		key="${dispatch_keys[$i]}"
-		[[ -z "${seen[$key]+x}" ]] || return 1
-		seen["$key"]=1
-		[[ "$key" == "${DOTFILES_COMMAND_KEYS[$i]}" ]] || return 1
-	done
 }

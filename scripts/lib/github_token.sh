@@ -208,8 +208,3 @@ github_token_export_if_valid() {
 	_github_token_warning_scope_end
 	return 0
 }
-
-# Compatibility for existing callers; optional failures no longer block them.
-github_token_load() {
-	github_token_export_if_valid
-}

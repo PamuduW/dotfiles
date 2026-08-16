@@ -23,28 +23,7 @@ source "$REPO_DIR/scripts/lib/components/menu.sh"
 source "$REPO_DIR/scripts/lib/components/plan.sh"
 [[ -f "$REPO_DIR/scripts/menus/libraries.sh" ]] && source "$REPO_DIR/scripts/menus/libraries.sh"
 
-passed=0
-failed=0
-
-pass() {
-	printf 'ok - %s\n' "$1"
-	passed=$((passed + 1))
-}
-
-fail() {
-	printf 'not ok - %s\n' "$1" >&2
-	failed=$((failed + 1))
-}
-
-expect_success() {
-	local name="$1"
-	shift
-	if "$@"; then
-		pass "$name"
-	else
-		fail "$name"
-	fi
-}
+test_harness_report_init
 
 assert_array_equals() {
 	local actual_name="$1" expected_name="$2"
@@ -195,10 +174,10 @@ test_install_repo_gate_relaunches_after_fast_forward() (
 test_required_breadcrumb_literals() {
 	local status_fn component_fn plan_fn
 	status_fn="$(declare -f print_status_summary_all)"
-	component_fn="$(declare -f _draw_component_menu)"
+	component_fn="$(declare -f component_menu)"
 	plan_fn="$(declare -f show_plan)"
 	[[ "$status_fn" == *'ui_print_header "Check Status" "Dotfiles › Check Status"'* ]] || return 1
-	[[ "$component_fn" == *'ui_print_header "Install Dotfiles" "Dotfiles › Install Dotfiles"'* ]] || return 1
+	[[ "$component_fn" == *"MENU_CB_TITLE='Install Dotfiles'"* && "$component_fn" == *"MENU_CB_BREADCRUMB='Dotfiles › Install Dotfiles'"* ]] || return 1
 	[[ "$plan_fn" == *'ui_print_header "Execution Plan" "Dotfiles › Install Dotfiles › Execution Plan"'* ]]
 }
 
@@ -380,5 +359,4 @@ expect_success 'failed Agentbot launch pauses before the Dotfiles menu redraws' 
 expect_success 'successful Agentbot exit stops the outer Dotfiles menu loop' test_agentbot_success_exits_outer_menu_loop
 expect_success 'SETUP_CALLER=agentbot hides the reciprocal menu entry' test_caller_guard_hides_agentbot_entry
 
-printf '%d test(s) passed; %d failed\n' "$passed" "$failed"
-((failed == 0))
+finish_tests

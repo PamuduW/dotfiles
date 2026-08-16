@@ -4,6 +4,7 @@ run_update_flow() {
 	local dotfiles_cmd
 	local relaunch_marker="${DOTFILES_UPDATE_RELAUNCH_MARKER:-${TMPDIR:-/tmp}/dotfiles-update-relaunch-${BASHPID}}"
 	local rc=0
+	declare -F start_action_log >/dev/null 2>&1 && start_action_log
 	DOTFILES_UPDATE_RELAUNCHED=false
 	rm -f -- "$relaunch_marker"
 

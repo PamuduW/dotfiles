@@ -6,13 +6,19 @@ _comp_install_git_identity() {
 }
 
 _comp_install_system_packages() {
-	apt_install_packages core cli system
-	post_install_fixes
-	ensure_wslview_browser_in_bashrc
+	local tags
+	tags="$(comp_package_tags system_packages)"
+	# shellcheck disable=SC2086 # Component package tags are an internal word list.
+	apt_install_packages $tags || return $?
+	post_install_fixes || return $?
+	ensure_wslview_browser_in_bashrc || return $?
 }
 
 _comp_install_python() {
-	apt_install_packages python
+	local tags
+	tags="$(comp_package_tags python)"
+	# shellcheck disable=SC2086 # Component package tags are an internal word list.
+	apt_install_packages $tags
 }
 
 _comp_install_graphify_cli() {
@@ -64,8 +70,8 @@ _comp_install_nodejs() {
 }
 
 _comp_install_direnv() {
-	install_direnv
-	ensure_direnv_hook_in_bashrc
+	install_direnv || return $?
+	ensure_direnv_hook_in_bashrc || return $?
 }
 
 _comp_install_cursor_cli() {
@@ -93,9 +99,9 @@ _comp_install_ssh_key() {
 }
 
 _comp_install_dotfiles() {
-	backup_existing_dotfiles
-	stow_dotfiles
-	ensure_bash_profile_sources_bashrc
+	backup_existing_dotfiles || return $?
+	stow_dotfiles || return $?
+	ensure_bash_profile_sources_bashrc || return $?
 }
 
 _run_install_preamble() {
@@ -107,7 +113,7 @@ _run_install_preamble() {
 			log_ok "apt indexes refreshed"
 		else
 			log_warn "apt indexes refresh failed"
-			exit 1
+			return 1
 		fi
 	fi
 }
@@ -121,7 +127,7 @@ run_install() {
 	_log_legend_line
 	echo ""
 
-	_run_install_preamble
+	_run_install_preamble || return $?
 
 	for key in "${COMP_INSTALL_ORDER[@]}"; do
 		is_on "$key" || continue

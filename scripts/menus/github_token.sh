@@ -19,6 +19,14 @@ _github_token_menu_line() {
 	printf -v "$out_var" '%s' "$value"
 }
 
+_github_token_menu_secret() {
+	local out_var="$1" prompt="$2" value=''
+	printf '%s' "$prompt" >&"$GITHUB_TOKEN_MENU_OUT_FD"
+	IFS= read -rs value <&"$GITHUB_TOKEN_MENU_IN_FD" || value='q'
+	printf '\n' >&"$GITHUB_TOKEN_MENU_OUT_FD"
+	printf -v "$out_var" '%s' "$value"
+}
+
 _github_token_menu_confirm() {
 	local answer=''
 	_github_token_menu_line answer "${C_YELLOW:-}$1${C_RESET:-} [y/N/q]: "
@@ -58,16 +66,16 @@ _github_token_menu_render() {
 	printf '  %sNo repository scopes are needed for this workflow.%s\n\n' \
 		"${C_DIM:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
 	printf '  %s\n' \
-		"$(ui_color_shortcut_hint 's Save or replace   r Reveal once   d Remove   q Back')" \
+		"$(ui_format_shortcuts s 'Save or replace' r 'Reveal once' d Remove q Back)${C_RESET:-}" \
 		>&"$GITHUB_TOKEN_MENU_OUT_FD"
 	printf '\n' >&"$GITHUB_TOKEN_MENU_OUT_FD"
 }
 
 _github_token_menu_save() {
 	local token=''
-	printf '  %sInput is visible on screen and may be seen by others.%s\n' \
-		"${C_YELLOW:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
-	_github_token_menu_line token "  ${C_CYAN:-}GitHub token${C_RESET:-} (q cancels): "
+	printf '  %sInput is hidden while you type.%s\n' \
+		"${C_DIM:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
+	_github_token_menu_secret token "  ${C_CYAN:-}GitHub token${C_RESET:-} (q cancels): "
 	[[ "$token" != q && "$token" != Q && -n "$token" ]] || return 0
 	if ! github_token_is_valid "$token"; then
 		printf '  %sInvalid token; nothing was saved.%s\n' \

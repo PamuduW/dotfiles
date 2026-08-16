@@ -7,21 +7,7 @@ ROOT="$(cd -- "$TEST_DIR/.." && pwd)"
 source "$TEST_DIR/lib/test_harness.sh"
 test_harness_init
 
-passed=0
-failed=0
-pass() {
-	printf 'ok - %s\n' "$1"
-	passed=$((passed + 1))
-}
-fail() {
-	printf 'not ok - %s\n' "$1" >&2
-	failed=$((failed + 1))
-}
-expect_success() {
-	local name="$1"
-	shift
-	if "$@"; then pass "$name"; else fail "$name"; fi
-}
+test_harness_report_init
 
 source "$ROOT/scripts/lib/installers/logging.sh"
 source "$ROOT/scripts/lib/installers/graphify.sh"
@@ -101,5 +87,4 @@ expect_success 'external Graphify installations are preserved' test_install_exis
 expect_success 'uv-owned Graphify installation is idempotent' test_install_existing_uv_graphify_is_idempotent
 expect_success 'missing uv uses the official Astral installer' test_missing_uv_uses_official_astral_installer
 
-printf '%s test(s) passed; %s failed\n' "$passed" "$failed"
-[[ "$failed" -eq 0 ]]
+finish_tests

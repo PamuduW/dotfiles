@@ -30,15 +30,19 @@ install_lazygit_from_github() {
 	arch_suffix="$(_linux_github_arch_suffix)" || return 1
 	tarball="lazygit_${ver}_linux_${arch_suffix}.tar.gz"
 	github_curl -fsSL -o "$tmp/$tarball" \
-		"https://github.com/jesseduffield/lazygit/releases/download/v${ver}/${tarball}"
+		"https://github.com/jesseduffield/lazygit/releases/download/v${ver}/${tarball}" || return $?
 	github_curl -fsSL -o "$tmp/checksums.txt" \
-		"https://github.com/jesseduffield/lazygit/releases/download/v${ver}/checksums.txt"
+		"https://github.com/jesseduffield/lazygit/releases/download/v${ver}/checksums.txt" || return $?
+	awk -v file="$tarball" '$2 == file || $2 == "*" file { found=1 } END { exit !found }' "$tmp/checksums.txt" || {
+		echo "  lazygit checksum manifest does not contain $tarball." >&2
+		return 1
+	}
 	if ! (cd "$tmp" && sha256sum --check --ignore-missing checksums.txt); then
 		echo "  lazygit checksum verification failed." >&2
 		return 1
 	fi
-	tar -C "$tmp" -xzf "$tmp/$tarball" lazygit
-	sudo install -m 0755 "$tmp/lazygit" /usr/local/bin/lazygit
+	tar -C "$tmp" -xzf "$tmp/$tarball" lazygit || return $?
+	sudo install -m 0755 "$tmp/lazygit" /usr/local/bin/lazygit || return $?
 	rm -rf "$tmp"
 	trap - RETURN
 	log_ok "lazygit v${ver} installed"
@@ -68,14 +72,18 @@ install_lazydocker_from_github() {
 	arch_suffix="$(_linux_github_arch_suffix)" || return 1
 	tarball="lazydocker_${ver}_Linux_${arch_suffix}.tar.gz"
 	github_curl -fsSL -o "$tmp/$tarball" \
-		"https://github.com/jesseduffield/lazydocker/releases/download/v${ver}/${tarball}"
+		"https://github.com/jesseduffield/lazydocker/releases/download/v${ver}/${tarball}" || return $?
 	github_curl -fsSL -o "$tmp/checksums.txt" \
-		"https://github.com/jesseduffield/lazydocker/releases/download/v${ver}/checksums.txt"
+		"https://github.com/jesseduffield/lazydocker/releases/download/v${ver}/checksums.txt" || return $?
+	awk -v file="$tarball" '$2 == file || $2 == "*" file { found=1 } END { exit !found }' "$tmp/checksums.txt" || {
+		echo "  lazydocker checksum manifest does not contain $tarball." >&2
+		return 1
+	}
 	if ! (cd "$tmp" && sha256sum --check --ignore-missing checksums.txt); then
 		echo "  lazydocker checksum verification failed." >&2
 		return 1
 	fi
-	tar -C "$tmp" -xzf "$tmp/$tarball"
+	tar -C "$tmp" -xzf "$tmp/$tarball" || return $?
 
 	if [[ ! -f "$tmp/lazydocker" ]]; then
 		local binpath
@@ -83,7 +91,11 @@ install_lazydocker_from_github() {
 		[[ -n "$binpath" ]] && cp "$binpath" "$tmp/lazydocker"
 	fi
 
-	sudo install -m 0755 "$tmp/lazydocker" /usr/local/bin/lazydocker
+	[[ -f "$tmp/lazydocker" ]] || {
+		echo "  lazydocker archive did not contain the expected executable." >&2
+		return 1
+	}
+	sudo install -m 0755 "$tmp/lazydocker" /usr/local/bin/lazydocker || return $?
 	rm -rf "$tmp"
 	trap - RETURN
 	log_ok "lazydocker v${ver} installed"

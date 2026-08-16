@@ -163,16 +163,6 @@ rt_print_section() {
 	printf '  %s%s%s%s\n' "$C_BOLD" "$C_YELLOW" "$label" "$C_RESET"
 }
 
-# Blank line, section title, blank line, then column header — easier to scan than one long table.
-rt_print_section_block() {
-	local label="$1"
-
-	printf '\n'
-	rt_print_section "$label"
-	printf '\n'
-	rt_print_table_columns
-}
-
 rt_print_table_columns() {
 	local label_rule detail_rule result_rule
 	printf -v label_rule '%*s' "$_RT_LABEL_W" ''

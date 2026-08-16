@@ -53,18 +53,25 @@ _clean_log_stream() {
 }
 
 LOG_DIR="$DOTFILES_DIR/log"
-mkdir -p "$LOG_DIR"
-LOG_FILE="$LOG_DIR/$(date '+%Y-%m-%d_%H-%M-%S').log"
-RAW_LOG_FILE="${LOG_FILE}.raw"
+LOG_FILE=''
+RAW_LOG_FILE=''
+DOTFILES_LOG_ACTIVE=false
 
 finalize_log_file() {
-	[[ -f "$RAW_LOG_FILE" ]] || return 0
+	[[ -n "$RAW_LOG_FILE" && -f "$RAW_LOG_FILE" ]] || return 0
 	_clean_log_stream <"$RAW_LOG_FILE" >"$LOG_FILE"
 	rm -f "$RAW_LOG_FILE"
 }
 
-trap finalize_log_file EXIT
-exec > >(tee -a "$RAW_LOG_FILE") 2>&1
+start_action_log() {
+	[[ "$DOTFILES_LOG_ACTIVE" == true ]] && return 0
+	mkdir -p "$LOG_DIR"
+	LOG_FILE="$LOG_DIR/$(date '+%Y-%m-%d_%H-%M-%S').log"
+	RAW_LOG_FILE="${LOG_FILE}.raw"
+	DOTFILES_LOG_ACTIVE=true
+	trap finalize_log_file EXIT
+	exec > >(tee -a "$RAW_LOG_FILE") 2>&1
+}
 
 # shellcheck source=scripts/lib/load.sh
 source "$DOTFILES_DIR/scripts/lib/load.sh"
@@ -177,7 +184,7 @@ main() {
 			return 0
 		fi
 		run_initial_setup_flow
-		return 0
+		return $?
 	fi
 
 	case "$mode" in

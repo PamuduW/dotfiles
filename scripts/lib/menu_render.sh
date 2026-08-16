@@ -98,10 +98,3 @@ menu_redraw_prepare() {
 		menu_redraw_up "$prev_lines"
 	fi
 }
-
-menu_count_lines() {
-	local header_rows="$1"
-	local item_count="$2"
-	local footer_rows="$3"
-	echo $((header_rows + item_count + footer_rows))
-}

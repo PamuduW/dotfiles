@@ -139,10 +139,10 @@ install_docker() {
 		[[ "${ID:-}" == "debian" ]] && docker_distro="debian"
 		codename="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
 
-		sudo apt-get -o Dpkg::Use-Pty=0 install -y ca-certificates curl
-		sudo install -m 0755 -d /etc/apt/keyrings
-		sudo curl -fsSL "https://download.docker.com/linux/${docker_distro}/gpg" -o /etc/apt/keyrings/docker.asc
-		sudo chmod a+r /etc/apt/keyrings/docker.asc
+		sudo apt-get -o Dpkg::Use-Pty=0 install -y ca-certificates curl || return $?
+		sudo install -m 0755 -d /etc/apt/keyrings || return $?
+		sudo curl -fsSL "https://download.docker.com/linux/${docker_distro}/gpg" -o /etc/apt/keyrings/docker.asc || return $?
+		sudo chmod a+r /etc/apt/keyrings/docker.asc || return $?
 
 		sudo tee /etc/apt/sources.list.d/docker.sources >/dev/null <<DOCKEREOF
 Types: deb
@@ -151,15 +151,17 @@ Suites: ${codename}
 Components: stable
 Signed-By: /etc/apt/keyrings/docker.asc
 DOCKEREOF
+		local sources_rc=$?
+		((sources_rc == 0)) || return "$sources_rc"
 
-		sudo apt-get update -qq
-		sudo apt-get -o Dpkg::Use-Pty=0 install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+		sudo apt-get update -qq || return $?
+		sudo apt-get -o Dpkg::Use-Pty=0 install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin || return $?
 		log_ok "Docker Engine installed"
 	fi
 
 	if ! groups "$USER" | grep -qw docker; then
-		sudo groupadd -f docker
-		sudo usermod -aG docker "$USER"
+		sudo groupadd -f docker || return $?
+		sudo usermod -aG docker "$USER" || return $?
 		log_ok "Added $USER to docker group (log out/in or 'newgrp docker' to activate)"
 	fi
 
@@ -169,6 +171,7 @@ DOCKEREOF
 	fi
 	if ! restart_docker_service; then
 		log_warn "Docker restart failed after daemon config update"
+		return 1
 	fi
 }
 
@@ -180,7 +183,7 @@ install_portainer() {
 	fi
 
 	log_step "Install Portainer CE"
-	run_docker volume create portainer_data
+	run_docker volume create portainer_data || return $?
 	run_docker run -d \
 		-p 8000:8000 \
 		-p 9443:9443 \
@@ -188,7 +191,7 @@ install_portainer() {
 		--restart unless-stopped \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v portainer_data:/data \
-		"$portainer_image"
-	run_docker stop portainer
+		"$portainer_image" || return $?
+	run_docker stop portainer || return $?
 	log_ok "Portainer installed (stopped — use 'dpot' to start, 'dpotstop' to stop)"
 }

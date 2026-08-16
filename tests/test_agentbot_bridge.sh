@@ -8,22 +8,10 @@ test_harness_init
 
 ROOT="$(cd "$TEST_DIR/.." && pwd)"
 DOTFILES_DIR="$ROOT"
+source "$ROOT/scripts/lib/agent_bootstrap_paths.sh"
 source "$ROOT/scripts/menus/agentbot.sh"
 
-passed=0 failed=0
-pass() {
-	printf 'ok - %s\n' "$1"
-	passed=$((passed + 1))
-}
-fail() {
-	printf 'not ok - %s\n' "$1" >&2
-	failed=$((failed + 1))
-}
-check() {
-	local name="$1"
-	shift
-	if "$@"; then pass "$name"; else fail "$name"; fi
-}
+test_harness_report_init
 
 prepare_existing() {
 	AGENTBOT_HOME="$(test_harness_create_fake_sibling agent_bootstrap)"
@@ -122,6 +110,34 @@ test_clone_failure_stops() {
 	[[ "$rc" -ne 0 && ! -e "$AGENTBOT_HOME/install.sh" ]]
 }
 
+test_disallowed_clone_url_is_rejected_before_git_clone() {
+	AGENTBOT_HOME="$TEST_HARNESS_ROOT/rejected-agentbot"
+	DOTFILES_AGENTBOT_URL='https://example.invalid/untrusted/agentbot.git'
+	DOTFILES_AGENTBOT_CONFIRM=yes
+	export AGENTBOT_HOME DOTFILES_AGENTBOT_URL DOTFILES_AGENTBOT_CONFIRM
+	test_harness_configure_fake git 0 ''
+	test_harness_reset_logs
+	set +e
+	dotfiles_launch_agentbot >/dev/null 2>&1
+	local rc=$?
+	set -e
+	[[ "$rc" -ne 0 ]] || return 1
+	! grep -Fq $'git\tclone' "$TEST_COMMAND_LOG"
+}
+
+test_shell_and_menu_share_canonical_agentbot_home() (
+	local configured="$TEST_HARNESS_ROOT/configured-agentbot"
+	mkdir -p "$configured"
+	printf '%s\n' '#!/usr/bin/env bash' 'exit 0' >"$configured/install.sh"
+	chmod +x "$configured/install.sh"
+	AGENTBOT_HOME="$configured"
+	AGENTBOT_ALLOW_OVERRIDE=1
+	unset AGENT_BOOTSTRAP_HOME AGENT_BOOTSTRAP_ALLOW_OVERRIDE
+	export AGENTBOT_HOME AGENTBOT_ALLOW_OVERRIDE
+	[[ "$(resolve_agent_bootstrap_home)" == "$configured" ]] || return 1
+	[[ "$(dotfiles_agentbot_home)" == "$configured" ]]
+)
+
 check 'existing allowlisted Agentbot launches with SETUP_CALLER=dotfiles' test_existing_launches_with_caller
 check 'existing Agentbot launch gates both repositories first' test_existing_launch_requires_both_repository_gates
 check 'repository gate failure stops Agentbot child launch' test_repository_gate_failure_stops_child_launch
@@ -130,7 +146,8 @@ check 'configured SSH alias resolving to another path is rejected' test_configur
 check 'wrong or token-bearing Agentbot origin is rejected' test_wrong_origin_stops
 check 'declining a missing Agentbot clone is non-mutating' test_declined_clone_does_not_run
 check 'Agentbot clone failure stops before launch' test_clone_failure_stops
+check 'disallowed Agentbot clone URLs fail before git clone' test_disallowed_clone_url_is_rejected_before_git_clone
+check 'shell and menu resolution share the canonical Agentbot home' test_shell_and_menu_share_canonical_agentbot_home
 
-printf '%d test(s) passed; %d failed\n' "$passed" "$failed"
 test_harness_cleanup
-((failed == 0))
+finish_tests

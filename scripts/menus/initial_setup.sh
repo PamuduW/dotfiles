@@ -51,7 +51,7 @@ _dotfiles_install_repo_gate() {
 		return 0
 	fi
 
-	repo_update_run "$DOTFILES_DIR" 'dotfiles repo' _dotfiles_install_repo_decision result || return 1
+	repo_update_run "$DOTFILES_DIR" 'dotfiles repo' _dotfiles_install_repo_decision result 'PamuduW/dotfiles' || return 1
 	outcome="${result[outcome]}"
 	case "$outcome" in
 	current | ahead_continue) return 0 ;;
@@ -67,6 +67,7 @@ _dotfiles_install_repo_gate() {
 }
 
 run_install_action() {
+	declare -F start_action_log >/dev/null 2>&1 && start_action_log
 	ui_clear
 	# A declined or blocked repository check is a handled menu outcome. The
 	# shared gate already printed the reason; return to the menu without adding a
@@ -98,6 +99,7 @@ _run_setup_header() {
 
 run_initial_setup_flow() {
 	local tty_out
+	declare -F start_action_log >/dev/null 2>&1 && start_action_log
 	if [[ "$DOTFILES_INTERACTIVE_TTY" != true ]]; then
 		_dotfiles_install_repo_gate || return 1
 		apply_dotfiles_components_env
@@ -105,7 +107,7 @@ run_initial_setup_flow() {
 		_run_setup_header
 		show_plan
 		run_install
-		return 0
+		return $?
 	fi
 
 	tty_out="$(tty_output_path)"
@@ -142,11 +144,13 @@ confirm_loop() {
 }
 
 print_status_summary_all() {
-	local i key label row result detail short_label
+	local row result detail short_label
+	local -a rows=()
 	local ok_count=0 check_count=0 miss_count=0
 	local cols status_output="${DOTFILES_STATUS_OUTPUT:-$(tty_output_path)}"
 
 	cols="$(menu_tty_cols)"
+	collect_component_status_rows rows
 
 	{
 		ui_clear
@@ -154,16 +158,12 @@ print_status_summary_all() {
 		ui_print_header "Check Status" "Dotfiles › Check Status" "$cols"
 		ui_print_report_table_columns
 
-		for i in "${!COMP_KEYS[@]}"; do
-			key="${COMP_KEYS[$i]}"
-			label="${COMP_LABELS[$i]}"
-			row="$(_install_summary_probe "$key")"
-			IFS='|' read -r result detail <<<"$row"
-			short_label="$(_install_short_label "$label")"
+		for row in "${rows[@]}"; do
+			IFS='|' read -r short_label detail result <<<"$row"
 			case "$result" in
 			installed | configured) ((++ok_count)) ;;
 			missing) ((++miss_count)) ;;
-			check) ((++check_count)) ;;
+			*) ((++check_count)) ;;
 			esac
 			ui_print_report_table_row "$short_label" "$detail" "$result"
 		done

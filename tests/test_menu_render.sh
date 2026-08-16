@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=tests/lib/test_harness.sh
+source "$ROOT/tests/lib/test_harness.sh"
 
 # shellcheck source=scripts/lib/menu_render.sh
 source "$ROOT/scripts/lib/menu_render.sh"
@@ -17,36 +19,13 @@ source "$ROOT/scripts/lib/menu_checkbox.sh"
 source "$ROOT/scripts/lib/menu_paging.sh"
 # shellcheck source=scripts/lib/components/registry.sh
 source "$ROOT/scripts/lib/components/registry.sh"
-# shellcheck source=scripts/lib/components/descriptions.sh
-source "$ROOT/scripts/lib/components/descriptions.sh"
 # shellcheck source=scripts/lib/components/menu.sh
 source "$ROOT/scripts/lib/components/menu.sh"
 
 _fit_menu_line() { menu_fit_line "$@"; }
 _fit_menu_line_with_indent() { menu_fit_indent "$@"; }
 
-passed=0
-failed=0
-
-pass() {
-	printf 'ok - %s\n' "$1"
-	passed=$((passed + 1))
-}
-
-fail() {
-	printf 'not ok - %s\n' "$1" >&2
-	failed=$((failed + 1))
-}
-
-expect_success() {
-	local name="$1"
-	shift
-	if "$@"; then
-		pass "$name"
-	else
-		fail "$name"
-	fi
-}
+test_harness_report_init
 
 configure_simple_menu_with_descriptions() {
 	MENU_SIMPLE_TITLE='Test menu'
@@ -150,18 +129,21 @@ test_checkbox_fixed_rows_are_unchanged() {
 	[[ "$(_menu_cb_fixed_rows)" -eq 10 ]]
 }
 
-test_component_menu_redraw_count_matches_rendered_frame() {
-	local output_file="$TEST_TMP/component-menu"
-	local -a lines=()
+test_component_menu_adapter_preserves_dependency_toggles() {
 	COMP_KEYS=(alpha beta)
 	COMP_LABELS=('Alpha' 'Beta')
-	declare -gA COMP_DEPENDS_ON=()
-	declare -A COMP_ON=()
+	declare -gA COMP_DEPENDS_ON=([beta]=alpha)
+	declare -gA COMP_ON=()
 	COMP_ON=([alpha]=1 [beta]=1)
-	_draw_component_menu 0 2 '' 80 >"$output_file"
-	mapfile -t lines <"$output_file"
-	[[ "$_COMP_MENU_FIXED_ROWS" -eq 9 ]] || return 1
-	[[ "${#lines[@]}" -eq 11 ]]
+	toggle_component() {
+		COMP_ON[alpha]=0
+		COMP_ON[beta]=0
+		TOGGLE_MSG='auto-disabled: Beta'
+	}
+	declare -ga MENU_CB_CHECKED=([0]=1 [1]=1)
+	_component_menu_toggle 0
+	[[ "${MENU_CB_CHECKED[0]}" -eq 0 && "${MENU_CB_CHECKED[1]}" -eq 0 ]] || return 1
+	[[ "$MENU_CB_STATUS_MESSAGE" == 'auto-disabled: Beta' ]]
 }
 
 TEST_TMP="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-menu-render.XXXXXX")"
@@ -174,7 +156,6 @@ expect_success 'simple menu has exactly one spacer before descriptions' test_sim
 expect_success 'down/up frames match redraw count without stale content' test_down_up_frames_match_redraw_count_without_stale_content
 expect_success 'no-description menu keeps its existing blank footer' test_no_description_keeps_existing_blank_footer
 expect_success 'checkbox fixed-row accounting is unchanged' test_checkbox_fixed_rows_are_unchanged
-expect_success 'component menu redraw count matches its rendered frame' test_component_menu_redraw_count_matches_rendered_frame
+expect_success 'component menu adapter preserves dependency-aware toggles' test_component_menu_adapter_preserves_dependency_toggles
 
-printf '%d test(s) passed; %d failed\n' "$passed" "$failed"
-((failed == 0))
+finish_tests

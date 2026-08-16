@@ -29,7 +29,7 @@ read_packages_by_tags() {
 }
 
 apt_install_packages() {
-	local pkgs
+	local pkgs rc
 	mapfile -t pkgs < <(read_packages_by_tags "$@")
 	if [[ ${#pkgs[@]} -eq 0 ]]; then
 		log_skip "No packages for tags: $*"
@@ -39,6 +39,8 @@ apt_install_packages() {
 	if _run_quiet_command "apt packages ($*)" sudo apt-get -qq -o Dpkg::Use-Pty=0 install -y "${pkgs[@]}"; then
 		log_ok "Apt packages installed: $*"
 	else
+		rc=$?
 		log_warn "Apt package install failed: $*"
+		return "$rc"
 	fi
 }

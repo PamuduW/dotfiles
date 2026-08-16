@@ -2,8 +2,8 @@
 # Requires: DOTFILES_DIR
 
 apply_git_config() {
-	git config --global user.name "$SETUP_GIT_NAME"
-	git config --global user.email "$SETUP_GIT_EMAIL"
+	git config --global user.name "$SETUP_GIT_NAME" || return $?
+	git config --global user.email "$SETUP_GIT_EMAIL" || return $?
 	log_ok "Git configured: $SETUP_GIT_NAME <$SETUP_GIT_EMAIL>"
 }
 
@@ -20,9 +20,9 @@ generate_ssh_key() {
 		ssh_comment="${USER:-user}@$(hostname 2>/dev/null || echo wsl)"
 	fi
 	echo "  You'll be prompted for a passphrase (press Enter to skip / use no passphrase)."
-	ssh-keygen -t ed25519 -C "$ssh_comment" -f "$HOME/.ssh/id_ed25519"
-	eval "$(ssh-agent -s)" >/dev/null
-	ssh-add "$HOME/.ssh/id_ed25519" 2>/dev/null
+	ssh-keygen -t ed25519 -C "$ssh_comment" -f "$HOME/.ssh/id_ed25519" || return $?
+	eval "$(ssh-agent -s)" >/dev/null || return $?
+	ssh-add "$HOME/.ssh/id_ed25519" 2>/dev/null || return $?
 
 	local pub_key
 	pub_key="$(cat "$HOME/.ssh/id_ed25519.pub")"
@@ -107,10 +107,10 @@ find_windows_git_credential_manager() {
 }
 
 configure_git_submodule_defaults() {
-	git config --global submodule.recurse true
-	git config --global fetch.recurseSubmodules on-demand
-	git config --global push.recurseSubmodules check
-	git config --global status.submoduleSummary true
+	git config --global submodule.recurse true || return $?
+	git config --global fetch.recurseSubmodules on-demand || return $?
+	git config --global push.recurseSubmodules check || return $?
+	git config --global status.submoduleSummary true || return $?
 	log_ok "Git submodule defaults: recurse, on-demand fetch, checked push, status summary"
 }
 

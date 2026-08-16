@@ -12,6 +12,19 @@ _install_summary_probe() {
 	comp_probe "$1"
 }
 
+collect_component_status_rows() {
+	local output_name="$1" i key label probe result detail
+	local -n output_rows="$output_name"
+	output_rows=()
+	for i in "${!COMP_KEYS[@]}"; do
+		key="${COMP_KEYS[$i]}"
+		label="$(_install_short_label "${COMP_LABELS[$i]}")"
+		probe="$(_install_summary_probe "$key")"
+		IFS='|' read -r result detail <<<"$probe"
+		output_rows+=("${label}|${detail}|${result}")
+	done
+}
+
 _comp_probe_git_identity() {
 	local name email
 	name="$(git config --global user.name 2>/dev/null || true)"
@@ -25,24 +38,24 @@ _comp_probe_git_identity() {
 
 _comp_probe_system_packages() {
 	local pkg_file="${PKG_FILE:-${DOTFILES_DIR:-}/packages/packages.txt}"
-	local line pkg status missing=0 checked=0
+	local pkg status missing=0 checked=0 tags
+	local -a packages=()
 
 	if [[ ! -f "$pkg_file" ]]; then
 		printf 'missing|packages.txt not found\n'
 		return 0
 	fi
 
-	while IFS= read -r line || [[ -n "$line" ]]; do
-		line="${line%%#*}"
-		line="${line// /}"
-		[[ -n "$line" ]] || continue
-		pkg="$line"
+	tags="$(comp_package_tags system_packages)"
+	# shellcheck disable=SC2086 # Component package tags are an internal word list.
+	mapfile -t packages < <(PKG_FILE="$pkg_file" read_packages_by_tags $tags)
+	for pkg in "${packages[@]}"; do
 		checked=$((checked + 1))
 		status="$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null || true)"
 		if [[ "$status" != *"install ok installed"* ]]; then
 			missing=$((missing + 1))
 		fi
-	done <"$pkg_file"
+	done
 
 	if [[ "$checked" -eq 0 ]]; then
 		printf 'skipped|no packages listed\n'

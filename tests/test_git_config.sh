@@ -9,21 +9,7 @@ test_harness_init
 PATH="$ORIGINAL_PATH"
 export PATH
 
-passed=0
-failed=0
-pass() {
-	printf 'ok - %s\n' "$1"
-	passed=$((passed + 1))
-}
-fail() {
-	printf 'not ok - %s\n' "$1" >&2
-	failed=$((failed + 1))
-}
-expect_success() {
-	local name="$1"
-	shift
-	if "$@"; then pass "$name"; else fail "$name"; fi
-}
+test_harness_report_init
 
 DOTFILES_DIR="$ROOT"
 export DOTFILES_DIR
@@ -94,5 +80,4 @@ expect_success 'missing GCM preserves an existing credential helper' test_existi
 expect_success 'detected GCM is configured with all submodule defaults' test_detected_gcm_and_submodule_defaults_are_all_configured
 expect_success 'Git configuration probe distinguishes full and partial states' test_probe_distinguishes_complete_partial_and_incomplete_configuration
 
-printf '%s test(s) passed; %s failed\n' "$passed" "$failed"
-[[ "$failed" -eq 0 ]]
+finish_tests

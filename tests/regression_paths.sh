@@ -2,29 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-PASS=0
-FAIL=0
-
-pass() {
-	printf 'ok - %s\n' "$1"
-	PASS=$((PASS + 1))
-}
-fail() {
-	printf 'not ok - %s\n' "$1" >&2
-	FAIL=$((FAIL + 1))
-}
-
-expect_success() {
-	local name="$1"
-	shift
-	if "$@"; then pass "$name"; else fail "$name"; fi
-}
-
-expect_failure() {
-	local name="$1"
-	shift
-	if "$@"; then fail "$name"; else pass "$name"; fi
-}
+source "$ROOT/tests/lib/test_harness.sh"
+test_harness_report_init
 
 test_docker_stops_before_restart_on_config_failure() {
 	local tmp="$1"
@@ -44,26 +23,6 @@ test_docker_merge_temp_file_uses_sudo_boundary() {
 	grep -Fq 'tmp_file="$(sudo mktemp)"' "$installer" &&
 		grep -Fq 'sudo tee "$tmp_file" >/dev/null' "$installer" &&
 		grep -Fq 'sudo rm -f "$tmp_file"' "$installer"
-}
-
-test_existing_unapproved_origin_is_rejected() {
-	local repo="$1/rejected-repo"
-	git init -q "$repo"
-	git -C "$repo" remote add origin https://example.invalid/unapproved.git
-	bash -c '
-		source "$1/scripts/lib/agent_bootstrap_paths.sh"
-		agent_bootstrap_existing_origin_allowed "$2"
-	' _ "$ROOT" "$repo"
-}
-
-test_existing_unapproved_origin_can_be_explicitly_bypassed() {
-	local repo="$1/bypassed-repo"
-	git init -q "$repo"
-	git -C "$repo" remote add origin https://example.invalid/unapproved.git
-	AGENT_BOOTSTRAP_REPO_URL_ALLOW_ANY=1 bash -c '
-		source "$1/scripts/lib/agent_bootstrap_paths.sh"
-		agent_bootstrap_existing_origin_allowed "$2"
-	' _ "$ROOT" "$repo"
 }
 
 test_removed_commands_have_migration_guidance() {
@@ -94,14 +53,6 @@ test_help_omits_removed_commands() {
 	local output
 	output="$($ROOT/bin/bin/dotfiles help 2>&1)"
 	! printf '%s\n' "$output" | grep -Eq '^  (summary|upgrade|self)([[:space:]]|$)'
-}
-
-test_path_status_separator_has_no_numeric_format_artifact() {
-	local output
-	output="$(NO_COLOR=1 bash -c 'source "$1/scripts/lib/ui.sh"; ui_print_check_result_path_header 100' _ "$ROOT")"
-	[[ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" -eq 2 ]] &&
-		[[ "$(printf '%s\n' "$output" | sed -n '2p')" == *+*+* ]] &&
-		! printf '%s\n' "$output" | sed -n '2p' | grep -Eq -- '-[0-9]+$'
 }
 
 test_github_api_failure_names_source_without_leaking_token() {
@@ -213,7 +164,7 @@ test_github_token_config_is_private_and_scoped() {
 		github_token_write "test_token_fixture_abcdefghijklmnopqrstuvwxyz1234567890"
 		[[ "$(stat -c %a "$(github_token_file)")" == "600" ]]
 		unset GITHUB_TOKEN
-		github_token_load
+		github_token_export_if_valid
 		[[ "$GITHUB_TOKEN" == "test_token_fixture_abcdefghijklmnopqrstuvwxyz1234567890" ]]
 	' _ "$ROOT" 2>&1)" || return 1
 	[[ "$output" != *"test_token_fixture_abcdefghijklmnopqrstuvwxyz1234567890"* ]]
@@ -231,12 +182,9 @@ main() {
 	else
 		fail 'Docker restart was not attempted'
 	fi
-	expect_failure 'unapproved existing agent_bootstrap origin is rejected' test_existing_unapproved_origin_is_rejected "$tmp"
-	expect_success 'explicit origin bypass remains available' test_existing_unapproved_origin_can_be_explicitly_bypassed "$tmp"
 	expect_success 'removed dotfiles commands have migration guidance' test_removed_commands_have_migration_guidance
 	expect_success 'removed dotfiles commands are absent from help' test_help_omits_removed_commands
 	expect_success 'report separator has no stray trailing dash' test_report_separator_has_no_stray_trailing_dash
-	expect_success 'path-status separator has no numeric format artifact' test_path_status_separator_has_no_numeric_format_artifact
 
 	local curl_dir="$tmp/curl-bin"
 	mkdir -p "$curl_dir"
@@ -250,8 +198,7 @@ main() {
 	expect_success 'lazygit uses the current lowercase Linux release asset' test_lazygit_uses_current_lowercase_linux_release_asset "$tmp"
 	expect_success 'GitHub token config is private and scoped' test_github_token_config_is_private_and_scoped "$tmp"
 
-	printf '%s test(s) passed; %s failed\n' "$PASS" "$FAIL"
-	[[ "$FAIL" -eq 0 ]]
+	finish_tests
 }
 
 main "$@"

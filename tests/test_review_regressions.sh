@@ -7,27 +7,18 @@ REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
 source "$TEST_DIR/lib/test_harness.sh"
 test_harness_init
 
-passed=0
-failed=0
-pass() {
-	printf 'ok - %s\n' "$1"
-	passed=$((passed + 1))
-}
-fail() {
-	printf 'not ok - %s\n' "$1" >&2
-	failed=$((failed + 1))
-}
-check() {
-	local name="$1"
-	shift
-	if "$@"; then pass "$name"; else fail "$name"; fi
-}
+test_harness_report_init
 
 source "$REPO_DIR/scripts/lib/tty.sh"
 source "$REPO_DIR/scripts/lib/menu_render.sh"
 source "$REPO_DIR/scripts/lib/repo_update.sh"
 source "$REPO_DIR/scripts/lib/wsl_conf.sh"
 source "$REPO_DIR/scripts/lib/components/registry.sh"
+source "$REPO_DIR/scripts/lib/installers/apt.sh"
+source "$REPO_DIR/scripts/lib/installers/cli_tools.sh"
+source "$REPO_DIR/scripts/lib/installers/docker.sh"
+source "$REPO_DIR/scripts/lib/installers/remote_script.sh"
+source "$REPO_DIR/scripts/lib/installers/github_release.sh"
 source "$REPO_DIR/scripts/lib/components/probes.sh"
 source "$REPO_DIR/scripts/lib/installers/stow.sh"
 source "$REPO_DIR/scripts/lib/components/install_dispatch.sh"
@@ -110,6 +101,21 @@ test_noninteractive_install_runs_repository_gate_first() (
 	run_install() { printf 'install\n' >>"$events"; }
 	run_initial_setup_flow
 	[[ "$(<"$events")" == $'gate\ncomponents\ninstall' ]]
+)
+
+test_noninteractive_install_propagates_install_failure() (
+	DOTFILES_INTERACTIVE_TTY=false
+	_dotfiles_install_repo_gate() { :; }
+	apply_dotfiles_components_env() { :; }
+	_apply_noninteractive_git_defaults() { :; }
+	_run_setup_header() { :; }
+	show_plan() { :; }
+	run_install() { return 31; }
+	set +e
+	run_initial_setup_flow
+	local rc=$?
+	set -e
+	[[ "$rc" -eq 31 ]]
 )
 
 test_python_probe_requires_python_pip_and_venv() (
@@ -222,6 +228,113 @@ test_selected_component_install_failures_propagate() (
 	[[ "$rc" == 23 ]]
 )
 
+test_multi_step_component_installers_preserve_first_failure() (
+	apt_install_packages() { return 23; }
+	post_install_fixes() { return 0; }
+	ensure_wslview_browser_in_bashrc() { return 0; }
+	install_direnv() { return 24; }
+	ensure_direnv_hook_in_bashrc() { return 0; }
+	backup_existing_dotfiles() { return 25; }
+	stow_dotfiles() { return 0; }
+	ensure_bash_profile_sources_bashrc() { return 0; }
+
+	local installer expected rc
+	for installer in _comp_install_system_packages _comp_install_direnv _comp_install_dotfiles; do
+		case "$installer" in
+		_comp_install_system_packages) expected=23 ;;
+		_comp_install_direnv) expected=24 ;;
+		_comp_install_dotfiles) expected=25 ;;
+		esac
+		set +e
+		"$installer" >/dev/null 2>&1
+		rc=$?
+		set -e
+		[[ "$rc" == "$expected" ]] || return 1
+	done
+)
+
+test_apt_install_failure_is_not_hidden_by_warning_logging() (
+	local pkg_file="$TEST_HARNESS_ROOT/failing-apt-packages.txt" rc
+	printf '%s\n' '# @core' 'git' >"$pkg_file"
+	PKG_FILE="$pkg_file"
+	_run_quiet_command() { return 26; }
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	log_warn() { :; }
+	set +e
+	apt_install_packages core >/dev/null 2>&1
+	rc=$?
+	set -e
+	[[ "$rc" == 26 ]]
+)
+
+test_tool_installers_stop_at_the_first_required_failure() (
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	log_warn() { :; }
+	ensure_asdf_installed() { return 0; }
+	asdf() { [[ "$1 $2" == 'plugin list' ]] && printf 'golang\n'; }
+	local call=0 rc
+	_run_quiet_command() {
+		call=$((call + 1))
+		[[ "$call" -ne 1 ]] || return 27
+	}
+	set +e
+	install_go_via_asdf >/dev/null 2>&1
+	rc=$?
+	set -e
+	[[ "$rc" == 27 ]] || return 1
+
+	command() {
+		if [[ "$1" == -v && "$2" == codex ]]; then return 1; fi
+		if [[ "$1" == -v && "$2" == npm ]]; then return 0; fi
+		builtin command "$@"
+	}
+	npm() { return 28; }
+	set +e
+	install_codex_cli >/dev/null 2>&1
+	rc=$?
+	set -e
+	[[ "$rc" == 28 ]]
+)
+
+test_container_installers_stop_at_the_first_required_failure() (
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	log_warn() { :; }
+	run_docker() {
+		[[ "$1" == ps ]] && return 0
+		[[ "$1 $2" != 'volume create' ]] || return 29
+		return 0
+	}
+	local rc
+	set +e
+	install_portainer >/dev/null 2>&1
+	rc=$?
+	set -e
+	[[ "$rc" == 29 ]]
+)
+
+test_system_package_probe_uses_system_package_tags_only() (
+	local pkg_file="$TEST_HARNESS_ROOT/scoped-packages.txt" output
+	printf '%s\n' \
+		'# @core' 'core-package' \
+		'# @python' 'python-package' \
+		'# @cli' 'cli-package' \
+		'# @system' 'system-package' >"$pkg_file"
+	dpkg-query() {
+		case "${*: -1}" in
+		core-package | cli-package | system-package) printf 'install ok installed\n' ;;
+		*) return 1 ;;
+		esac
+	}
+	output="$(PKG_FILE="$pkg_file" _comp_probe_system_packages)"
+	[[ "$output" == 'installed|3 apt packages' ]]
+)
+
 test_install_orchestrator_collects_failures_and_finishes_selected_work() (
 	local calls="$TEST_HARNESS_ROOT/install-failure-calls"
 	: >"$calls"
@@ -291,6 +404,70 @@ test_remote_shell_installers_are_downloaded_before_execution() (
 	! rg -n 'curl[^|]*\|[[:space:]]*(bash|sh)' "$REPO_DIR/scripts/lib/installers" "$REPO_DIR/scripts/lib/update_components.sh"
 )
 
+test_remote_shell_installer_fails_closed() (
+	local calls="$TEST_HARNESS_ROOT/vendor-installer.calls" output_path=''
+	: >"$calls"
+	curl() {
+		printf 'curl\n' >>"$calls"
+		while (($#)); do
+			if [[ "$1" == -o ]]; then
+				output_path="$2"
+				shift 2
+			else shift; fi
+		done
+		: >"$output_path"
+	}
+	set +e
+	run_vendor_shell_installer 'http://example.invalid/install.sh' Example >/dev/null 2>&1
+	local insecure_rc=$?
+	run_vendor_shell_installer 'https://example.invalid/install.sh' Example >/dev/null 2>&1
+	local empty_rc=$?
+	set -e
+	[[ "$insecure_rc" -ne 0 && "$empty_rc" -ne 0 ]] || return 1
+	[[ "$(wc -l <"$calls")" -eq 1 ]]
+)
+
+test_release_manifest_must_name_the_selected_archive() (
+	local calls="$TEST_HARNESS_ROOT/release-installer.calls"
+	: >"$calls"
+	github_latest_release_version() { printf '1.2.3\n'; }
+	_linux_github_arch_suffix() { printf 'x86_64\n'; }
+	log_step() { :; }
+	github_curl() {
+		local output='' arg
+		while (($#)); do
+			arg="$1"
+			shift
+			if [[ "$arg" == -o ]]; then
+				output="$1"
+				shift
+			fi
+		done
+		if [[ "$output" == *checksums.txt ]]; then
+			printf '%064d  unrelated.tar.gz\n' 0 >"$output"
+		else
+			: >"$output"
+		fi
+	}
+	sha256sum() {
+		printf 'sha256sum\n' >>"$calls"
+		return 0
+	}
+	tar() {
+		printf 'tar\n' >>"$calls"
+		return 0
+	}
+	sudo() {
+		printf 'sudo\n' >>"$calls"
+		return 0
+	}
+	set +e
+	install_lazygit_from_github >/dev/null 2>&1
+	local rc=$?
+	set -e
+	[[ "$rc" -ne 0 && ! -s "$calls" ]]
+)
+
 test_portainer_uses_an_explicit_image_version() (
 	! rg -n 'portainer/portainer-ce:latest' "$REPO_DIR/scripts/lib/installers/docker.sh"
 	rg -q 'PORTAINER_IMAGE' "$REPO_DIR/scripts/lib/installers/docker.sh"
@@ -323,6 +500,7 @@ check 'Agentbot preflights both repositories before approval or mutation' test_a
 check 'repository reload wait is safe without a controlling TTY' test_reload_wait_is_noop_without_a_tty
 check 'terminal geometry falls back quietly without a controlling TTY' test_terminal_geometry_is_quiet_without_a_tty
 check 'non-interactive install runs the repository gate before setup' test_noninteractive_install_runs_repository_gate_first
+check 'non-interactive install propagates component installation failure' test_noninteractive_install_propagates_install_failure
 check 'Python probe verifies interpreter pip and venv support' test_python_probe_requires_python_pip_and_venv
 check 'Go probe rejects an asdf installation without a selected Go version' test_go_probe_does_not_treat_empty_asdf_as_installed
 check 'Dotfiles probe requires every managed Stow target' test_dotfiles_probe_requires_every_managed_link
@@ -334,6 +512,11 @@ check 'failed Stow application restores backed-up user files' test_failed_stow_r
 check 'update-all calls dotfiles update --all' test_update_all_calls_supported_command
 check '.bashrc registers the Dotfiles prompt hook only once' test_bashrc_registers_prompt_hook_once
 check 'selected component installer failures propagate to the orchestrator' test_selected_component_install_failures_propagate
+check 'multi-step component installers preserve the first required failure' test_multi_step_component_installers_preserve_first_failure
+check 'apt installation failures are not hidden by warning logging' test_apt_install_failure_is_not_hidden_by_warning_logging
+check 'tool installers stop at the first required command failure' test_tool_installers_stop_at_the_first_required_failure
+check 'container installers stop at the first required command failure' test_container_installers_stop_at_the_first_required_failure
+check 'system package status checks only the packages owned by that component' test_system_package_probe_uses_system_package_tags_only
 check 'install orchestration reports failures after attempting all selected components' test_install_orchestrator_collects_failures_and_finishes_selected_work
 check 'all terminal device access goes through the shared TTY adapter' test_terminal_device_access_is_centralized
 check 'dotfiles CLI is a thin adapter over shared update modules' test_dotfiles_cli_is_a_thin_adapter_over_update_modules
@@ -342,11 +525,12 @@ check 'Dotfiles install and update use the same repository runner' test_single_r
 check 'update probes find Cursor and Claude in the vendor local bin directory' test_update_probes_find_vendor_local_bin_installations
 check 'Monaspace upgrades replace an older installed release' test_monaspace_upgrade_requests_a_replacement_install
 check 'remote shell installers are downloaded before execution' test_remote_shell_installers_are_downloaded_before_execution
+check 'remote shell installers reject insecure and empty payloads' test_remote_shell_installer_fails_closed
+check 'release checksums must identify the selected archive' test_release_manifest_must_name_the_selected_archive
 check 'Portainer uses an explicit image version' test_portainer_uses_an_explicit_image_version
 check 'WSL config rendering updates settings only in their required sections' test_wsl_config_renderer_updates_only_the_requested_section
 check 'repository has one local validation entrypoint wired into CI' test_repository_has_one_validation_entrypoint_and_ci
 check 'installer help exits before log initialization' test_installer_help_exits_before_log_initialization
 
-printf '%d test(s) passed; %d failed\n' "$passed" "$failed"
 test_harness_cleanup
-((failed == 0))
+finish_tests

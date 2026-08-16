@@ -13,20 +13,7 @@ source "$REPO_DIR/scripts/lib/ui.sh"
 source "$REPO_DIR/scripts/lib/installers/logging.sh"
 ui_init_colors
 
-passed=0 failed=0
-pass() {
-	printf 'ok - %s\n' "$1"
-	passed=$((passed + 1))
-}
-fail() {
-	printf 'not ok - %s\n' "$1" >&2
-	failed=$((failed + 1))
-}
-expect_success() {
-	local name="$1"
-	shift
-	if "$@"; then pass "$name"; else fail "$name"; fi
-}
+test_harness_report_init
 
 test_install_legend_uses_status_colors() {
 	local output
@@ -63,12 +50,19 @@ test_install_confirm_prompt_colors_full_action_text() {
 	local output
 	NO_COLOR='' FORCE_COLOR=1 ui_init_colors
 	output="$(ui_install_confirm_prompt)"
-	[[ "$output" == "${C_DIM}  ${C_RESET}${C_CYAN}c${C_RESET}${C_DIM} confirm   ${C_RESET}${C_CYAN}e${C_RESET}${C_DIM} edit   ${C_RESET}${C_CYAN}q${C_RESET}${C_DIM} back_to_menu : ${C_RESET}" ]]
+	[[ "$output" == "  ${C_CYAN}c${C_RESET} confirm   ${C_CYAN}e${C_RESET} edit   ${C_CYAN}q${C_RESET} back_to_menu : ${C_RESET}" ]]
+}
+
+test_shortcut_hint_keeps_labels_undimmed() {
+	local output
+	NO_COLOR='' FORCE_COLOR=1 ui_init_colors
+	output="$(ui_format_shortcuts s 'Save or replace' r 'Reveal once' d Remove q Back)${C_RESET:-}"
+	[[ "$output" == "${C_CYAN}s${C_RESET} Save or replace   ${C_CYAN}r${C_RESET} Reveal once   ${C_CYAN}d${C_RESET} Remove   ${C_CYAN}q${C_RESET} Back${C_RESET}" ]]
 }
 
 expect_success 'install legend uses semantic status colors' test_install_legend_uses_status_colors
 expect_success 'install status markers use semantic colors' test_install_status_markers_use_semantic_colors
 expect_success 'confirmation hint colors its action keys' test_confirm_hint_uses_colored_action_keys
 expect_success 'install confirmation prompt colors full action text' test_install_confirm_prompt_colors_full_action_text
-printf '%d test(s) passed; %d failed\n' "$passed" "$failed"
-((failed == 0))
+expect_success 'shortcut labels use normal text intensity' test_shortcut_hint_keeps_labels_undimmed
+finish_tests

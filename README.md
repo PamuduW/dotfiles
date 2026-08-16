@@ -43,6 +43,7 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 │   ├── install.sh      # real installer
 │   ├── validate.sh     # syntax, static analysis, formatting, and test gate
 │   ├── lib/            # TUI, component, update, and installer modules
+│   │   └── updates/    # focused system, runtime, integration, and repo updates
 │   └── menus/          # main + submenus
 ├── tests/
 │   └── run.sh          # discovers and runs every shell test file
@@ -99,7 +100,7 @@ Use arrow keys to navigate and Enter to select.
 
 | Option | Submenu / action |
 | ------ | ---------------- |
-| Check Status | Read-only local component and repository report; remote and apt freshness are labelled unchecked. |
+| Check Status | Read-only local report for all 21 setup components. |
 | Install Dotfiles | Run the shared repository gate, then select components, review the execution plan, and apply setup. |
 | Update | Repo-first fetch/classify/pull gate, then confirmed downstream updates. |
 | GitHub Token Config | Configure the optional shared API token without blocking anonymous use. |
@@ -141,7 +142,7 @@ When you choose **Run setup** interactively (TTY), the installer will:
 
 | Component       | What it does                                                                  |
 | --------------- | ----------------------------------------------------------------------------- |
-| Git identity    | Set global `user.name` / `user.email` (auto-disabled if `includeIf` detected) |
+| Git identity    | Set global `user.name` / `user.email` (disabled by default)                   |
 | System packages | Core CLI tools from apt (@core, @cli, @system)                                |
 | Python          | python3, pip, venv                                                            |
 | Graphify CLI    | Optional `graphifyy` package through `uv`; exposes the `graphify` command (selected by default) |
@@ -200,7 +201,9 @@ and any existing credential helper remains unchanged. SSH remotes do not use
 this credential helper. The stable component key remains `git_credential` for
 existing `DOTFILES_COMPONENTS` automation.
 
-**Multi-identity git setups**: If your `~/.gitconfig` uses `includeIf` for per-directory identities, the installer detects this and defaults "Git identity" to OFF so it won't overwrite your configuration.
+**Multi-identity git setups**: "Git identity" defaults to OFF, so an existing
+`includeIf`-based per-directory identity is not overwritten unless you
+explicitly select this component.
 
 ## Security notes
 
@@ -229,6 +232,7 @@ After stowing:
 Global command (stowed to `~/bin/dotfiles`, on PATH like `ex` and `clip`):
 
 | Subcommand | Action |
+| ---------- | ------ |
 | `dotfiles` | On a TTY, opens the boot menu; otherwise prints help |
 | `dotfiles menu` | Boot menu (same as `./install.sh`) |
 | `dotfiles update` | **Apply after confirmation** — repo-first gate, then apt/CLI/tool changes |
@@ -243,7 +247,9 @@ The interactive **Command Lib**, `dotfiles commands`, and `dotfiles help` show
 the complete supported command, option, configuration, output, and integration
 reference. They are read-only and use the same catalog.
 
-Runs **unprivileged**; only the apt portion invokes `sudo` internally (single prompt). Agent CLI and npm updates stay under your user.
+Most CLI updates run as your user. System package, PowerShell, Docker,
+`/etc/wsl.conf`, `/usr/local/bin`, and Docker-group changes invoke `sudo` when
+needed; the terminal may reuse the active sudo credential cache.
 
 When Graphify is selected, `dotfiles update` (including `dotfiles update --all`)
 updates it with `uv tool upgrade graphifyy` only when `uv tool list` proves that
@@ -403,8 +409,9 @@ stow -D bash bin readline
 
 ## Logging
 
-Mutating and interactive runs of `install.sh` write a timestamped log to `log/`
-(gitignored). `--help` exits before log initialization.
+Mutating install, update, and Agentbot actions write a timestamped log to
+`log/` (gitignored). Read-only menu navigation and `--help` do not initialize a
+log.
 
 ## Development validation
 
