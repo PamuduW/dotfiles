@@ -99,7 +99,7 @@ Use arrow keys to navigate and Enter to select.
 Skip the boot menu with explicit flags:
 
 ```bash
-dotfiles status             # Read-only status
+dotfiles status             # Read-only status 
 ./install.sh --update       # Update submenu
 ./install.sh --help         # Usage
 ```
