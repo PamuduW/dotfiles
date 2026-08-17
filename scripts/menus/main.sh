@@ -50,10 +50,14 @@ _main_menu_run_direct_action() {
 	ui_clear
 	"$action_fn" || rc=$?
 	if ((rc != 0)); then
-		printf '%sAction failed (exit %d).%s\n' "${C_RED:-}" "$rc" "${C_RESET:-}" >&2
+		if ((rc == 2)); then
+			DOTFILES_EXIT_AFTER_REPOSITORY_UPDATE=true
+			rc=0
+		else
+			printf '%sAction failed (exit %d).%s\n' "${C_RED:-}" "$rc" "${C_RESET:-}" >&2
+		fi
 	fi
-	if [[ "${DOTFILES_UPDATE_RELAUNCHED:-false}" == true ]]; then
-		DOTFILES_UPDATE_RELAUNCHED=false
+	if [[ "${DOTFILES_EXIT_AFTER_REPOSITORY_UPDATE:-false}" == true ]]; then
 		skip_pause=true
 	fi
 	[[ "$skip_pause" == true ]] || ui_pause
@@ -110,6 +114,7 @@ _main_menu_dispatch() {
 main_menu_loop() {
 	local choice=''
 	local -a labels keys
+	DOTFILES_EXIT_AFTER_REPOSITORY_UPDATE=false
 	labels=("${_main_menu_labels[@]}")
 	keys=("${_main_menu_keys[@]}")
 
@@ -131,5 +136,6 @@ main_menu_loop() {
 		fi
 
 		_main_menu_dispatch "$choice" || true
+		[[ "${DOTFILES_EXIT_AFTER_REPOSITORY_UPDATE:-false}" == true ]] && return 0
 	done
 }

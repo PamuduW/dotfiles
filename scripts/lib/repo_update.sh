@@ -350,7 +350,7 @@ repo_update_apply() {
 	behind)
 		if pull_output="$(git -C "${result_ref[dir]}" pull --ff-only 2>&1)"; then
 			[[ -n "$pull_output" ]] && _repo_update_print_fetch_output "$pull_output"
-			result_ref[outcome]=relaunch_required
+			result_ref[outcome]=repository_changed
 		else
 			[[ -n "$pull_output" ]] && printf '%s\n' "$pull_output" >&2
 			printf 'Fast-forward pull failed; resolve the repository manually.\n' >&2
@@ -369,6 +369,9 @@ repo_update_apply() {
 # Complete the single-repository workflow. Every caller gets the same
 # preflight, report, approval, pull, and stopped-state presentation.
 repo_update_run() {
+	# Contract: 0 means callers may continue, 1 means the update stopped, and
+	# 2 means a fast-forward changed this checkout and all higher-level work
+	# must stop so the user can rerun from the new repository state.
 	local repo_dir="$1" repo_label="$2" confirm_fn="$3" result_name="$4" expected_slug="${5:-}"
 	repo_update_preflight "$repo_dir" "$repo_label" "$result_name" "$expected_slug"
 	local -n result_ref="$result_name"
@@ -382,15 +385,6 @@ repo_update_run() {
 	if ! repo_update_apply "$result_name"; then
 		return 1
 	fi
+	[[ "${result_ref[outcome]}" == repository_changed ]] && return 2
 	return 0
-}
-
-repo_update_wait_for_reload() {
-	local answer=''
-	tty_available || return 0
-	read_tty_line answer 'Press Enter to reload the updated Dotfiles menu: ' || true
-}
-
-repo_update_relaunch() {
-	exec "$@"
 }

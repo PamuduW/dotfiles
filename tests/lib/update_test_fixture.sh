@@ -59,7 +59,9 @@ run_gate() {
 	TEST_REPO_STATE="$1" TEST_CONFIRM="${2:-no}"
 	export TEST_REPO_STATE TEST_CONFIRM
 	TEST_REPO_RESULT=()
-	repo_update_run "$TEST_HARNESS_ROOT/repo" 'dotfiles repo' confirm_state TEST_REPO_RESULT 'PamuduW/dotfiles' >/dev/null 2>&1 || true
+	repo_update_run "$TEST_HARNESS_ROOT/repo" 'dotfiles repo' confirm_state TEST_REPO_RESULT 'PamuduW/dotfiles' >/dev/null 2>&1
+	TEST_REPO_RC=$?
+	return 0
 }
 pull_count() { grep -c $'git\t-C\t.*\tpull\t--ff-only$' "$TEST_COMMAND_LOG" || true; }
 
@@ -69,4 +71,3 @@ DOTFILES_SOURCE_ONLY=1 source "$REPO_DIR/bin/bin/dotfiles" >/dev/null
 source "$REPO_DIR/scripts/lib/menu_runner.sh"
 source "$REPO_DIR/scripts/menus/initial_setup.sh"
 source "$REPO_DIR/scripts/menus/update.sh"
-declare -F repo_update_relaunch >/dev/null || repo_update_relaunch() { return 1; }

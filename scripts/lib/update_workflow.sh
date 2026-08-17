@@ -218,7 +218,7 @@ _run_update_downstream() {
 }
 
 cmd_update() {
-	local upgrade_all=false arg outcome
+	local upgrade_all=false arg repo_rc=0
 	local -A repo_result=()
 	for arg in "$@"; do
 		case "$arg" in
@@ -235,26 +235,12 @@ cmd_update() {
 		esac
 	done
 
-	if ! repo_update_run "$DOTFILES_DIR" 'dotfiles repo' _dotfiles_confirm_repo_update repo_result 'PamuduW/dotfiles'; then
-		return 1
-	fi
-	outcome="${repo_result[outcome]}"
-	case "$outcome" in
-	relaunch_required)
-		_msg "${C_GREEN}Repository fast-forward succeeded; the old update process will not continue.${C_RESET}"
-		repo_update_wait_for_reload
-		if [[ -n "${DOTFILES_RELAUNCH_MARKER:-}" ]]; then
-			: >"$DOTFILES_RELAUNCH_MARKER" 2>/dev/null || true
-		fi
-		repo_update_relaunch "$DOTFILES_DIR/install.sh"
-		return $?
-		;;
-	current | ahead_continue) ;;
-	*)
-		_err "Unknown repository update outcome: $outcome"
-		return 1
-		;;
-	esac
+	repo_update_run "$DOTFILES_DIR" 'dotfiles repo' _dotfiles_confirm_repo_update repo_result 'PamuduW/dotfiles' || repo_rc=$?
+	[[ "$repo_rc" -eq 2 ]] && {
+		_msg "${C_GREEN}Repository fast-forward succeeded; update stopped. Run dotfiles update again when ready.${C_RESET}"
+		return 2
+	}
+	[[ "$repo_rc" -eq 0 ]] || return 1
 
 	print_report_table repo_result
 	if ! _dotfiles_confirm "Proceed with apt refresh and downstream updates?"; then

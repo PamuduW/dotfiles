@@ -46,12 +46,9 @@ test_repository_approval_uses_explicit_event_contract() (
 	[[ "${state[approved]}" == 1 ]]
 )
 
-test_reload_wait_is_noop_without_a_tty() (
-	DOTFILES_TTY_INPUT="$TEST_HARNESS_ROOT/missing-input"
-	DOTFILES_TTY_OUTPUT="$TEST_HARNESS_ROOT/missing-output/tty"
-	local errors="$TEST_HARNESS_ROOT/no-tty-errors"
-	repo_update_wait_for_reload 2>"$errors"
-	[[ ! -s "$errors" ]]
+test_repository_update_has_no_reload_hook() (
+	! declare -F repo_update_wait_for_reload >/dev/null 2>&1
+	! declare -F repo_update_relaunch >/dev/null 2>&1
 )
 
 test_terminal_geometry_is_quiet_without_a_tty() (
@@ -469,7 +466,7 @@ test_installer_help_exits_before_log_initialization() (
 )
 
 check 'repository approval uses explicit event and prompt arguments' test_repository_approval_uses_explicit_event_contract
-check 'repository reload wait is safe without a controlling TTY' test_reload_wait_is_noop_without_a_tty
+check 'repository update has no reload hook' test_repository_update_has_no_reload_hook
 check 'terminal geometry falls back quietly without a controlling TTY' test_terminal_geometry_is_quiet_without_a_tty
 check 'non-interactive install runs the repository gate before setup' test_noninteractive_install_runs_repository_gate_first
 check 'non-interactive install propagates component installation failure' test_noninteractive_install_propagates_install_failure

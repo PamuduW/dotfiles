@@ -73,7 +73,7 @@ test_only_confirmed_behind_pulls() {
 	[[ "${TEST_REPO_RESULT[outcome]}" == stopped && "$(pull_count)" -eq 0 ]] || return 1
 	test_harness_reset_logs
 	run_gate behind yes
-	[[ "${TEST_REPO_RESULT[outcome]}" == relaunch_required && "$(pull_count)" -eq 1 ]]
+	[[ "${TEST_REPO_RESULT[outcome]}" == repository_changed && "$TEST_REPO_RC" -eq 2 && "$(pull_count)" -eq 1 ]]
 }
 
 test_blocked_states_never_pull() {
@@ -111,19 +111,12 @@ test_ahead_requires_continue() {
 	[[ "${TEST_REPO_RESULT[outcome]}" == ahead_continue && "$(pull_count)" -eq 0 ]]
 }
 
-test_success_requires_relaunch_without_old_work() {
+test_success_returns_changed_repository_without_old_work() {
 	test_harness_reset_logs
 	run_gate behind yes
-	[[ "${TEST_REPO_RESULT[outcome]}" == relaunch_required ]] || return 1
+	[[ "${TEST_REPO_RESULT[outcome]}" == repository_changed && "$TEST_REPO_RC" -eq 2 ]] || return 1
 	! grep -Eq $'^(apt-get|sudo|stow|curl|npx)\t' "$TEST_COMMAND_LOG"
 }
-
-test_relaunch_is_injectable() (
-	local called="$TEST_HARNESS_ROOT/relaunch.called"
-	repo_update_relaunch() { printf '%s\n' "$*" >"$called"; }
-	repo_update_relaunch dotfiles update --all
-	grep -Fqx 'dotfiles update --all' "$called" && [[ ! -e "$TEST_FAKE_BIN/exec" ]]
-)
 
 test_cmd_update_executes_outcome_contract() (
 	local events="$TEST_HARNESS_ROOT/cmd-update.events" replies=''
@@ -132,7 +125,11 @@ test_cmd_update_executes_outcome_contract() (
 		local -n result_ref="$4"
 		printf 'gate\n' >>"$events"
 		result_ref=([outcome]="${TEST_GATE_OUTCOME:?}")
-		[[ "$TEST_GATE_OUTCOME" != stopped ]]
+		case "$TEST_GATE_OUTCOME" in
+		stopped) return 1 ;;
+		repository_changed) return 2 ;;
+		esac
+		return 0
 	}
 	_dotfiles_confirm() {
 		local answer="${replies%% *}"
@@ -143,8 +140,6 @@ test_cmd_update_executes_outcome_contract() (
 	print_report_table() { printf 'report\n' >>"$events"; }
 	print_upgrade_summary() { printf 'summary:%s\n' "$1" >>"$events"; }
 	_run_update_downstream() { printf 'downstream:%s\n' "$1" >>"$events"; }
-	repo_update_relaunch() { printf 'relaunch:%s\n' "$*" >>"$events"; }
-	repo_update_wait_for_reload() { printf 'wait\n' >>"$events"; }
 
 	TEST_GATE_OUTCOME=stopped
 	if cmd_update >/dev/null 2>&1; then return 1; fi
@@ -176,11 +171,15 @@ test_cmd_update_executes_outcome_contract() (
 	[[ "$(sed -n '3p' "$events")" == confirm:* && "$(sed -n '4p' "$events")" == downstream:true && "$(sed -n '5p' "$events")" == summary:true ]] || return 1
 
 	: >"$events"
-	TEST_GATE_OUTCOME=relaunch_required
+	TEST_GATE_OUTCOME=repository_changed
 	replies=yes
-	cmd_update --all >/dev/null || return 1
-	grep -Fq "wait" "$events" || return 1
-	grep -Fq "relaunch:${DOTFILES_DIR}/install.sh" "$events" || return 1
+	set +e
+	cmd_update --all >/dev/null
+	local changed_rc=$?
+	set -e
+	[[ "$changed_rc" -eq 2 ]] || return 1
+	! grep -Fq "wait" "$events" || return 1
+	! grep -Fq "relaunch" "$events" || return 1
 	! grep -Fq downstream "$events"
 )
 
@@ -266,9 +265,8 @@ expect_success 'blocked declined and failed states never reach downstream' test_
 expect_success 'non-origin upstream stops before fetch or pull' test_non_origin_upstream_stops_before_fetch
 expect_success 'untrusted repository origin stops before fetch or pull' test_untrusted_origin_stops_before_fetch
 expect_success 'ahead never pulls and requires explicit continue confirmation' test_ahead_requires_continue
-expect_success 'successful pull requires relaunch and stops old-process work' test_success_requires_relaunch_without_old_work
-expect_success 'relaunch wrapper is injectable without a fake exec command' test_relaunch_is_injectable
-expect_success 'cmd_update executes stopped current ahead and relaunch outcomes' test_cmd_update_executes_outcome_contract
+expect_success 'successful pull reports a changed repository and stops old-process work' test_success_returns_changed_repository_without_old_work
+expect_success 'cmd_update executes one repository update exit contract' test_cmd_update_executes_outcome_contract
 expect_success 'cmd_update reports dirty paths and verified remote state before stopping' test_cmd_update_reports_dirty_paths_and_remote_state_before_stopping
 expect_success 'declined repository pulls print one report before the pause boundary' test_declined_repository_pull_prints_one_report_and_one_pause_boundary
 expect_success 'declined install pulls use shared failure output' test_declined_install_repository_pull_uses_shared_failure_output

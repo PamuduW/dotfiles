@@ -148,9 +148,7 @@ test_install_repo_gate_uses_repository_update_topic() (
 	[[ "$output" == *$'\033[33m1 commit(s) behind\033[0m'* && "$output" == *$'\033[36mpull --ff-only\033[0m'* ]]
 )
 
-test_install_repo_gate_relaunches_after_fast_forward() (
-	local calls="$TEST_HARNESS_ROOT/install-relaunch.calls"
-	: >"$calls"
+test_install_repo_gate_returns_changed_repository_after_fast_forward() (
 	DOTFILES_DIR=/tmp/dotfiles-test-repo
 	repo_update_preflight() {
 		local -n result_ref="$3"
@@ -162,12 +160,13 @@ test_install_repo_gate_relaunches_after_fast_forward() (
 	}
 	repo_update_apply() {
 		local -n result_ref="$1"
-		result_ref[outcome]=relaunch_required
+		result_ref[outcome]=repository_changed
 	}
-	repo_update_wait_for_reload() { printf 'wait\n' >>"$calls"; }
-	repo_update_relaunch() { printf '%s\n' "$*" >>"$calls"; }
-	_dotfiles_install_repo_gate || return 1
-	[[ "$(<"$calls")" == $'wait\n/tmp/dotfiles-test-repo/install.sh' ]]
+	set +e
+	_dotfiles_install_repo_gate
+	local rc=$?
+	set -e
+	[[ "$rc" -eq 2 ]]
 )
 
 test_required_breadcrumb_literals() {
@@ -217,18 +216,29 @@ test_failed_action_pauses_once() {
 	[[ "$pauses" -eq 1 ]]
 }
 
-test_relaunched_update_skips_stale_parent_pause() (
+test_changed_repository_skips_pause_and_marks_parent_to_quit() (
 	local pauses=0
 	run_update_flow() {
-		DOTFILES_UPDATE_RELAUNCHED=true
-		return 0
+		return 2
 	}
 	ui_clear() { :; }
 	ui_pause() { pauses=$((pauses + 1)); }
 	_main_menu_run_direct_action run_update_flow || return 1
-	[[ "$pauses" -eq 0 ]]
+	[[ "$pauses" -eq 0 && "${DOTFILES_EXIT_AFTER_REPOSITORY_UPDATE:-false}" == true ]]
 )
 
+test_changed_repository_exits_dotfiles_menu_without_redraw() (
+	local calls="$TEST_HARNESS_ROOT/changed-repository-menu.calls"
+	: >"$calls"
+	menu_simple_run() {
+		printf x >>"$calls"
+		[[ "$(wc -c <"$calls")" -eq 1 ]] || return 1
+		printf '%s\n' update
+	}
+	_main_menu_dispatch() { DOTFILES_EXIT_AFTER_REPOSITORY_UPDATE=true; }
+	main_menu_loop || return 1
+	[[ "$(wc -c <"$calls")" -eq 1 ]]
+)
 test_deferred_actions_are_safe_when_undefined() {
 	local pauses=0 action output output_file="$TEST_HARNESS_ROOT/deferred.output"
 	unset -f github_token_menu libraries_menu 2>/dev/null || true
@@ -274,11 +284,12 @@ expect_success 'status, install, and update dispatch directly' test_direct_statu
 expect_success 'install gates the repository before opening setup' test_install_dispatch_gates_repository_before_menu
 expect_success 'install blocks when the repository gate is not ready' test_install_dispatch_blocks_when_repository_is_not_ready
 expect_success 'install repository gate shows the update topic' test_install_repo_gate_uses_repository_update_topic
-expect_success 'install relaunches after repository fast-forward' test_install_repo_gate_relaunches_after_fast_forward
+expect_success 'install returns the changed-repository exit after fast-forward' test_install_repo_gate_returns_changed_repository_after_fast_forward
 expect_success 'status, picker, and plan breadcrumbs are exact' test_required_breadcrumb_literals
 expect_success 'root cancel redraws and explicit Quit returns cleanly' test_cancel_redraws_and_quit_returns
 expect_success 'failed direct action pauses exactly once and returns failure' test_failed_action_pauses_once
-expect_success 're-launched updates skip the stale parent pause' test_relaunched_update_skips_stale_parent_pause
+expect_success 'changed-repository updates skip pause and mark the parent to quit' test_changed_repository_skips_pause_and_marks_parent_to_quit
+expect_success 'repository changes exit the Dotfiles menu without a redraw' test_changed_repository_exits_dotfiles_menu_without_redraw
 expect_success 'undefined deferred actions are unavailable and non-mutating' test_deferred_actions_are_safe_when_undefined
 expect_success 'defined deferred hooks are dispatched without root rewiring' test_deferred_actions_call_defined_hooks
 

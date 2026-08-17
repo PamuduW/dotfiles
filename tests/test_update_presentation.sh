@@ -153,19 +153,22 @@ FAKE
 	! declare -F update_menu >/dev/null 2>&1
 )
 
-test_tui_detects_a_relaunched_update_child() (
-	local fake_dotfiles="$TEST_HARNESS_ROOT/fake-relaunch-dotfiles"
-	local tty_output="$TEST_HARNESS_ROOT/relaunch-update.tty"
+test_tui_propagates_changed_repository_from_update_child() (
+	local fake_dotfiles="$TEST_HARNESS_ROOT/fake-changed-dotfiles"
+	local tty_output="$TEST_HARNESS_ROOT/changed-update.tty"
 	cat >"$fake_dotfiles" <<'FAKE'
 #!/usr/bin/env bash
-: >"${DOTFILES_RELAUNCH_MARKER:?}"
+exit 2
 FAKE
 	chmod 700 "$fake_dotfiles"
 	export DOTFILES_TTY_PATH="$tty_output"
 	resolve_dotfiles_cmd() { printf '%s\n' "$fake_dotfiles"; }
 	ui_print_header() { :; }
-	run_update_flow || return 1
-	[[ "${DOTFILES_UPDATE_RELAUNCHED:-false}" == true ]]
+	set +e
+	run_update_flow
+	local rc=$?
+	set -e
+	[[ "$rc" -eq 2 ]]
 )
 
 test_stopped_paths_have_no_downstream() {
@@ -291,7 +294,7 @@ expect_success 'repository fetch notices color each line independently' test_rep
 expect_success 'update apply uses a high-level Upgrade heading without opt-in plan noise' test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan
 expect_success 'upgrade summary marks the repo gate as handled' test_upgrade_summary_marks_repo_gate_as_handled
 expect_success 'TUI runs shared update directly without a submenu' test_tui_runs_shared_update_without_submenu
-expect_success 'TUI detects when the update child relaunched the installer' test_tui_detects_a_relaunched_update_child
+expect_success 'TUI propagates the changed-repository exit from the update child' test_tui_propagates_changed_repository_from_update_child
 expect_success 'stopped paths perform no apt tool network or stow work' test_stopped_paths_have_no_downstream
 expect_success 'dotfiles status is strictly local and labels freshness unchecked' test_status_is_strictly_local
 expect_success 'root TUI status omits unchecked apt and repository freshness locally' test_root_tui_status_omits_unchecked_freshness_without_network

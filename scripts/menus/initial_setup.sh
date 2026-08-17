@@ -44,26 +44,20 @@ _dotfiles_install_repo_decision() {
 }
 
 _dotfiles_install_repo_gate() {
-	local outcome
+	local repo_rc=0
 	local -A result=()
 
 	if ! declare -F repo_update_run >/dev/null || [[ -z "${DOTFILES_DIR:-}" ]]; then
 		return 0
 	fi
 
-	repo_update_run "$DOTFILES_DIR" 'dotfiles repo' _dotfiles_install_repo_decision result 'PamuduW/dotfiles' || return 1
-	outcome="${result[outcome]}"
-	case "$outcome" in
-	current | ahead_continue) return 0 ;;
-	relaunch_required)
-		printf '%sRepository fast-forward succeeded; reloading Dotfiles.%s\n' \
+	repo_update_run "$DOTFILES_DIR" 'dotfiles repo' _dotfiles_install_repo_decision result 'PamuduW/dotfiles' || repo_rc=$?
+	[[ "$repo_rc" -eq 2 ]] && {
+		printf '%sRepository fast-forward succeeded; install stopped. Run setup again when ready.%s\n' \
 			"${C_GREEN:-}" "${C_RESET:-}"
-		repo_update_wait_for_reload
-		repo_update_relaunch "$DOTFILES_DIR/install.sh"
-		return $?
-		;;
-	*) return 1 ;;
-	esac
+		return 2
+	}
+	[[ "$repo_rc" -eq 0 ]]
 }
 
 run_install_action() {
@@ -72,7 +66,10 @@ run_install_action() {
 	# A declined or blocked repository check is a handled menu outcome. The
 	# shared gate already printed the reason; return to the menu without adding a
 	# second generic "Action failed" message.
-	_dotfiles_install_repo_gate || return 0
+	local repo_rc=0
+	_dotfiles_install_repo_gate || repo_rc=$?
+	((repo_rc == 2)) && return 2
+	((repo_rc != 0)) && return 0
 	run_initial_setup_flow
 }
 
@@ -101,7 +98,7 @@ run_initial_setup_flow() {
 	local tty_out
 	declare -F start_action_log >/dev/null 2>&1 && start_action_log
 	if [[ "$DOTFILES_INTERACTIVE_TTY" != true ]]; then
-		_dotfiles_install_repo_gate || return 1
+		_dotfiles_install_repo_gate || return $?
 		apply_dotfiles_components_env
 		_apply_noninteractive_git_defaults
 		_run_setup_header
