@@ -344,7 +344,6 @@ dotfiles_command_print_details() {
 			"${DOTFILES_SURFACE_DESCRIPTION[$key]} Location: ${DOTFILES_SURFACE_LOCATION[$key]}" "$cols"
 	done
 
-	_dotfiles_command_print_section 'Integrations'
 }
 
 dotfiles_command_print_table() {

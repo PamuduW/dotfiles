@@ -180,7 +180,6 @@ test_command_details_use_orange_sections_and_yellow_topics() {
 	[[ "$colored_output" == *"${C_BOLD}${C_YELLOW}Command: menu${C_RESET}"* ]] || return 1
 	[[ "$colored_output" == *"${C_BOLD}${C_ORANGE}=== Configuration and environment ===${C_RESET}"* ]] || return 1
 	[[ "$colored_output" == *"${C_BOLD}${C_ORANGE}=== System surfaces ===${C_RESET}"* ]] || return 1
-	[[ "$colored_output" == *"${C_BOLD}${C_ORANGE}=== Integrations ===${C_RESET}"* ]] || return 1
 	NO_COLOR=1
 	ui_init_colors
 	output="$(dotfiles_command_print_details 100)"
