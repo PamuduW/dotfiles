@@ -46,17 +46,21 @@ _dotfiles_install_repo_decision() {
 _dotfiles_install_repo_gate() {
 	local repo_rc=0
 	local -A result=()
+	DOTFILES_REPOSITORY_UPDATE_DECLINED=false
 
 	if ! declare -F repo_update_run >/dev/null || [[ -z "${DOTFILES_DIR:-}" ]]; then
 		return 0
 	fi
 
 	repo_update_run "$DOTFILES_DIR" 'dotfiles repo' _dotfiles_install_repo_decision result 'PamuduW/dotfiles' || repo_rc=$?
-	[[ "$repo_rc" -eq 2 ]] && {
-		printf '%sRepository fast-forward succeeded; install stopped. Run setup again when ready.%s\n' \
-			"${C_GREEN:-}" "${C_RESET:-}"
+	if ((repo_rc == 2)); then
+		repo_update_print_changed
 		return 2
-	}
+	fi
+	if repo_update_is_declined result; then
+		DOTFILES_REPOSITORY_UPDATE_DECLINED=true
+		return 0
+	fi
 	[[ "$repo_rc" -eq 0 ]]
 }
 
@@ -70,6 +74,7 @@ run_install_action() {
 	_dotfiles_install_repo_gate || repo_rc=$?
 	((repo_rc == 2)) && return 2
 	((repo_rc != 0)) && return 0
+	[[ "${DOTFILES_REPOSITORY_UPDATE_DECLINED:-false}" == true ]] && return 0
 	run_initial_setup_flow
 }
 
@@ -99,6 +104,7 @@ run_initial_setup_flow() {
 	declare -F start_action_log >/dev/null 2>&1 && start_action_log
 	if [[ "$DOTFILES_INTERACTIVE_TTY" != true ]]; then
 		_dotfiles_install_repo_gate || return $?
+		[[ "${DOTFILES_REPOSITORY_UPDATE_DECLINED:-false}" == true ]] && return 0
 		apply_dotfiles_components_env
 		_apply_noninteractive_git_defaults
 		_run_setup_header

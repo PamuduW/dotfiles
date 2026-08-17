@@ -388,3 +388,17 @@ repo_update_run() {
 	[[ "${result_ref[outcome]}" == repository_changed ]] && return 2
 	return 0
 }
+
+repo_update_is_declined() {
+	local result_name="$1"
+	local -n result_ref="$result_name"
+	case "${result_ref[reason]:-unknown}" in
+	behind-declined | ahead-declined) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+repo_update_print_changed() {
+	printf '%sRepository fast-forward succeeded%s\n\n' "${C_GREEN:-}" "${C_RESET:-}"
+	printf 'Run setup again when ready.\n'
+}

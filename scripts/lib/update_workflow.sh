@@ -236,10 +236,11 @@ cmd_update() {
 	done
 
 	repo_update_run "$DOTFILES_DIR" 'dotfiles repo' _dotfiles_confirm_repo_update repo_result 'PamuduW/dotfiles' || repo_rc=$?
-	[[ "$repo_rc" -eq 2 ]] && {
-		_msg "${C_GREEN}Repository fast-forward succeeded; update stopped. Run dotfiles update again when ready.${C_RESET}"
+	if ((repo_rc == 2)); then
+		repo_update_print_changed
 		return 2
-	}
+	fi
+	repo_update_is_declined repo_result && return 0
 	[[ "$repo_rc" -eq 0 ]] || return 1
 
 	print_report_table repo_result

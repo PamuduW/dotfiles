@@ -163,10 +163,11 @@ test_install_repo_gate_returns_changed_repository_after_fast_forward() (
 		result_ref[outcome]=repository_changed
 	}
 	set +e
-	_dotfiles_install_repo_gate
+	local output
+	output="$(_dotfiles_install_repo_gate 2>&1)"
 	local rc=$?
 	set -e
-	[[ "$rc" -eq 2 ]]
+	[[ "$rc" -eq 2 && "$output" == *'Repository fast-forward succeeded'* && "$output" == *'Run setup again when ready.'* ]]
 )
 
 test_required_breadcrumb_literals() {

@@ -174,13 +174,32 @@ test_cmd_update_executes_outcome_contract() (
 	TEST_GATE_OUTCOME=repository_changed
 	replies=yes
 	set +e
-	cmd_update --all >/dev/null
+	local changed_output
+	changed_output="$(cmd_update --all 2>&1)"
 	local changed_rc=$?
 	set -e
 	[[ "$changed_rc" -eq 2 ]] || return 1
+	[[ "$changed_output" == *'Repository fast-forward succeeded'* ]] || return 1
+	[[ "$changed_output" == *'Run setup again when ready.'* ]] || return 1
 	! grep -Fq "wait" "$events" || return 1
 	! grep -Fq "relaunch" "$events" || return 1
 	! grep -Fq downstream "$events"
+)
+
+test_cmd_update_declined_pull_is_handled_without_failure() (
+	local events="$TEST_HARNESS_ROOT/cmd-update-declined.events"
+	: >"$events"
+	repo_update_run() {
+		local -n result_ref="$4"
+		result_ref=([outcome]=stopped [reason]=behind-declined)
+		printf 'gate\n' >>"$events"
+		return 1
+	}
+	set +e
+	cmd_update --all >/dev/null 2>&1
+	local declined_rc=$?
+	set -e
+	[[ "$declined_rc" -eq 0 && "$(<"$events")" == gate ]]
 )
 
 test_cmd_update_reports_dirty_paths_and_remote_state_before_stopping() (
@@ -217,7 +236,7 @@ test_declined_repository_pull_prints_one_report_and_one_pause_boundary() (
 	rc=$?
 	set -e
 	clean_output="$(sed -E $'s/\033\\[[0-9;]*m//g' <<<"$output")"
-	[[ "$rc" -ne 0 ]] || return 1
+	[[ "$rc" -eq 0 ]] || return 1
 	[[ "$(grep -c '^Repository update$' <<<"$clean_output")" -eq 1 ]] || return 1
 	[[ "$clean_output" == *'Pull 3 commit(s) with --ff-only? [y/N]: '*$'\n\n''Pull declined; update stopped.'* ]] || return 1
 	[[ "$output" == *$'\033[31mPull declined; update stopped.\033[0m'* ]] || return 1
@@ -225,7 +244,7 @@ test_declined_repository_pull_prints_one_report_and_one_pause_boundary() (
 )
 
 test_declined_install_repository_pull_uses_shared_failure_output() (
-	local output clean_output rc
+	local output clean_output rc output_file="$TEST_HARNESS_ROOT/declined-install.output"
 	TEST_REPO_STATE=behind
 	export TEST_REPO_STATE
 	ui_confirm_yes_no() {
@@ -233,11 +252,13 @@ test_declined_install_repository_pull_uses_shared_failure_output() (
 		return 1
 	}
 	set +e
-	output="$(_dotfiles_install_repo_gate 2>&1)"
+	_dotfiles_install_repo_gate >"$output_file" 2>&1
 	rc=$?
 	set -e
+	output="$(<"$output_file")"
 	clean_output="$(sed -E $'s/\033\\[[0-9;]*m//g' <<<"$output")"
-	[[ "$rc" -ne 0 ]] || return 1
+	[[ "$rc" -eq 0 ]] || return 1
+	[[ "$DOTFILES_REPOSITORY_UPDATE_DECLINED" == true ]] || return 1
 	[[ "$(grep -c '^Repository update$' <<<"$clean_output")" -eq 1 ]] || return 1
 	[[ "$clean_output" == *'Pull 3 commit(s) with --ff-only? [y/N]: '*$'\n\n''Pull declined; update stopped.'* ]] || return 1
 	[[ "$clean_output" != *'Install stopped; the Dotfiles repository is not ready for setup.'* ]] || return 1
@@ -267,6 +288,7 @@ expect_success 'untrusted repository origin stops before fetch or pull' test_unt
 expect_success 'ahead never pulls and requires explicit continue confirmation' test_ahead_requires_continue
 expect_success 'successful pull reports a changed repository and stops old-process work' test_success_returns_changed_repository_without_old_work
 expect_success 'cmd_update executes one repository update exit contract' test_cmd_update_executes_outcome_contract
+expect_success 'cmd_update handles declined pulls without a failure status' test_cmd_update_declined_pull_is_handled_without_failure
 expect_success 'cmd_update reports dirty paths and verified remote state before stopping' test_cmd_update_reports_dirty_paths_and_remote_state_before_stopping
 expect_success 'declined repository pulls print one report before the pause boundary' test_declined_repository_pull_prints_one_report_and_one_pause_boundary
 expect_success 'declined install pulls use shared failure output' test_declined_install_repository_pull_uses_shared_failure_output
