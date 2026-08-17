@@ -42,11 +42,10 @@ test_exact_root_contract() {
 		"Update"
 		"GitHub Token Config"
 		"Libraries"
-		"Agentbot"
 		"Quit"
 	)
 	# shellcheck disable=SC2034  # Read through a nameref in assert_array_equals.
-	local expected_keys=(status install update github_token libraries agentbot quit)
+	local expected_keys=(status install update github_token libraries quit)
 	assert_array_equals _main_menu_labels expected_labels || return 1
 	assert_array_equals _main_menu_keys expected_keys || return 1
 	local i description
@@ -269,79 +268,7 @@ test_libraries_menu_contains_command_and_package_libs() {
 	[[ "$(<"$capture")" == $'Libraries|Dotfiles › Libraries|Command Lib Package Lib|command_lib package_lib\nUp/Down navigate   Enter confirm   q back' ]]
 }
 
-test_agentbot_is_deterministic_unavailable_and_non_mutating() {
-	local pauses=0 legacy_calls=0 relaunch_calls=0 output
-	local protected_relative=".dotfiles-task04-agentbot-${BASHPID}"
-	local protected="$ORIGINAL_HOME/$protected_relative"
-	[[ ! -e "$protected" ]] || return 1
-	test_harness_protect_original_path "$protected_relative"
-	test_harness_reset_logs
-	test_harness_configure_fake sibling-install 88 '' 'must not run'
-	test_harness_create_fake_sibling agent_bootstrap >/dev/null
-	# shellcheck disable=SC2317  # Must remain unreachable in this safety test.
-	agents_menu() { legacy_calls=$((legacy_calls + 1)); }
-	# shellcheck disable=SC2317
-	test_agentbot_relaunch() { relaunch_calls=$((relaunch_calls + 1)); }
-	# shellcheck disable=SC2034  # Consumed indirectly by the harness relaunch seam.
-	local TEST_RELAUNCH_WRAPPER=test_agentbot_relaunch
-	ui_pause() { pauses=$((pauses + 1)); }
-	_main_menu_dispatch agentbot >"$TEST_HARNESS_ROOT/agentbot.output" || return 1
-	output="$(<"$TEST_HARNESS_ROOT/agentbot.output")"
-	[[ "$output" == *'Agentbot is unavailable until the sibling bridge is installed.'* ]] || return 1
-	[[ "$pauses" -eq 1 ]] || return 1
-	[[ "$legacy_calls" -eq 0 && "$relaunch_calls" -eq 0 ]] || return 1
-	[[ ! -s "$TEST_COMMAND_LOG" && ! -s "$TEST_URL_LOG" ]] || return 1
-	[[ ! -e "$protected" ]]
-}
-
-test_agentbot_failure_pauses_before_redraw() (
-	local pauses=0 rc
-	dotfiles_launch_agentbot() { return 23; }
-	ui_pause() { pauses=$((pauses + 1)); }
-
-	set +e
-	_main_menu_dispatch agentbot >/dev/null 2>&1
-	rc=$?
-	set -e
-	[[ "$rc" -eq 23 && "$pauses" -eq 1 ]]
-)
-
-test_agentbot_success_exits_outer_menu_loop() (
-	local calls_file="$TEST_HARNESS_ROOT/agentbot-exit.calls"
-	: >"$calls_file"
-	dotfiles_launch_agentbot() {
-		DOTFILES_AGENTBOT_EXITED=true
-		return 0
-	}
-	menu_simple_run() {
-		printf 'menu\n' >>"$calls_file"
-		if [[ "$(wc -l <"$calls_file")" -eq 1 ]]; then
-			printf '%s\n' agentbot
-		else
-			printf '%s\n' quit
-		fi
-	}
-
-	main_menu_loop
-	[[ "$(wc -l <"$calls_file")" -eq 1 ]]
-)
-
-test_caller_guard_hides_agentbot_entry() {
-	local captured="$TEST_HARNESS_ROOT/caller-guard.captured"
-	SETUP_CALLER=agentbot
-	export SETUP_CALLER
-	menu_simple_run() {
-		printf '%s\n' "${MENU_SIMPLE_LABELS[*]}" >"$captured"
-		MENU_SIMPLE_RESULT=quit
-		printf 'quit\n'
-		return 0
-	}
-	main_menu_loop
-	unset SETUP_CALLER
-	! grep -Fq 'Agentbot' "$captured"
-}
-
-expect_success 'root labels and keys match the exact eight-action contract' test_exact_root_contract
+expect_success 'root labels and keys match the standalone contract' test_exact_root_contract
 expect_success 'root title, breadcrumb, and hint are normalized' test_root_breadcrumb_is_dotfiles
 expect_success 'status, install, and update dispatch directly' test_direct_status_install_update_dispatch
 expect_success 'install gates the repository before opening setup' test_install_dispatch_gates_repository_before_menu
@@ -354,9 +281,5 @@ expect_success 'failed direct action pauses exactly once and returns failure' te
 expect_success 're-launched updates skip the stale parent pause' test_relaunched_update_skips_stale_parent_pause
 expect_success 'undefined deferred actions are unavailable and non-mutating' test_deferred_actions_are_safe_when_undefined
 expect_success 'defined deferred hooks are dispatched without root rewiring' test_deferred_actions_call_defined_hooks
-expect_success 'Agentbot is deterministic unavailable and non-mutating' test_agentbot_is_deterministic_unavailable_and_non_mutating
-expect_success 'failed Agentbot launch pauses before the Dotfiles menu redraws' test_agentbot_failure_pauses_before_redraw
-expect_success 'successful Agentbot exit stops the outer Dotfiles menu loop' test_agentbot_success_exits_outer_menu_loop
-expect_success 'SETUP_CALLER=agentbot hides the reciprocal menu entry' test_caller_guard_hides_agentbot_entry
 
 finish_tests

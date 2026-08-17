@@ -4,7 +4,7 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 
 ## What you get
 
-- **Interactive boot menu** — `dotfiles` / `dotfiles menu` or `./install.sh`; loops through status, install, update, token, library, and Agentbot actions
+- **Interactive boot menu** — `dotfiles` / `dotfiles menu` or `./install.sh`; loops through status, install, update, token, and library actions
 - Custom Bash prompt: time, user@host, path, git branch + status markers, exit code
 - Cross-terminal history syncing (`history -a; history -n`) with 10k line history
 - Modern CLI tools: `eza`, `fzf` (Ctrl+R/Ctrl+T/Alt+C), `zoxide`, `ripgrep`, `fd`
@@ -64,18 +64,6 @@ chmod +x install.sh bin/bin/ex bin/bin/clip bin/bin/dotfiles
 ./install.sh
 ```
 
-### agent_bootstrap sibling path
-
-The **Agentbot** action expects `agent_bootstrap` as a **sibling** of this repo (not a fixed `~/Dev` path):
-
-```text
-parent/
-├── dotfiles/           # this repo
-└── agent_bootstrap/    # sibling target for Agentbot 
-```
-
-Clone manually or use **Agentbot**. The bridge validates `install.sh` and the Git origin before launching. A standalone `agent_bootstrap` clone still works when launched directly.
-
 Entry points (interactive TTY):
 
 - `dotfiles` or `dotfiles menu` — boot menu (after stow)
@@ -90,7 +78,6 @@ The main menu **loops** until you choose Quit:
   Update
   GitHub Token Config
   Libraries
-  Agentbot
   Quit
 ```
 
@@ -105,7 +92,6 @@ Use arrow keys to navigate and Enter to select.
 | Update | Repo-first fetch/classify/pull gate, then confirmed downstream updates. |
 | GitHub Token Config | Configure the optional shared API token without blocking anonymous use. |
 | Libraries | Opens the read-only Command Lib and Package Lib submenu; `q` returns. |
-| Agentbot | Validate/clone the sibling `agent_bootstrap` repository, then launch it as a child. |
 | Quit | Exit |
 
 ### CLI flags
@@ -115,7 +101,6 @@ Skip the boot menu with explicit flags:
 ```bash
 dotfiles status             # Read-only status
 ./install.sh --update       # Update submenu
-./install.sh --agents       # Agentbot sibling bridge
 ./install.sh --help         # Usage
 ```
 
@@ -126,7 +111,6 @@ dotfiles status             # Read-only status
 | `./install.sh` (no flag, no TTY) | Runs the explicit non-interactive install path |
 | `dotfiles status` | Prints local status without fetch, apt refresh, or writes |
 | `./install.sh --update` | Runs update flow (non-interactive where applicable) |
-| `./install.sh --agents` | Launches Agentbot as a sibling child after validation |
 
 Set `DOTFILES_COMPONENTS` to a comma-separated list of component keys to install only those (e.g. `DOTFILES_COMPONENTS=docker,portainer,lazygit`). When git identity is enabled but not prompted, existing `git config --global` values are used.
 
@@ -175,9 +159,10 @@ missing, the component may install it through Astral's official installer.
 
 Dotfiles owns only this CLI component. It does not install Graphify's
 assistant skill or edit project `AGENTS.md`, Cursor rules, hooks, or graph data.
-After selecting the component, main Agentbot Install and Update synchronize the
-generic Agent Skills copy automatically. Direct `agentbot graphify status` and
-`agentbot graphify setup` remain available for inspection and repair.
+After installing the CLI, use Agentbot separately if you want its optional
+Graphify Agent Skills integration. Direct `agentbot graphify status` and
+`agentbot graphify setup` remain available for inspection and repair; Dotfiles
+does not launch or update Agentbot.
 
 ### Git config (credentials + submodules)
 
@@ -240,7 +225,6 @@ Global command (stowed to `~/bin/dotfiles`, on PATH like `ex` and `clip`):
 | `dotfiles status` | Local installed versions + repo state; no fetch or apt refresh |
 | `dotfiles commands` | Read-only full command, option, configuration, and integration reference |
 | `dotfiles packages` | Read-only component/package catalog |
-| `dotfiles menu --agents` | Open the Agentbot submenu through the installer |
 | `dotfiles restow` | `stow --restow bash bin readline` |
 
 The interactive **Command Lib**, `dotfiles commands`, and `dotfiles help` show
@@ -287,36 +271,6 @@ NVM does not reach the target, Dotfiles retries that exact version with
 command-local `--engine-strict --allow-remote=all` settings and verifies again.
 A still-old npm is reported as a failed step with a copyable retry command.
 Dotfiles never writes this remote-package policy to an npmrc file.
-
-### Agentbot — `agent_bootstrap`
-
-The **Agentbot** action validates or clones [`agent_bootstrap`](https://github.com/PamuduW/agent_bootstrap) as a sibling of this dotfiles repo, then launches it as a child process.
-
-This is the Phase 1 ownership boundary:
-
-- Dotfiles owns sibling-path resolution, clone-origin validation, and the
-  `--agents`/menu bridge.
-- `agent_bootstrap` owns the standalone Agentbot menu, skills workflow, global
-  outputs, and `agentbot boot` repository scaffolding.
-- `./install.sh --agents` launches the sibling `./install.sh`; with a
-  controlling TTY that opens the Agentbot menu. There is no separate
-  `./install.sh menu` command.
-
-| Action | What it does |
-| ------ | ------------ |
-| Existing sibling | Requires executable `install.sh` and an allowlisted origin |
-| Missing sibling | Shows exact URL/destination and asks before cloning |
-| Git URL aliases | Global `url.*.insteadOf` aliases are accepted only when they resolve to the exact allowlisted repository |
-| Child launch | Runs `SETUP_CALLER=dotfiles ../agent_bootstrap/install.sh`; Dotfiles exits when Agentbot exits |
-
-**Environment overrides (advanced):**
-
-| Variable | Default | Notes |
-| -------- | ------- | ----- |
-| `DOTFILES_AGENTBOT_URL` | `git@github.com:PamuduW/agent_bootstrap.git` | Clone URL; must match the allowlist |
-| `AGENTBOT_HOME` | sibling `agent_bootstrap` | Explicit validated sibling override |
-
-Clone URLs never contain credentials. `SETUP_CALLER=agentbot` makes the child hide its Dotfiles route.
 
 ## Bash prompt
 
@@ -409,7 +363,7 @@ stow -D bash bin readline
 
 ## Logging
 
-Mutating install, update, and Agentbot actions write a timestamped log to
+Mutating install and update actions write a timestamped log to
 `log/` (gitignored). Read-only menu navigation and `--help` do not initialize a
 log.
 

@@ -5,13 +5,13 @@
 - **OS:** WSL2 Ubuntu
 - **Shell:** bash
 - **Primary agents:** Cursor, Claude Code, Codex, GitHub Copilot
-- **Bootstrap home:** `$AGENT_BOOTSTRAP_HOME` (agent_bootstrap repo on PATH)
 
 Invoke skills in Agent chat by typing `/<skill-name>`.
 
 **Pick 2–4 skills per session by phase — do not load all at once.**
 
-Skills below match `skills.sources.yaml` (enabled upstreams installed via `./install.sh skills install` in the sibling `agent_bootstrap` clone).
+Skills below describe the available project methodology and are maintained
+independently of this repository's installer.
 
 ### Methodology
 
@@ -85,11 +85,11 @@ Never agree with me by default. Your first instinct should be to stress-test wha
 
 ## Project overlay
 
-Scaffolded from `agent_bootstrap/base/` via `agentbot boot`. Canonical templates stay in the sibling `agent_bootstrap` repo; this file is the live dotfiles instance with project notes below.
+This file is repository-local policy for the Dotfiles project.
 
 ## Project
 
-**Purpose:** WSL Debian/Ubuntu dotfiles — interactive installer, GNU Stow symlinks, and integration with sibling `agent_bootstrap` for skills and agent scaffolding.
+**Purpose:** WSL Debian/Ubuntu dotfiles — interactive installer and GNU Stow symlinks.
 
 **Stack:** bash (installer + TUI menus), GNU Stow (`bash/`, `bin/`, `readline/` packages), `dotfiles` CLI (`bin/bin/dotfiles`).
 
@@ -100,12 +100,10 @@ Scaffolded from `agent_bootstrap/base/` via `agentbot boot`. Canonical templates
 | `install.sh` | Shim → `scripts/install.sh` (boot menu + component install) |
 | `scripts/install.sh` | Real installer; logs to `log/` |
 | `scripts/lib/` | TUI (`menu_simple`, `report_table`), component registry |
-| `scripts/menus/` | Main, initial setup, update, and Agentbot submenus |
+| `scripts/menus/` | Main, initial setup, update, and library menus |
 | `bin/bin/dotfiles` | `update`, `restow`, `menu` |
 | `packages/packages.txt` | Apt components with `@tag` sections |
-| `bash/.bashrc` | Stowed shell config; sources `agent_bootstrap_paths.sh` |
-
-**Sibling repo:** `agent_bootstrap/` next to this repo (`../agent_bootstrap`). The Agentbot menu validates or clones the sibling, then launches its standalone menu. `AGENT_BOOTSTRAP_HOME` resolves to the sibling when `install.sh` exists.
+| `bash/.bashrc` | Stowed shell config and prompt setup |
 
 **Commands:**
 
@@ -118,7 +116,7 @@ find scripts -name '*.sh' -print0 | xargs -0 -n1 bash -n   # shell syntax check
 
 **Conventions:**
 
-- Stow only deploys `bash`, `bin`, `readline` — not agent policy files (those come from `agent_bootstrap`).
+- Stow only deploys `bash`, `bin`, and `readline`.
 - Menu changes: extend `scripts/lib/menu_*.sh` and wire in `scripts/menus/`.
 - Component installs: registry in `scripts/lib/components/`; keep probes honest for status tables.
 - Keep the `git_credential` component key stable. Its displayed label is

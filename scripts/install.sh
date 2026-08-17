@@ -23,7 +23,6 @@ Usage: $(basename "$0") [OPTIONS]
 Options:
   --initial     Open initial setup submenu (or run setup non-interactively)
   --update      Open update workflow
-  --agents      Open Agentbot workflow
   --help        Show this help and exit
 
 Without options on an interactive terminal, shows the main menu (loops until Quit).
@@ -95,8 +94,6 @@ source "$DOTFILES_DIR/scripts/menus/command_lib.sh"
 source "$DOTFILES_DIR/scripts/menus/package_lib.sh"
 # shellcheck source=scripts/menus/libraries.sh
 source "$DOTFILES_DIR/scripts/menus/libraries.sh"
-# shellcheck source=scripts/menus/agentbot.sh
-source "$DOTFILES_DIR/scripts/menus/agentbot.sh"
 
 SETUP_GIT_NAME=""
 SETUP_GIT_EMAIL=""
@@ -162,10 +159,6 @@ main() {
 			mode="update"
 			shift
 			;;
-		--agents)
-			mode="agents"
-			shift
-			;;
 		--help | -h)
 			print_usage
 			exit 0
@@ -197,9 +190,6 @@ main() {
 		;;
 	update)
 		run_update_flow
-		;;
-	agents)
-		dotfiles_launch_agentbot
 		;;
 	*)
 		printf 'unknown mode: %s\n' "$mode" >&2

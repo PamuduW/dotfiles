@@ -23,10 +23,6 @@ _main_menu_desc_fn() {
 		echo "Open the Dotfiles command and package libraries."
 		echo "Read-only references for commands and supported packages."
 		;;
-	agentbot)
-		echo "Open the standalone Agentbot setup."
-		echo "The sibling is validated before launch and cannot recurse here."
-		;;
 	quit)
 		echo "Exit the Dotfiles menu."
 		;;
@@ -39,10 +35,9 @@ _main_menu_labels=(
 	"Update"
 	"GitHub Token Config"
 	"Libraries"
-	"Agentbot"
 	"Quit"
 )
-_main_menu_keys=(status install update github_token libraries agentbot quit)
+_main_menu_keys=(status install update github_token libraries quit)
 
 _main_menu_unavailable() {
 	local message="$1"
@@ -103,14 +98,6 @@ _main_menu_dispatch() {
 		_main_menu_dispatch_optional libraries_menu \
 			"Libraries are not available in this phase."
 		;;
-	agentbot)
-		if declare -F dotfiles_launch_agentbot >/dev/null; then
-			_main_menu_run_child_menu dotfiles_launch_agentbot
-		else
-			_main_menu_unavailable \
-				"Agentbot is unavailable until the sibling bridge is installed."
-		fi
-		;;
 	*)
 		printf 'Unknown Dotfiles menu action: %s\n' "$1" >&2
 		ui_pause
@@ -123,13 +110,8 @@ _main_menu_dispatch() {
 main_menu_loop() {
 	local choice=''
 	local -a labels keys
-	DOTFILES_AGENTBOT_EXITED=false
 	labels=("${_main_menu_labels[@]}")
 	keys=("${_main_menu_keys[@]}")
-	if [[ "${SETUP_CALLER:-}" == agentbot ]]; then
-		labels=("Check Status" "Install Dotfiles" "Update" "GitHub Token Config" "Libraries" "Quit")
-		keys=(status install update github_token libraries quit)
-	fi
 
 	while true; do
 		MENU_SIMPLE_TITLE="Dotfiles"
@@ -149,8 +131,5 @@ main_menu_loop() {
 		fi
 
 		_main_menu_dispatch "$choice" || true
-		if [[ "${DOTFILES_AGENTBOT_EXITED:-false}" == true ]]; then
-			return 0
-		fi
 	done
 }

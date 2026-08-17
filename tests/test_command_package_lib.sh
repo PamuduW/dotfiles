@@ -145,16 +145,21 @@ test_command_lib_documents_full_help_catalog() {
 		'--all' \
 		'Include Node.js, npm, Go, and Monaspace' \
 		'DOTFILES_COMPONENTS' \
-		'AGENT_BOOTSTRAP_HOME' \
 		'GITHUB_TOKEN' \
 		'install.sh --initial' \
-		'Agentbot integration' \
 		'stow'; do
 		[[ "$output" == *"$needle"* ]] || {
 			printf 'missing Dotfiles Command Lib detail: %s\n' "$needle" >&2
 			return 1
 		}
 	done
+	[[ "$output" != *'Agentbot integration'* && "$output" != *'AGENT_BOOTSTRAP_HOME'* && "$output" != *'AGENTBOT_HOME'* ]] || return 1
+}
+
+test_installer_help_has_no_agentbot_route() {
+	local output
+	output="$("$REPO_DIR/scripts/install.sh" --help)"
+	[[ "$output" != *'--agents'* ]]
 }
 
 test_command_lib_details_fit_narrow_terminal() {
@@ -359,6 +364,7 @@ expect_success 'dotfiles status is local-only and reports freshness unchecked' t
 expect_success 'report path shortening preserves the fixed detail width' test_report_path_shortening_preserves_exact_width
 expect_success 'Command Lib renders all metadata once without side effects' test_command_lib_is_metadata_only
 expect_success 'Command Lib documents the full command/config catalog' test_command_lib_documents_full_help_catalog
+expect_success 'installer help exposes no Agentbot route' test_installer_help_has_no_agentbot_route
 expect_success 'Command Lib wraps details to the terminal width' test_command_lib_details_fit_narrow_terminal
 expect_success 'Command details use orange sections and yellow topics' test_command_details_use_orange_sections_and_yellow_topics
 expect_success 'Command Lib colors mutating and read-only behavior cells' test_command_lib_colors_behavior_cells_when_enabled

@@ -59,7 +59,7 @@ declare -A DOTFILES_COMMAND_NOTE=(
 )
 
 declare -A DOTFILES_COMMAND_OPTIONS=(
-	[menu]=$'--initial|Run the initial setup flow through install.sh --initial.|menu default\n--update|Open the update workflow through install.sh --update.|menu default\n--agents|Open the Agentbot workflow through install.sh --agents.|menu default\n--help|Show installer menu help and exit.|off'
+	[menu]=$'--initial|Run the initial setup flow through install.sh --initial.|menu default\n--update|Open the update workflow through install.sh --update.|menu default\n--help|Show installer menu help and exit.|off'
 	[update]=$'--all|Include Node.js, npm, Go, and Monaspace font updates.|off\n-h|Show command help and exit.|off\n--help|Show command help and exit.|off'
 	[status]=$'(none)|Show local versions and repository state without command options.|always'
 	[commands]=$'(none)|Show this full read-only command/configuration catalog.|always'
@@ -89,7 +89,7 @@ declare -A DOTFILES_COMMAND_EFFECTS=(
 )
 
 declare -A DOTFILES_COMMAND_EXAMPLES=(
-	[menu]='dotfiles menu --agents'
+	[menu]='dotfiles menu'
 	[update]='dotfiles update --all'
 	[status]='dotfiles status'
 	[commands]='dotfiles commands'
@@ -99,7 +99,7 @@ declare -A DOTFILES_COMMAND_EXAMPLES=(
 )
 
 declare -A DOTFILES_COMMAND_RELATED=(
-	[menu]='Use dotfiles commands for a read-only reference; use dotfiles agentbot through the Agents menu when the bridge is installed.'
+	[menu]='Use dotfiles commands for a read-only reference.'
 	[update]='Use status for local inspection and restow for link-only repair.'
 	[status]='Use update when repository and downstream freshness should be checked.'
 	[commands]='The interactive Command Lib renders this same catalog.'
@@ -109,19 +109,11 @@ declare -A DOTFILES_COMMAND_RELATED=(
 )
 
 DOTFILES_CONFIG_KEYS=(
-	DOTFILES_COMPONENTS AGENTBOT_HOME DOTFILES_AGENTBOT_URL AGENTBOT_URL_ALLOW_ANY
-	AGENT_BOOTSTRAP_HOME AGENT_BOOTSTRAP_CLONE_HOME AGENT_BOOTSTRAP_ALLOW_OVERRIDE
-	XDG_CONFIG_HOME GITHUB_TOKEN NO_COLOR FORCE_COLOR DOTFILES_TUI
+	DOTFILES_COMPONENTS XDG_CONFIG_HOME GITHUB_TOKEN NO_COLOR FORCE_COLOR DOTFILES_TUI
 )
 
 declare -A DOTFILES_CONFIG_DESCRIPTION=(
 	[DOTFILES_COMPONENTS]='Comma-separated component IDs for non-interactive component selection.'
-	[AGENTBOT_HOME]='Canonical Agentbot checkout and clone destination override.'
-	[DOTFILES_AGENTBOT_URL]='Agentbot clone URL; rejected before clone unless allowlisted.'
-	[AGENTBOT_URL_ALLOW_ANY]='Unsafe opt-out from the Agentbot clone/origin allowlist.'
-	[AGENT_BOOTSTRAP_HOME]='Legacy Agentbot checkout input retained for shell compatibility.'
-	[AGENT_BOOTSTRAP_CLONE_HOME]='Legacy Agentbot clone destination input.'
-	[AGENT_BOOTSTRAP_ALLOW_OVERRIDE]='Allows a legacy non-sibling checkout when set to 1.'
 	[XDG_CONFIG_HOME]='Base directory for shared private Agentbot configuration.'
 	[GITHUB_TOKEN]='Optional GitHub API credential; its value is never rendered by Command Lib.'
 	[NO_COLOR]='Disables ANSI styling when set.'
@@ -131,12 +123,6 @@ declare -A DOTFILES_CONFIG_DESCRIPTION=(
 
 declare -A DOTFILES_CONFIG_DEFAULT=(
 	[DOTFILES_COMPONENTS]='Unset; interactive selection or all enabled components apply.'
-	[AGENTBOT_HOME]='Unset; the sibling agent_bootstrap path is used.'
-	[DOTFILES_AGENTBOT_URL]='git@github.com:PamuduW/agent_bootstrap.git.'
-	[AGENTBOT_URL_ALLOW_ANY]='Unset/0; only the expected repository is accepted.'
-	[AGENT_BOOTSTRAP_HOME]='Unset; used only when the canonical variable is absent.'
-	[AGENT_BOOTSTRAP_CLONE_HOME]='Unset; used only when the canonical variable is absent.'
-	[AGENT_BOOTSTRAP_ALLOW_OVERRIDE]='Unset/0; legacy non-sibling overrides are rejected.'
 	[XDG_CONFIG_HOME]='$HOME/.config when unset.'
 	[GITHUB_TOKEN]='Unset; GitHub API calls remain unauthenticated.'
 	[NO_COLOR]='Unset; colors follow TTY/TUI detection.'
@@ -146,12 +132,6 @@ declare -A DOTFILES_CONFIG_DEFAULT=(
 
 declare -A DOTFILES_CONFIG_LOCATION=(
 	[DOTFILES_COMPONENTS]='Process environment; comma-separated component IDs.'
-	[AGENTBOT_HOME]='Process environment; canonical checkout and clone destination.'
-	[DOTFILES_AGENTBOT_URL]='Process environment; validated before clone.'
-	[AGENTBOT_URL_ALLOW_ANY]='Process environment; value 1 bypasses repository identity checks.'
-	[AGENT_BOOTSTRAP_HOME]='Legacy process environment input normalized by the bridge.'
-	[AGENT_BOOTSTRAP_CLONE_HOME]='Legacy process environment clone input.'
-	[AGENT_BOOTSTRAP_ALLOW_OVERRIDE]='Legacy process environment override switch.'
 	[XDG_CONFIG_HOME]='Process environment; ${XDG_CONFIG_HOME:-$HOME/.config}/agentbot/.'
 	[GITHUB_TOKEN]='Process environment or ${XDG_CONFIG_HOME:-$HOME/.config}/agentbot/github.env.'
 	[NO_COLOR]='Process environment only.'
@@ -159,18 +139,16 @@ declare -A DOTFILES_CONFIG_LOCATION=(
 	[DOTFILES_TUI]='Process environment only.'
 )
 
-DOTFILES_SURFACE_KEYS=(repo links components agentbot)
+DOTFILES_SURFACE_KEYS=(repo links components)
 declare -A DOTFILES_SURFACE_DESCRIPTION=(
 	[repo]='The Dotfiles repository, package manifests, installers, and logs.'
 	[links]='Stow-managed bash, bin, and readline links in the home directory.'
 	[components]='Component catalog, package metadata, probes, and selected installers.'
-	[agentbot]='Sibling Agentbot clone, bridge menu, canonical policy sources, and rendered outputs.'
 )
 declare -A DOTFILES_SURFACE_LOCATION=(
 	[repo]='DOTFILES_DIR and its packages/, scripts/, bin/, and log/ directories.'
 	[links]='$HOME via GNU Stow packages bash, bin, and readline.'
 	[components]='scripts/lib/components/ and packages/packages.txt.'
-	[agentbot]='AGENTBOT_HOME or the canonical sibling repository; global outputs under ~/.codex and ~/.claude.'
 )
 
 dotfiles_command_metadata_validate() {
@@ -367,8 +345,6 @@ dotfiles_command_print_details() {
 	done
 
 	_dotfiles_command_print_section 'Integrations'
-	_dotfiles_command_print_field 'Agentbot integration' \
-		'Dotfiles resolves Agentbot through AGENTBOT_HOME or the canonical sibling path. Legacy AGENT_BOOTSTRAP_* inputs are normalized only for compatibility. Agentbot renders canonical policy files into global Codex/Claude locations and selected repository surfaces.' "$cols"
 }
 
 dotfiles_command_print_table() {

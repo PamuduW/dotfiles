@@ -58,7 +58,6 @@ repo_update_origin_allowed() {
 	local key target prefix matched_prefix='' matched_target='' resolved
 	case "$expected_slug" in
 	PamuduW/dotfiles) [[ "${DOTFILES_REPO_URL_ALLOW_ANY:-0}" == 1 ]] && return 0 ;;
-	PamuduW/agent_bootstrap) [[ "${AGENTBOT_URL_ALLOW_ANY:-${AGENT_BOOTSTRAP_REPO_URL_ALLOW_ANY:-0}}" == 1 ]] && return 0 ;;
 	esac
 	case "$origin" in *://*@*) return 1 ;; esac
 	case "$origin" in

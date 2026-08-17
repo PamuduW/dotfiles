@@ -24,7 +24,6 @@ source "$REPO_DIR/scripts/lib/installers/stow.sh"
 source "$REPO_DIR/scripts/lib/components/install_dispatch.sh"
 DOTFILES_DIR="$REPO_DIR"
 source "$REPO_DIR/scripts/menus/initial_setup.sh"
-source "$REPO_DIR/scripts/menus/agentbot.sh"
 source "$REPO_DIR/scripts/lib/update_components.sh"
 source "$REPO_DIR/scripts/lib/update_workflow.sh"
 
@@ -45,32 +44,6 @@ test_repository_approval_uses_explicit_event_contract() (
 	}
 	repo_update_request_approval state decision >/dev/null
 	[[ "${state[approved]}" == 1 ]]
-)
-
-test_agentbot_preflights_both_repositories_before_approval_or_apply() (
-	local events="$TEST_HARNESS_ROOT/agentbot-update-order"
-	: >"$events"
-	AGENTBOT_HOME="$TEST_HARNESS_ROOT/agentbot-home"
-	mkdir -p "$AGENTBOT_HOME"
-	repo_update_preflight() {
-		local _dir="$1" label="$2" result_name="$3"
-		local -n result_ref="$result_name"
-		result_ref=([dir]="$_dir" [label]="$label" [state]=current [safe]=1 [approved]=1 [outcome]=current)
-		printf 'preflight:%s\n' "$label" >>"$events"
-	}
-	repo_update_request_approval() {
-		local -n result_ref="$1"
-		printf 'approval:%s\n' "${result_ref[label]}" >>"$events"
-	}
-	repo_update_apply() {
-		local -n result_ref="$1"
-		printf 'apply:%s\n' "${result_ref[label]}" >>"$events"
-	}
-	dotfiles_agentbot_update_all
-	mapfile -t actual <"$events"
-	[[ "${actual[0]}" == 'preflight:dotfiles repo' ]]
-	[[ "${actual[1]}" == 'preflight:agentbot repo' ]]
-	[[ "${actual[2]}" == approval:* ]]
 )
 
 test_reload_wait_is_noop_without_a_tty() (
@@ -496,7 +469,6 @@ test_installer_help_exits_before_log_initialization() (
 )
 
 check 'repository approval uses explicit event and prompt arguments' test_repository_approval_uses_explicit_event_contract
-check 'Agentbot preflights both repositories before approval or mutation' test_agentbot_preflights_both_repositories_before_approval_or_apply
 check 'repository reload wait is safe without a controlling TTY' test_reload_wait_is_noop_without_a_tty
 check 'terminal geometry falls back quietly without a controlling TTY' test_terminal_geometry_is_quiet_without_a_tty
 check 'non-interactive install runs the repository gate before setup' test_noninteractive_install_runs_repository_gate_first

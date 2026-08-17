@@ -137,16 +137,6 @@ test_unconfigured_network_fake_fails_closed() {
 	grep -Fqx $'curl\thttps://example.invalid/should-not-run' "$TEST_COMMAND_LOG"
 }
 
-test_fake_sibling_installer_is_intercepted() {
-	test_harness_reset_logs
-	test_harness_configure_fake sibling-install 0 'sibling-returned'
-	local sibling output
-	sibling="$(test_harness_create_fake_sibling agent_bootstrap)"
-	output="$(SETUP_CALLER=dotfiles "$sibling/install.sh" menu)"
-	[[ "$output" == 'sibling-returned' ]] || return 1
-	grep -Fqx $'sibling-install\tmenu' "$TEST_COMMAND_LOG"
-}
-
 test_relaunch_wrapper_is_injectable() {
 	test_harness_reset_logs
 	local TEST_RELAUNCH_WRAPPER=test_record_relaunch
@@ -196,7 +186,6 @@ expect_success 'HOME, XDG, logs, and commands are isolated' test_environment_is_
 expect_success 'fake commands record sanitized argv' test_fakes_record_sanitized_argv
 expect_success 'fake commands propagate configured exit and stderr' test_fake_exit_and_stderr_propagate
 expect_success 'unconfigured network fake fails closed' test_unconfigured_network_fake_fails_closed
-expect_success 'fake sibling install.sh records calls' test_fake_sibling_installer_is_intercepted
 expect_success 'relaunch uses an injectable shell wrapper' test_relaunch_wrapper_is_injectable
 expect_success 'path guard rejects writes outside isolated homes' test_path_guard_rejects_outside_writes
 expect_success 'canary secret is absent from output and logs' test_canary_is_redacted_everywhere

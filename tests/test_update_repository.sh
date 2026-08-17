@@ -120,9 +120,9 @@ test_success_requires_relaunch_without_old_work() {
 
 test_relaunch_is_injectable() (
 	local called="$TEST_HARNESS_ROOT/relaunch.called"
-	repo_update_relaunch() { printf '%s\n' "$*|${SETUP_CALLER:-}" >"$called"; }
-	SETUP_CALLER=dotfiles repo_update_relaunch dotfiles update --all
-	grep -Fqx 'dotfiles update --all|dotfiles' "$called" && [[ ! -e "$TEST_FAKE_BIN/exec" ]]
+	repo_update_relaunch() { printf '%s\n' "$*" >"$called"; }
+	repo_update_relaunch dotfiles update --all
+	grep -Fqx 'dotfiles update --all' "$called" && [[ ! -e "$TEST_FAKE_BIN/exec" ]]
 )
 
 test_cmd_update_executes_outcome_contract() (
@@ -143,7 +143,7 @@ test_cmd_update_executes_outcome_contract() (
 	print_report_table() { printf 'report\n' >>"$events"; }
 	print_upgrade_summary() { printf 'summary:%s\n' "$1" >>"$events"; }
 	_run_update_downstream() { printf 'downstream:%s\n' "$1" >>"$events"; }
-	repo_update_relaunch() { printf 'relaunch:%s|%s\n' "$*" "${SETUP_CALLER:-}" >>"$events"; }
+	repo_update_relaunch() { printf 'relaunch:%s\n' "$*" >>"$events"; }
 	repo_update_wait_for_reload() { printf 'wait\n' >>"$events"; }
 
 	TEST_GATE_OUTCOME=stopped
@@ -178,10 +178,9 @@ test_cmd_update_executes_outcome_contract() (
 	: >"$events"
 	TEST_GATE_OUTCOME=relaunch_required
 	replies=yes
-	SETUP_CALLER=dotfiles
 	cmd_update --all >/dev/null || return 1
 	grep -Fq "wait" "$events" || return 1
-	grep -Fq "relaunch:${DOTFILES_DIR}/install.sh|dotfiles" "$events" || return 1
+	grep -Fq "relaunch:${DOTFILES_DIR}/install.sh" "$events" || return 1
 	! grep -Fq downstream "$events"
 )
 

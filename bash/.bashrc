@@ -131,18 +131,3 @@ export PATH="$HOME/.asdf/bin:$HOME/.asdf/shims:$PATH"
 if [ -f ~/.bash_aliases ]; then
 	. ~/.bash_aliases
 fi
-
-# agent_bootstrap — sibling of dotfiles repo; export only when install.sh exists
-_ab_paths_sh=""
-if [[ -f "${HOME}/.bashrc" ]]; then
-	_ab_bashrc_resolved="$(readlink -f "${HOME}/.bashrc" 2>/dev/null || true)"
-	if [[ -n "$_ab_bashrc_resolved" && -f "$_ab_bashrc_resolved" ]]; then
-		_ab_paths_sh="$(dirname "$(dirname "$_ab_bashrc_resolved")")/scripts/lib/agent_bootstrap_paths.sh"
-	fi
-fi
-if [[ -f "$_ab_paths_sh" ]]; then
-	# shellcheck source=/dev/null
-	source "$_ab_paths_sh"
-	sync_agent_bootstrap_home_env || true
-	unset _ab_paths_sh _ab_bashrc_resolved
-fi
