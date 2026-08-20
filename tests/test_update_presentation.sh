@@ -273,8 +273,8 @@ test_removed_commands_have_guidance() {
 
 test_exact_command_set_parity() {
 	source "$REPO_DIR/scripts/lib/command_metadata.sh"
-	local expected=(menu update status commands packages restow help) i
-	[[ "${#DOTFILES_COMMAND_KEYS[@]}" -eq 7 ]] || return 1
+	local expected=(menu update full-update status commands packages restow help) i
+	[[ "${#DOTFILES_COMMAND_KEYS[@]}" -eq 8 ]] || return 1
 	for i in "${!expected[@]}"; do [[ "${DOTFILES_COMMAND_KEYS[$i]}" == "${expected[$i]}" ]] || return 1; done
 	dotfiles_command_metadata_validate
 }
@@ -302,7 +302,7 @@ expect_success 'root status rollup has exactly one blank line before the summary
 expect_success 'CLI and TUI status use the same component-state collector' test_cli_and_tui_status_share_component_collector
 expect_success 'status update and restow retain removed command capabilities' test_retained_capability_coverage
 expect_success 'summary upgrade and self fail with migration guidance' test_removed_commands_have_guidance
-expect_success 'metadata help Command Lib and dispatch share seven keys' test_exact_command_set_parity
+expect_success 'metadata help Command Lib and dispatch share eight keys' test_exact_command_set_parity
 expect_success 'harness fakes prevent real repo network apt home and stow mutation' test_harness_safety_and_no_real_mutation
 
 finish_tests

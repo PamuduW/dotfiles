@@ -117,10 +117,13 @@ source "$_COMPONENT_PROBES_LIB"
 
 _UPDATE_COMPONENTS_LIB="${DOTFILES_DIR}/scripts/lib/update_components.sh"
 _UPDATE_WORKFLOW_LIB="${DOTFILES_DIR}/scripts/lib/update_workflow.sh"
+_FULL_UPDATE_LIB="${DOTFILES_DIR}/scripts/lib/full_update.sh"
 # shellcheck source=scripts/lib/update_components.sh
 source "$_UPDATE_COMPONENTS_LIB"
 # shellcheck source=scripts/lib/update_workflow.sh
 source "$_UPDATE_WORKFLOW_LIB"
+# shellcheck source=scripts/lib/full_update.sh
+source "$_FULL_UPDATE_LIB"
 
 cmd_status() {
 	local row component detail result

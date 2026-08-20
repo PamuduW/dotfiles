@@ -217,9 +217,32 @@ _run_update_downstream() {
 	((failures == 0))
 }
 
-cmd_update() {
-	local upgrade_all=false arg repo_rc=0
+_dotfiles_run_update() {
+	local upgrade_all="$1" repository_decision_fn="$2" unattended="$3" repo_rc=0
 	local -A repo_result=()
+	repo_update_run "$DOTFILES_DIR" 'dotfiles repo' "$repository_decision_fn" repo_result 'PamuduW/dotfiles' || repo_rc=$?
+	if ((repo_rc == 2)); then
+		repo_update_print_changed
+		return 2
+	fi
+	repo_update_is_declined repo_result && return 0
+	[[ "$repo_rc" -eq 0 ]] || return 1
+
+	print_report_table repo_result
+	if [[ "$unattended" != true ]] && ! _dotfiles_confirm "Proceed with apt refresh and downstream updates?"; then
+		_msg 'Downstream updates skipped.'
+		return 0
+	fi
+	upgrade_all=true
+	printf '\n%s%s=== Upgrade ===%s\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
+	local downstream_rc=0
+	_run_update_downstream "$upgrade_all" || downstream_rc=$?
+	print_upgrade_summary "$upgrade_all" repo_result
+	return "$downstream_rc"
+}
+
+cmd_update() {
+	local upgrade_all=false arg
 	for arg in "$@"; do
 		case "$arg" in
 		--all) upgrade_all=true ;;
@@ -234,26 +257,5 @@ cmd_update() {
 			;;
 		esac
 	done
-
-	repo_update_run "$DOTFILES_DIR" 'dotfiles repo' _dotfiles_confirm_repo_update repo_result 'PamuduW/dotfiles' || repo_rc=$?
-	if ((repo_rc == 2)); then
-		repo_update_print_changed
-		return 2
-	fi
-	repo_update_is_declined repo_result && return 0
-	[[ "$repo_rc" -eq 0 ]] || return 1
-
-	print_report_table repo_result
-	if ! _dotfiles_confirm "Proceed with apt refresh and downstream updates?"; then
-		_msg 'Downstream updates skipped.'
-		return 0
-	fi
-	if [[ "$upgrade_all" != true ]] && _dotfiles_confirm 'Include Node.js, npm, Go, and Monaspace fonts (--all)?'; then
-		upgrade_all=true
-	fi
-	printf '\n%s%s=== Upgrade ===%s\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
-	local downstream_rc=0
-	_run_update_downstream "$upgrade_all" || downstream_rc=$?
-	print_upgrade_summary "$upgrade_all" repo_result
-	return "$downstream_rc"
+	_dotfiles_run_update "$upgrade_all" _dotfiles_confirm_repo_update false
 }

@@ -40,7 +40,7 @@ count_exact_line() {
 test_authoritative_command_metadata() {
 	declare -F dotfiles_command_metadata_validate >/dev/null || return 1
 	dotfiles_command_metadata_validate || return 1
-	local expected=(menu update status commands packages restow help)
+	local expected=(menu update full-update status commands packages restow help)
 	[[ "${#DOTFILES_COMMAND_KEYS[@]}" -eq "${#expected[@]}" ]] || return 1
 	local i key class
 	for i in "${!expected[@]}"; do
@@ -334,7 +334,7 @@ test_narrow_reports_remain_bounded() {
 	done <"$output"
 }
 
-expect_success 'command metadata exactly matches the seven-command dispatch contract' test_authoritative_command_metadata
+expect_success 'command metadata exactly matches the eight-command dispatch contract' test_authoritative_command_metadata
 expect_success 'help, commands output, and dispatch consume authoritative metadata' test_help_commands_and_dispatch_share_metadata
 expect_success 'dispatch parity rejects missing or invalid command handlers' test_dispatch_parity_rejects_missing_or_invalid_handlers
 expect_success 'removed commands fail with migration guidance' test_removed_commands_report_migration_guidance

@@ -31,6 +31,9 @@ _repo_update_result_init() {
 		[reason]=''
 		[safe]=0
 		[approved]=0
+		[apply_action]=''
+		[recovery_branch]=''
+		[recovery_stash]=''
 		[outcome]=stopped
 	)
 }
@@ -209,7 +212,7 @@ _repo_update_color_action() {
 	case "$action" in
 	up\ to\ date | skip | current) printf '%s%s%s' "${C_GREEN:-}" "$action" "${C_RESET:-}" ;;
 	latest\ unchecked) printf '%s%s%s' "${C_DIM:-}" "$action" "${C_RESET:-}" ;;
-	upgrade* | refresh | continue | check) printf '%s%s%s' "${C_YELLOW:-}" "$action" "${C_RESET:-}" ;;
+	upgrade* | refresh | continue | check | replace*) printf '%s%s%s' "${C_YELLOW:-}" "$action" "${C_RESET:-}" ;;
 	pull* | verified) printf '%s%s%s' "${C_CYAN:-}" "$action" "${C_RESET:-}" ;;
 	unchecked) printf '%s%s%s' "${C_YELLOW:-}" "$action" "${C_RESET:-}" ;;
 	blocked) printf '%s%s%s' "${C_RED:-}" "$action" "${C_RESET:-}" ;;
@@ -240,7 +243,7 @@ repo_update_print_result() {
 	if [[ "${result_ref[dirty]}" == 1 ]]; then
 		action=blocked
 	else
-		case "${result_ref[state]}" in behind) action='pull --ff-only' ;; ahead) action='continue' ;; current) action='current' ;; *) action='check' ;; esac
+		case "${result_ref[state]}" in behind) action='pull --ff-only' ;; ahead | diverged) action='replace after backup' ;; current) action='current' ;; *) action='check' ;; esac
 	fi
 
 	printf '\n%s%sRepository update%s\n\n' "${C_BOLD:-}" "${C_YELLOW:-}" "${C_RESET:-}"
@@ -301,6 +304,21 @@ repo_update_request_approval() {
 	local result_name="$1" confirm_fn="$2" event prompt
 	local -n result_ref="$result_name"
 	result_ref[approved]=0
+	if [[ "${result_ref[reason]:-}" == dirty || ("${result_ref[dirty]:-0}" == 0 && ("${result_ref[state]:-}" == ahead || "${result_ref[state]:-}" == diverged)) ]]; then
+		event=replace-local
+		prompt="Back up local work and replace it with ${result_ref[upstream]}?"
+		repo_update_print_result "$result_name"
+		repo_update_print_changes "$result_name"
+		if "$confirm_fn" "$event" "$prompt"; then
+			result_ref[approved]=1
+			result_ref[apply_action]=replace
+			return 0
+		fi
+		result_ref[reason]=replace-declined
+		result_ref[outcome]=stopped
+		printf '\n\n%sReplacement declined; update stopped.%s\n' "${C_RED:-}" "${C_RESET:-}"
+		return 1
+	fi
 	if [[ "${result_ref[safe]}" != 1 ]]; then
 		result_ref[outcome]=stopped
 		return 1
@@ -337,6 +355,79 @@ repo_update_request_approval() {
 	return 1
 }
 
+_repo_update_recovery_branch() {
+	local result_name="$1" timestamp candidate suffix=0
+	local -n result_ref="$result_name"
+	timestamp="$(date -u +%Y%m%d-%H%M%S)" || {
+		result_ref[reason]=recovery-timestamp-failed
+		return 1
+	}
+	candidate="recovery/dotfiles-${timestamp}"
+	while git -C "${result_ref[dir]}" show-ref --verify --quiet "refs/heads/${candidate}"; do
+		suffix=$((suffix + 1))
+		candidate="recovery/dotfiles-${timestamp}-${suffix}"
+	done
+	if ! git -C "${result_ref[dir]}" branch "$candidate" HEAD; then
+		result_ref[reason]=recovery-branch-failed
+		return 1
+	fi
+	result_ref[recovery_branch]="$candidate"
+}
+
+_repo_update_stash_changes() {
+	local result_name="$1" stash_output='' stash_id message
+	local -n result_ref="$result_name"
+	message="dotfiles full-update recovery $(date -u +%Y%m%d-%H%M%S)" || {
+		result_ref[reason]=recovery-timestamp-failed
+		return 1
+	}
+	if ! stash_output="$(git -C "${result_ref[dir]}" stash push --include-untracked -m "$message" 2>&1)"; then
+		[[ -n "$stash_output" ]] && printf '%s\n' "$stash_output" >&2
+		result_ref[reason]=stash-failed
+		return 1
+	fi
+	stash_id="$(git -C "${result_ref[dir]}" rev-parse --verify refs/stash 2>/dev/null)" || {
+		result_ref[reason]=stash-reference-failed
+		return 1
+	}
+	result_ref[recovery_stash]="$stash_id"
+}
+
+_repo_update_replace_with_upstream() {
+	local result_name="$1" remaining reset_output=''
+	local -n result_ref="$result_name"
+	if ((result_ref[ahead] > 0)); then
+		_repo_update_recovery_branch "$result_name" || return 1
+	fi
+	if [[ "${result_ref[dirty]}" == 1 ]]; then
+		_repo_update_stash_changes "$result_name" || return 1
+	fi
+	remaining="$(git -C "${result_ref[dir]}" status --short --untracked-files=all 2>/dev/null)" || {
+		result_ref[reason]=status-failed-after-recovery
+		return 1
+	}
+	if [[ -n "$remaining" ]]; then
+		result_ref[reason]=recovery-incomplete
+		return 1
+	fi
+	if ! reset_output="$(git -C "${result_ref[dir]}" reset --hard '@{upstream}' 2>&1)"; then
+		[[ -n "$reset_output" ]] && printf '%s\n' "$reset_output" >&2
+		result_ref[reason]=reset-failed
+		return 1
+	fi
+	[[ -n "$reset_output" ]] && _repo_update_print_fetch_output "$reset_output"
+	result_ref[outcome]=repository_changed
+}
+
+repo_update_print_recovery() {
+	local result_name="$1"
+	local -n result_ref="$result_name"
+	[[ -n "${result_ref[recovery_branch]:-}${result_ref[recovery_stash]:-}" ]] || return 0
+	printf 'Recovery data preserved:\n'
+	[[ -n "${result_ref[recovery_branch]:-}" ]] && printf '  Recovery branch: %s\n' "${result_ref[recovery_branch]}"
+	[[ -n "${result_ref[recovery_stash]:-}" ]] && printf '  Recovery stash: %s\n' "${result_ref[recovery_stash]}"
+}
+
 repo_update_apply() {
 	local result_name="$1" pull_output=''
 	local -n result_ref="$result_name"
@@ -344,6 +435,10 @@ repo_update_apply() {
 		result_ref[outcome]=stopped
 		return 1
 	}
+	if [[ "${result_ref[apply_action]:-}" == replace ]]; then
+		_repo_update_replace_with_upstream "$result_name"
+		return $?
+	fi
 	case "${result_ref[state]}" in
 	current) result_ref[outcome]=current ;;
 	ahead) result_ref[outcome]=ahead_continue ;;
@@ -375,7 +470,7 @@ repo_update_run() {
 	local repo_dir="$1" repo_label="$2" confirm_fn="$3" result_name="$4" expected_slug="${5:-}"
 	repo_update_preflight "$repo_dir" "$repo_label" "$result_name" "$expected_slug"
 	local -n result_ref="$result_name"
-	if [[ "${result_ref[safe]}" != 1 ]]; then
+	if [[ "${result_ref[safe]}" != 1 && "${result_ref[reason]}" != dirty && "${result_ref[state]}" != diverged ]]; then
 		repo_update_print_stopped "$result_name"
 		return 1
 	fi
@@ -383,9 +478,13 @@ repo_update_run() {
 		return 1
 	fi
 	if ! repo_update_apply "$result_name"; then
+		repo_update_print_recovery "$result_name"
 		return 1
 	fi
-	[[ "${result_ref[outcome]}" == repository_changed ]] && return 2
+	if [[ "${result_ref[outcome]}" == repository_changed ]]; then
+		repo_update_print_recovery "$result_name"
+		return 2
+	fi
 	return 0
 }
 
@@ -393,7 +492,7 @@ repo_update_is_declined() {
 	local result_name="$1"
 	local -n result_ref="$result_name"
 	case "${result_ref[reason]:-unknown}" in
-	behind-declined | ahead-declined) return 0 ;;
+	behind-declined | ahead-declined | replace-declined) return 0 ;;
 	*) return 1 ;;
 	esac
 }

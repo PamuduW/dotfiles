@@ -220,8 +220,9 @@ Global command (stowed to `~/bin/dotfiles`, on PATH like `ex` and `clip`):
 | ---------- | ------ |
 | `dotfiles` | On a TTY, opens the boot menu; otherwise prints help |
 | `dotfiles menu` | Boot menu (same as `./install.sh`) |
-| `dotfiles update` | **Apply after confirmation** — repo-first gate, then apt/CLI/tool changes |
-| `dotfiles update --all` | Same as `update`, plus opt-in **Node.js**, **npm**, **Go**, and **Monaspace** fonts |
+| `dotfiles update` | **Apply after one confirmation** — repo-first gate, then all managed apt/CLI/runtime/font changes |
+| `dotfiles update --all` | Compatible explicit spelling for the same complete Dotfiles update |
+| `dotfiles full-update` | Unattended Dotfiles update, Agentbot install, and Agentbot update |
 | `dotfiles status` | Local installed versions + repo state; no fetch or apt refresh |
 | `dotfiles commands` | Read-only full command, option, configuration, and integration reference |
 | `dotfiles packages` | Read-only component/package catalog |
@@ -256,22 +257,20 @@ enables the skill automatically.
 
 Install and Update call the same repository-update service before doing any
 setup or downstream work. It validates the repository and upstream, captures
-local changes, fetches `origin`, and then
-classifies the verified ahead/behind state. Any tracked or untracked local
-change stops both the repository pull and every downstream update, even when
-the fetched upstream is current. The stopped report shows the verified remote
-state and up to 20 changed paths, plus a copyable command for the complete
-list.
+local changes, fetches `origin`, and classifies the verified ahead/behind
+state. Dirty, ahead, and diverged checkouts can be replaced after approval.
+Before replacement, the updater stashes tracked and untracked changes and
+creates a timestamped `recovery/dotfiles-*` branch for local commits. It stops
+if either backup fails, never runs `git clean`, and leaves ignored files alone.
 
 For a clean repository, an available pull is shown in a colored repository
 table and requires confirmation. After a pull, press Enter to restart
 `install.sh` from the updated checkout. When the repository is current, Update
-shows the full colored installed/available/action report, asks whether to
-upgrade, then asks whether to include the Node.js, npm, Go, and Monaspace
-opt-ins. It finishes with a colored result table and returns to the menu after
-Enter.
+shows the full colored installed/available/action report and asks once whether
+to continue. An affirmative answer includes Node.js, npm, Go, and Monaspace.
+It finishes with a colored result table and returns to the menu after Enter.
 
-npm remains opt-in under `dotfiles update --all`. The updater captures one
+The npm updater captures one
 exact registry target, asks NVM for the latest compatible npm, and then checks
 the installed version instead of trusting command output or exit status. If
 NVM does not reach the target, Dotfiles retries that exact version with
@@ -344,11 +343,29 @@ Apply the repo-first update workflow (the downstream plan is confirmed before mu
 dotfiles update
 ```
 
-Include opt-in runtime/font upgrades (Node.js and npm via nvm, Go via asdf,
-Monaspace):
+Run the same complete Dotfiles update with the compatible explicit spelling:
 
 ```bash
 dotfiles update --all
+```
+
+Update Dotfiles, install Agentbot, and update Agentbot with one unattended
+application-level command:
+
+```bash
+dotfiles full-update
+```
+
+This command automatically restarts once after either repository changes. It
+also authorizes recoverable replacement of dirty, ahead, or diverged local Git
+state. `sudo` may still request system authentication. Inspect preserved work
+with:
+
+```bash
+git branch --list 'recovery/*'
+git stash list
+git show recovery/dotfiles-YYYYMMDD-HHMMSS
+git stash show --stat <stash-object-id>
 ```
 
 Symlinks point to repo files, so edits are immediate. To refresh links manually:

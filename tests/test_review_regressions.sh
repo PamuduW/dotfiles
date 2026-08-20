@@ -351,7 +351,8 @@ test_four_column_table_layout_has_one_shared_implementation() (
 test_single_repository_install_and_update_use_one_runner() (
 	declare -F repo_update_run >/dev/null
 	[[ "$(declare -f _dotfiles_install_repo_gate)" == *repo_update_run* ]]
-	[[ "$(declare -f cmd_update)" == *repo_update_run* ]]
+	[[ "$(declare -f _dotfiles_run_update)" == *repo_update_run* ]]
+	[[ "$(declare -f cmd_update)" == *_dotfiles_run_update* ]]
 )
 
 test_update_probes_find_vendor_local_bin_installations() (

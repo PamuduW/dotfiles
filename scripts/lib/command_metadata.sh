@@ -6,6 +6,7 @@
 DOTFILES_COMMAND_KEYS=(
 	menu
 	update
+	full-update
 	status
 	commands
 	packages
@@ -15,12 +16,14 @@ DOTFILES_COMMAND_KEYS=(
 
 declare -A DOTFILES_COMMAND_HANDLERS=(
 	[menu]=cmd_menu [update]=cmd_update [status]=cmd_status
+	['full-update']=cmd_full_update
 	[commands]=cmd_commands [packages]=cmd_packages [restow]=cmd_restow [help]=cmd_help
 )
 
 declare -A DOTFILES_COMMAND_USAGE=(
 	[menu]=''
 	[update]='[--all]'
+	['full-update']=''
 	[status]=''
 	[commands]=''
 	[packages]=''
@@ -31,6 +34,7 @@ declare -A DOTFILES_COMMAND_USAGE=(
 declare -A DOTFILES_COMMAND_CLASS=(
 	[menu]='mutating'
 	[update]='mutating'
+	['full-update']='mutating'
 	[status]='read-only'
 	[commands]='read-only'
 	[packages]='read-only'
@@ -41,6 +45,7 @@ declare -A DOTFILES_COMMAND_CLASS=(
 declare -A DOTFILES_COMMAND_DESCRIPTION=(
 	[menu]='Open interactive install and update workflows.'
 	[update]='Safely update the repo, then packages and tools.'
+	['full-update']='Update Dotfiles and Agentbot without application prompts.'
 	[status]='Show local component and repository state only.'
 	[commands]='Show this authoritative command library.'
 	[packages]='Show component and package metadata.'
@@ -50,7 +55,8 @@ declare -A DOTFILES_COMMAND_DESCRIPTION=(
 
 declare -A DOTFILES_COMMAND_NOTE=(
 	[menu]=''
-	[update]='Use --all to include Node.js, npm, Go, and Monaspace.'
+	[update]='An approved update includes Node.js, npm, Go, and Monaspace; --all remains compatible.'
+	['full-update']='Backs up replaceable local Git state before syncing upstream.'
 	[status]='Remote and apt freshness remain unchecked.'
 	[commands]=''
 	[packages]=''
@@ -61,6 +67,7 @@ declare -A DOTFILES_COMMAND_NOTE=(
 declare -A DOTFILES_COMMAND_OPTIONS=(
 	[menu]=$'--initial|Run the initial setup flow through install.sh --initial.|menu default\n--update|Open the update workflow through install.sh --update.|menu default\n--help|Show installer menu help and exit.|off'
 	[update]=$'--all|Include Node.js, npm, Go, and Monaspace font updates.|off\n-h|Show command help and exit.|off\n--help|Show command help and exit.|off'
+	['full-update']=$'(none)|Run the complete unattended Dotfiles and Agentbot maintenance flow.|always'
 	[status]=$'(none)|Show local versions and repository state without command options.|always'
 	[commands]=$'(none)|Show this full read-only command/configuration catalog.|always'
 	[packages]=$'(none)|Show component and package metadata without probing the system.|always'
@@ -70,7 +77,8 @@ declare -A DOTFILES_COMMAND_OPTIONS=(
 
 declare -A DOTFILES_COMMAND_DEFAULTS=(
 	[menu]='No flags opens the interactive installer menu.'
-	[update]='Without --all, opt-in Node.js, npm, Go, and Monaspace updates are skipped.'
+	[update]='One approval runs every managed update; --all is an explicit compatible spelling.'
+	['full-update']='Running the command authorizes application prompts and recoverable repository replacement.'
 	[status]='Reads local installed versions; remote freshness remains unchecked.'
 	[commands]='Prints the complete catalog without changing state.'
 	[packages]='Reads packages/packages.txt and component metadata only.'
@@ -80,7 +88,8 @@ declare -A DOTFILES_COMMAND_DEFAULTS=(
 
 declare -A DOTFILES_COMMAND_EFFECTS=(
 	[menu]='Delegates to scripts/install.sh; selected workflows may install, update, or configure components.'
-	[update]='May pull the repository, refresh apt, update CLIs, and optionally update Node.js, npm, Go, and Monaspace.'
+	[update]='May pull the repository, refresh apt, and update all managed CLIs, runtimes, and fonts.'
+	['full-update']='May stash local changes, create recovery branches, sync both repositories, and update the system.'
 	[status]='Reads local command versions and git status; it does not run remote freshness checks.'
 	[commands]='Performs no installer, git, network, stow, package, or component action.'
 	[packages]='Performs no package installation or system probe.'
@@ -91,6 +100,7 @@ declare -A DOTFILES_COMMAND_EFFECTS=(
 declare -A DOTFILES_COMMAND_EXAMPLES=(
 	[menu]='dotfiles menu'
 	[update]='dotfiles update --all'
+	['full-update']='dotfiles full-update'
 	[status]='dotfiles status'
 	[commands]='dotfiles commands'
 	[packages]='dotfiles packages'
@@ -101,6 +111,7 @@ declare -A DOTFILES_COMMAND_EXAMPLES=(
 declare -A DOTFILES_COMMAND_RELATED=(
 	[menu]='Use dotfiles commands for a read-only reference.'
 	[update]='Use status for local inspection and restow for link-only repair.'
+	['full-update']='Use update for an interactive Dotfiles-only run.'
 	[status]='Use update when repository and downstream freshness should be checked.'
 	[commands]='The interactive Command Lib renders this same catalog.'
 	[packages]='Use the component menu for interactive selection.'

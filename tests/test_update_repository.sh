@@ -27,9 +27,9 @@ test_dirty_history_matrix_fetches_classifies_and_stops() {
 	for pair in dirty-current:current dirty-ahead:ahead dirty-behind:behind dirty-diverged:diverged; do
 		state="${pair%%:*}" expected="${pair#*:}"
 		test_harness_reset_logs
-		run_gate "$state" yes
+		run_gate "$state" no
 		[[ "${TEST_REPO_RESULT[outcome]}" == stopped && "${TEST_REPO_RESULT[state]}" == "$expected" ]] || return 1
-		[[ "${TEST_REPO_RESULT[reason]}" == dirty && "${TEST_REPO_RESULT[dirty]}" == 1 ]] || return 1
+		[[ "${TEST_REPO_RESULT[reason]}" == replace-declined && "${TEST_REPO_RESULT[dirty]}" == 1 ]] || return 1
 		[[ "${TEST_REPO_RESULT[changes]}" == *' M scripts/example.sh'* && "${TEST_REPO_RESULT[upstream]}" == origin/main ]] || return 1
 		grep -Eq $'git\t-C\t.*\tfetch\t--prune$' "$TEST_COMMAND_LOG" || return 1
 		grep -Eq $'git\t-C\t.*\trev-list\t--left-right\t--count\tHEAD\.\.\.@\{upstream\}$' "$TEST_COMMAND_LOG" || return 1
@@ -102,13 +102,10 @@ test_untrusted_origin_stops_before_fetch() {
 	! grep -Eq $'git\t-C\t.*\t(fetch|pull)(\t|$)' "$TEST_COMMAND_LOG"
 }
 
-test_ahead_requires_continue() {
+test_ahead_requires_replacement_approval() {
 	test_harness_reset_logs
 	run_gate ahead no
-	[[ "${TEST_REPO_RESULT[outcome]}" == stopped && "$(pull_count)" -eq 0 ]] || return 1
-	test_harness_reset_logs
-	run_gate ahead yes
-	[[ "${TEST_REPO_RESULT[outcome]}" == ahead_continue && "$(pull_count)" -eq 0 ]]
+	[[ "${TEST_REPO_RESULT[outcome]}" == stopped && "${TEST_REPO_RESULT[reason]}" == replace-declined && "$(pull_count)" -eq 0 ]]
 }
 
 test_success_returns_changed_repository_without_old_work() {
@@ -153,19 +150,13 @@ test_cmd_update_executes_outcome_contract() (
 
 	: >"$events"
 	TEST_GATE_OUTCOME=current
-	replies='yes no'
+	replies=yes
 	cmd_update >/dev/null || return 1
-	[[ "$(sed -n '1p' "$events")" == gate && "$(sed -n '2p' "$events")" == report && "$(sed -n '3p' "$events")" == confirm:* && "$(sed -n '4p' "$events")" == confirm:* && "$(sed -n '5p' "$events")" == downstream:false && "$(sed -n '6p' "$events")" == summary:false ]] || return 1
-	grep -Fqx 'confirm:Include Node.js, npm, Go, and Monaspace fonts (--all)?' "$events" || return 1
+	[[ "$(sed -n '1p' "$events")" == gate && "$(sed -n '2p' "$events")" == report && "$(sed -n '3p' "$events")" == confirm:* && "$(sed -n '4p' "$events")" == downstream:true && "$(sed -n '5p' "$events")" == summary:true ]] || return 1
+	! grep -Fq 'Include Node.js, npm, Go, and Monaspace fonts' "$events" || return 1
 
 	: >"$events"
 	TEST_GATE_OUTCOME=current
-	replies='yes yes'
-	cmd_update >/dev/null || return 1
-	[[ "$(sed -n '5p' "$events")" == downstream:true && "$(sed -n '6p' "$events")" == summary:true ]] || return 1
-
-	: >"$events"
-	TEST_GATE_OUTCOME=ahead_continue
 	replies=yes
 	cmd_update --all >/dev/null || return 1
 	[[ "$(sed -n '3p' "$events")" == confirm:* && "$(sed -n '4p' "$events")" == downstream:true && "$(sed -n '5p' "$events")" == summary:true ]] || return 1
@@ -276,6 +267,90 @@ test_dirty_change_report_is_bounded_and_copyable() (
 	[[ "$output" == *'git -C '* && "$output" == *' status --short --untracked-files=all'* ]]
 )
 
+test_dirty_replacement_stashes_before_reset() (
+	local calls="$TEST_HARNESS_ROOT/dirty-replacement.calls"
+	local stashed="$TEST_HARNESS_ROOT/dirty-replacement.stashed"
+	local -A result=()
+	: >"$calls"
+	git() {
+		local -a args=("$@")
+		[[ "${args[0]:-}" == -C ]] && args=("${args[@]:2}")
+		printf '%s\n' "${args[*]}" >>"$calls"
+		case "${args[*]}" in
+		'rev-parse --is-inside-work-tree') printf 'true\n' ;;
+		'rev-parse --is-bare-repository') printf 'false\n' ;;
+		'remote get-url origin') printf 'https://github.com/PamuduW/dotfiles.git\n' ;;
+		'symbolic-ref -q --short HEAD') printf 'main\n' ;;
+		'rev-parse --abbrev-ref --symbolic-full-name @{upstream}') printf 'origin/main\n' ;;
+		'status --short --untracked-files=all') [[ -f "$stashed" ]] || printf ' M scripts/example.sh\n?? local-change\n' ;;
+		'fetch --prune') ;;
+		'rev-list --left-right --count HEAD...@{upstream}') printf '0\t0\n' ;;
+		'stash push --include-untracked -m '*)
+			: >"$stashed"
+			printf 'Saved working directory\n'
+			;;
+		'rev-parse --verify refs/stash') printf 'stash-object-id\n' ;;
+		'reset --hard @{upstream}') ;;
+		*)
+			printf 'unexpected git call: %s\n' "${args[*]}" >&2
+			return 97
+			;;
+		esac
+	}
+	approve_replacement() { [[ "$1" == replace-local ]]; }
+
+	local rc=0 output output_file="$TEST_HARNESS_ROOT/dirty-replacement.output"
+	repo_update_run "$TEST_HARNESS_ROOT/repo" 'dotfiles repo' approve_replacement result 'PamuduW/dotfiles' >"$output_file" 2>&1 || rc=$?
+	output="$(<"$output_file")"
+	[[ "$rc" -eq 2 && "${result[outcome]}" == repository_changed ]] || return 1
+	[[ -n "${result[recovery_stash]:-}" && -z "${result[recovery_branch]:-}" ]] || return 1
+	[[ "$output" == *'Recovery stash: stash-object-id'* ]] || return 1
+	local stash_line clean_check_line reset_line
+	stash_line="$(grep -n '^stash push --include-untracked -m ' "$calls" | cut -d: -f1)"
+	clean_check_line="$(grep -n '^status --short --untracked-files=all$' "$calls" | tail -n 1 | cut -d: -f1)"
+	reset_line="$(grep -n '^reset --hard @{upstream}$' "$calls" | cut -d: -f1)"
+	[[ -n "$stash_line" && -n "$clean_check_line" && -n "$reset_line" ]] || return 1
+	((stash_line < clean_check_line && clean_check_line < reset_line))
+)
+
+test_ahead_replacement_branches_before_reset() (
+	local calls="$TEST_HARNESS_ROOT/ahead-replacement.calls"
+	local -A result=()
+	: >"$calls"
+	git() {
+		local -a args=("$@")
+		[[ "${args[0]:-}" == -C ]] && args=("${args[@]:2}")
+		printf '%s\n' "${args[*]}" >>"$calls"
+		case "${args[*]}" in
+		'rev-parse --is-inside-work-tree') printf 'true\n' ;;
+		'rev-parse --is-bare-repository') printf 'false\n' ;;
+		'remote get-url origin') printf 'https://github.com/PamuduW/dotfiles.git\n' ;;
+		'symbolic-ref -q --short HEAD') printf 'main\n' ;;
+		'rev-parse --abbrev-ref --symbolic-full-name @{upstream}') printf 'origin/main\n' ;;
+		'status --short --untracked-files=all') ;;
+		'fetch --prune') ;;
+		'rev-list --left-right --count HEAD...@{upstream}') printf '2\t0\n' ;;
+		'show-ref --verify --quiet refs/heads/recovery/dotfiles-'*) return 1 ;;
+		'branch recovery/dotfiles-'*' HEAD') ;;
+		'reset --hard @{upstream}') ;;
+		*)
+			printf 'unexpected git call: %s\n' "${args[*]}" >&2
+			return 97
+			;;
+		esac
+	}
+	approve_replacement() { [[ "$1" == replace-local ]]; }
+
+	local rc=0
+	repo_update_run "$TEST_HARNESS_ROOT/repo" 'dotfiles repo' approve_replacement result 'PamuduW/dotfiles' >/dev/null 2>&1 || rc=$?
+	[[ "$rc" -eq 2 && "${result[outcome]}" == repository_changed ]] || return 1
+	[[ "${result[recovery_branch]:-}" == recovery/dotfiles-* && -z "${result[recovery_stash]:-}" ]] || return 1
+	local branch_line reset_line
+	branch_line="$(grep -n '^branch recovery/dotfiles-.* HEAD$' "$calls" | cut -d: -f1)"
+	reset_line="$(grep -n '^reset --hard @{upstream}$' "$calls" | cut -d: -f1)"
+	[[ -n "$branch_line" && -n "$reset_line" ]] && ((branch_line < reset_line))
+)
+
 expect_success 'repository state table returns stable outcomes' test_state_table_outcomes
 expect_success 'dirty current ahead behind and diverged states fetch classify and stop' test_dirty_history_matrix_fetches_classifies_and_stops
 expect_success 'dirty fetch failure preserves paths and marks freshness unknown' test_dirty_fetch_failure_preserves_changes_and_unknown_freshness
@@ -285,7 +360,7 @@ expect_success 'only clean strictly-behind confirmed state pulls ff-only once' t
 expect_success 'blocked declined and failed states never reach downstream' test_blocked_states_never_pull
 expect_success 'non-origin upstream stops before fetch or pull' test_non_origin_upstream_stops_before_fetch
 expect_success 'untrusted repository origin stops before fetch or pull' test_untrusted_origin_stops_before_fetch
-expect_success 'ahead never pulls and requires explicit continue confirmation' test_ahead_requires_continue
+expect_success 'ahead requires explicit replacement approval' test_ahead_requires_replacement_approval
 expect_success 'successful pull reports a changed repository and stops old-process work' test_success_returns_changed_repository_without_old_work
 expect_success 'cmd_update executes one repository update exit contract' test_cmd_update_executes_outcome_contract
 expect_success 'cmd_update handles declined pulls without a failure status' test_cmd_update_declined_pull_is_handled_without_failure
@@ -293,5 +368,7 @@ expect_success 'cmd_update reports dirty paths and verified remote state before 
 expect_success 'declined repository pulls print one report before the pause boundary' test_declined_repository_pull_prints_one_report_and_one_pause_boundary
 expect_success 'declined install pulls use shared failure output' test_declined_install_repository_pull_uses_shared_failure_output
 expect_success 'dirty path report is bounded and includes a copyable full-list command' test_dirty_change_report_is_bounded_and_copyable
+expect_success 'dirty replacement stashes and verifies the worktree before reset' test_dirty_replacement_stashes_before_reset
+expect_success 'ahead replacement creates a recovery branch before reset' test_ahead_replacement_branches_before_reset
 
 finish_tests
