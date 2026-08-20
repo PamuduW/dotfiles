@@ -147,11 +147,9 @@ package_lib_packages_menu() {
 	}
 	cols="$(menu_tty_cols)"
 	tty_out="$(tty_output_path)"
-	{
-		ui_clear
-		package_lib_render_packages_all "$cols"
-		ui_pause
-	} >"$tty_out"
+	ui_clear
+	package_lib_render_packages_all "$cols" >"$tty_out"
+	ui_wait_back
 }
 
 package_lib_menu() {

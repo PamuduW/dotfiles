@@ -1,6 +1,20 @@
 # shellcheck shell=bash
 # Per-component status probes (_comp_probe_<id>).
 
+_comp_probe_capture() {
+	local output_name="$1" timeout_seconds="$2" captured='' rc
+	shift 2
+	if captured="$(timeout --kill-after=0.2 "$timeout_seconds" "$@" 2>/dev/null)"; then
+		rc=0
+	else
+		rc=$?
+	fi
+	[[ "$rc" -eq 137 ]] && rc=124
+	captured="${captured%%$'\n'*}"
+	printf -v "$output_name" '%s' "$captured"
+	return "$rc"
+}
+
 _install_short_label() {
 	local label="$1"
 	label="${label%%(*}"
@@ -13,17 +27,41 @@ _install_summary_probe() {
 }
 
 collect_component_status_rows() {
-	local output_name="$1" i key label probe result detail
+	local output_name="$1"
 	local -n output_rows="$output_name"
-	output_rows=()
+	mapfile -t output_rows < <(_collect_component_status_rows_stream)
+}
+
+_collect_component_status_rows_stream() (
+	local probe_dir i key label probe result detail pid
+	local -a pids=()
+	probe_dir="$(mktemp -d)" || return 1
+	trap 'rm -r -- "$probe_dir"' EXIT
+
 	for i in "${!COMP_KEYS[@]}"; do
 		key="${COMP_KEYS[$i]}"
-		label="$(_install_short_label "${COMP_LABELS[$i]}")"
-		probe="$(_install_summary_probe "$key")"
-		IFS='|' read -r result detail <<<"$probe"
-		output_rows+=("${label}|${detail}|${result}")
+		(
+			if probe="$(_install_summary_probe "$key")"; then
+				probe="${probe%%$'\n'*}"
+				printf '%s\n' "${probe:-check|probe returned no result}"
+			else
+				printf 'check|probe failed\n'
+			fi
+		) >"$probe_dir/$i" &
+		pids+=("$!")
 	done
-}
+
+	for pid in "${pids[@]}"; do
+		wait "$pid" || true
+	done
+
+	for i in "${!COMP_KEYS[@]}"; do
+		label="$(_install_short_label "${COMP_LABELS[$i]}")"
+		probe="$(<"$probe_dir/$i")"
+		IFS='|' read -r result detail <<<"$probe"
+		printf '%s|%s|%s\n' "$label" "$detail" "$result"
+	done
+)
 
 _comp_probe_git_identity() {
 	local name email
@@ -83,9 +121,13 @@ _comp_probe_python() {
 }
 
 _comp_probe_graphify_cli() {
-	local graphify_path ver
+	local graphify_path ver rc timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
 	if graphify_path="$(graphify_command 2>/dev/null)"; then
-		ver="$("$graphify_path" --version 2>/dev/null | head -n1 || true)"
+		_comp_probe_capture ver "$timeout_seconds" "$graphify_path" --version || rc=$?
+		if [[ "${rc:-0}" -eq 124 ]]; then
+			printf 'check|graphify cli probe timed out\n'
+			return
+		fi
 		if declare -F graphify_cli_is_uv_owned >/dev/null 2>&1 && graphify_cli_is_uv_owned; then
 			printf 'installed|%s (uv)\n' "${ver:-$graphify_path}"
 		else
@@ -97,24 +139,41 @@ _comp_probe_graphify_cli() {
 }
 
 _comp_probe_powershell() {
+	local ver rc timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
 	if command -v pwsh >/dev/null 2>&1; then
-		printf 'installed|%s\n' "$(pwsh --version 2>/dev/null | head -n1)"
+		_comp_probe_capture ver "$timeout_seconds" pwsh --version || rc=$?
+		if [[ "${rc:-0}" -eq 124 ]]; then
+			printf 'check|powershell probe timed out\n'
+		else
+			printf 'installed|%s\n' "${ver:-pwsh}"
+		fi
 	else
 		printf 'missing|pwsh not on PATH\n'
 	fi
 }
 
 _comp_probe_go() {
-	local ver
+	local raw ver rc timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
 	if command -v go >/dev/null 2>&1; then
-		ver="$(go version 2>/dev/null | grep -oE 'go[0-9.]+' | head -n1 || true)"
+		_comp_probe_capture raw "$timeout_seconds" go version || rc=$?
+		if [[ "${rc:-0}" -eq 124 ]]; then
+			printf 'check|go probe timed out\n'
+			return
+		fi
+		ver="$(grep -oE 'go[0-9.]+' <<<"$raw" | head -n1 || true)"
 		if [[ -n "$ver" ]]; then
 			printf 'installed|%s\n' "$ver"
 			return
 		fi
 	fi
 	if command -v asdf >/dev/null 2>&1; then
-		ver="$(asdf current golang 2>/dev/null | awk '$1=="golang" {print $2; exit}')"
+		rc=0
+		_comp_probe_capture raw "$timeout_seconds" asdf current golang || rc=$?
+		if [[ "$rc" -eq 124 ]]; then
+			printf 'check|go probe timed out\n'
+			return
+		fi
+		ver="$(awk '$1=="golang" {print $2; exit}' <<<"$raw")"
 		if [[ -n "$ver" && "$ver" != system ]]; then
 			printf 'installed|go%s (asdf)\n' "$ver"
 		else
@@ -126,35 +185,58 @@ _comp_probe_go() {
 }
 
 _comp_probe_nodejs() {
+	local ver rc timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
 	if [[ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]]; then
 		# shellcheck source=/dev/null
 		. "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
 	fi
 	if command -v node >/dev/null 2>&1; then
-		printf 'installed|node %s\n' "$(node --version 2>/dev/null)"
+		_comp_probe_capture ver "$timeout_seconds" node --version || rc=$?
+		if [[ "${rc:-0}" -eq 124 ]]; then
+			printf 'check|node probe timed out\n'
+		else
+			printf 'installed|node %s\n' "${ver:-unknown}"
+		fi
 	else
 		printf 'missing|node not on PATH\n'
 	fi
 }
 
 _comp_probe_direnv() {
+	local ver rc timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
 	if command -v direnv >/dev/null 2>&1; then
-		printf 'installed|%s\n' "$(direnv version 2>/dev/null | head -n1)"
+		_comp_probe_capture ver "$timeout_seconds" direnv version || rc=$?
+		if [[ "${rc:-0}" -eq 124 ]]; then
+			printf 'check|direnv probe timed out\n'
+		else
+			printf 'installed|%s\n' "${ver:-direnv}"
+		fi
 	else
 		printf 'missing|direnv not on PATH\n'
 	fi
 }
 
 _comp_probe_docker() {
+	local ver rc timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
 	if command -v docker >/dev/null 2>&1; then
-		printf 'installed|%s\n' "$(docker --version 2>/dev/null | head -n1)"
+		_comp_probe_capture ver "$timeout_seconds" docker --version || rc=$?
+		if [[ "${rc:-0}" -eq 124 ]]; then
+			printf 'check|docker probe timed out\n'
+		else
+			printf 'installed|%s\n' "${ver:-docker}"
+		fi
 	else
 		printf 'missing|docker not on PATH\n'
 	fi
 }
 
 _comp_probe_portainer() {
-	if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx portainer; then
+	local name rc timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
+	_comp_probe_capture name "$timeout_seconds" docker ps -a \
+		--filter 'name=^/portainer$' --format '{{.Names}}' || rc=$?
+	if [[ "${rc:-0}" -eq 124 ]]; then
+		printf 'check|portainer probe timed out\n'
+	elif [[ "$name" == portainer ]]; then
 		printf 'installed|container exists (stopped by default)\n'
 	else
 		printf 'missing|portainer container not found\n'
@@ -162,9 +244,14 @@ _comp_probe_portainer() {
 }
 
 _comp_probe_lazygit() {
-	local ver
+	local raw ver rc timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
 	if command -v lazygit >/dev/null 2>&1; then
-		ver="$(lazygit --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)"
+		_comp_probe_capture raw "$timeout_seconds" lazygit --version || rc=$?
+		if [[ "${rc:-0}" -eq 124 ]]; then
+			printf 'check|lazygit probe timed out\n'
+			return
+		fi
+		ver="$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' <<<"$raw" | head -n1 || true)"
 		printf 'installed|%s\n' "${ver:-lazygit}"
 	else
 		printf 'missing|lazygit not on PATH\n'
@@ -172,9 +259,14 @@ _comp_probe_lazygit() {
 }
 
 _comp_probe_lazydocker() {
-	local ver
+	local raw ver rc timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
 	if command -v lazydocker >/dev/null 2>&1; then
-		ver="$(lazydocker --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)"
+		_comp_probe_capture raw "$timeout_seconds" lazydocker --version || rc=$?
+		if [[ "${rc:-0}" -eq 124 ]]; then
+			printf 'check|lazydocker probe timed out\n'
+			return
+		fi
+		ver="$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' <<<"$raw" | head -n1 || true)"
 		printf 'installed|%s\n' "${ver:-lazydocker}"
 	else
 		printf 'missing|lazydocker not on PATH\n'
@@ -182,16 +274,24 @@ _comp_probe_lazydocker() {
 }
 
 _comp_probe_cursor_cli() {
-	local ver
+	local ver rc timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
 	if command -v agent >/dev/null 2>&1 || command -v cursor >/dev/null 2>&1; then
 		if command -v agent >/dev/null 2>&1; then
-			ver="$(agent --version 2>/dev/null | head -n1 || true)"
+			_comp_probe_capture ver "$timeout_seconds" agent --version || rc=$?
 		else
-			ver="$(cursor --version 2>/dev/null | head -n1 || true)"
+			_comp_probe_capture ver "$timeout_seconds" cursor --version || rc=$?
+		fi
+		if [[ "${rc:-0}" -eq 124 ]]; then
+			printf 'check|cursor cli probe timed out\n'
+			return
 		fi
 		printf 'installed|%s\n' "${ver:-cursor cli}"
 	elif [[ -x "$HOME/.local/bin/agent" ]]; then
-		ver="$("$HOME/.local/bin/agent" --version 2>/dev/null | head -n1 || true)"
+		_comp_probe_capture ver "$timeout_seconds" "$HOME/.local/bin/agent" --version || rc=$?
+		if [[ "${rc:-0}" -eq 124 ]]; then
+			printf 'check|cursor cli probe timed out\n'
+			return
+		fi
 		printf 'installed|%s\n' "${ver:-cursor cli}"
 	else
 		printf 'missing|cursor/agent not on PATH\n'
@@ -199,20 +299,38 @@ _comp_probe_cursor_cli() {
 }
 
 _comp_probe_codex_cli() {
+	local ver rc timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
+	if [[ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]]; then
+		# shellcheck source=/dev/null
+		. "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
+	fi
 	if command -v codex >/dev/null 2>&1; then
-		printf 'installed|%s\n' "$(codex --version 2>/dev/null | head -n1)"
+		_comp_probe_capture ver "$timeout_seconds" codex --version || rc=$?
+		if [[ "${rc:-0}" -eq 124 ]]; then
+			printf 'check|codex cli probe timed out\n'
+		else
+			printf 'installed|%s\n' "${ver:-codex cli}"
+		fi
 	else
 		printf 'missing|codex not on PATH\n'
 	fi
 }
 
 _comp_probe_claude_cli() {
-	local ver
+	local ver rc timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
 	if command -v claude >/dev/null 2>&1; then
-		ver="$(claude --version 2>/dev/null | head -n1 || true)"
+		_comp_probe_capture ver "$timeout_seconds" claude --version || rc=$?
+		if [[ "${rc:-0}" -eq 124 ]]; then
+			printf 'check|claude cli probe timed out\n'
+			return
+		fi
 		printf 'installed|%s\n' "${ver:-claude cli}"
 	elif [[ -x "$HOME/.local/bin/claude" ]]; then
-		ver="$("$HOME/.local/bin/claude" --version 2>/dev/null | head -n1 || true)"
+		_comp_probe_capture ver "$timeout_seconds" "$HOME/.local/bin/claude" --version || rc=$?
+		if [[ "${rc:-0}" -eq 124 ]]; then
+			printf 'check|claude cli probe timed out\n'
+			return
+		fi
 		printf 'installed|%s\n' "${ver:-claude cli}"
 	else
 		printf 'missing|claude not on PATH\n'
@@ -220,12 +338,19 @@ _comp_probe_claude_cli() {
 }
 
 _comp_probe_copilot_cli() {
+	local ver rc timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
 	if command -v copilot >/dev/null 2>&1; then
-		printf 'installed|%s\n' "$(copilot --version 2>/dev/null | head -n1)"
+		_comp_probe_capture ver "$timeout_seconds" copilot --version || rc=$?
 	elif [[ -x "$HOME/.local/bin/copilot" ]]; then
-		printf 'installed|%s\n' "$("$HOME/.local/bin/copilot" --version 2>/dev/null | head -n1)"
+		_comp_probe_capture ver "$timeout_seconds" "$HOME/.local/bin/copilot" --version || rc=$?
 	else
 		printf 'missing|copilot not on PATH\n'
+		return
+	fi
+	if [[ "${rc:-0}" -eq 124 ]]; then
+		printf 'check|copilot cli probe timed out\n'
+	else
+		printf 'installed|%s\n' "${ver:-copilot cli}"
 	fi
 }
 

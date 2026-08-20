@@ -2,7 +2,7 @@
 # shellcheck disable=SC2034  # MENU_SIMPLE_* globals are consumed by menu_simple_run.
 
 libraries_menu() {
-	local choice rc child_available
+	local choice rc
 
 	while true; do
 		MENU_SIMPLE_TITLE='Libraries'
@@ -23,11 +23,9 @@ libraries_menu() {
 		choice="${MENU_SIMPLE_RESULT:-}"
 		ui_clear
 		rc=0
-		child_available=false
 		case "$choice" in
 		command_lib)
 			if declare -F command_lib_menu >/dev/null; then
-				child_available=true
 				command_lib_menu || rc=$?
 			else
 				printf 'Command Lib is not available in this phase.\n'
@@ -36,7 +34,6 @@ libraries_menu() {
 			;;
 		package_lib)
 			if declare -F package_lib_menu >/dev/null; then
-				child_available=true
 				package_lib_menu || rc=$?
 			else
 				printf 'Package Lib is not available in this phase.\n'
@@ -50,7 +47,7 @@ libraries_menu() {
 		esac
 		if ((rc != 0)); then
 			printf '%sAction failed (exit %d).%s\n' "${C_RED:-}" "$rc" "${C_RESET:-}" >&2
+			ui_pause
 		fi
-		[[ "$child_available" == true ]] || ui_pause
 	done
 }

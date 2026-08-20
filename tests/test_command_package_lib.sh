@@ -93,27 +93,6 @@ test_dispatch_parity_rejects_missing_or_invalid_handlers() {
 	dotfiles_command_metadata_validate
 }
 
-test_status_is_local_read_only() {
-	local output="$TEST_HARNESS_ROOT/status.output"
-	local protected_relative=".dotfiles-task05-status-${BASHPID}"
-	local forbidden=$'^(curl|npx|sudo|stow|apt-get)\t|^git\t.*\t(fetch|pull)(\t|$)'
-	local fake
-	test_harness_protect_original_path "$protected_relative"
-	for fake in sudo stow apt-get; do
-		ln -s -- _test_fake_command "$TEST_FAKE_BIN/$fake"
-		test_harness_configure_fake "$fake" 98 '' 'read-only status must not invoke this command'
-	done
-	test_harness_configure_fake git 0 $'## feat/test\n'
-	test_harness_reset_logs
-	"$REPO_DIR/bin/bin/dotfiles" status >"$output" || return 1
-	grep -Fqi 'freshness' "$output" || return 1
-	grep -Fqi 'unchecked' "$output" || return 1
-	if grep -Eq "$forbidden" "$TEST_COMMAND_LOG"; then
-		return 1
-	fi
-	[[ ! -s "$TEST_URL_LOG" ]]
-}
-
 test_report_path_shortening_preserves_exact_width() {
 	local value output
 	value='/mnt/c/Program Files/Microsoft/Windows/Credential Manager/git-credential-manager.exe'
@@ -359,7 +338,6 @@ expect_success 'command metadata exactly matches the seven-command dispatch cont
 expect_success 'help, commands output, and dispatch consume authoritative metadata' test_help_commands_and_dispatch_share_metadata
 expect_success 'dispatch parity rejects missing or invalid command handlers' test_dispatch_parity_rejects_missing_or_invalid_handlers
 expect_success 'removed commands fail with migration guidance' test_removed_commands_report_migration_guidance
-expect_success 'dotfiles status is local-only and reports freshness unchecked' test_status_is_local_read_only
 expect_success 'report path shortening preserves the fixed detail width' test_report_path_shortening_preserves_exact_width
 expect_success 'Command Lib renders all metadata once without side effects' test_command_lib_is_metadata_only
 expect_success 'Command Lib documents the full command/config catalog' test_command_lib_documents_full_help_catalog

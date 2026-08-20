@@ -307,29 +307,43 @@ _dotfiles_command_print_options() {
 	done <<<"$rows"
 }
 
+_dotfiles_command_print_one() {
+	local key="$1" cols="$2"
+	_rt_ensure_colors
+	printf '  %s%sCommand: %s%s\n' "$C_BOLD" "$C_YELLOW" "$key" "$C_RESET"
+	_dotfiles_command_print_field 'Usage' "$(dotfiles_command_display_usage "$key")" "$cols"
+	_dotfiles_command_print_field 'Behavior' "${DOTFILES_COMMAND_CLASS[$key]}" "$cols"
+	_dotfiles_command_print_field 'Purpose' "${DOTFILES_COMMAND_DESCRIPTION[$key]}" "$cols"
+	printf '  %sOptions%s\n' "$C_BOLD" "$C_RESET"
+	_dotfiles_command_print_options "${DOTFILES_COMMAND_OPTIONS[$key]}" "$cols"
+	_dotfiles_command_print_field 'Defaults' "${DOTFILES_COMMAND_DEFAULTS[$key]}" "$cols"
+	_dotfiles_command_print_field 'Effects' "${DOTFILES_COMMAND_EFFECTS[$key]}" "$cols"
+	_dotfiles_command_print_field 'Example' "${DOTFILES_COMMAND_EXAMPLES[$key]}" "$cols"
+	_dotfiles_command_print_field 'Related' "${DOTFILES_COMMAND_RELATED[$key]}" "$cols"
+	[[ -n "${DOTFILES_COMMAND_NOTE[$key]}" ]] &&
+		_dotfiles_command_print_field 'Note' "${DOTFILES_COMMAND_NOTE[$key]}" "$cols"
+	return 0
+}
+
+dotfiles_command_print_detail() {
+	local key="$1" cols="${2:-100}"
+	dotfiles_command_metadata_validate || return 1
+	[[ -n "${DOTFILES_COMMAND_CLASS[$key]+x}" ]] || return 2
+	_dotfiles_command_print_section 'Command detail' true
+	_dotfiles_command_print_one "$key" "$cols"
+}
+
 dotfiles_command_print_details() {
 	local cols="${1:-100}" key first_command=true
 	dotfiles_command_metadata_validate || return 1
 	_dotfiles_command_print_section 'Command details' true
 	for key in "${DOTFILES_COMMAND_KEYS[@]}"; do
-		_rt_ensure_colors
 		if [[ "$first_command" == true ]]; then
 			first_command=false
 		else
 			printf '\n'
 		fi
-		printf '  %s%sCommand: %s%s\n' "$C_BOLD" "$C_YELLOW" "$key" "$C_RESET"
-		_dotfiles_command_print_field 'Usage' "$(dotfiles_command_display_usage "$key")" "$cols"
-		_dotfiles_command_print_field 'Behavior' "${DOTFILES_COMMAND_CLASS[$key]}" "$cols"
-		_dotfiles_command_print_field 'Purpose' "${DOTFILES_COMMAND_DESCRIPTION[$key]}" "$cols"
-		printf '  %sOptions%s\n' "$C_BOLD" "$C_RESET"
-		_dotfiles_command_print_options "${DOTFILES_COMMAND_OPTIONS[$key]}" "$cols"
-		_dotfiles_command_print_field 'Defaults' "${DOTFILES_COMMAND_DEFAULTS[$key]}" "$cols"
-		_dotfiles_command_print_field 'Effects' "${DOTFILES_COMMAND_EFFECTS[$key]}" "$cols"
-		_dotfiles_command_print_field 'Example' "${DOTFILES_COMMAND_EXAMPLES[$key]}" "$cols"
-		_dotfiles_command_print_field 'Related' "${DOTFILES_COMMAND_RELATED[$key]}" "$cols"
-		[[ -n "${DOTFILES_COMMAND_NOTE[$key]}" ]] &&
-			_dotfiles_command_print_field 'Note' "${DOTFILES_COMMAND_NOTE[$key]}" "$cols"
+		_dotfiles_command_print_one "$key" "$cols"
 	done
 
 	_dotfiles_command_print_section 'Configuration and environment'

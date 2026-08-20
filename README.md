@@ -227,9 +227,16 @@ Global command (stowed to `~/bin/dotfiles`, on PATH like `ex` and `clip`):
 | `dotfiles packages` | Read-only component/package catalog |
 | `dotfiles restow` | `stow --restow bash bin readline` |
 
-The interactive **Command Lib**, `dotfiles commands`, and `dotfiles help` show
-the complete supported command, option, configuration, output, and integration
-reference. They are read-only and use the same catalog.
+The interactive **Command Lib** is a selectable command index: open one command
+for its focused usage, options, effects, examples, and related commands, then
+return directly to the index. `dotfiles commands` and `dotfiles help` continue
+to print the complete reference. All three views are read-only and use the same
+authoritative metadata.
+
+`dotfiles status` runs independent local component probes concurrently while
+preserving the component registry order. External version checks are bounded;
+a stalled tool is reported as needing attention instead of freezing the status
+screen.
 
 Most CLI updates run as your user. System package, PowerShell, Docker,
 `/etc/wsl.conf`, `/usr/local/bin`, and Docker-group changes invoke `sudo` when

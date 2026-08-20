@@ -46,6 +46,18 @@ ui_pause() {
 	read_tty_line _ui_pause_reply "${C_YELLOW:-}Press Enter to continue:${C_RESET:-} "
 }
 
+ui_wait_back() {
+	local action
+	tty_printf '\n%sq%s or %sEnter%s to return: ' \
+		"${C_CYAN:-}" "${C_RESET:-}" "${C_CYAN:-}" "${C_RESET:-}"
+	while true; do
+		action="$(menu_read_key)"
+		case "$action" in
+		cancel | left | confirm) return 0 ;;
+		esac
+	done
+}
+
 ui_confirm_yes_no() {
 	local prompt="$1"
 	local default_no="${2:-true}"
