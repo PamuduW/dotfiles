@@ -245,10 +245,12 @@ needed; the terminal may reuse the active sudo credential cache.
 
 When Graphify is selected, `dotfiles update` (including `dotfiles update --all`)
 updates it with `uv tool upgrade graphifyy` only when `uv tool list` proves that
-the installed `graphify` command is owned by the `graphifyy` tool. An external
-or otherwise unproven Graphify installation is preserved and reported as
-externally managed; update it through its own owner instead. Dotfiles does not
-run any Graphify assistant installer during install or update.
+the installed `graphify` command is owned by the `graphifyy` tool. If that
+upgrade fails, Dotfiles retries once with
+`uv tool upgrade graphifyy --system-certs`. An external or otherwise unproven
+Graphify installation is preserved and reported as externally managed; update
+it through its own owner instead. Dotfiles does not run any Graphify assistant
+installer during install or update.
 After a successful CLI upgrade, Dotfiles prints a non-mutating handoff for an
 already-enabled Agentbot integration: run `agentbot graphify setup` or
 `agentbot update` to refresh the installed skill version. The CLI and skill may

@@ -287,6 +287,26 @@ test_graphify_upgrade_uses_uv_tool_upgrade() (
 	grep -Fq 'or agentbot update to refresh the installed skill.' <<<"$output"
 )
 
+test_graphify_upgrade_retries_with_system_certs_after_failure() (
+	local output calls="$TEST_HARNESS_ROOT/graphify-system-certs.calls"
+	: >"$calls"
+	graphify() { [[ "$1" == --version ]] && printf 'graphify 1.2.3\n'; }
+	uv() {
+		printf 'uv:%s\n' "$*" >>"$calls"
+		case "$*" in
+		'tool list') printf '%s\n' 'graphifyy v1.2.3' ;;
+		'tool upgrade graphifyy') return 23 ;;
+		'tool upgrade graphifyy --system-certs') return 0 ;;
+		*) return 97 ;;
+		esac
+	}
+	output="$(upgrade_graphify_cli)" || return 1
+	[[ "$(sed -n '2p' "$calls")" == 'uv:tool upgrade graphifyy' ]] || return 1
+	[[ "$(sed -n '3p' "$calls")" == 'uv:tool upgrade graphifyy --system-certs' ]] || return 1
+	[[ "$(wc -l <"$calls")" -eq 3 ]] || return 1
+	grep -Fq "If Agentbot's Graphify integration is enabled, run agentbot graphify setup" <<<"$output"
+)
+
 test_graphify_upgrade_failure_has_copyable_retry_command() (
 	local output calls="$TEST_HARNESS_ROOT/graphify-failure.calls"
 	: >"$calls"
@@ -433,6 +453,7 @@ expect_success 'unverifiable CLI probes label latest freshness unchecked' test_u
 expect_success 'Graphify update probe distinguishes uv-owned and external installs' test_graphify_probe_reports_uv_owned_and_external_states
 expect_success 'Graphify update probe skips an absent CLI' test_graphify_probe_skips_when_not_installed
 expect_success 'Graphify update uses uv tool upgrade' test_graphify_upgrade_uses_uv_tool_upgrade
+expect_success 'Graphify update retries with system certificates after failure' test_graphify_upgrade_retries_with_system_certs_after_failure
 expect_success 'Graphify update failures include a copyable retry command' test_graphify_upgrade_failure_has_copyable_retry_command
 expect_success 'upgrade step marks failures in red with retry command' test_upgrade_step_marks_failures_in_red_with_retry_command
 expect_success 'upgrade step omits failure marker after success' test_upgrade_step_omits_failure_marker_after_success
