@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2034  # MENU_SIMPLE_RESULT is this module's output to callers.
 # Simple numbered-list menu with optional non-selectable section headers.
 
 _menu_simple_is_selectable() {
@@ -148,6 +149,8 @@ menu_simple_run() {
 		menu_cursor_show
 	} >"$tty_out"
 
+	# The choice is returned in MENU_SIMPLE_RESULT only. It used to also go to
+	# stdout, which meant any caller capturing a menu's output got the key
+	# mixed into it.
 	MENU_SIMPLE_RESULT="${MENU_SIMPLE_KEYS[$cursor]}"
-	printf '%s\n' "$MENU_SIMPLE_RESULT"
 }

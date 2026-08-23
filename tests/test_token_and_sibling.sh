@@ -5,21 +5,21 @@ set -euo pipefail
 TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
 
-# shellcheck source=tests/lib/test_harness.sh
+# shellcheck source=tests/lib/harness.sh
 # shellcheck disable=SC1091
-source "$TEST_DIR/lib/test_harness.sh"
+source "$TEST_DIR/lib/harness.sh"
 test_harness_init
 test_harness_protect_original_path ".config/agent_bootstrap/github.env"
 test_harness_protect_original_path ".config/agentbot/github.env"
 
 # shellcheck source=scripts/lib/github_token.sh
 source "$REPO_DIR/scripts/lib/github_token.sh"
-# shellcheck source=scripts/lib/menu_render.sh
-source "$REPO_DIR/scripts/lib/menu_render.sh"
-# shellcheck source=scripts/lib/tty.sh
-source "$REPO_DIR/scripts/lib/tty.sh"
-# shellcheck source=scripts/lib/ui.sh
-source "$REPO_DIR/scripts/lib/ui.sh"
+# shellcheck source=scripts/lib/shared/tui/menu_render.sh
+source "$REPO_DIR/scripts/lib/shared/tui/menu_render.sh"
+# shellcheck source=scripts/lib/shared/tui/tty.sh
+source "$REPO_DIR/scripts/lib/shared/tui/tty.sh"
+# shellcheck source=scripts/lib/shared/tui/ui.sh
+source "$REPO_DIR/scripts/lib/shared/tui/ui.sh"
 ui_init_colors
 if [[ -f "$REPO_DIR/scripts/menus/github_token.sh" ]]; then
 	# shellcheck source=scripts/menus/github_token.sh

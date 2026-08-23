@@ -55,7 +55,7 @@ declare -A DOTFILES_COMMAND_DESCRIPTION=(
 
 declare -A DOTFILES_COMMAND_NOTE=(
 	[menu]=''
-	[update]='An approved update includes Node.js, npm, Go, and Monaspace; --all remains compatible.'
+	[update]='One approval updates every managed component; --all is accepted but selects nothing extra.'
 	['full-update']='Backs up replaceable local Git state before syncing upstream.'
 	[status]='Remote and apt freshness remain unchecked.'
 	[commands]=''
@@ -66,7 +66,7 @@ declare -A DOTFILES_COMMAND_NOTE=(
 
 declare -A DOTFILES_COMMAND_OPTIONS=(
 	[menu]=$'--initial|Run the initial setup flow through install.sh --initial.|menu default\n--update|Open the update workflow through install.sh --update.|menu default\n--help|Show installer menu help and exit.|off'
-	[update]=$'--all|Include Node.js, npm, Go, and Monaspace font updates.|off\n-h|Show command help and exit.|off\n--help|Show command help and exit.|off'
+	[update]=$'--all|Accepted for compatibility; every managed update already runs without it.|no-op\n-h|Show command help and exit.|off\n--help|Show command help and exit.|off'
 	['full-update']=$'(none)|Run the complete unattended Dotfiles and Agentbot maintenance flow.|always'
 	[status]=$'(none)|Show local versions and repository state without command options.|always'
 	[commands]=$'(none)|Show this full read-only command/configuration catalog.|always'
@@ -77,7 +77,7 @@ declare -A DOTFILES_COMMAND_OPTIONS=(
 
 declare -A DOTFILES_COMMAND_DEFAULTS=(
 	[menu]='No flags opens the interactive installer menu.'
-	[update]='One approval runs every managed update; --all is an explicit compatible spelling.'
+	[update]='One approval runs every managed update, including Node.js, npm, Go, and Monaspace.'
 	['full-update']='Running the command authorizes application prompts and recoverable repository replacement.'
 	[status]='Reads local installed versions; remote freshness remains unchecked.'
 	[commands]='Prints the complete catalog without changing state.'
@@ -99,7 +99,7 @@ declare -A DOTFILES_COMMAND_EFFECTS=(
 
 declare -A DOTFILES_COMMAND_EXAMPLES=(
 	[menu]='dotfiles menu'
-	[update]='dotfiles update --all'
+	[update]='dotfiles update'
 	['full-update']='dotfiles full-update'
 	[status]='dotfiles status'
 	[commands]='dotfiles commands'
@@ -121,6 +121,7 @@ declare -A DOTFILES_COMMAND_RELATED=(
 
 DOTFILES_CONFIG_KEYS=(
 	DOTFILES_COMPONENTS XDG_CONFIG_HOME GITHUB_TOKEN NO_COLOR FORCE_COLOR DOTFILES_TUI
+	DOTFILES_LOG_RETAIN
 )
 
 declare -A DOTFILES_CONFIG_DESCRIPTION=(
@@ -130,6 +131,7 @@ declare -A DOTFILES_CONFIG_DESCRIPTION=(
 	[NO_COLOR]='Disables ANSI styling when set.'
 	[FORCE_COLOR]='Requests ANSI styling for non-TTY output when set.'
 	[DOTFILES_TUI]='Marks TUI execution for presentation/bridge behavior.'
+	[DOTFILES_LOG_RETAIN]='How many timestamped action logs to keep in log/.'
 )
 
 declare -A DOTFILES_CONFIG_DEFAULT=(
@@ -139,6 +141,7 @@ declare -A DOTFILES_CONFIG_DEFAULT=(
 	[NO_COLOR]='Unset; colors follow TTY/TUI detection.'
 	[FORCE_COLOR]='Unset.'
 	[DOTFILES_TUI]='Unset for direct commands; set by menu callers when needed.'
+	[DOTFILES_LOG_RETAIN]='20 when unset.'
 )
 
 declare -A DOTFILES_CONFIG_LOCATION=(
@@ -148,6 +151,7 @@ declare -A DOTFILES_CONFIG_LOCATION=(
 	[NO_COLOR]='Process environment only.'
 	[FORCE_COLOR]='Process environment only.'
 	[DOTFILES_TUI]='Process environment only.'
+	[DOTFILES_LOG_RETAIN]='Process environment; applied when an action log starts.'
 )
 
 DOTFILES_SURFACE_KEYS=(repo links components)
@@ -300,13 +304,9 @@ _dotfiles_command_print_token_field() {
 }
 
 _dotfiles_command_print_section() {
-	local label="$1" first="${2:-false}"
+	local label="$1"
 	_rt_ensure_colors
-	if [[ "$first" == true ]]; then
-		printf '\n  %s%s=== %s ===%s\n' "$C_BOLD" "$C_ORANGE" "$label" "$C_RESET"
-	else
-		printf '\n  %s%s=== %s ===%s\n' "$C_BOLD" "$C_ORANGE" "$label" "$C_RESET"
-	fi
+	printf '\n  %s%s=== %s ===%s\n' "$C_BOLD" "$C_ORANGE" "$label" "$C_RESET"
 }
 
 _dotfiles_command_print_options() {
@@ -340,14 +340,14 @@ dotfiles_command_print_detail() {
 	local key="$1" cols="${2:-100}"
 	dotfiles_command_metadata_validate || return 1
 	[[ -n "${DOTFILES_COMMAND_CLASS[$key]+x}" ]] || return 2
-	_dotfiles_command_print_section 'Command detail' true
+	_dotfiles_command_print_section 'Command detail'
 	_dotfiles_command_print_one "$key" "$cols"
 }
 
 dotfiles_command_print_details() {
 	local cols="${1:-100}" key first_command=true
 	dotfiles_command_metadata_validate || return 1
-	_dotfiles_command_print_section 'Command details' true
+	_dotfiles_command_print_section 'Command details'
 	for key in "${DOTFILES_COMMAND_KEYS[@]}"; do
 		if [[ "$first_command" == true ]]; then
 			first_command=false

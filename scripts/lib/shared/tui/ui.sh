@@ -2,36 +2,18 @@
 # Shared TUI colors, headers, confirms, and semantic word coloring.
 # Depends on: menu_render.sh, tty.sh
 
-# Public palette tokens (C_ORANGE, C_YELLOW, C_BLUE, and C_INVERT are
-# consumed by menu modules).
-# shellcheck disable=SC2034
+if ! declare -F colors_set_palette >/dev/null 2>&1; then
+	# shellcheck source=scripts/lib/shared/tui/colors.sh
+	source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/colors.sh"
+fi
+
+# Colour is on unless NO_COLOR is set; menus always own a terminal.
 ui_init_colors() {
 	if [[ -z "${NO_COLOR:-}" ]]; then
-		C_RESET=$'\e[0m'
-		C_BOLD=$'\e[1m'
-		C_DIM=$'\e[2m'
-		C_MAGENTA=$'\e[35m'
-		C_CYAN=$'\e[36m'
-		C_GREEN=$'\e[32m'
-		C_YELLOW=$'\e[33m'
-		C_ORANGE=$'\e[38;5;208m'
-		C_RED=$'\e[31m'
-		C_BLUE=$'\e[34m'
-		C_INVERT=$'\e[7m'
+		colors_set_palette
 		return 0
 	fi
-
-	C_RESET=''
-	C_BOLD=''
-	C_DIM=''
-	C_MAGENTA=''
-	C_CYAN=''
-	C_GREEN=''
-	C_YELLOW=''
-	C_ORANGE=''
-	C_RED=''
-	C_BLUE=''
-	C_INVERT=''
+	colors_clear_palette
 }
 
 ui_clear() {
@@ -182,9 +164,3 @@ ui_print_plan_row() {
 		printf '\n'
 	fi
 }
-
-# Report tables — shared design system (see scripts/lib/report_table.sh).
-ui_print_report_header() { rt_print_header "$@"; }
-ui_print_report_table_columns() { rt_print_table_columns; }
-ui_print_report_table_row() { rt_print_table_row "$@"; }
-ui_print_report_rollup() { rt_print_rollup "$@"; }

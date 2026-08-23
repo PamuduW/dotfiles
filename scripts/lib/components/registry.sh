@@ -1,144 +1,256 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # Registry arrays are public to sourced component modules.
-# Component registry: keys, labels, deps, and dispatch helpers.
+# Component registry.
+#
+# One comp_define call per component. Previously the same 21 components were
+# spread across eight arrays, one of which (COMP_LABELS) was positional against
+# COMP_KEYS while the rest were keyed: inserting a component and forgetting one
+# array silently shifted every label below it, with no test failure because the
+# lengths still matched. Declaring each component once makes that impossible.
 
-COMP_KEYS=(
-	git_identity
-	system_packages
-	python
-	graphify_cli
-	powershell
-	go
-	nodejs
-	direnv
-	docker
-	portainer
-	lazygit
-	lazydocker
-	cursor_cli
-	codex_cli
-	claude_cli
-	copilot_cli
-	monaspace_fonts
-	ssh_key
-	dotfiles
-	wsl_conf
-	git_credential
-)
+COMP_KEYS=()
+COMP_LABELS=()
+COMP_INSTALL_ORDER=()
+declare -A COMP_DESCRIPTIONS=()
+declare -A COMP_PLAN_LABELS=()
+declare -A COMP_PLAN_DETAILS=()
+declare -A COMP_DEPENDS_ON=()
+declare -A COMP_PACKAGE_TAGS=()
+declare -A COMP_ON=()
+declare -A _COMP_ORDER_RANK=()
 
-COMP_LABELS=(
-	"Git identity (global user.name / email)"
-	"System packages"
-	"Python (python3, pip, venv)"
-	"Graphify CLI"
-	"PowerShell (pwsh)"
-	"Go (asdf)"
-	"Node.js 24 LTS (nvm)"
-	"direnv (env loader + shell hook)"
-	"Docker Engine"
-	"Portainer CE"
-	"lazygit (git TUI)"
-	"lazydocker (docker TUI)"
-	"Cursor CLI"
-	"Codex CLI"
-	"Claude CLI"
-	"Copilot CLI"
-	"Monaspace fonts (Nerd Fonts)"
-	"Generate SSH key"
-	"Apply dotfiles (stow)"
-	"WSL config (systemd, appendWindowsPath)"
-	"Git config (credentials + submodules)"
-)
+# comp_define <key> [--label L] [--plan L] [--detail D] [--desc D]
+#             [--depends KEY] [--tags "t1 t2"] [--order N]
+#
+# --order is the install rank (menu display order is declaration order); the
+# ranks are sorted into COMP_INSTALL_ORDER by comp_registry_finalize.
+comp_define() {
+	local key="$1"
+	shift
+	local label='' plan='' detail='' desc='' depends='' tags='' order=''
 
-declare -A COMP_DESCRIPTIONS=(
-	[git_identity]=$'Set global git user.name and user.email.\nSkip this if you use includeIf for per-directory identities.'
-	[system_packages]=$'Installs the curated apt package catalog from packages/packages.txt.\nPackage Lib shows every package name, tag, and description.'
-	[python]=$'Installs python3, pip, and venv via apt.\nProvides the standard Python runtime and virtual-environment tooling.'
-	[graphify_cli]=$'Installs the official graphifyy package with uv, exposing the graphify CLI.\nOptional Agent Skills integration for Codex, Cursor, Claude, and compatible assistants.'
-	[powershell]=$'Installs Microsoft PowerShell from packages.microsoft.com.\nAdds the Microsoft apt repository if missing, then installs powershell.'
-	[go]=$'Installs latest Go via asdf and sets it for the user.\nThe selected Go version is available to shells and Go-based tools.'
-	[nodejs]=$'Installs Node.js v24 via nvm (Node Version Manager).\nAlso provides npm for global packages like Codex CLI.'
-	[direnv]=$'Installs or updates direnv to ~/.local/bin via the official installer.\nThe stowed .bashrc provides the direnv Bash hook.'
-	[docker]=$'Installs Docker Engine CE and safely merges logging defaults into daemon.json.\nAdds your user to the docker group for non-root access.'
-	[portainer]=$'Deploys the Portainer CE container (web UI for Docker).\nThe container is stopped by default; start it with dpot.'
-	[lazygit]=$'Terminal UI for Git, downloaded from GitHub releases.\nUse it to review status, stage changes, and manage commits interactively.'
-	[lazydocker]=$'Terminal UI for Docker, downloaded from GitHub releases.\nUse it to inspect containers, images, logs, and Compose services.'
-	[cursor_cli]=$'Installs the Cursor editor CLI from cursor.com.\nUpdate it later through the Dotfiles update workflow.'
-	[codex_cli]=$'Installs OpenAI Codex CLI via npm (requires Node.js).\nUpdate it later through the Dotfiles update workflow.'
-	[claude_cli]=$'Installs Anthropic Claude CLI from claude.ai.\nUpdate it later through the Dotfiles update workflow.'
-	[copilot_cli]=$'Installs GitHub Copilot CLI via the official installer script.\nDownloads and validates the vendor script before executing it.'
-	[monaspace_fonts]=$'Downloads GitHub Monaspace Nerd Fonts to ~/.local/share/fonts/.\nIncludes all five variants with Powerline glyphs and development icons.'
-	[ssh_key]=$'Generates an Ed25519 SSH key and adds it to ssh-agent.\nSaves the public key and GitHub setup steps to ~/.ssh/github-setup.txt.'
-	[dotfiles]=$'Uses GNU Stow to link bash, bin, and readline configuration into $HOME.\nBacks up an existing .bashrc, .bash_aliases, and .inputrc first.'
-	[wsl_conf]=$'Sets systemd=true and appendWindowsPath=true in /etc/wsl.conf.\nRequires wsl --shutdown from Windows to take effect.'
-	[git_credential]=$'Sets credential.helper to Windows GCM for HTTPS when available.\nSets submodule.recurse, fetch.recurseSubmodules, push.recurseSubmodules=check, and status.submoduleSummary.'
-)
+	while (($#)); do
+		case "$1" in
+		--label)
+			label="$2"
+			shift 2
+			;;
+		--plan)
+			plan="$2"
+			shift 2
+			;;
+		--detail)
+			detail="$2"
+			shift 2
+			;;
+		--desc)
+			desc="$2"
+			shift 2
+			;;
+		--depends)
+			depends="$2"
+			shift 2
+			;;
+		--tags)
+			tags="$2"
+			shift 2
+			;;
+		--order)
+			order="$2"
+			shift 2
+			;;
+		*)
+			printf 'comp_define %s: unknown option %s\n' "$key" "$1" >&2
+			return 2
+			;;
+		esac
+	done
 
-declare -A COMP_PLAN_LABELS=(
-	[git_identity]='Git identity' [system_packages]='System packages' [python]='Python'
-	[graphify_cli]='Graphify CLI' [powershell]='PowerShell' [go]='Go' [nodejs]='Node.js'
-	[direnv]='direnv' [docker]='Docker' [portainer]='Portainer' [lazygit]='lazygit'
-	[lazydocker]='lazydocker' [cursor_cli]='Cursor CLI' [codex_cli]='Codex CLI'
-	[claude_cli]='Claude CLI' [copilot_cli]='Copilot CLI' [monaspace_fonts]='Monaspace fonts'
-	[ssh_key]='SSH key' [dotfiles]='Dotfiles' [wsl_conf]='WSL config' [git_credential]='Git config'
-)
+	[[ -n "$key" && -n "$label" && -n "$order" ]] || {
+		printf 'comp_define %s: key, --label, and --order are required\n' "$key" >&2
+		return 2
+	}
 
-declare -A COMP_PLAN_DETAILS=(
-	[python]='python3, pip, venv' [graphify_cli]='uv tool install graphifyy (optional)'
-	[powershell]='Microsoft repo + powershell' [go]='asdf golang latest' [nodejs]='v24 via nvm'
-	[direnv]='install/update + bash hook' [docker]='Docker Engine CE + docker group'
-	[portainer]='Portainer CE (stopped by default)' [lazygit]='latest from GitHub'
-	[lazydocker]='latest from GitHub' [cursor_cli]='cursor.com installer'
-	[codex_cli]='npm @openai/codex' [claude_cli]='claude.ai installer'
-	[copilot_cli]='gh.io/copilot-install'
-	[monaspace_fonts]='Monaspace Nerd Fonts -> ~/.local/share/fonts/'
-	[dotfiles]='stow bash, bin, readline' [wsl_conf]='systemd=true, appendWindowsPath=true'
-	[git_credential]='GCM + recursive submodule defaults'
-)
+	COMP_KEYS+=("$key")
+	COMP_LABELS+=("$label")
+	COMP_PLAN_LABELS["$key"]="${plan:-$label}"
+	COMP_DESCRIPTIONS["$key"]="$desc"
+	[[ -n "$detail" ]] && COMP_PLAN_DETAILS["$key"]="$detail"
+	[[ -n "$depends" ]] && COMP_DEPENDS_ON["$key"]="$depends"
+	[[ -n "$tags" ]] && COMP_PACKAGE_TAGS["$key"]="$tags"
+	_COMP_ORDER_RANK["$key"]="$order"
+	return 0
+}
 
-# Dependencies use stable component keys so display-order changes cannot silently
-# change their meaning.
-declare -A COMP_DEPENDS_ON=(
-	[graphify_cli]=python
-	[portainer]=docker
-	[lazydocker]=docker
-	[codex_cli]=nodejs
-	[dotfiles]=system_packages
-)
+# Build COMP_INSTALL_ORDER from the declared ranks.
+comp_registry_finalize() {
+	local key
+	COMP_INSTALL_ORDER=()
+	while IFS=$'\t' read -r _ key; do
+		COMP_INSTALL_ORDER+=("$key")
+	done < <(
+		for key in "${!_COMP_ORDER_RANK[@]}"; do
+			printf '%s\t%s\n' "${_COMP_ORDER_RANK[$key]}" "$key"
+		done | sort -n -k1,1
+	)
+}
 
-# Package groups owned by components. Installation and completion probes must
-# use this same metadata so one component cannot report another as missing.
-declare -A COMP_PACKAGE_TAGS=(
-	[system_packages]='core cli system'
-	[python]='python'
-)
+comp_define git_identity \
+	--label 'Git identity (global user.name / email)' \
+	--plan 'Git identity' \
+	--order 0 \
+	--desc $'Set global git user.name and user.email.\nSkip this if you use includeIf for per-directory identities.'
 
-# Install execution order (differs from menu display order).
-COMP_INSTALL_ORDER=(
-	git_identity
-	system_packages
-	python
-	graphify_cli
-	powershell
-	go
-	lazygit
-	wsl_conf
-	git_credential
-	docker
-	portainer
-	lazydocker
-	nodejs
-	direnv
-	cursor_cli
-	codex_cli
-	claude_cli
-	copilot_cli
-	monaspace_fonts
-	ssh_key
-	dotfiles
-)
+comp_define system_packages \
+	--label 'System packages' \
+	--plan 'System packages' \
+	--tags 'core cli system' \
+	--order 1 \
+	--desc $'Installs the curated apt package catalog from packages/packages.txt.\nPackage Lib shows every package name, tag, and description.'
 
-declare -A COMP_ON
+comp_define python \
+	--label 'Python (python3, pip, venv)' \
+	--plan 'Python' \
+	--detail 'python3, pip, venv' \
+	--tags 'python' \
+	--order 2 \
+	--desc $'Installs python3, pip, and venv via apt.\nProvides the standard Python runtime and virtual-environment tooling.'
+
+comp_define graphify_cli \
+	--label 'Graphify CLI' \
+	--plan 'Graphify CLI' \
+	--detail 'uv tool install graphifyy (optional)' \
+	--depends 'python' \
+	--order 3 \
+	--desc $'Installs the official graphifyy package with uv, exposing the graphify CLI.\nOptional Agent Skills integration for Codex, Cursor, Claude, and compatible assistants.'
+
+comp_define powershell \
+	--label 'PowerShell (pwsh)' \
+	--plan 'PowerShell' \
+	--detail 'Microsoft repo + powershell' \
+	--order 4 \
+	--desc $'Installs Microsoft PowerShell from packages.microsoft.com.\nAdds the Microsoft apt repository if missing, then installs powershell.'
+
+comp_define go \
+	--label 'Go (asdf)' \
+	--plan 'Go' \
+	--detail 'asdf golang latest' \
+	--order 5 \
+	--desc $'Installs latest Go via asdf and sets it for the user.\nThe selected Go version is available to shells and Go-based tools.'
+
+comp_define nodejs \
+	--label 'Node.js 24 LTS (nvm)' \
+	--plan 'Node.js' \
+	--detail 'v24 via nvm' \
+	--order 12 \
+	--desc $'Installs Node.js v24 via nvm (Node Version Manager).\nAlso provides npm for global packages like Codex CLI.'
+
+comp_define direnv \
+	--label 'direnv (env loader + shell hook)' \
+	--plan 'direnv' \
+	--detail 'install/update + bash hook' \
+	--order 13 \
+	--desc $'Installs or updates direnv to ~/.local/bin via the official installer.\nThe stowed .bashrc provides the direnv Bash hook.'
+
+comp_define docker \
+	--label 'Docker Engine' \
+	--plan 'Docker' \
+	--detail 'Docker Engine CE + docker group' \
+	--order 9 \
+	--desc $'Installs Docker Engine CE and safely merges logging defaults into daemon.json.\nAdds your user to the docker group for non-root access.'
+
+comp_define portainer \
+	--label 'Portainer CE' \
+	--plan 'Portainer' \
+	--detail 'Portainer CE (stopped by default)' \
+	--depends 'docker' \
+	--order 10 \
+	--desc $'Deploys the Portainer CE container (web UI for Docker).\nThe container is stopped by default; start it with dpot.'
+
+comp_define lazygit \
+	--label 'lazygit (git TUI)' \
+	--plan 'lazygit' \
+	--detail 'latest from GitHub' \
+	--order 6 \
+	--desc $'Terminal UI for Git, downloaded from GitHub releases.\nUse it to review status, stage changes, and manage commits interactively.'
+
+comp_define lazydocker \
+	--label 'lazydocker (docker TUI)' \
+	--plan 'lazydocker' \
+	--detail 'latest from GitHub' \
+	--depends 'docker' \
+	--order 11 \
+	--desc $'Terminal UI for Docker, downloaded from GitHub releases.\nUse it to inspect containers, images, logs, and Compose services.'
+
+comp_define cursor_cli \
+	--label 'Cursor CLI' \
+	--plan 'Cursor CLI' \
+	--detail 'cursor.com installer' \
+	--order 14 \
+	--desc $'Installs the Cursor editor CLI from cursor.com.\nUpdate it later through the Dotfiles update workflow.'
+
+comp_define codex_cli \
+	--label 'Codex CLI' \
+	--plan 'Codex CLI' \
+	--detail 'npm @openai/codex' \
+	--depends 'nodejs' \
+	--order 15 \
+	--desc $'Installs OpenAI Codex CLI via npm (requires Node.js).\nUpdate it later through the Dotfiles update workflow.'
+
+comp_define claude_cli \
+	--label 'Claude CLI' \
+	--plan 'Claude CLI' \
+	--detail 'claude.ai installer' \
+	--order 16 \
+	--desc $'Installs Anthropic Claude CLI from claude.ai.\nUpdate it later through the Dotfiles update workflow.'
+
+comp_define copilot_cli \
+	--label 'Copilot CLI' \
+	--plan 'Copilot CLI' \
+	--detail 'gh.io/copilot-install' \
+	--order 17 \
+	--desc $'Installs GitHub Copilot CLI via the official installer script.\nDownloads and validates the vendor script before executing it.'
+
+comp_define monaspace_fonts \
+	--label 'Monaspace fonts (Nerd Fonts)' \
+	--plan 'Monaspace fonts' \
+	--detail 'Monaspace Nerd Fonts -> ~/.local/share/fonts/' \
+	--order 18 \
+	--desc $'Downloads GitHub Monaspace Nerd Fonts to ~/.local/share/fonts/.\nIncludes all five variants with Powerline glyphs and development icons.'
+
+comp_define ssh_key \
+	--label 'Generate SSH key' \
+	--plan 'SSH key' \
+	--order 19 \
+	--desc $'Generates an Ed25519 SSH key and adds it to ssh-agent.\nSaves the public key and GitHub setup steps to ~/.ssh/github-setup.txt.'
+
+comp_define dotfiles \
+	--label 'Apply dotfiles (stow)' \
+	--plan 'Dotfiles' \
+	--detail 'stow bash, bin, readline' \
+	--depends 'system_packages' \
+	--order 20 \
+	--desc $'Uses GNU Stow to link bash, bin, and readline configuration into $HOME.\nBacks up an existing .bashrc, .bash_aliases, and .inputrc first.'
+
+comp_define wsl_conf \
+	--label 'WSL config (systemd, appendWindowsPath)' \
+	--plan 'WSL config' \
+	--detail 'systemd=true, appendWindowsPath=true' \
+	--order 7 \
+	--desc $'Sets systemd=true and appendWindowsPath=true in /etc/wsl.conf.\nRequires wsl --shutdown from Windows to take effect.'
+
+comp_define git_credential \
+	--label 'Git config (credentials + submodules)' \
+	--plan 'Git config' \
+	--detail 'GCM + recursive submodule defaults' \
+	--order 8 \
+	--desc $'Sets credential.helper to Windows GCM for HTTPS when available.\nSets submodule.recurse, fetch.recurseSubmodules, push.recurseSubmodules=check, and status.submoduleSummary.'
+
+comp_registry_finalize
+
+# Selection predicate. Lives beside COMP_ON so the component modules that use it
+# (probes, install_dispatch, menus) do not depend on scripts/install.sh.
+is_on() { [[ "${COMP_ON[$1]}" -eq 1 ]]; }
 
 comp_dependency() {
 	printf '%s\n' "${COMP_DEPENDS_ON[$1]:-}"
@@ -169,10 +281,23 @@ comp_registry_validate() {
 		}
 		known[$key]=1
 	done
+	# comp_define appends to both, so this can only trip if something wrote to
+	# the arrays directly.
 	[[ "${#COMP_KEYS[@]}" -eq "${#COMP_LABELS[@]}" ]] || {
 		printf 'component key/label count mismatch\n' >&2
 		return 1
 	}
+	# Every component needs a status probe and an install action, or it will
+	# silently report "probe failed" / do nothing when selected.
+	for key in "${COMP_KEYS[@]}"; do
+		if declare -F "_comp_probe_${key}" >/dev/null 2>&1 ||
+			declare -F comp_probe >/dev/null 2>&1; then
+			:
+		else
+			printf 'component without a probe: %s\n' "$key" >&2
+			return 1
+		fi
+	done
 	for key in "${!COMP_DEPENDS_ON[@]}"; do
 		dependency="${COMP_DEPENDS_ON[$key]}"
 		[[ -n "${known[$key]+x}" && -n "${known[$dependency]+x}" ]] || {

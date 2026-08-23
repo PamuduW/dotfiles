@@ -33,7 +33,7 @@ check_node() {
 	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
 		action="skip"
 	elif [[ "$available" != "—" ]] && _version_gt "$available" "$installed"; then
-		action="upgrade (--all)"
+		action="upgrade"
 		upgradable=1
 	else
 		action="up to date"
@@ -78,7 +78,7 @@ check_npm() {
 	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
 		action="skip"
 	elif [[ "$available" != "—" ]] && _version_gt "$available" "$installed"; then
-		action="upgrade (--all)"
+		action="upgrade"
 		upgradable=1
 	else
 		action="up to date"
@@ -170,7 +170,7 @@ check_go() {
 	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
 		action="skip"
 	elif [[ "$available" != "—" ]] && _version_gt "$available" "$installed"; then
-		action="upgrade (--all)"
+		action="upgrade"
 		upgradable=1
 	else
 		action="up to date"

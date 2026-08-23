@@ -1,33 +1,40 @@
 # shellcheck shell=bash
+# Tool discovery and version reading are shared with the status probes.
+if ! declare -F tool_resolve >/dev/null 2>&1; then
+	# shellcheck source=scripts/lib/tool_resolve.sh
+	source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/tool_resolve.sh"
+fi
+
 # --- Cursor CLI ---
 cursor_installed_version() {
-	if command -v agent >/dev/null 2>&1; then
-		agent --version 2>/dev/null | head -n1 || echo "installed"
-	elif command -v cursor >/dev/null 2>&1; then
-		cursor --version 2>/dev/null | head -n1 || echo "installed"
-	elif [[ -x "$HOME/.local/bin/agent" ]]; then
-		"$HOME/.local/bin/agent" --version 2>/dev/null | head -n1 || echo "installed"
-	else
+	local binary raw
+	binary="$(tool_resolve 'agent cursor')" || {
 		echo "$NOT_INSTALLED"
-	fi
+		return
+	}
+	raw="$(tool_version_raw "$binary" --version)" || {
+		echo installed
+		return
+	}
+	printf '%s\n' "${raw%%$'\n'*}"
 }
 
 cursor_is_installed() {
-	command -v agent >/dev/null 2>&1 || command -v cursor >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/agent" ]]
+	tool_resolve 'agent cursor' >/dev/null 2>&1
 }
 
+# Cursor publishes no queryable "latest" version, so this probe never reports an
+# upgrade and always returns nonzero (no upgrade available).
 check_cursor_cli() {
-	local installed available action upgradable=0
+	local installed action
 	installed="$(cursor_installed_version)"
 	if cursor_is_installed; then
-		available="—"
 		action="latest unchecked"
 	else
-		available="—"
 		action="skip"
 	fi
-	printf '%s|%s|%s|%s\n' "Cursor CLI" "$installed" "$available" "$action"
-	[[ $upgradable -eq 1 ]]
+	printf '%s|%s|%s|%s\n' "Cursor CLI" "$installed" "—" "$action"
+	return 1
 }
 
 upgrade_cursor_cli() {
@@ -51,12 +58,17 @@ upgrade_cursor_cli() {
 
 # --- Codex CLI ---
 codex_installed_version() {
+	local binary raw
 	_load_nvm
-	if command -v codex >/dev/null 2>&1; then
-		codex --version 2>/dev/null | head -n1 || echo "installed"
-	else
+	binary="$(tool_resolve codex)" || {
 		echo "$NOT_INSTALLED"
-	fi
+		return
+	}
+	raw="$(tool_version_raw "$binary" --version)" || {
+		echo installed
+		return
+	}
+	printf '%s\n' "${raw%%$'\n'*}"
 }
 
 codex_available_version() {
@@ -98,13 +110,16 @@ upgrade_codex_cli() {
 
 # --- Claude CLI ---
 claude_installed_version() {
-	if command -v claude >/dev/null 2>&1; then
-		claude --version 2>/dev/null | head -n1 || echo "installed"
-	elif [[ -x "$HOME/.local/bin/claude" ]]; then
-		"$HOME/.local/bin/claude" --version 2>/dev/null | head -n1 || echo "installed"
-	else
+	local binary raw
+	binary="$(tool_resolve claude)" || {
 		echo "$NOT_INSTALLED"
-	fi
+		return
+	}
+	raw="$(tool_version_raw "$binary" --version)" || {
+		echo installed
+		return
+	}
+	printf '%s\n' "${raw%%$'\n'*}"
 }
 
 check_claude_cli() {
@@ -133,22 +148,20 @@ upgrade_claude_cli() {
 
 # --- Copilot CLI ---
 copilot_command() {
-	if command -v copilot >/dev/null 2>&1; then
-		command -v copilot
-	elif [[ -x "$HOME/.local/bin/copilot" ]]; then
-		printf '%s\n' "$HOME/.local/bin/copilot"
-	else
-		return 1
-	fi
+	tool_resolve copilot
 }
 
 copilot_installed_version() {
-	local executable
-	if executable="$(copilot_command)"; then
-		"$executable" --version 2>/dev/null | head -n1 || echo "installed"
-	else
+	local binary raw
+	binary="$(copilot_command)" || {
 		echo "$NOT_INSTALLED"
-	fi
+		return
+	}
+	raw="$(tool_version_raw "$binary" --version)" || {
+		echo installed
+		return
+	}
+	printf '%s\n' "${raw%%$'\n'*}"
 }
 
 copilot_is_installed() {
@@ -180,12 +193,17 @@ upgrade_copilot_cli() {
 
 # --- lazygit ---
 lazygit_installed_version() {
-	if command -v lazygit >/dev/null 2>&1; then
-		lazygit --version 2>/dev/null | grep -oP 'version=\K[0-9.]+' | head -n1 ||
-			lazygit --version 2>/dev/null | head -n1 || echo "installed"
-	else
+	local binary raw version
+	binary="$(tool_resolve lazygit)" || {
 		echo "$NOT_INSTALLED"
-	fi
+		return
+	}
+	raw="$(tool_version_raw "$binary" --version)" || {
+		echo installed
+		return
+	}
+	version="$(grep -oP 'version=\K[0-9.]+' <<<"$raw" | head -n1 || true)"
+	printf '%s\n' "${version:-${raw%%$'\n'*}}"
 }
 
 check_lazygit() {
@@ -225,12 +243,17 @@ upgrade_lazygit() {
 
 # --- lazydocker ---
 lazydocker_installed_version() {
-	if command -v lazydocker >/dev/null 2>&1; then
-		lazydocker --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 ||
-			echo "$NOT_INSTALLED"
-	else
+	local binary raw version
+	binary="$(tool_resolve lazydocker)" || {
 		echo "$NOT_INSTALLED"
-	fi
+		return
+	}
+	raw="$(tool_version_raw "$binary" --version)" || {
+		echo "$NOT_INSTALLED"
+		return
+	}
+	version="$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' <<<"$raw" | head -n1 || true)"
+	printf '%s\n' "${version:-$NOT_INSTALLED}"
 }
 
 check_lazydocker() {
@@ -294,7 +317,7 @@ check_monaspace() {
 	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
 		action="skip"
 	elif [[ "$available" != "—" && "$installed" != "$available" ]]; then
-		action="upgrade (--all)"
+		action="upgrade"
 		upgradable=1
 	else
 		action="up to date"

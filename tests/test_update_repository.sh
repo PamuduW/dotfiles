@@ -4,7 +4,7 @@ set -euo pipefail
 
 TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
-source "$TEST_DIR/lib/test_harness.sh"
+source "$TEST_DIR/lib/harness.sh"
 test_harness_init
 test_harness_report_init
 source "$TEST_DIR/lib/update_test_fixture.sh"
@@ -135,8 +135,8 @@ test_cmd_update_executes_outcome_contract() (
 		[[ "$answer" == yes ]]
 	}
 	print_report_table() { printf 'report\n' >>"$events"; }
-	print_upgrade_summary() { printf 'summary:%s\n' "$1" >>"$events"; }
-	_run_update_downstream() { printf 'downstream:%s\n' "$1" >>"$events"; }
+	print_upgrade_summary() { printf 'summary\n' >>"$events"; }
+	_run_update_downstream() { printf 'downstream\n' >>"$events"; }
 
 	TEST_GATE_OUTCOME=stopped
 	if cmd_update >/dev/null 2>&1; then return 1; fi
@@ -152,14 +152,14 @@ test_cmd_update_executes_outcome_contract() (
 	TEST_GATE_OUTCOME=current
 	replies=yes
 	cmd_update >/dev/null || return 1
-	[[ "$(sed -n '1p' "$events")" == gate && "$(sed -n '2p' "$events")" == report && "$(sed -n '3p' "$events")" == confirm:* && "$(sed -n '4p' "$events")" == downstream:true && "$(sed -n '5p' "$events")" == summary:true ]] || return 1
+	[[ "$(sed -n '1p' "$events")" == gate && "$(sed -n '2p' "$events")" == report && "$(sed -n '3p' "$events")" == confirm:* && "$(sed -n '4p' "$events")" == downstream && "$(sed -n '5p' "$events")" == summary ]] || return 1
 	! grep -Fq 'Include Node.js, npm, Go, and Monaspace fonts' "$events" || return 1
 
 	: >"$events"
 	TEST_GATE_OUTCOME=current
 	replies=yes
 	cmd_update --all >/dev/null || return 1
-	[[ "$(sed -n '3p' "$events")" == confirm:* && "$(sed -n '4p' "$events")" == downstream:true && "$(sed -n '5p' "$events")" == summary:true ]] || return 1
+	[[ "$(sed -n '3p' "$events")" == confirm:* && "$(sed -n '4p' "$events")" == downstream && "$(sed -n '5p' "$events")" == summary ]] || return 1
 
 	: >"$events"
 	TEST_GATE_OUTCOME=repository_changed

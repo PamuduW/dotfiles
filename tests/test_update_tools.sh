@@ -4,12 +4,12 @@ set -euo pipefail
 
 TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
-source "$TEST_DIR/lib/test_harness.sh"
+source "$TEST_DIR/lib/harness.sh"
 test_harness_init
 test_harness_report_init
 source "$TEST_DIR/lib/update_test_fixture.sh"
 
-test_downstream_executes_apt_first_and_all_matrix() (
+test_downstream_executes_apt_first_then_every_managed_step() (
 	local events="$TEST_HARNESS_ROOT/downstream.events"
 	: >"$events"
 	sudo() { printf 'sudo:%s\n' "$*" >>"$events"; }
@@ -19,19 +19,25 @@ test_downstream_executes_apt_first_and_all_matrix() (
 		UPGRADE_STEP_RESULT["$1"]=ok
 	}
 
-	_run_update_downstream false >/dev/null || return 1
+	_run_update_downstream >/dev/null || return 1
 	[[ "$(sed -n '1p' "$events")" == 'sudo:apt-get update -qq' ]] || return 1
 	grep -Fq 'step:apt packages|' "$events" || return 1
-	! grep -Eq 'step:(Node.js \(nvm\)|npm|Go \(asdf\)|Monaspace fonts)\|' "$events" || return 1
-
-	: >"$events"
-	_run_update_downstream true >/dev/null || return 1
-	[[ "$(sed -n '1p' "$events")" == 'sudo:apt-get update -qq' ]] || return 1
 	grep -Fq 'step:Graphify CLI|' "$events" || return 1
 	grep -Fq 'step:Node.js (nvm)|' "$events" || return 1
 	grep -Fqx 'step:npm|npm install -g npm@12.0.2 --engine-strict --allow-remote=all|upgrade_npm|12.0.2' "$events" || return 1
 	grep -Fq 'step:Go (asdf)|' "$events" || return 1
 	grep -Fq 'step:Monaspace fonts|' "$events"
+)
+
+test_update_accepts_all_flag_as_a_compatibility_no_op() (
+	local events="$TEST_HARNESS_ROOT/downstream-all-flag.events"
+	: >"$events"
+	_dotfiles_run_update() { printf 'run:%s:%s\n' "$1" "$2" >>"$events"; }
+
+	cmd_update >/dev/null || return 1
+	cmd_update --all >/dev/null || return 1
+	[[ "$(sed -n '1p' "$events")" == "$(sed -n '2p' "$events")" ]] || return 1
+	[[ "$(sed -n '1p' "$events")" == 'run:_dotfiles_confirm_repo_update:false' ]]
 )
 
 test_node_probe_uses_nvm_default_when_shell_path_is_stale() (
@@ -62,7 +68,7 @@ test_npm_probe_reports_upgrade_current_and_missing_states() (
 	}
 
 	output="$(check_npm || true)"
-	[[ "$output" == 'npm|11.16.0|12.0.1|upgrade (--all)' ]] || return 1
+	[[ "$output" == 'npm|11.16.0|12.0.1|upgrade' ]] || return 1
 
 	npm_mode=current
 	output="$(check_npm || true)"
@@ -438,7 +444,38 @@ test_apt_report_does_not_claim_cached_indices_are_current() (
 	[[ "$output" == 'apt packages|system packages|none (cached)|refresh on apply' ]]
 )
 
-expect_success 'downstream execution runs apt refresh first and honors --all' test_downstream_executes_apt_first_and_all_matrix
+test_installed_version_reports_installed_when_version_command_fails() (
+	local bin_dir="$TEST_HARNESS_ROOT/broken-version-bin"
+	mkdir -p "$bin_dir"
+	# A tool that exists but whose --version fails must report "installed",
+	# not an empty cell. `cmd --version | head -n1 || echo installed` could
+	# never do this: head exits 0 on empty input.
+	printf '#!/bin/sh\nexit 3\n' >"$bin_dir/claude"
+	chmod +x "$bin_dir/claude"
+	[[ "$(PATH="$bin_dir:/usr/bin:/bin" HOME="$TEST_HARNESS_ROOT" claude_installed_version)" == 'installed' ]] || return 1
+
+	printf '#!/bin/sh\nexit 3\n' >"$bin_dir/lazydocker"
+	chmod +x "$bin_dir/lazydocker"
+	[[ "$(PATH="$bin_dir:/usr/bin:/bin" HOME="$TEST_HARNESS_ROOT" lazydocker_installed_version)" == "$NOT_INSTALLED" ]]
+)
+
+test_status_and_update_share_one_tool_resolver() (
+	# Both paths must find the same executable, including the ~/.local/bin
+	# fallback, so status and update cannot disagree about what is installed.
+	local home_dir="$TEST_HARNESS_ROOT/shared-resolver-home"
+	mkdir -p "$home_dir/.local/bin"
+	printf '#!/bin/sh\necho 9.9.9\n' >"$home_dir/.local/bin/claude"
+	chmod +x "$home_dir/.local/bin/claude"
+	local empty="$TEST_HARNESS_ROOT/shared-resolver-bin"
+	mkdir -p "$empty"
+	[[ "$(PATH="$empty:/usr/bin:/bin" HOME="$home_dir" tool_resolve claude)" == "$home_dir/.local/bin/claude" ]] || return 1
+	[[ "$(PATH="$empty:/usr/bin:/bin" HOME="$home_dir" claude_installed_version)" == '9.9.9' ]]
+)
+
+expect_success 'installed-version reports installed when the version command fails' test_installed_version_reports_installed_when_version_command_fails
+expect_success 'status and update share one tool resolver' test_status_and_update_share_one_tool_resolver
+expect_success 'downstream execution runs apt refresh first, then every managed step' test_downstream_executes_apt_first_then_every_managed_step
+expect_success 'update accepts --all as a compatibility no-op' test_update_accepts_all_flag_as_a_compatibility_no_op
 expect_success 'Node.js probe follows nvm default instead of a stale shell PATH' test_node_probe_uses_nvm_default_when_shell_path_is_stale
 expect_success 'npm probe reports upgrade current and missing states' test_npm_probe_reports_upgrade_current_and_missing_states
 expect_success 'npm version verification accepts only safe equal or newer versions' test_npm_version_reached_requires_a_safe_equal_or_newer_version
@@ -462,6 +499,7 @@ expect_success 'Go upgrade stops when asdf install fails' test_go_upgrade_stops_
 expect_success 'Cursor update falls back to the official installer after agent update failure' test_cursor_update_falls_back_to_official_installer
 expect_success 'Copilot update invokes the executable discovered in the local vendor bin' test_copilot_update_uses_discovered_local_executable
 expect_success 'pre-confirmation apt report probing never invokes sudo' test_apt_report_probe_uses_cached_indices_without_sudo
+
 expect_success 'apt preview labels cached metadata without claiming it is current' test_apt_report_does_not_claim_cached_indices_are_current
 
 finish_tests

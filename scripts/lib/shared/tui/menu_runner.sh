@@ -37,18 +37,44 @@ menu_submenu_loop() {
 			unset MENU_SIMPLE_DESC_FN
 		fi
 
-		if ! choice="$(menu_simple_run)"; then
+		if ! menu_simple_run; then
 			return 0
 		fi
-		MENU_SIMPLE_RESULT="$choice"
+		choice="${MENU_SIMPLE_RESULT:-}"
 
 		if [[ "$choice" == "back" ]]; then
 			return 0
 		fi
 
 		ui_clear
-		local dispatch_rc=0
-		"$dispatch_fn" "$choice" || dispatch_rc=$?
+		"$dispatch_fn" "$choice" || true
 		ui_pause
 	done
+}
+
+# Submenu loop driven by a setup function and a dispatch function, for menus
+# that build MENU_SIMPLE_* themselves rather than passing label/key arrays.
+#
+#   tui_submenu_loop <setup_fn> <dispatch_fn>
+tui_submenu_loop() {
+	local setup_fn="$1" dispatch_fn="$2" choice rc
+	while true; do
+		"$setup_fn"
+		if ! menu_simple_run; then
+			return 0
+		fi
+		choice="${MENU_SIMPLE_RESULT:-}"
+		[[ "$choice" == back || "$choice" == quit ]] && return 0
+		ui_clear
+		rc=0
+		"$dispatch_fn" "$choice" || rc=$?
+		((rc == 0)) || ui_pause
+	done
+}
+
+# A submenu declares that it already paused for its own actions, so the parent
+# loop skips its pause. This replaces a hard-coded list of child menu names in
+# the parent, which had to be edited whenever a submenu was added.
+tui_menu_declare_owns_pause() {
+	MENU_OWNS_PAUSE=true
 }

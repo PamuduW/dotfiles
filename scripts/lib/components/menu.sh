@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2034  # MENU_CB_* globals are consumed by menu_checkbox_run.
 # Component selection adapter over the shared checkbox menu.
 
 _COMP_DESC_LINES=2

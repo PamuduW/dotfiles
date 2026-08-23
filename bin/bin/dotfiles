@@ -4,7 +4,7 @@ set -euo pipefail
 _script="$(readlink -f "${BASH_SOURCE[0]}")"
 DOTFILES_DIR="$(dirname "$(dirname "$(dirname "$_script")")")"
 
-_REPORT_TABLE_LIB="${DOTFILES_DIR}/scripts/lib/report_table.sh"
+_REPORT_TABLE_LIB="${DOTFILES_DIR}/scripts/lib/shared/tui/report_table.sh"
 if [[ -f "$_REPORT_TABLE_LIB" ]]; then
 	# shellcheck source=/dev/null
 	source "$_REPORT_TABLE_LIB"
@@ -56,6 +56,10 @@ if [[ -f "$_GITHUB_API_LIB" ]]; then
 fi
 
 # --- TTY colors ---
+_COLORS_LIB="${DOTFILES_DIR}/scripts/lib/shared/tui/colors.sh"
+# shellcheck source=scripts/lib/shared/tui/colors.sh
+source "$_COLORS_LIB"
+
 _dotfiles_use_color() {
 	[[ -n "${NO_COLOR:-}" ]] && return 1
 	[[ -n "${FORCE_COLOR:-}" ]] && return 0
@@ -66,23 +70,9 @@ _dotfiles_use_color() {
 }
 
 if _dotfiles_use_color; then
-	C_RESET=$'\033[0m'
-	C_BOLD=$'\033[1m'
-	C_DIM=$'\033[2m'
-	C_GREEN=$'\033[32m'
-	C_YELLOW=$'\033[33m'
-	C_CYAN=$'\033[36m'
-	C_ORANGE=$'\033[38;5;208m'
-	C_RED=$'\033[31m'
+	colors_set_palette
 else
-	C_RESET=''
-	C_BOLD=''
-	C_DIM=''
-	C_GREEN=''
-	C_YELLOW=''
-	C_CYAN=''
-	C_ORANGE=''
-	C_RED=''
+	colors_clear_palette
 fi
 
 NOT_INSTALLED='not installed'
@@ -91,6 +81,14 @@ NOT_INSTALLED='not installed'
 _msg() { printf '%s\n' "$*"; }
 _warn() { printf '%s%s%s\n' "$C_YELLOW" "$*" "$C_RESET" >&2; }
 _err() { printf '%s%s%s\n' "$C_RED" "$*" "$C_RESET" >&2; }
+
+_PARALLEL_PROBE_LIB="${DOTFILES_DIR}/scripts/lib/parallel_probe.sh"
+# shellcheck source=scripts/lib/parallel_probe.sh
+source "$_PARALLEL_PROBE_LIB"
+
+_TOOL_RESOLVE_LIB="${DOTFILES_DIR}/scripts/lib/tool_resolve.sh"
+# shellcheck source=scripts/lib/tool_resolve.sh
+source "$_TOOL_RESOLVE_LIB"
 
 _INSTALLER_LOGGING_LIB="${DOTFILES_DIR}/scripts/lib/installers/logging.sh"
 _REMOTE_SCRIPT_LIB="${DOTFILES_DIR}/scripts/lib/installers/remote_script.sh"
@@ -114,6 +112,10 @@ source "$_APT_INSTALLER_LIB"
 source "$_WSL_CONF_LIB"
 # shellcheck source=scripts/lib/components/probes.sh
 source "$_COMPONENT_PROBES_LIB"
+
+_ACTION_LOG_LIB="${DOTFILES_DIR}/scripts/lib/action_log.sh"
+# shellcheck source=scripts/lib/action_log.sh
+source "$_ACTION_LOG_LIB"
 
 _UPDATE_COMPONENTS_LIB="${DOTFILES_DIR}/scripts/lib/update_components.sh"
 _UPDATE_WORKFLOW_LIB="${DOTFILES_DIR}/scripts/lib/update_workflow.sh"

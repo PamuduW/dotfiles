@@ -45,7 +45,9 @@ bash -n "${shell_files[@]}"
 if command -v shellcheck >/dev/null 2>&1; then
 	printf 'Running ShellCheck on production code...\n'
 	# Bash namerefs to associative arrays trigger SC2178/SC2313 false positives.
-	shellcheck -x -e SC2034,SC1091,SC2178,SC2313 "${production_files[@]}"
+	# SC2034 stays enabled so new dead variables are caught; files that publish
+	# cross-module globals carry a local disable with a reason.
+	shellcheck -x -e SC1091,SC2178,SC2313 "${production_files[@]}"
 	printf 'Running ShellCheck warning checks on test harnesses...\n'
 	# Test namerefs and source-time metadata arrays produce known false positives.
 	shellcheck -x -S warning -e SC1091,SC2034,SC2178,SC2313 "${test_files[@]}"
@@ -68,6 +70,9 @@ if ((${#json_files[@]} > 0)); then
 		printf 'jq not installed; skipping JSON syntax checks.\n' >&2
 	fi
 fi
+
+printf 'Checking shared library drift...\n'
+"$REPO_DIR/scripts/sync-shared.sh" --check
 
 printf 'Checking diff whitespace...\n'
 git -C "$REPO_DIR" diff --check

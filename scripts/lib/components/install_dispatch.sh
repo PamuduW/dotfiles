@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2034  # INSTALL_COMPONENT_RESULT is read by the install orchestrator.
 # Per-component install dispatch (_comp_install_<id>) and run_install orchestration.
 
 _comp_install_git_identity() {

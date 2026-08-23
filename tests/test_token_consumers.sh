@@ -4,8 +4,8 @@ set -euo pipefail
 
 TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
-# shellcheck source=tests/lib/test_harness.sh
-source "$TEST_DIR/lib/test_harness.sh"
+# shellcheck source=tests/lib/harness.sh
+source "$TEST_DIR/lib/harness.sh"
 
 test_harness_report_init
 

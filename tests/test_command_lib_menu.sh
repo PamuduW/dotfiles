@@ -5,19 +5,19 @@ set -euo pipefail
 TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
 
-# shellcheck source=tests/lib/test_harness.sh
-source "$TEST_DIR/lib/test_harness.sh"
+# shellcheck source=tests/lib/harness.sh
+source "$TEST_DIR/lib/harness.sh"
 test_harness_init
 
 NO_COLOR=1
 PKG_FILE="$REPO_DIR/packages/packages.txt"
 export NO_COLOR PKG_FILE
 
-source "$REPO_DIR/scripts/lib/menu_render.sh"
-source "$REPO_DIR/scripts/lib/tty.sh"
-source "$REPO_DIR/scripts/lib/report_table.sh"
-source "$REPO_DIR/scripts/lib/menu_keys.sh"
-source "$REPO_DIR/scripts/lib/ui.sh"
+source "$REPO_DIR/scripts/lib/shared/tui/menu_render.sh"
+source "$REPO_DIR/scripts/lib/shared/tui/tty.sh"
+source "$REPO_DIR/scripts/lib/shared/tui/report_table.sh"
+source "$REPO_DIR/scripts/lib/shared/tui/menu_keys.sh"
+source "$REPO_DIR/scripts/lib/shared/tui/ui.sh"
 source "$REPO_DIR/scripts/lib/command_metadata.sh"
 source "$REPO_DIR/scripts/lib/components/registry.sh"
 source "$REPO_DIR/scripts/menus/command_lib.sh"

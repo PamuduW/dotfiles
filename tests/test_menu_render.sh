@@ -2,21 +2,21 @@
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=tests/lib/test_harness.sh
-source "$ROOT/tests/lib/test_harness.sh"
+# shellcheck source=tests/lib/harness.sh
+source "$ROOT/tests/lib/harness.sh"
 
-# shellcheck source=scripts/lib/menu_render.sh
-source "$ROOT/scripts/lib/menu_render.sh"
-# shellcheck source=scripts/lib/ui.sh
-source "$ROOT/scripts/lib/ui.sh"
-# shellcheck source=scripts/lib/menu_descriptions.sh
-source "$ROOT/scripts/lib/menu_descriptions.sh"
-# shellcheck source=scripts/lib/menu_simple.sh
-source "$ROOT/scripts/lib/menu_simple.sh"
-# shellcheck source=scripts/lib/menu_checkbox.sh
-source "$ROOT/scripts/lib/menu_checkbox.sh"
-# shellcheck source=scripts/lib/menu_paging.sh
-source "$ROOT/scripts/lib/menu_paging.sh"
+# shellcheck source=scripts/lib/shared/tui/menu_render.sh
+source "$ROOT/scripts/lib/shared/tui/menu_render.sh"
+# shellcheck source=scripts/lib/shared/tui/ui.sh
+source "$ROOT/scripts/lib/shared/tui/ui.sh"
+# shellcheck source=scripts/lib/shared/tui/menu_descriptions.sh
+source "$ROOT/scripts/lib/shared/tui/menu_descriptions.sh"
+# shellcheck source=scripts/lib/shared/tui/menu_simple.sh
+source "$ROOT/scripts/lib/shared/tui/menu_simple.sh"
+# shellcheck source=scripts/lib/shared/tui/menu_checkbox.sh
+source "$ROOT/scripts/lib/shared/tui/menu_checkbox.sh"
+# shellcheck source=scripts/lib/shared/tui/menu_paging.sh
+source "$ROOT/scripts/lib/shared/tui/menu_paging.sh"
 # shellcheck source=scripts/lib/components/registry.sh
 source "$ROOT/scripts/lib/components/registry.sh"
 # shellcheck source=scripts/lib/components/menu.sh
@@ -156,6 +156,41 @@ expect_success 'simple menu has exactly one spacer before descriptions' test_sim
 expect_success 'down/up frames match redraw count without stale content' test_down_up_frames_match_redraw_count_without_stale_content
 expect_success 'no-description menu keeps its existing blank footer' test_no_description_keeps_existing_blank_footer
 expect_success 'checkbox fixed-row accounting is unchanged' test_checkbox_fixed_rows_are_unchanged
+test_terminal_geometry_is_cached_and_invalidatable() (
+	local calls reads
+	calls="$(mktemp)"
+	# Count how often geometry is actually read from the terminal. Only
+	# in-process calls are measured: a $(...) subshell gets its own cache copy.
+	tty_available() {
+		printf 'read\n' >>"$calls"
+		return 1
+	}
+	tput() { printf '77\n'; }
+
+	menu_tty_invalidate_size
+	_menu_tty_read_size
+	_menu_tty_read_size
+	_menu_tty_read_size
+	reads="$(wc -l <"$calls")"
+	[[ "$reads" -eq 1 ]] || {
+		rm -f -- "$calls"
+		printf 'expected 1 cached geometry read, got %s\n' "$reads" >&2
+		return 1
+	}
+	[[ "$_MENU_TTY_COLS" == 77 && "$_MENU_TTY_ROWS" == 77 ]] || {
+		rm -f -- "$calls"
+		return 1
+	}
+
+	# SIGWINCH and the explicit hook both force a fresh read.
+	menu_tty_invalidate_size
+	_menu_tty_read_size
+	reads="$(wc -l <"$calls")"
+	rm -f -- "$calls"
+	[[ "$reads" -eq 2 ]]
+)
+
 expect_success 'component menu adapter preserves dependency-aware toggles' test_component_menu_adapter_preserves_dependency_toggles
+expect_success 'terminal geometry is cached and invalidatable' test_terminal_geometry_is_cached_and_invalidatable
 
 finish_tests

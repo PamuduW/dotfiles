@@ -5,14 +5,19 @@ if [[ "${_DOTFILES_REPO_UPDATE_LOADED:-0}" == 1 ]]; then
 fi
 _DOTFILES_REPO_UPDATE_LOADED=1
 
+if ! declare -F colors_set_palette >/dev/null 2>&1; then
+	_REPO_UPDATE_LIB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/shared/tui" && pwd)"
+	# shellcheck source=scripts/lib/shared/tui/colors.sh
+	source "$_REPO_UPDATE_LIB_DIR/colors.sh"
+fi
 if ! declare -F tty_available >/dev/null 2>&1; then
-	_REPO_UPDATE_LIB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-	# shellcheck source=scripts/lib/tty.sh
+	_REPO_UPDATE_LIB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/shared/tui" && pwd)"
+	# shellcheck source=scripts/lib/shared/tui/tty.sh
 	source "$_REPO_UPDATE_LIB_DIR/tty.sh"
 fi
 if ! declare -F rt_print_four_column_header >/dev/null 2>&1; then
-	_REPO_UPDATE_LIB_DIR="${_REPO_UPDATE_LIB_DIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)}"
-	# shellcheck source=scripts/lib/report_table.sh
+	_REPO_UPDATE_LIB_DIR="${_REPO_UPDATE_LIB_DIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/shared/tui" && pwd)}"
+	# shellcheck source=scripts/lib/shared/tui/report_table.sh
 	source "$_REPO_UPDATE_LIB_DIR/report_table.sh"
 fi
 
@@ -198,27 +203,8 @@ _repo_update_history_detail_for() {
 	esac
 }
 
-_repo_update_color_available() {
-	local available="$1"
-	case "$available" in
-	none | — | up\ to\ date) printf '%s%s%s' "${C_DIM:-}" "$available" "${C_RESET:-}" ;;
-	*behind | *ahead | update* | *review*) printf '%s%s%s' "${C_YELLOW:-}" "$available" "${C_RESET:-}" ;;
-	*) printf '%s%s%s' "${C_CYAN:-}" "$available" "${C_RESET:-}" ;;
-	esac
-}
-
-_repo_update_color_action() {
-	local action="$1"
-	case "$action" in
-	up\ to\ date | skip | current) printf '%s%s%s' "${C_GREEN:-}" "$action" "${C_RESET:-}" ;;
-	latest\ unchecked) printf '%s%s%s' "${C_DIM:-}" "$action" "${C_RESET:-}" ;;
-	upgrade* | refresh | continue | check | replace*) printf '%s%s%s' "${C_YELLOW:-}" "$action" "${C_RESET:-}" ;;
-	pull* | verified) printf '%s%s%s' "${C_CYAN:-}" "$action" "${C_RESET:-}" ;;
-	unchecked) printf '%s%s%s' "${C_YELLOW:-}" "$action" "${C_RESET:-}" ;;
-	blocked) printf '%s%s%s' "${C_RED:-}" "$action" "${C_RESET:-}" ;;
-	*) printf '%s' "$action" ;;
-	esac
-}
+_repo_update_color_available() { status_color_available "$1"; }
+_repo_update_color_action() { status_color_action "$1"; }
 
 _repo_update_print_table_header() {
 	local last_col="$1"

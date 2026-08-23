@@ -159,7 +159,7 @@ print_status_summary_all() {
 		ui_clear
 		printf '\n'
 		ui_print_header "Check Status" "Dotfiles › Check Status" "$cols"
-		ui_print_report_table_columns
+		rt_print_table_columns
 
 		for row in "${rows[@]}"; do
 			IFS='|' read -r short_label detail result <<<"$row"
@@ -168,15 +168,15 @@ print_status_summary_all() {
 			missing) ((++miss_count)) ;;
 			*) ((++check_count)) ;;
 			esac
-			ui_print_report_table_row "$short_label" "$detail" "$result"
+			rt_print_table_row "$short_label" "$detail" "$result"
 		done
 
 		if [[ $miss_count -eq 0 && $check_count -eq 0 ]]; then
-			ui_print_report_rollup "$ok_count" 0 0
+			rt_print_rollup "$ok_count" 0 0
 		elif [[ $miss_count -eq 0 ]]; then
-			ui_print_report_rollup "$ok_count" "$check_count" 0
+			rt_print_rollup "$ok_count" "$check_count" 0
 		else
-			ui_print_report_rollup "$ok_count" "$check_count" "$miss_count"
+			rt_print_rollup "$ok_count" "$check_count" "$miss_count"
 		fi
 	} >"$status_output"
 }

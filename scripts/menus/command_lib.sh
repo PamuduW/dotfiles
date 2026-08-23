@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2034  # MENU_SIMPLE_* globals are consumed by menu_simple_run.
 
 command_lib_render() {
 	local cols="${1:-$(menu_tty_cols)}"

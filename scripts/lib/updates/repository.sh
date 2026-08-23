@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2034  # CHECK_FUNCS is consumed by update_workflow.sh.
 # --- dotfiles repo ---
 dotfiles_repo_status() {
 	local result_name="${1:-}" state=unchecked ahead=0 behind=0

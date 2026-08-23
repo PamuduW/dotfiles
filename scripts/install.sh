@@ -43,34 +43,8 @@ if [[ -t 0 ]]; then
 	DOTFILES_INTERACTIVE_TTY=true
 fi
 
-_clean_log_stream() {
-	perl -pe '
-		s/\r/\n/g;
-		s/\e\[[0-9;?]*[ -\/]*[@-~]//g;
-		s/\e\][^\a]*(?:\a|\e\\)//g;
-	' | sed -u 's/[[:space:]]*$//'
-}
-
-LOG_DIR="$DOTFILES_DIR/log"
-LOG_FILE=''
-RAW_LOG_FILE=''
-DOTFILES_LOG_ACTIVE=false
-
-finalize_log_file() {
-	[[ -n "$RAW_LOG_FILE" && -f "$RAW_LOG_FILE" ]] || return 0
-	_clean_log_stream <"$RAW_LOG_FILE" >"$LOG_FILE"
-	rm -f "$RAW_LOG_FILE"
-}
-
-start_action_log() {
-	[[ "$DOTFILES_LOG_ACTIVE" == true ]] && return 0
-	mkdir -p "$LOG_DIR"
-	LOG_FILE="$LOG_DIR/$(date '+%Y-%m-%d_%H-%M-%S').log"
-	RAW_LOG_FILE="${LOG_FILE}.raw"
-	DOTFILES_LOG_ACTIVE=true
-	trap finalize_log_file EXIT
-	exec > >(tee -a "$RAW_LOG_FILE") 2>&1
-}
+# shellcheck source=scripts/lib/action_log.sh
+source "$DOTFILES_DIR/scripts/lib/action_log.sh"
 
 # shellcheck source=scripts/lib/load.sh
 source "$DOTFILES_DIR/scripts/lib/load.sh"
@@ -98,8 +72,6 @@ source "$DOTFILES_DIR/scripts/menus/libraries.sh"
 SETUP_GIT_NAME=""
 SETUP_GIT_EMAIL=""
 TOGGLE_MSG=""
-
-is_on() { [[ "${COMP_ON[$1]}" -eq 1 ]]; }
 
 prompt_git_identity() {
 	local current_name current_email

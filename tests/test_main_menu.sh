@@ -4,9 +4,9 @@ set -euo pipefail
 TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
 
-# shellcheck source=tests/lib/test_harness.sh
+# shellcheck source=tests/lib/harness.sh
 # shellcheck disable=SC1091  # Dynamic repository path; validated above.
-source "$TEST_DIR/lib/test_harness.sh"
+source "$TEST_DIR/lib/harness.sh"
 test_harness_init
 
 # Source only the owned menu units; dependencies are stubbed per test.
@@ -40,12 +40,13 @@ test_exact_root_contract() {
 		"Check Status"
 		"Install Dotfiles"
 		"Update"
+		"Full Update (Dotfiles + Agentbot)"
 		"GitHub Token Config"
 		"Libraries"
 		"Quit"
 	)
 	# shellcheck disable=SC2034  # Read through a nameref in assert_array_equals.
-	local expected_keys=(status install update github_token libraries quit)
+	local expected_keys=(status install update full_update github_token libraries quit)
 	assert_array_equals _main_menu_labels expected_labels || return 1
 	assert_array_equals _main_menu_keys expected_keys || return 1
 	local i description
@@ -66,7 +67,7 @@ test_root_breadcrumb_is_dotfiles() {
 		IFS= read -r choice <"$queue"
 		tail -n +2 "$queue" >"$rest"
 		mv -f -- "$rest" "$queue"
-		printf '%s\n' "$choice"
+		MENU_SIMPLE_RESULT="$choice"
 	}
 	(main_menu_loop)
 	[[ "$(sed -n '1p' "$captured")" == 'Dotfiles' ]] || return 1
@@ -191,7 +192,7 @@ test_cancel_redraws_and_quit_returns() {
 		if [[ "$choice" == 'CANCEL' ]]; then
 			return 1
 		fi
-		printf '%s\n' "$choice"
+		MENU_SIMPLE_RESULT="$choice"
 	}
 	output="$({
 		main_menu_loop
@@ -234,7 +235,7 @@ test_changed_repository_exits_dotfiles_menu_without_redraw() (
 	menu_simple_run() {
 		printf x >>"$calls"
 		[[ "$(wc -c <"$calls")" -eq 1 ]] || return 1
-		printf '%s\n' update
+		MENU_SIMPLE_RESULT=update
 	}
 	_main_menu_dispatch() { DOTFILES_EXIT_AFTER_REPOSITORY_UPDATE=true; }
 	main_menu_loop || return 1

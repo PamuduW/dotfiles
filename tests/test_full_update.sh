@@ -4,7 +4,7 @@ set -euo pipefail
 
 TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
-source "$TEST_DIR/lib/test_harness.sh"
+source "$TEST_DIR/lib/harness.sh"
 test_harness_init
 test_harness_report_init
 
@@ -18,8 +18,8 @@ test_success_runs_all_stages_without_confirmation() (
 	local events="$TEST_HARNESS_ROOT/full-update-success.events"
 	: >"$events"
 	_dotfiles_run_update() {
-		printf 'dotfiles:%s:%s:%s\n' "$1" "$2" "$3" >>"$events"
-		[[ "$2" == _dotfiles_approve_repo_update && "$3" == true ]]
+		printf 'dotfiles:%s:%s\n' "$1" "$2" >>"$events"
+		[[ "$1" == _dotfiles_approve_repo_update && "$2" == true ]]
 	}
 	_dotfiles_approve_repo_update() {
 		printf 'unexpected-confirm\n' >>"$events"
@@ -30,7 +30,7 @@ test_success_runs_all_stages_without_confirmation() (
 	}
 
 	cmd_full_update >/dev/null || return 1
-	[[ "$(<"$events")" == $'dotfiles:true:_dotfiles_approve_repo_update:true\nagentbot:install:confirm=yes\nagentbot:update --yes:confirm=unset' ]]
+	[[ "$(<"$events")" == $'dotfiles:_dotfiles_approve_repo_update:true\nagentbot:install:confirm=yes\nagentbot:update --yes:confirm=unset' ]]
 )
 
 test_dotfiles_change_restarts_once_and_second_change_stops() (

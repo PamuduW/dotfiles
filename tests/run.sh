@@ -4,6 +4,10 @@ set -euo pipefail
 TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 failed=0
 
+# This runs the test files only. scripts/validate.sh is the full gate (syntax,
+# ShellCheck, shfmt, JSON, whitespace, then this runner) and is what CI calls.
+printf 'Running test files only. For the full gate run: scripts/validate.sh\n'
+
 while IFS= read -r test_file; do
 	printf '\n== %s ==\n' "$(basename "$test_file")"
 	if ! bash "$test_file"; then

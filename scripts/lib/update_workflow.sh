@@ -1,46 +1,28 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2034  # repo_result is populated through a nameref by repo_update_run.
 # Repository-first update orchestration and fixed-width update reports.
 # Depends on update_components.sh and repo_update.sh.
 
-_color_action() {
-	local action="$1"
-	case "$action" in
-	up\ to\ date | skip) printf '%s%s%s' "$C_GREEN" "$action" "$C_RESET" ;;
-	current) printf '%s%s%s' "$C_GREEN" "$action" "$C_RESET" ;;
-	latest\ unchecked) printf '%s%s%s' "$C_DIM" "$action" "$C_RESET" ;;
-	upgrade* | refresh | continue | check) printf '%s%s%s' "$C_YELLOW" "$action" "$C_RESET" ;;
-	pull* | verified) printf '%s%s%s' "$C_CYAN" "$action" "$C_RESET" ;;
-	unchecked) printf '%s%s%s' "$C_YELLOW" "$action" "$C_RESET" ;;
-	blocked) printf '%s%s%s' "$C_RED" "$action" "$C_RESET" ;;
-	*) printf '%s' "$action" ;;
-	esac
-}
+_color_action() { status_color_action "$1"; }
+_color_result() { status_color_result "$1"; }
 
-_color_result() {
-	local result="$1"
-	case "$result" in
-	ok | installed | configured) printf '%s%s%s' "$C_GREEN" "$result" "$C_RESET" ;;
-	missing | failed) printf '%s%s%s' "$C_RED" "$result" "$C_RESET" ;;
-	check | drift | extra) printf '%s%s%s' "$C_YELLOW" "$result" "$C_RESET" ;;
-	skipped*) printf '%s%s%s' "$C_DIM" "$result" "$C_RESET" ;;
-	*) printf '%s' "$result" ;;
-	esac
-}
-
+# Several checks hit the network (npm view, GitHub releases), so run them
+# concurrently. Output order still follows CHECK_FUNCS, so the report is
+# deterministic. dotfiles_repo_status reads an already-collected nameref and
+# takes the repo result name.
 _collect_check_rows() {
 	local repo_result_name="${1:-}"
 	_load_nvm
-	local -a rows=()
-	local fn row
+	local fn
+	local -a probes=()
 	for fn in "${CHECK_FUNCS[@]}"; do
 		if [[ "$fn" == dotfiles_repo_status ]]; then
-			row="$("$fn" "$repo_result_name" || true)"
+			probes+=("$(printf '%s %q' "$fn" "$repo_result_name")")
 		else
-			row="$("$fn" || true)"
+			probes+=("$fn")
 		fi
-		rows+=("$row")
 	done
-	printf '%s\n' "${rows[@]}"
+	run_probes_parallel '' "${probes[@]}"
 }
 
 # Fixed-width table row: truncate text columns so pipes stay aligned; color last column only.
@@ -113,8 +95,7 @@ print_report_table() {
 }
 
 print_upgrade_summary() {
-	local upgrade_all="${1:-false}"
-	local repo_result_name="${2:-}"
+	local repo_result_name="${1:-}"
 	local -a rows=()
 	local row component installed available _action result
 	local ok_count=0 fail_count=0
@@ -130,13 +111,6 @@ print_upgrade_summary() {
 		if [[ -z "$result" ]]; then
 			case "$component" in
 			"dotfiles repo") result="ok" ;;
-			"Node.js (nvm)" | "npm" | "Go (asdf)" | "Monaspace fonts")
-				if [[ "$upgrade_all" == true ]]; then
-					result="skipped"
-				else
-					result="skipped (--all)"
-				fi
-				;;
 			*) result="—" ;;
 			esac
 		fi
@@ -149,9 +123,7 @@ print_upgrade_summary() {
 
 	printf '\n'
 	if [[ $fail_count -eq 0 ]]; then
-		printf '%sUpgrade finished%s — %d step(s) ok' "$C_GREEN" "$C_RESET" "$ok_count"
-		[[ "$upgrade_all" != true ]] && printf ' (opt-in components skipped; use --all)'
-		printf '.\n'
+		printf '%sUpgrade finished%s — %d step(s) ok.\n' "$C_GREEN" "$C_RESET" "$ok_count"
 	else
 		printf '%sUpgrade finished with %d failure(s)%s — see log above.\n' "$C_RED" "$fail_count" "$C_RESET"
 	fi
@@ -178,9 +150,10 @@ _update_apt_packages() {
 	sudo apt-get -o Dpkg::Use-Pty=0 upgrade -y
 }
 
+# One approved update runs every managed step, including the runtimes and fonts
+# that `--all` used to gate. See cmd_update for the compatibility note.
 _run_update_downstream() {
-	local upgrade_all=false apt_refresh_rc=0 npm_target='' npm_retry='nvm install-latest-npm'
-	[[ "${1:-}" == true ]] && upgrade_all=true
+	local apt_refresh_rc=0 npm_target='' npm_retry='nvm install-latest-npm'
 	UPGRADE_STEP_RESULT=()
 	if command -v apt-get >/dev/null 2>&1; then
 		sudo apt-get update -qq || apt_refresh_rc=$?
@@ -199,26 +172,22 @@ _run_update_downstream() {
 	_run_upgrade_step "lazygit" "dotfiles update" upgrade_lazygit
 	_run_upgrade_step "lazydocker" "dotfiles update" upgrade_lazydocker
 
-	if [[ $upgrade_all == true ]]; then
-		_run_upgrade_step "Node.js (nvm)" "nvm install --lts" upgrade_node
-		npm_target="$(npm_available_version)"
-		if npm_version_token_is_safe "$npm_target"; then
-			npm_retry="npm install -g npm@${npm_target} --engine-strict --allow-remote=all"
-		fi
-		_run_upgrade_step "npm" "$npm_retry" upgrade_npm "$npm_target"
-		_run_upgrade_step "Go (asdf)" "asdf install golang latest" upgrade_go
-		_run_upgrade_step "Monaspace fonts" "dotfiles update --all" upgrade_monaspace
-	else
-		_msg ""
-		_msg "${C_DIM}Skipping opt-in updates (Node.js, npm, Go, Monaspace). Use --all to include them.${C_RESET}"
+	_run_upgrade_step "Node.js (nvm)" "nvm install --lts" upgrade_node
+	npm_target="$(npm_available_version)"
+	if npm_version_token_is_safe "$npm_target"; then
+		npm_retry="npm install -g npm@${npm_target} --engine-strict --allow-remote=all"
 	fi
+	_run_upgrade_step "npm" "$npm_retry" upgrade_npm "$npm_target"
+	_run_upgrade_step "Go (asdf)" "asdf install golang latest" upgrade_go
+	_run_upgrade_step "Monaspace fonts" "dotfiles update" upgrade_monaspace
+
 	local result failures=0
 	for result in "${UPGRADE_STEP_RESULT[@]}"; do [[ "$result" == failed ]] && failures=$((failures + 1)); done
 	((failures == 0))
 }
 
 _dotfiles_run_update() {
-	local upgrade_all="$1" repository_decision_fn="$2" unattended="$3" repo_rc=0
+	local repository_decision_fn="$1" unattended="$2" repo_rc=0
 	local -A repo_result=()
 	repo_update_run "$DOTFILES_DIR" 'dotfiles repo' "$repository_decision_fn" repo_result 'PamuduW/dotfiles' || repo_rc=$?
 	if ((repo_rc == 2)); then
@@ -233,19 +202,20 @@ _dotfiles_run_update() {
 		_msg 'Downstream updates skipped.'
 		return 0
 	fi
-	upgrade_all=true
 	printf '\n%s%s=== Upgrade ===%s\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
 	local downstream_rc=0
-	_run_update_downstream "$upgrade_all" || downstream_rc=$?
-	print_upgrade_summary "$upgrade_all" repo_result
+	_run_update_downstream || downstream_rc=$?
+	print_upgrade_summary repo_result
 	return "$downstream_rc"
 }
 
 cmd_update() {
-	local upgrade_all=false arg
+	local arg
 	for arg in "$@"; do
 		case "$arg" in
-		--all) upgrade_all=true ;;
+		# Accepted for compatibility only: one approved update already runs every
+		# managed step, so --all selects nothing extra.
+		--all) ;;
 		-h | --help)
 			cmd_help
 			return 0
@@ -257,5 +227,5 @@ cmd_update() {
 			;;
 		esac
 	done
-	_dotfiles_run_update "$upgrade_all" _dotfiles_confirm_repo_update false
+	_dotfiles_run_update _dotfiles_confirm_repo_update false
 }

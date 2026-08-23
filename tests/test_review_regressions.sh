@@ -4,13 +4,13 @@ set -euo pipefail
 
 TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
-source "$TEST_DIR/lib/test_harness.sh"
+source "$TEST_DIR/lib/harness.sh"
 test_harness_init
 
 test_harness_report_init
 
-source "$REPO_DIR/scripts/lib/tty.sh"
-source "$REPO_DIR/scripts/lib/menu_render.sh"
+source "$REPO_DIR/scripts/lib/shared/tui/tty.sh"
+source "$REPO_DIR/scripts/lib/shared/tui/menu_render.sh"
 source "$REPO_DIR/scripts/lib/repo_update.sh"
 source "$REPO_DIR/scripts/lib/wsl_conf.sh"
 source "$REPO_DIR/scripts/lib/components/registry.sh"
@@ -295,14 +295,27 @@ test_system_package_probe_uses_system_package_tags_only() (
 		'# @python' 'python-package' \
 		'# @cli' 'cli-package' \
 		'# @system' 'system-package' >"$pkg_file"
+	local queried="$TEST_HARNESS_ROOT/scoped-packages.queried"
+	: >"$queried"
+	# The probe asks dpkg-query about every owned package in one call and reads
+	# one status line per package, so the stub answers in batch.
 	dpkg-query() {
-		case "${*: -1}" in
-		core-package | cli-package | system-package) printf 'install ok installed\n' ;;
-		*) return 1 ;;
-		esac
+		local arg
+		for arg in "$@"; do
+			[[ "$arg" == -* ]] && continue
+			printf '%s\n' "$arg" >>"$queried"
+			case "$arg" in
+			core-package | cli-package | system-package) printf 'install ok installed\n' ;;
+			*) printf 'unknown ok not-installed\n' ;;
+			esac
+		done
 	}
 	output="$(PKG_FILE="$pkg_file" _comp_probe_system_packages)"
-	[[ "$output" == 'installed|3 apt packages' ]]
+	[[ "$output" == 'installed|3 apt packages' ]] || return 1
+	# python-package belongs to the python component and must not be queried.
+	[[ "$(sort "$queried" | tr '\n' ' ')" == 'cli-package core-package system-package ' ]] || return 1
+	# and it must be one batched call, not one process per package
+	[[ "$(wc -l <"$queried")" -eq 3 ]]
 )
 
 test_install_orchestrator_collects_failures_and_finishes_selected_work() (
@@ -330,7 +343,7 @@ test_install_orchestrator_collects_failures_and_finishes_selected_work() (
 
 test_terminal_device_access_is_centralized() (
 	! rg -n '/dev/tty' "$REPO_DIR/scripts" "$REPO_DIR/bin/bin/dotfiles" \
-		--glob '!**/lib/tty.sh' --glob '!tests/**'
+		--glob '!**/shared/tui/tty.sh' --glob '!tests/**'
 )
 
 test_dotfiles_cli_is_a_thin_adapter_over_update_modules() (
@@ -342,8 +355,8 @@ test_dotfiles_cli_is_a_thin_adapter_over_update_modules() (
 )
 
 test_four_column_table_layout_has_one_shared_implementation() (
-	rg -q '^rt_print_four_column_header\(\)' "$REPO_DIR/scripts/lib/report_table.sh"
-	rg -q '^rt_print_four_column_row\(\)' "$REPO_DIR/scripts/lib/report_table.sh"
+	rg -q '^rt_print_four_column_header\(\)' "$REPO_DIR/scripts/lib/shared/tui/report_table.sh"
+	rg -q '^rt_print_four_column_row\(\)' "$REPO_DIR/scripts/lib/shared/tui/report_table.sh"
 	! rg -n '^(_update|_repo_update)_(fit_text|table_rule|print_plain_cell|print_colored_cell)\(\)' \
 		"$REPO_DIR/scripts/lib/update_workflow.sh" "$REPO_DIR/scripts/lib/repo_update.sh"
 )
@@ -460,10 +473,42 @@ test_repository_has_one_validation_entrypoint_and_ci() (
 )
 
 test_installer_help_exits_before_log_initialization() (
-	local help_line log_line
+	local help_line log_line probe_dir
 	help_line="$(rg -n '^if \[\[.*(--help|-h)' "$REPO_DIR/scripts/install.sh" | head -n1 | cut -d: -f1)"
-	log_line="$(rg -n '^LOG_DIR=' "$REPO_DIR/scripts/install.sh" | cut -d: -f1)"
-	[[ -n "$help_line" && -n "$log_line" && "$help_line" -lt "$log_line" ]]
+	log_line="$(rg -n 'source .*scripts/lib/action_log\.sh' "$REPO_DIR/scripts/install.sh" | head -n1 | cut -d: -f1)"
+	[[ -n "$help_line" && -n "$log_line" && "$help_line" -lt "$log_line" ]] || return 1
+
+	# Loading the library must not create anything; only start_action_log may.
+	probe_dir="$TEST_HARNESS_ROOT/action-log-probe"
+	mkdir -p "$probe_dir"
+	(
+		DOTFILES_DIR="$probe_dir"
+		# shellcheck source=scripts/lib/action_log.sh
+		source "$REPO_DIR/scripts/lib/action_log.sh"
+	)
+	[[ ! -e "$probe_dir/log" ]]
+)
+
+test_action_log_retains_only_the_newest_logs() (
+	local probe_dir i
+	probe_dir="$TEST_HARNESS_ROOT/action-log-retention"
+	mkdir -p "$probe_dir/log"
+	for i in $(seq -w 1 25); do
+		: >"$probe_dir/log/2026-01-01_00-00-${i}.log"
+	done
+	: >"$probe_dir/log/orphan.log.raw"
+	(
+		DOTFILES_DIR="$probe_dir"
+		DOTFILES_LOG_RETAIN=20
+		# shellcheck source=scripts/lib/action_log.sh
+		source "$REPO_DIR/scripts/lib/action_log.sh"
+		_prune_action_logs
+	)
+	[[ "$(find "$probe_dir/log" -maxdepth 1 -name '*.log' | wc -l)" -eq 20 ]] || return 1
+	[[ ! -e "$probe_dir/log/orphan.log.raw" ]] || return 1
+	# Retention keeps the newest names, so the oldest must be the ones dropped.
+	[[ -e "$probe_dir/log/2026-01-01_00-00-25.log" ]] || return 1
+	[[ ! -e "$probe_dir/log/2026-01-01_00-00-01.log" ]]
 )
 
 check 'repository approval uses explicit event and prompt arguments' test_repository_approval_uses_explicit_event_contract
@@ -501,6 +546,7 @@ check 'Portainer uses an explicit image version' test_portainer_uses_an_explicit
 check 'WSL config rendering updates settings only in their required sections' test_wsl_config_renderer_updates_only_the_requested_section
 check 'repository has one local validation entrypoint wired into CI' test_repository_has_one_validation_entrypoint_and_ci
 check 'installer help exits before log initialization' test_installer_help_exits_before_log_initialization
+check 'action log retains only the newest logs and clears orphaned captures' test_action_log_retains_only_the_newest_logs
 
 test_harness_cleanup
 finish_tests

@@ -15,6 +15,10 @@ _main_menu_desc_fn() {
 		echo "Run the repo-first update workflow."
 		echo "Fetch/classify first; downstream changes require confirmation."
 		;;
+	full_update)
+		echo "Update Dotfiles, then install and update Agentbot, without prompts."
+		echo "Auto-approves application prompts and may replace replaceable local Git state."
+		;;
 	github_token)
 		echo "Configure the optional shared GitHub API token."
 		echo "Missing or malformed state falls back to anonymous access."
@@ -33,11 +37,12 @@ _main_menu_labels=(
 	"Check Status"
 	"Install Dotfiles"
 	"Update"
+	"Full Update (Dotfiles + Agentbot)"
 	"GitHub Token Config"
 	"Libraries"
 	"Quit"
 )
-_main_menu_keys=(status install update github_token libraries quit)
+_main_menu_keys=(status install update full_update github_token libraries quit)
 
 _main_menu_unavailable() {
 	local message="$1"
@@ -94,6 +99,9 @@ _main_menu_dispatch() {
 	update)
 		_main_menu_run_direct_action run_update_flow
 		;;
+	full_update)
+		_main_menu_run_direct_action run_full_update_flow
+		;;
 	github_token)
 		_main_menu_dispatch_optional github_token_menu \
 			"GitHub Token Config is not available in this phase."
@@ -127,9 +135,10 @@ main_menu_loop() {
 		MENU_SIMPLE_TYPES=()
 		MENU_SIMPLE_DESC_FN=_main_menu_desc_fn
 
-		if ! choice="$(menu_simple_run)"; then
+		if ! menu_simple_run; then
 			continue
 		fi
+		choice="${MENU_SIMPLE_RESULT:-}"
 
 		if [[ "$choice" == "quit" ]]; then
 			return 0

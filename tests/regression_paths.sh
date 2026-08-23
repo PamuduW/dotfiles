@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$ROOT/tests/lib/test_harness.sh"
+source "$ROOT/tests/lib/harness.sh"
 test_harness_report_init
 
 test_docker_stops_before_restart_on_config_failure() {
@@ -43,7 +43,7 @@ test_removed_commands_have_migration_guidance() {
 
 test_report_separator_has_no_stray_trailing_dash() {
 	local output
-	output="$(NO_COLOR=1 bash -c 'source "$1/scripts/lib/report_table.sh"; rt_print_table_columns' _ "$ROOT")"
+	output="$(NO_COLOR=1 bash -c 'source "$1/scripts/lib/shared/tui/report_table.sh"; rt_print_table_columns' _ "$ROOT")"
 	[[ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" -eq 2 ]] &&
 		[[ "$(printf '%s\n' "$output" | sed -n '2p')" == *+*+* ]] &&
 		! printf '%s\n' "$output" | sed -n '2p' | grep -Eq -- '-[0-9]+$'
@@ -69,7 +69,7 @@ test_failed_submenu_action_returns_to_menu_after_pause() {
 	local output
 	output="$(bash -c '
 		set -euo pipefail
-		source "$1/scripts/lib/menu_runner.sh"
+		source "$1/scripts/lib/shared/tui/menu_runner.sh"
 		state_file="$2/menu-loop-count"
 		printf "0\\n" >"$state_file"
 		menu_simple_run() {

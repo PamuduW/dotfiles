@@ -1,4 +1,8 @@
 # shellcheck shell=bash
+if ! declare -F colors_set_palette >/dev/null 2>&1; then
+	# shellcheck source=scripts/lib/shared/tui/colors.sh
+	source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/colors.sh"
+fi
 # Shared report table design system (component | detail | result).
 # Safe to source from dotfiles menus (via ui.sh) or bin/dotfiles standalone.
 
@@ -7,34 +11,16 @@ _RT_DETAIL_W=40
 _RT_RESULT_W=10
 
 _rt_ensure_colors() {
+	# Respect a palette the caller already installed (tests do this), but make
+	# sure every token exists so `set -u` callers can read the whole palette.
 	if [[ -n "${C_RESET:-}" ]]; then
-		C_BOLD="${C_BOLD:-}"
-		C_DIM="${C_DIM:-}"
-		C_GREEN="${C_GREEN:-}"
-		C_YELLOW="${C_YELLOW:-}"
-		C_ORANGE="${C_ORANGE:-}"
-		C_RED="${C_RED:-}"
-		C_CYAN="${C_CYAN:-}"
+		colors_complete_palette
 		return 0
 	fi
 	if [[ -z "${NO_COLOR:-}" ]] && { [[ -t 1 ]] || [[ -t 0 ]] || [[ -n "${FORCE_COLOR:-}" ]]; }; then
-		C_RESET=$'\033[0m'
-		C_BOLD=$'\033[1m'
-		C_DIM=$'\033[2m'
-		C_GREEN=$'\033[32m'
-		C_YELLOW=$'\033[33m'
-		C_ORANGE=$'\033[38;5;208m'
-		C_RED=$'\033[31m'
-		C_CYAN=$'\033[36m'
+		colors_set_palette
 	else
-		C_RESET=''
-		C_BOLD=''
-		C_DIM=''
-		C_GREEN=''
-		C_YELLOW=''
-		C_ORANGE=''
-		C_RED=''
-		C_CYAN=''
+		colors_clear_palette
 	fi
 }
 
@@ -117,29 +103,8 @@ rt_print_four_column_row() {
 }
 
 _rt_color_result() {
-	local result="$1"
-
 	_rt_ensure_colors
-	case "$result" in
-	ok | installed | configured | linked | up\ to\ date | current)
-		printf '%s%s%s' "$C_GREEN" "$result" "$C_RESET"
-		;;
-	missing | failed | error)
-		printf '%s%s%s' "$C_RED" "$result" "$C_RESET"
-		;;
-	check | drift | extra | warn | warning | partial)
-		printf '%s%s%s' "$C_YELLOW" "$result" "$C_RESET"
-		;;
-	skipped*)
-		printf '%s%s%s' "$C_DIM" "$result" "$C_RESET"
-		;;
-	info | dry-run)
-		printf '%s%s%s' "$C_CYAN" "$result" "$C_RESET"
-		;;
-	*)
-		printf '%s' "$result"
-		;;
-	esac
+	status_color_result "$1"
 }
 
 # Match ui_print_header when menu_render is unavailable.

@@ -2,8 +2,8 @@
 set -euo pipefail
 
 TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=tests/lib/test_harness.sh
-source "$TEST_DIR/lib/test_harness.sh"
+# shellcheck source=tests/lib/harness.sh
+source "$TEST_DIR/lib/harness.sh"
 
 test_harness_report_init
 
@@ -16,7 +16,7 @@ test_cleanup_runs_after_success() {
 		source "$1"
 		test_harness_init
 		printf "%s" "$TEST_HARNESS_ROOT"
-	' _ "$TEST_DIR/lib/test_harness.sh")"
+	' _ "$TEST_DIR/lib/harness.sh")"
 	[[ -n "$root" && ! -e "$root" ]]
 }
 
@@ -31,7 +31,7 @@ test_cleanup_runs_after_failure() {
 		test_harness_init
 		printf "%s" "$TEST_HARNESS_ROOT"
 		exit 23
-	' _ "$TEST_DIR/lib/test_harness.sh")"
+	' _ "$TEST_DIR/lib/harness.sh")"
 	rc=$?
 	set -e
 	[[ "$rc" -eq 23 && -n "$root" && ! -e "$root" ]]
@@ -47,7 +47,7 @@ test_init_failure_after_root_cleans_up() {
 		unset TEST_COMMAND_LOG TEST_URL_LOG
 		source "$1"
 		test_harness_init
-	' _ "$TEST_DIR/lib/test_harness.sh" >/dev/null 2>&1
+	' _ "$TEST_DIR/lib/harness.sh" >/dev/null 2>&1
 	rc=$?
 	set -e
 	[[ "$rc" -eq 93 ]] || return 1
@@ -66,7 +66,7 @@ test_protected_original_home_unchanged_passes() {
 		source "$1"
 		test_harness_init
 		test_harness_protect_original_path sentinel
-	' _ "$TEST_DIR/lib/test_harness.sh" >/dev/null 2>&1
+	' _ "$TEST_DIR/lib/harness.sh" >/dev/null 2>&1
 	rc=$?
 	set -e
 	[[ "$rc" -eq 0 ]]
@@ -85,7 +85,7 @@ test_protected_original_home_mutation_is_detected() {
 		test_harness_init
 		test_harness_protect_original_path sentinel
 		printf "after\n" >"$ORIGINAL_HOME/sentinel"
-	' _ "$TEST_DIR/lib/test_harness.sh" >/dev/null 2>&1
+	' _ "$TEST_DIR/lib/harness.sh" >/dev/null 2>&1
 	rc=$?
 	set -e
 	[[ "$rc" -eq 94 ]] || return 1

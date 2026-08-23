@@ -57,8 +57,12 @@ cmd_full_update() {
 		esac
 	done
 
+	# The longest and most mutating command in the product: capture it, so an
+	# unattended failure leaves something to read.
+	declare -F start_action_log >/dev/null 2>&1 && start_action_log
+
 	printf '%s%s=== Dotfiles full update ===%s\n' "${C_BOLD:-}" "${C_ORANGE:-}" "${C_RESET:-}"
-	_dotfiles_run_update true _dotfiles_approve_repo_update true || dotfiles_rc=$?
+	_dotfiles_run_update _dotfiles_approve_repo_update true || dotfiles_rc=$?
 	case "$dotfiles_rc" in
 	0) ;;
 	2)

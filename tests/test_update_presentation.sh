@@ -4,7 +4,7 @@ set -euo pipefail
 
 TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
-source "$TEST_DIR/lib/test_harness.sh"
+source "$TEST_DIR/lib/harness.sh"
 test_harness_init
 test_harness_report_init
 source "$TEST_DIR/lib/update_test_fixture.sh"
@@ -27,7 +27,7 @@ test_update_and_upgrade_rows_keep_the_last_column_width() (
 	line_lengths="$(NO_COLOR=1 print_report_table | awk '/^(component|apt packages|---)/ { print length($0) }')"
 	[[ "$line_lengths" == $'93\n93\n93' ]] || return 1
 
-	line_lengths="$(NO_COLOR=1 print_upgrade_summary false | awk '/^(component|apt packages|---)/ { print length($0) }')"
+	line_lengths="$(NO_COLOR=1 print_upgrade_summary | awk '/^(component|apt packages|---)/ { print length($0) }')"
 	[[ "$line_lengths" == $'93\n93\n93' ]]
 )
 
@@ -128,7 +128,7 @@ test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan() (
 test_upgrade_summary_marks_repo_gate_as_handled() (
 	_collect_check_rows() { printf '%s\n' 'dotfiles repo|main@abc123|none|up to date'; }
 	local output
-	output="$(print_upgrade_summary false)"
+	output="$(print_upgrade_summary)"
 	grep -Fq 'dotfiles repo' <<<"$output" || return 1
 	grep -Fq '| ok' <<<"$output"
 )
@@ -193,11 +193,11 @@ test_root_tui_status_omits_unchecked_freshness_without_network() (
 	menu_tty_cols() { printf '80\n'; }
 	ui_clear() { :; }
 	ui_print_header() { printf 'header:%s|%s\n' "$1" "$2"; }
-	ui_print_report_table_columns() { printf 'columns\n'; }
-	_install_summary_probe() { printf 'installed|present\n'; }
+	rt_print_table_columns() { printf 'columns\n'; }
+	comp_probe() { printf 'installed|present\n'; }
 	_install_short_label() { printf '%s\n' "$1"; }
-	ui_print_report_table_row() { printf 'row:%s|%s|%s\n' "$1" "$2" "$3"; }
-	ui_print_report_rollup() { printf 'rollup:%s|%s|%s\n' "$1" "$2" "$3"; }
+	rt_print_table_row() { printf 'row:%s|%s|%s\n' "$1" "$2" "$3"; }
+	rt_print_rollup() { printf 'rollup:%s|%s|%s\n' "$1" "$2" "$3"; }
 	test_harness_reset_logs
 	run_status_action || return 1
 	! grep -Fqi 'apt/package freshness: unchecked' "$output" || return 1
@@ -213,11 +213,8 @@ test_root_status_rollup_has_one_blank_line() (
 	menu_tty_cols() { printf '80\n'; }
 	ui_clear() { :; }
 	ui_print_header() { printf 'header:%s|%s\n' "$1" "$2"; }
-	ui_print_report_table_columns() { rt_print_table_columns; }
-	_install_summary_probe() { printf 'installed|present\n'; }
+	comp_probe() { printf 'installed|present\n'; }
 	_install_short_label() { printf '%s\n' "$1"; }
-	ui_print_report_table_row() { rt_print_table_row "$@"; }
-	ui_print_report_rollup() { rt_print_rollup "$@"; }
 	NO_COLOR=1 run_status_action || return 1
 
 	awk '
@@ -243,9 +240,6 @@ test_cli_and_tui_status_share_component_collector() (
 	menu_tty_cols() { printf '80\n'; }
 	ui_clear() { :; }
 	ui_print_header() { rt_print_header "$1" "$2"; }
-	ui_print_report_table_columns() { rt_print_table_columns; }
-	ui_print_report_table_row() { rt_print_table_row "$@"; }
-	ui_print_report_rollup() { rt_print_rollup "$@"; }
 	DOTFILES_STATUS_OUTPUT="$tui_output" run_status_action
 	NO_COLOR=1 cmd_status >"$cli_output"
 	[[ "$(wc -l <"$calls")" -eq 2 ]] || return 1

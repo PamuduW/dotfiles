@@ -4,8 +4,8 @@ set -euo pipefail
 TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
 
-# shellcheck source=tests/lib/test_harness.sh
-source "$TEST_DIR/lib/test_harness.sh"
+# shellcheck source=tests/lib/harness.sh
+source "$TEST_DIR/lib/harness.sh"
 test_harness_init
 
 PKG_FILE="$REPO_DIR/packages/packages.txt"
@@ -137,7 +137,7 @@ test_component_collector_overlaps_probes_and_preserves_registry_order() (
 	mkdir -p "$barrier"
 	COMP_KEYS=(alpha beta gamma)
 	COMP_LABELS=(Alpha Beta Gamma)
-	_install_summary_probe() {
+	comp_probe() {
 		local key="$1"
 		: >"$barrier/$key"
 		for ((i = 0; i < 100; i++)); do
@@ -161,7 +161,7 @@ test_component_collector_keeps_rows_when_one_probe_fails() (
 	local -a rows=()
 	COMP_KEYS=(alpha broken gamma)
 	COMP_LABELS=(Alpha Broken Gamma)
-	_install_summary_probe() {
+	comp_probe() {
 		[[ "$1" != broken ]] || return 19
 		printf 'installed|%s detail\n' "$1"
 	}
@@ -200,6 +200,53 @@ expect_success 'stalled version probe returns one neutral row' test_stalled_vers
 expect_success 'external probes share bounded timeout behavior' test_external_probes_share_bounded_timeout_behavior
 expect_success 'component collector overlaps probes and preserves registry order' test_component_collector_overlaps_probes_and_preserves_registry_order
 expect_success 'component collector keeps rows when one probe fails' test_component_collector_keeps_rows_when_one_probe_fails
+
+test_generic_version_probes_cover_every_table_row() (
+	local row id
+	((${#_COMP_VERSION_PROBES[@]} > 0)) || return 1
+	for row in "${_COMP_VERSION_PROBES[@]}"; do
+		IFS='|' read -r id _ <<<"$row"
+		declare -F "_comp_probe_${id}" >/dev/null || {
+			printf 'table row without a probe function: %s\n' "$id" >&2
+			return 1
+		}
+		comp_index_of "$id" >/dev/null || {
+			printf 'table row is not a registered component: %s\n' "$id" >&2
+			return 1
+		}
+	done
+)
+
+test_generic_probe_reports_missing_timeout_and_version() (
+	local bin_dir="$TEST_HARNESS_ROOT/generic-probe-bin"
+	local home_dir="$TEST_HARNESS_ROOT/generic-probe-home"
+	mkdir -p "$bin_dir" "$home_dir"
+
+	# absent binary uses the missing label, not the timeout label
+	[[ "$(PATH="$bin_dir:/usr/bin:/bin" HOME="$home_dir" \
+		_comp_probe_version 'nope/absent' 'absent cli' nope-absent-cli --version '' '' '')" == 'missing|nope/absent not on PATH' ]] || return 1
+
+	# a version is extracted and prefixed
+	printf '#!/bin/sh\necho "some 1.2.3 build"\n' >"$bin_dir/toolx"
+	chmod +x "$bin_dir/toolx"
+	[[ "$(PATH="$bin_dir:/usr/bin:/bin" HOME="$home_dir" \
+		_comp_probe_version toolx toolx toolx --version '[0-9]+\.[0-9]+\.[0-9]+' 'v' '')" == 'installed|v1.2.3' ]] || return 1
+
+	# the ~/.local/bin fallback is used when the command is not on PATH
+	mkdir -p "$home_dir/.local/bin"
+	printf '#!/bin/sh\necho fallback-9\n' >"$home_dir/.local/bin/tooly"
+	chmod +x "$home_dir/.local/bin/tooly"
+	[[ "$(PATH="$bin_dir:/usr/bin:/bin" HOME="$home_dir" \
+		_comp_probe_version tooly tooly tooly --version '' '' '')" == 'installed|fallback-9' ]] || return 1
+
+	# a hung binary reports the timeout label
+	printf '#!/bin/sh\nsleep 5\n' >"$bin_dir/toolz"
+	chmod +x "$bin_dir/toolz"
+	[[ "$(COMP_PROBE_TIMEOUT_SECONDS=1 PATH="$bin_dir:/usr/bin:/bin" HOME="$home_dir" \
+		_comp_probe_version toolz 'tool z' toolz --version '' '' '')" == 'check|tool z probe timed out' ]]
+)
 expect_success 'dotfiles status is local-only and reports freshness unchecked' test_status_is_local_read_only
+expect_success 'every version-probe table row has a probe and a registered component' test_generic_version_probes_cover_every_table_row
+expect_success 'generic probe reports missing, version, fallback, and timeout states' test_generic_probe_reports_missing_timeout_and_version
 
 finish_tests

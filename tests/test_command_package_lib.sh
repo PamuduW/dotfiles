@@ -5,9 +5,9 @@ set -euo pipefail
 TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
 
-# shellcheck source=tests/lib/test_harness.sh
+# shellcheck source=tests/lib/harness.sh
 # shellcheck disable=SC1091
-source "$TEST_DIR/lib/test_harness.sh"
+source "$TEST_DIR/lib/harness.sh"
 test_harness_init
 
 NO_COLOR=1
@@ -17,11 +17,11 @@ export PKG_FILE
 
 # Source the read-only presentation and component metadata dependencies.
 # shellcheck disable=SC1091
-source "$REPO_DIR/scripts/lib/menu_render.sh"
-source "$REPO_DIR/scripts/lib/tty.sh"
-source "$REPO_DIR/scripts/lib/report_table.sh"
-source "$REPO_DIR/scripts/lib/ui.sh"
-source "$REPO_DIR/scripts/lib/menu_paging.sh"
+source "$REPO_DIR/scripts/lib/shared/tui/menu_render.sh"
+source "$REPO_DIR/scripts/lib/shared/tui/tty.sh"
+source "$REPO_DIR/scripts/lib/shared/tui/report_table.sh"
+source "$REPO_DIR/scripts/lib/shared/tui/ui.sh"
+source "$REPO_DIR/scripts/lib/shared/tui/menu_paging.sh"
 source "$REPO_DIR/scripts/lib/components/registry.sh"
 source "$REPO_DIR/scripts/lib/components/probes.sh"
 ui_init_colors
@@ -122,7 +122,7 @@ test_command_lib_documents_full_help_catalog() {
 	for needle in \
 		'update [--all]' \
 		'--all' \
-		'Include Node.js, npm, Go, and Monaspace' \
+		'Node.js, npm, Go, and Monaspace' \
 		'DOTFILES_COMPONENTS' \
 		'GITHUB_TOKEN' \
 		'install.sh --initial' \
@@ -267,7 +267,7 @@ test_package_lib_components_are_metadata_only() (
 	declare -F package_lib_render_components >/dev/null || return 1
 	local output="$TEST_HARNESS_ROOT/package-components.output" probe_calls=0 install_calls=0
 	comp_probe() { probe_calls=$((probe_calls + 1)); }
-	_install_summary_probe() { probe_calls=$((probe_calls + 1)); }
+	comp_probe() { probe_calls=$((probe_calls + 1)); }
 	comp_install() { install_calls=$((install_calls + 1)); }
 	test_harness_reset_logs
 	package_lib_render_components 80 >"$output" || return 1
@@ -307,7 +307,7 @@ test_install_summary_uses_report_table_alignment() (
 	COMP_KEYS=(git_identity system_packages)
 	COMP_LABELS=('Git identity' 'System packages')
 	is_on() { return 0; }
-	_install_summary_probe() {
+	comp_probe() {
 		case "$1" in
 		git_identity) printf 'configured|Pamudu Wijesingha <pamuduwijesingha2k20@gmail.com>\n' ;;
 		system_packages) printf 'installed|30 apt packages\n' ;;

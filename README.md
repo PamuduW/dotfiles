@@ -76,6 +76,7 @@ The main menu **loops** until you choose Quit:
   Check Status
   Install Dotfiles
   Update
+  Full Update (Dotfiles + Agentbot)
   GitHub Token Config
   Libraries
   Quit
@@ -90,6 +91,7 @@ Use arrow keys to navigate and Enter to select.
 | Check Status | Read-only local report for all 21 setup components. |
 | Install Dotfiles | Run the shared repository gate, then select components, review the execution plan, and apply setup. |
 | Update | Repo-first fetch/classify/pull gate, then confirmed downstream updates. |
+| Full Update (Dotfiles + Agentbot) | Confirms once, then runs `dotfiles full-update` unattended: Dotfiles update, then Agentbot install and update. |
 | GitHub Token Config | Configure the optional shared API token without blocking anonymous use. |
 | Libraries | Opens the read-only Command Lib and Package Lib submenu; `q` returns. |
 | Quit | Exit |
@@ -221,7 +223,7 @@ Global command (stowed to `~/bin/dotfiles`, on PATH like `ex` and `clip`):
 | `dotfiles` | On a TTY, opens the boot menu; otherwise prints help |
 | `dotfiles menu` | Boot menu (same as `./install.sh`) |
 | `dotfiles update` | **Apply after one confirmation** — repo-first gate, then all managed apt/CLI/runtime/font changes |
-| `dotfiles update --all` | Compatible explicit spelling for the same complete Dotfiles update |
+| `dotfiles update --all` | Accepted for compatibility; selects nothing extra (one approval already runs every managed update) |
 | `dotfiles full-update` | Unattended Dotfiles update, Agentbot install, and Agentbot update |
 | `dotfiles status` | Local installed versions + repo state; no fetch or apt refresh |
 | `dotfiles commands` | Read-only full command, option, configuration, and integration reference |
@@ -345,14 +347,17 @@ Apply the repo-first update workflow (the downstream plan is confirmed before mu
 dotfiles update
 ```
 
-Run the same complete Dotfiles update with the compatible explicit spelling:
+`--all` is still accepted so existing scripts and the `update-all` alias keep
+working, but it selects nothing extra — one approved update already includes
+Node.js, npm, Go, and the Monaspace fonts:
 
 ```bash
 dotfiles update --all
 ```
 
 Update Dotfiles, install Agentbot, and update Agentbot with one unattended
-application-level command:
+application-level command (also available from the boot menu as
+**Full Update (Dotfiles + Agentbot)**, which confirms once before starting):
 
 ```bash
 dotfiles full-update
@@ -389,9 +394,11 @@ stow -D bash bin readline
 
 ## Logging
 
-Mutating install and update actions write a timestamped log to
-`log/` (gitignored). Read-only menu navigation and `--help` do not initialize a
-log.
+Mutating install and update actions — including `dotfiles full-update` — write a
+timestamped log to `log/` (gitignored). Read-only menu navigation and `--help` do
+not initialize a log. The newest 20 logs are kept; older ones and any orphaned
+`.log.raw` capture from an interrupted run are pruned when the next log starts.
+Override the count with `DOTFILES_LOG_RETAIN`.
 
 ## Development validation
 

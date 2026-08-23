@@ -3,8 +3,8 @@ set -euo pipefail
 
 TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd -- "$TEST_DIR/.." && pwd)"
-# shellcheck source=tests/lib/test_harness.sh
-source "$TEST_DIR/lib/test_harness.sh"
+# shellcheck source=tests/lib/harness.sh
+source "$TEST_DIR/lib/harness.sh"
 test_harness_init
 PATH="$ORIGINAL_PATH"
 export PATH
