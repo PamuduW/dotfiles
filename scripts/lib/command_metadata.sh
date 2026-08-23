@@ -2,122 +2,182 @@
 # shellcheck disable=SC2034  # Public metadata arrays are consumed by sourced callers.
 # shellcheck disable=SC2016  # Literal variable expressions are documentation values.
 # Authoritative public Dotfiles command metadata.
+#
+# One dotfiles_command_define call per command. This used to be eleven parallel
+# associative arrays that had to be kept in step by hand, which is why the
+# validator below existed mostly to prove they still were. Declaring each
+# command once removes that whole class of mistake; the validator now only
+# checks that each record is complete and well formed.
 
-DOTFILES_COMMAND_KEYS=(
-	menu
-	update
-	full-update
-	status
-	commands
-	packages
-	restow
-	help
-)
+DOTFILES_COMMAND_KEYS=()
+declare -A DOTFILES_COMMAND_HANDLERS=()
+declare -A DOTFILES_COMMAND_USAGE=()
+declare -A DOTFILES_COMMAND_CLASS=()
+declare -A DOTFILES_COMMAND_DESCRIPTION=()
+declare -A DOTFILES_COMMAND_NOTE=()
+declare -A DOTFILES_COMMAND_OPTIONS=()
+declare -A DOTFILES_COMMAND_DEFAULTS=()
+declare -A DOTFILES_COMMAND_EFFECTS=()
+declare -A DOTFILES_COMMAND_EXAMPLES=()
+declare -A DOTFILES_COMMAND_RELATED=()
 
-declare -A DOTFILES_COMMAND_HANDLERS=(
-	[menu]=cmd_menu [update]=cmd_update [status]=cmd_status
-	['full-update']=cmd_full_update
-	[commands]=cmd_commands [packages]=cmd_packages [restow]=cmd_restow [help]=cmd_help
-)
+# dotfiles_command_define <key> --handler FN --class read-only|mutating
+#     --description D --options ROWS --defaults D --effects E
+#     --example E --related R [--usage U] [--note N]
+#
+# --options rows are "option|description|default", one per line.
+dotfiles_command_define() {
+	local key="$1"
+	shift
+	local handler='' usage='' class='' description='' note=''
+	local options='' defaults='' effects='' example='' related=''
 
-declare -A DOTFILES_COMMAND_USAGE=(
-	[menu]=''
-	[update]='[--all]'
-	['full-update']=''
-	[status]=''
-	[commands]=''
-	[packages]=''
-	[restow]=''
-	[help]=''
-)
+	while (($#)); do
+		case "$1" in
+		--handler)
+			handler="$2"
+			shift 2
+			;;
+		--usage)
+			usage="$2"
+			shift 2
+			;;
+		--class)
+			class="$2"
+			shift 2
+			;;
+		--description)
+			description="$2"
+			shift 2
+			;;
+		--note)
+			note="$2"
+			shift 2
+			;;
+		--options)
+			options="$2"
+			shift 2
+			;;
+		--defaults)
+			defaults="$2"
+			shift 2
+			;;
+		--effects)
+			effects="$2"
+			shift 2
+			;;
+		--example)
+			example="$2"
+			shift 2
+			;;
+		--related)
+			related="$2"
+			shift 2
+			;;
+		*)
+			printf 'dotfiles_command_define %s: unknown option %s\n' "$key" "$1" >&2
+			return 2
+			;;
+		esac
+	done
 
-declare -A DOTFILES_COMMAND_CLASS=(
-	[menu]='mutating'
-	[update]='mutating'
-	['full-update']='mutating'
-	[status]='read-only'
-	[commands]='read-only'
-	[packages]='read-only'
-	[restow]='mutating'
-	[help]='read-only'
-)
+	DOTFILES_COMMAND_KEYS+=("$key")
+	DOTFILES_COMMAND_HANDLERS["$key"]="$handler"
+	DOTFILES_COMMAND_USAGE["$key"]="$usage"
+	DOTFILES_COMMAND_CLASS["$key"]="$class"
+	DOTFILES_COMMAND_DESCRIPTION["$key"]="$description"
+	DOTFILES_COMMAND_NOTE["$key"]="$note"
+	DOTFILES_COMMAND_OPTIONS["$key"]="$options"
+	DOTFILES_COMMAND_DEFAULTS["$key"]="$defaults"
+	DOTFILES_COMMAND_EFFECTS["$key"]="$effects"
+	DOTFILES_COMMAND_EXAMPLES["$key"]="$example"
+	DOTFILES_COMMAND_RELATED["$key"]="$related"
+	return 0
+}
 
-declare -A DOTFILES_COMMAND_DESCRIPTION=(
-	[menu]='Open interactive install and update workflows.'
-	[update]='Safely update the repo, then packages and tools.'
-	['full-update']='Update Dotfiles and Agentbot without application prompts.'
-	[status]='Show local component and repository state only.'
-	[commands]='Show this authoritative command library.'
-	[packages]='Show component and package metadata.'
-	[restow]='Re-apply bash, bin, and readline stow links.'
-	[help]='Show command usage and behavior classes.'
-)
+dotfiles_command_define 'menu' \
+	--handler 'cmd_menu' \
+	--class 'mutating' \
+	--description 'Open interactive install and update workflows.' \
+	--options $'--initial|Run the initial setup flow through install.sh --initial.|menu default\n--update|Open the update workflow through install.sh --update.|menu default\n--help|Show installer menu help and exit.|off' \
+	--defaults 'No flags opens the interactive installer menu.' \
+	--effects 'Delegates to scripts/install.sh; selected workflows may install, update, or configure components.' \
+	--example 'dotfiles menu' \
+	--related 'Use dotfiles commands for a read-only reference.'
 
-declare -A DOTFILES_COMMAND_NOTE=(
-	[menu]=''
-	[update]='One approval updates every managed component; --all is accepted but selects nothing extra.'
-	['full-update']='Backs up replaceable local Git state before syncing upstream.'
-	[status]='Remote and apt freshness remain unchecked.'
-	[commands]=''
-	[packages]=''
-	[restow]=''
-	[help]=''
-)
+dotfiles_command_define 'update' \
+	--handler 'cmd_update' \
+	--usage '[--all]' \
+	--class 'mutating' \
+	--description 'Safely update the repo, then packages and tools.' \
+	--note 'One approval updates every managed component; --all is accepted but selects nothing extra.' \
+	--options $'--all|Accepted for compatibility; every managed update already runs without it.|no-op\n-h|Show command help and exit.|off\n--help|Show command help and exit.|off' \
+	--defaults 'One approval runs every managed update, including Node.js, npm, Go, and Monaspace.' \
+	--effects 'May pull the repository, refresh apt, and update all managed CLIs, runtimes, and fonts.' \
+	--example 'dotfiles update' \
+	--related 'Use status for local inspection and restow for link-only repair.'
 
-declare -A DOTFILES_COMMAND_OPTIONS=(
-	[menu]=$'--initial|Run the initial setup flow through install.sh --initial.|menu default\n--update|Open the update workflow through install.sh --update.|menu default\n--help|Show installer menu help and exit.|off'
-	[update]=$'--all|Accepted for compatibility; every managed update already runs without it.|no-op\n-h|Show command help and exit.|off\n--help|Show command help and exit.|off'
-	['full-update']=$'(none)|Run the complete unattended Dotfiles and Agentbot maintenance flow.|always'
-	[status]=$'(none)|Show local versions and repository state without command options.|always'
-	[commands]=$'(none)|Show this full read-only command/configuration catalog.|always'
-	[packages]=$'(none)|Show component and package metadata without probing the system.|always'
-	[restow]=$'(none)|Re-apply the bash, bin, and readline stow packages.|always'
-	[help]=$'(none)|Show the same full catalog as dotfiles commands, with the repository path.|always'
-)
+dotfiles_command_define 'full-update' \
+	--handler 'cmd_full_update' \
+	--class 'mutating' \
+	--description 'Update Dotfiles and Agentbot without application prompts.' \
+	--note 'Backs up replaceable local Git state before syncing upstream.' \
+	--options '(none)|Run the complete unattended Dotfiles and Agentbot maintenance flow.|always' \
+	--defaults 'Running the command authorizes application prompts and recoverable repository replacement.' \
+	--effects 'May stash local changes, create recovery branches, sync both repositories, and update the system.' \
+	--example 'dotfiles full-update' \
+	--related 'Use update for an interactive Dotfiles-only run.'
 
-declare -A DOTFILES_COMMAND_DEFAULTS=(
-	[menu]='No flags opens the interactive installer menu.'
-	[update]='One approval runs every managed update, including Node.js, npm, Go, and Monaspace.'
-	['full-update']='Running the command authorizes application prompts and recoverable repository replacement.'
-	[status]='Reads local installed versions; remote freshness remains unchecked.'
-	[commands]='Prints the complete catalog without changing state.'
-	[packages]='Reads packages/packages.txt and component metadata only.'
-	[restow]='Targets $HOME using the bash, bin, and readline Stow packages.'
-	[help]='Prints the catalog and the resolved Dotfiles repository path.'
-)
+dotfiles_command_define 'status' \
+	--handler 'cmd_status' \
+	--class 'read-only' \
+	--description 'Show local component and repository state only.' \
+	--note 'Remote and apt freshness remain unchecked.' \
+	--options '(none)|Show local versions and repository state without command options.|always' \
+	--defaults 'Reads local installed versions; remote freshness remains unchecked.' \
+	--effects 'Reads local command versions and git status; it does not run remote freshness checks.' \
+	--example 'dotfiles status' \
+	--related 'Use update when repository and downstream freshness should be checked.'
 
-declare -A DOTFILES_COMMAND_EFFECTS=(
-	[menu]='Delegates to scripts/install.sh; selected workflows may install, update, or configure components.'
-	[update]='May pull the repository, refresh apt, and update all managed CLIs, runtimes, and fonts.'
-	['full-update']='May stash local changes, create recovery branches, sync both repositories, and update the system.'
-	[status]='Reads local command versions and git status; it does not run remote freshness checks.'
-	[commands]='Performs no installer, git, network, stow, package, or component action.'
-	[packages]='Performs no package installation or system probe.'
-	[restow]='Runs stow --restow for bash, bin, and readline and changes home-directory links.'
-	[help]='Performs no installer, git, network, stow, package, or component action.'
-)
+dotfiles_command_define 'commands' \
+	--handler 'cmd_commands' \
+	--class 'read-only' \
+	--description 'Show this authoritative command library.' \
+	--options '(none)|Show this full read-only command/configuration catalog.|always' \
+	--defaults 'Prints the complete catalog without changing state.' \
+	--effects 'Performs no installer, git, network, stow, package, or component action.' \
+	--example 'dotfiles commands' \
+	--related 'The interactive Command Lib renders this same catalog.'
 
-declare -A DOTFILES_COMMAND_EXAMPLES=(
-	[menu]='dotfiles menu'
-	[update]='dotfiles update'
-	['full-update']='dotfiles full-update'
-	[status]='dotfiles status'
-	[commands]='dotfiles commands'
-	[packages]='dotfiles packages'
-	[restow]='dotfiles restow'
-	[help]='dotfiles help'
-)
+dotfiles_command_define 'packages' \
+	--handler 'cmd_packages' \
+	--class 'read-only' \
+	--description 'Show component and package metadata.' \
+	--options '(none)|Show component and package metadata without probing the system.|always' \
+	--defaults 'Reads packages/packages.txt and component metadata only.' \
+	--effects 'Performs no package installation or system probe.' \
+	--example 'dotfiles packages' \
+	--related 'Use the component menu for interactive selection.'
 
-declare -A DOTFILES_COMMAND_RELATED=(
-	[menu]='Use dotfiles commands for a read-only reference.'
-	[update]='Use status for local inspection and restow for link-only repair.'
-	['full-update']='Use update for an interactive Dotfiles-only run.'
-	[status]='Use update when repository and downstream freshness should be checked.'
-	[commands]='The interactive Command Lib renders this same catalog.'
-	[packages]='Use the component menu for interactive selection.'
-	[restow]='Use update for repository/downstream updates; restow does not install packages.'
-	[help]='The commands subcommand prints the catalog without the trailing repository line.'
-)
+dotfiles_command_define 'restow' \
+	--handler 'cmd_restow' \
+	--class 'mutating' \
+	--description 'Re-apply bash, bin, and readline stow links.' \
+	--options '(none)|Re-apply the bash, bin, and readline stow packages.|always' \
+	--defaults 'Targets $HOME using the bash, bin, and readline Stow packages.' \
+	--effects 'Runs stow --restow for bash, bin, and readline and changes home-directory links.' \
+	--example 'dotfiles restow' \
+	--related 'Use update for repository/downstream updates; restow does not install packages.'
+
+dotfiles_command_define 'help' \
+	--handler 'cmd_help' \
+	--class 'read-only' \
+	--description 'Show command usage and behavior classes.' \
+	--options '(none)|Show the same full catalog as dotfiles commands, with the repository path.|always' \
+	--defaults 'Prints the catalog and the resolved Dotfiles repository path.' \
+	--effects 'Performs no installer, git, network, stow, package, or component action.' \
+	--example 'dotfiles help' \
+	--related 'The commands subcommand prints the catalog without the trailing repository line.'
 
 DOTFILES_CONFIG_KEYS=(
 	DOTFILES_COMPONENTS XDG_CONFIG_HOME GITHUB_TOKEN NO_COLOR FORCE_COLOR DOTFILES_TUI
@@ -166,6 +226,10 @@ declare -A DOTFILES_SURFACE_LOCATION=(
 	[components]='scripts/lib/components/ and packages/packages.txt.'
 )
 
+# Validates record content: a known behavior class, non-empty required fields,
+# a handler that looks like a command function, and well-formed option rows.
+# It no longer has to prove eleven arrays are in step -- dotfiles_command_define
+# fills them together -- but it still catches a damaged or incomplete record.
 dotfiles_command_metadata_validate() {
 	local -A seen=()
 	local key class option description default

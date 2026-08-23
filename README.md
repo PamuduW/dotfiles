@@ -365,8 +365,14 @@ dotfiles full-update
 
 This command automatically restarts once after either repository changes. It
 also authorizes recoverable replacement of dirty, ahead, or diverged local Git
-state. `sudo` may still request system authentication. Inspect preserved work
-with:
+state. `sudo` may still request system authentication.
+
+It stops at the first failing stage rather than pressing on. In particular, a
+skill source that fails to install makes `agentbot install` exit nonzero, which
+ends the run before the Agentbot update stage. Read the log in `log/`, fix the
+source, and rerun.
+
+Inspect preserved work with:
 
 ```bash
 git branch --list 'recovery/*'

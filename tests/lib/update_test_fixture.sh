@@ -20,7 +20,7 @@ case "$cmd" in
     [[ "$state" == no-origin ]] && exit 2
     [[ "$state" == wrong-origin ]] && { printf 'https://github.com/other/dotfiles.git\n'; exit 0; }
     printf 'https://github.com/PamuduW/dotfiles.git\n' ;;
-  'symbolic-ref -q --short HEAD') [[ "$state" == detached ]] && exit 1; printf 'main\n' ;;
+  'symbolic-ref --quiet --short HEAD') [[ "$state" == detached ]] && exit 1; printf 'main\n' ;;
   'rev-parse --abbrev-ref --symbolic-full-name @{upstream}')
     [[ "$state" == no-upstream ]] && exit 1
     [[ "$state" == other-remote ]] && { printf 'fork/main\n'; exit 0; }

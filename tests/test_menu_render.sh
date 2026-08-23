@@ -152,6 +152,20 @@ NO_COLOR=1
 export NO_COLOR
 ui_init_colors
 
+test_terminal_geometry_is_quiet_without_a_tty() (
+	local scratch errors cols
+	scratch="$(mktemp -d)"
+	DOTFILES_TTY_INPUT="$scratch/missing-geometry-input"
+	DOTFILES_TTY_OUTPUT="$scratch/missing-geometry-output"
+	errors="$scratch/geometry-errors"
+	menu_tty_invalidate_size
+	cols="$(menu_tty_cols 2>"$errors")"
+	local quiet=1
+	[[ -s "$errors" ]] && quiet=0
+	rm -rf -- "$scratch"
+	[[ "$cols" =~ ^[0-9]+$ && "$quiet" -eq 1 ]]
+)
+
 expect_success 'simple menu has exactly one spacer before descriptions' test_simple_menu_has_one_spacer_before_descriptions
 expect_success 'down/up frames match redraw count without stale content' test_down_up_frames_match_redraw_count_without_stale_content
 expect_success 'no-description menu keeps its existing blank footer' test_no_description_keeps_existing_blank_footer
@@ -192,5 +206,6 @@ test_terminal_geometry_is_cached_and_invalidatable() (
 
 expect_success 'component menu adapter preserves dependency-aware toggles' test_component_menu_adapter_preserves_dependency_toggles
 expect_success 'terminal geometry is cached and invalidatable' test_terminal_geometry_is_cached_and_invalidatable
+expect_success 'terminal geometry falls back quietly without a controlling TTY' test_terminal_geometry_is_quiet_without_a_tty
 
 finish_tests

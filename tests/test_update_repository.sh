@@ -280,7 +280,7 @@ test_dirty_replacement_stashes_before_reset() (
 		'rev-parse --is-inside-work-tree') printf 'true\n' ;;
 		'rev-parse --is-bare-repository') printf 'false\n' ;;
 		'remote get-url origin') printf 'https://github.com/PamuduW/dotfiles.git\n' ;;
-		'symbolic-ref -q --short HEAD') printf 'main\n' ;;
+		'symbolic-ref --quiet --short HEAD') printf 'main\n' ;;
 		'rev-parse --abbrev-ref --symbolic-full-name @{upstream}') printf 'origin/main\n' ;;
 		'status --short --untracked-files=all') [[ -f "$stashed" ]] || printf ' M scripts/example.sh\n?? local-change\n' ;;
 		'fetch --prune') ;;
@@ -325,7 +325,7 @@ test_ahead_replacement_branches_before_reset() (
 		'rev-parse --is-inside-work-tree') printf 'true\n' ;;
 		'rev-parse --is-bare-repository') printf 'false\n' ;;
 		'remote get-url origin') printf 'https://github.com/PamuduW/dotfiles.git\n' ;;
-		'symbolic-ref -q --short HEAD') printf 'main\n' ;;
+		'symbolic-ref --quiet --short HEAD') printf 'main\n' ;;
 		'rev-parse --abbrev-ref --symbolic-full-name @{upstream}') printf 'origin/main\n' ;;
 		'status --short --untracked-files=all') ;;
 		'fetch --prune') ;;
@@ -351,6 +351,25 @@ test_ahead_replacement_branches_before_reset() (
 	[[ -n "$branch_line" && -n "$reset_line" ]] && ((branch_line < reset_line))
 )
 
+test_repository_approval_uses_explicit_event_contract() (
+	declare -A state=(
+		[state]=behind
+		[behind]=2
+		[label]='dotfiles repo'
+		[dir]="$REPO_DIR"
+		[safe]=1
+		[dirty]=0
+		[upstream]=origin/main
+		[approved]=0
+	)
+	decision() {
+		[[ "$1" == pull-behind ]] || return 1
+		[[ "$2" == 'Pull 2 commit(s) with --ff-only?' ]]
+	}
+	repo_update_request_approval state decision >/dev/null
+	[[ "${state[approved]}" == 1 ]]
+)
+
 expect_success 'repository state table returns stable outcomes' test_state_table_outcomes
 expect_success 'dirty current ahead behind and diverged states fetch classify and stop' test_dirty_history_matrix_fetches_classifies_and_stops
 expect_success 'dirty fetch failure preserves paths and marks freshness unknown' test_dirty_fetch_failure_preserves_changes_and_unknown_freshness
@@ -370,5 +389,6 @@ expect_success 'declined install pulls use shared failure output' test_declined_
 expect_success 'dirty path report is bounded and includes a copyable full-list command' test_dirty_change_report_is_bounded_and_copyable
 expect_success 'dirty replacement stashes and verifies the worktree before reset' test_dirty_replacement_stashes_before_reset
 expect_success 'ahead replacement creates a recovery branch before reset' test_ahead_replacement_branches_before_reset
+expect_success 'repository approval uses explicit event and prompt arguments' test_repository_approval_uses_explicit_event_contract
 
 finish_tests

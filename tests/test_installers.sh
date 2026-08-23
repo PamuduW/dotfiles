@@ -1,0 +1,207 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC1091,SC2317  # Loader paths and indirect test doubles.
+# Individual installers: Stow, apt, remote vendor scripts, GitHub releases,
+# containers, fonts, and the WSL config writer. Several of these are safety
+# assertions -- payloads are verified before execution and failures must not
+# be swallowed.
+set -euo pipefail
+
+TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
+source "$TEST_DIR/lib/harness.sh"
+test_harness_init
+test_harness_report_init
+source "$TEST_DIR/lib/dotfiles_env.sh"
+
+test_backup_includes_existing_dotfiles_launcher() (
+	local fake_home="$TEST_HARNESS_ROOT/stow-home"
+	local fake_repo="$TEST_HARNESS_ROOT/stow-repo"
+	mkdir -p "$fake_home/bin" "$fake_repo"
+	printf 'old launcher\n' >"$fake_home/bin/dotfiles"
+	log_step() { :; }
+	log_ok() { :; }
+	HOME="$fake_home" DOTFILES_DIR="$fake_repo" backup_existing_dotfiles
+	[[ ! -e "$fake_home/bin/dotfiles" ]]
+	find "$fake_repo" -path '*/bin/dotfiles' -type f -print -quit | grep -q .
+)
+
+test_failed_stow_restores_backed_up_user_files() (
+	local fake_home="$TEST_HARNESS_ROOT/stow-rollback-home"
+	local fake_repo="$TEST_HARNESS_ROOT/stow-rollback-repo"
+	mkdir -p "$fake_home/bin" "$fake_repo"
+	printf 'user bashrc\n' >"$fake_home/.bashrc"
+	printf 'user launcher\n' >"$fake_home/bin/dotfiles"
+	log_step() { :; }
+	log_ok() { :; }
+	stow() { return 23; }
+	HOME="$fake_home" DOTFILES_DIR="$fake_repo" backup_existing_dotfiles
+	if HOME="$fake_home" DOTFILES_DIR="$fake_repo" stow_dotfiles >/dev/null 2>&1; then return 1; fi
+	[[ "$(<"$fake_home/.bashrc")" == 'user bashrc' ]]
+	[[ "$(<"$fake_home/bin/dotfiles")" == 'user launcher' ]]
+)
+
+test_apt_install_failure_is_not_hidden_by_warning_logging() (
+	local pkg_file="$TEST_HARNESS_ROOT/failing-apt-packages.txt" rc
+	printf '%s\n' '# @core' 'git' >"$pkg_file"
+	PKG_FILE="$pkg_file"
+	_run_quiet_command() { return 26; }
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	log_warn() { :; }
+	set +e
+	apt_install_packages core >/dev/null 2>&1
+	rc=$?
+	set -e
+	[[ "$rc" == 26 ]]
+)
+
+test_tool_installers_stop_at_the_first_required_failure() (
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	log_warn() { :; }
+	ensure_asdf_installed() { return 0; }
+	asdf() { [[ "$1 $2" == 'plugin list' ]] && printf 'golang\n'; }
+	local call=0 rc
+	_run_quiet_command() {
+		call=$((call + 1))
+		[[ "$call" -ne 1 ]] || return 27
+	}
+	set +e
+	install_go_via_asdf >/dev/null 2>&1
+	rc=$?
+	set -e
+	[[ "$rc" == 27 ]] || return 1
+
+	command() {
+		if [[ "$1" == -v && "$2" == codex ]]; then return 1; fi
+		if [[ "$1" == -v && "$2" == npm ]]; then return 0; fi
+		builtin command "$@"
+	}
+	npm() { return 28; }
+	set +e
+	install_codex_cli >/dev/null 2>&1
+	rc=$?
+	set -e
+	[[ "$rc" == 28 ]]
+)
+
+test_container_installers_stop_at_the_first_required_failure() (
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	log_warn() { :; }
+	run_docker() {
+		[[ "$1" == ps ]] && return 0
+		[[ "$1 $2" != 'volume create' ]] || return 29
+		return 0
+	}
+	local rc
+	set +e
+	install_portainer >/dev/null 2>&1
+	rc=$?
+	set -e
+	[[ "$rc" == 29 ]]
+)
+
+test_monaspace_upgrade_requests_a_replacement_install() (
+	[[ "$(declare -f upgrade_monaspace)" == *'install_monaspace_fonts --replace'* ]]
+)
+
+test_remote_shell_installers_are_downloaded_before_execution() (
+	! rg -n 'curl[^|]*\|[[:space:]]*(bash|sh)' "$REPO_DIR/scripts/lib/installers" "$REPO_DIR/scripts/lib/update_components.sh"
+)
+
+test_remote_shell_installer_fails_closed() (
+	local calls="$TEST_HARNESS_ROOT/vendor-installer.calls" output_path=''
+	: >"$calls"
+	curl() {
+		printf 'curl\n' >>"$calls"
+		while (($#)); do
+			if [[ "$1" == -o ]]; then
+				output_path="$2"
+				shift 2
+			else shift; fi
+		done
+		: >"$output_path"
+	}
+	set +e
+	run_vendor_shell_installer 'http://example.invalid/install.sh' Example >/dev/null 2>&1
+	local insecure_rc=$?
+	run_vendor_shell_installer 'https://example.invalid/install.sh' Example >/dev/null 2>&1
+	local empty_rc=$?
+	set -e
+	[[ "$insecure_rc" -ne 0 && "$empty_rc" -ne 0 ]] || return 1
+	[[ "$(wc -l <"$calls")" -eq 1 ]]
+)
+
+test_release_manifest_must_name_the_selected_archive() (
+	local calls="$TEST_HARNESS_ROOT/release-installer.calls"
+	: >"$calls"
+	github_latest_release_version() { printf '1.2.3\n'; }
+	_linux_github_arch_suffix() { printf 'x86_64\n'; }
+	log_step() { :; }
+	github_curl() {
+		local output='' arg
+		while (($#)); do
+			arg="$1"
+			shift
+			if [[ "$arg" == -o ]]; then
+				output="$1"
+				shift
+			fi
+		done
+		if [[ "$output" == *checksums.txt ]]; then
+			printf '%064d  unrelated.tar.gz\n' 0 >"$output"
+		else
+			: >"$output"
+		fi
+	}
+	sha256sum() {
+		printf 'sha256sum\n' >>"$calls"
+		return 0
+	}
+	tar() {
+		printf 'tar\n' >>"$calls"
+		return 0
+	}
+	sudo() {
+		printf 'sudo\n' >>"$calls"
+		return 0
+	}
+	set +e
+	install_lazygit_from_github >/dev/null 2>&1
+	local rc=$?
+	set -e
+	[[ "$rc" -ne 0 && ! -s "$calls" ]]
+)
+
+test_portainer_uses_an_explicit_image_version() (
+	! rg -n 'portainer/portainer-ce:latest' "$REPO_DIR/scripts/lib/installers/docker.sh"
+	rg -q 'PORTAINER_IMAGE' "$REPO_DIR/scripts/lib/installers/docker.sh"
+)
+
+test_wsl_config_renderer_updates_only_the_requested_section() (
+	local conf="$TEST_HARNESS_ROOT/wsl-render.conf" rendered="$TEST_HARNESS_ROOT/wsl-rendered.conf"
+	printf '%s\n' '[interop]' 'systemd=true' 'appendWindowsPath=false' '' '[boot]' 'appendWindowsPath=true' >"$conf"
+	wsl_conf_render_required "$conf" >"$rendered"
+	wsl_conf_has_setting "$rendered" boot systemd true || return 1
+	wsl_conf_has_setting "$rendered" interop appendWindowsPath true || return 1
+	grep -Fqx 'systemd=true' "$rendered"
+)
+
+check 'Stow backup includes an existing dotfiles launcher' test_backup_includes_existing_dotfiles_launcher
+check 'failed Stow application restores backed-up user files' test_failed_stow_restores_backed_up_user_files
+check 'apt installation failures are not hidden by warning logging' test_apt_install_failure_is_not_hidden_by_warning_logging
+check 'tool installers stop at the first required command failure' test_tool_installers_stop_at_the_first_required_failure
+check 'container installers stop at the first required command failure' test_container_installers_stop_at_the_first_required_failure
+check 'Monaspace upgrades replace an older installed release' test_monaspace_upgrade_requests_a_replacement_install
+check 'remote shell installers are downloaded before execution' test_remote_shell_installers_are_downloaded_before_execution
+check 'remote shell installers reject insecure and empty payloads' test_remote_shell_installer_fails_closed
+check 'release checksums must identify the selected archive' test_release_manifest_must_name_the_selected_archive
+check 'Portainer uses an explicit image version' test_portainer_uses_an_explicit_image_version
+check 'WSL config rendering updates settings only in their required sections' test_wsl_config_renderer_updates_only_the_requested_section
+
+test_harness_cleanup
+finish_tests
