@@ -88,7 +88,7 @@ test_command_lib_selects_detail_and_returns_to_index() (
 
 	command_lib_menu || return 1
 	[[ "$menu_calls" -eq 2 && "$waits" -eq 1 && "$clears" -eq 1 ]] || return 1
-	[[ "$index" == Command\ Lib\|Dotfiles\ ›\ Command\ Lib\|menu\ update\ full-update\ status\ commands\ packages\ restow\ help\|* ]] || return 1
+	[[ "$index" == Command\ Lib\|Dotfiles\ ›\ Command\ Lib\|menu\ update\ full-update\ doctor\ status\ commands\ packages\ logs\ restow\ help\|* ]] || return 1
 	grep -Fq 'Dotfiles › Command Lib › status' "$capture" || return 1
 	grep -Fq 'Command: status' "$capture" || return 1
 	! grep -Fq 'Command: update' "$capture"

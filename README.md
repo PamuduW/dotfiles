@@ -224,8 +224,11 @@ Global command (stowed to `~/bin/dotfiles`, on PATH like `ex` and `clip`):
 | `dotfiles menu` | Boot menu (same as `./install.sh`) |
 | `dotfiles update` | **Apply after one confirmation** — repo-first gate, then all managed apt/CLI/runtime/font changes |
 | `dotfiles update --all` | Accepted for compatibility; selects nothing extra (one approval already runs every managed update) |
+| `dotfiles update --dry-run` | Print the update report, then stop before any downstream change |
 | `dotfiles full-update` | Unattended Dotfiles update, Agentbot install, and Agentbot update |
+| `dotfiles doctor` | Only the components needing attention, plus the command that fixes each; exits nonzero when anything does |
 | `dotfiles status` | Local installed versions + repo state; no fetch or apt refresh |
+| `dotfiles logs [--list\|--last]` | List retained action logs, or print the newest |
 | `dotfiles commands` | Read-only full command, option, configuration, and integration reference |
 | `dotfiles packages` | Read-only component/package catalog |
 | `dotfiles restow` | `stow --restow bash bin readline` |

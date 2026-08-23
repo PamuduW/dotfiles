@@ -156,6 +156,49 @@ cmd_status() {
 	fi
 }
 
+# Doctor: only what needs attention, with the command that fixes it.
+# Status answers "what is installed"; this answers "what is wrong".
+cmd_doctor() {
+	local row component detail result
+	local -a rows=() problems=()
+	collect_component_status_rows rows
+	for row in "${rows[@]}"; do
+		IFS='|' read -r component detail result <<<"$row"
+		case "$result" in
+		installed | configured | skipped) ;;
+		*) problems+=("$row") ;;
+		esac
+	done
+
+	rt_print_header "Doctor" "Dotfiles › Doctor"
+	if ((${#problems[@]} == 0)); then
+		rt_print_table_columns
+		rt_print_table_row "All components" "installed or configured" "ok"
+		rt_print_rollup 1 0 0
+		printf '\n%sNothing needs attention.%s\n' "${C_GREEN:-}" "${C_RESET:-}"
+		return 0
+	fi
+
+	rt_print_table_columns
+	local miss_count=0 check_count=0
+	for row in "${problems[@]}"; do
+		IFS='|' read -r component detail result <<<"$row"
+		case "$result" in
+		missing) ((++miss_count)) ;;
+		*) ((++check_count)) ;;
+		esac
+		rt_print_table_row "$component" "$detail" "$result"
+	done
+	rt_print_rollup 0 "$check_count" "$miss_count"
+
+	printf '\n'
+	rt_print_section "Suggested"
+	((miss_count > 0)) && _msg "  Install what is missing:  dotfiles menu  (Install Dotfiles)"
+	((check_count > 0)) && _msg "  Re-check after updating:  dotfiles update"
+	_msg "  Repair stow links only:   dotfiles restow"
+	return 1
+}
+
 cmd_commands() {
 	dotfiles_command_metadata_validate || {
 		_err "Error: invalid command metadata."
@@ -169,6 +212,46 @@ cmd_packages() {
 	export PKG_FILE
 	package_metadata_load "$PKG_FILE" || return 1
 	package_lib_render_components 100
+}
+
+# The action log is retained (newest DOTFILES_LOG_RETAIN) but there was no way
+# to find one except `ls log/`.
+cmd_logs() {
+	local mode="${1:---list}" log_dir="${DOTFILES_DIR}/log" newest
+	local -a logs=()
+	case "$mode" in
+	--list | --last) ;;
+	*)
+		_err "Unknown logs option: $mode"
+		_msg 'Usage: dotfiles logs [--list|--last]'
+		return 64
+		;;
+	esac
+
+	if [[ ! -d "$log_dir" ]]; then
+		_msg 'No logs yet.'
+		return 0
+	fi
+	mapfile -t logs < <(find "$log_dir" -maxdepth 1 -type f -name '*.log' -print | sort -r)
+	if ((${#logs[@]} == 0)); then
+		_msg 'No logs yet.'
+		return 0
+	fi
+
+	if [[ "$mode" == --last ]]; then
+		newest="${logs[0]}"
+		printf '%s%s%s\n\n' "${C_DIM:-}" "$newest" "${C_RESET:-}"
+		cat -- "$newest"
+		return 0
+	fi
+
+	rt_print_header "Logs" "Dotfiles › Logs"
+	local file
+	for file in "${logs[@]}"; do
+		printf '  %s  %s%s%s\n' "$(basename -- "$file")" \
+			"${C_DIM:-}" "$(du -h -- "$file" | cut -f1)" "${C_RESET:-}"
+	done
+	printf '\n  %d log(s); newest first. Show the newest with: dotfiles logs --last\n' "${#logs[@]}"
 }
 
 cmd_restow() {

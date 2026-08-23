@@ -107,11 +107,11 @@ dotfiles_command_define 'menu' \
 
 dotfiles_command_define 'update' \
 	--handler 'cmd_update' \
-	--usage '[--all]' \
+	--usage '[--all] [--dry-run]' \
 	--class 'mutating' \
 	--description 'Safely update the repo, then packages and tools.' \
 	--note 'One approval updates every managed component; --all is accepted but selects nothing extra.' \
-	--options $'--all|Accepted for compatibility; every managed update already runs without it.|no-op\n-h|Show command help and exit.|off\n--help|Show command help and exit.|off' \
+	--options $'--all|Accepted for compatibility; every managed update already runs without it.|no-op\n--dry-run|Show the update report, then stop before any downstream change.|off\n-h|Show command help and exit.|off\n--help|Show command help and exit.|off' \
 	--defaults 'One approval runs every managed update, including Node.js, npm, Go, and Monaspace.' \
 	--effects 'May pull the repository, refresh apt, and update all managed CLIs, runtimes, and fonts.' \
 	--example 'dotfiles update' \
@@ -127,6 +127,17 @@ dotfiles_command_define 'full-update' \
 	--effects 'May stash local changes, create recovery branches, sync both repositories, and update the system.' \
 	--example 'dotfiles full-update' \
 	--related 'Use update for an interactive Dotfiles-only run.'
+
+dotfiles_command_define 'doctor' \
+	--handler 'cmd_doctor' \
+	--class 'read-only' \
+	--description 'Show only components that need attention.' \
+	--note 'Exits nonzero when anything needs attention, so scripts can gate on it.' \
+	--options $'(none)|Report components whose probe is not installed or configured.|always' \
+	--defaults 'Reads the same component probes as status; performs no installation.' \
+	--effects 'Reads local component state only; changes nothing.' \
+	--example 'dotfiles doctor' \
+	--related 'Use status for the full component list and update to refresh tools.'
 
 dotfiles_command_define 'status' \
 	--handler 'cmd_status' \
@@ -158,6 +169,17 @@ dotfiles_command_define 'packages' \
 	--effects 'Performs no package installation or system probe.' \
 	--example 'dotfiles packages' \
 	--related 'Use the component menu for interactive selection.'
+
+dotfiles_command_define 'logs' \
+	--handler 'cmd_logs' \
+	--usage '[--list|--last]' \
+	--class 'read-only' \
+	--description 'List retained action logs or print the newest.' \
+	--options $'--list|List retained logs, newest first, with sizes.|default\n--last|Print the newest log in full.|off' \
+	--defaults 'Lists the retained logs in log/ without options.' \
+	--effects 'Reads log/ only; writes nothing and starts no log of its own.' \
+	--example 'dotfiles logs --last' \
+	--related 'DOTFILES_LOG_RETAIN controls how many logs are kept.'
 
 dotfiles_command_define 'restow' \
 	--handler 'cmd_restow' \

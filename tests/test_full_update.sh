@@ -14,7 +14,7 @@ _err() { printf '%s\n' "$*" >&2; }
 C_BOLD='' C_ORANGE='' C_GREEN='' C_RESET=''
 [[ -f "$REPO_DIR/scripts/lib/full_update.sh" ]] && source "$REPO_DIR/scripts/lib/full_update.sh"
 
-test_success_runs_all_stages_without_confirmation() (
+test_success_runs_dotfiles_then_agentbot_full() (
 	local events="$TEST_HARNESS_ROOT/full-update-success.events"
 	: >"$events"
 	_dotfiles_run_update() {
@@ -30,7 +30,7 @@ test_success_runs_all_stages_without_confirmation() (
 	}
 
 	cmd_full_update >/dev/null || return 1
-	[[ "$(<"$events")" == $'dotfiles:_dotfiles_approve_repo_update:true\nagentbot:install:confirm=yes\nagentbot:update --yes:confirm=unset' ]]
+	[[ "$(<"$events")" == $'dotfiles:_dotfiles_approve_repo_update:true\nagentbot:full:confirm=yes' ]]
 )
 
 test_dotfiles_change_restarts_once_and_second_change_stops() (
@@ -50,45 +50,44 @@ test_dotfiles_change_restarts_once_and_second_change_stops() (
 	[[ "$rc" -eq 1 && "$(wc -l <"$events")" -eq 1 ]]
 )
 
-test_agentbot_restarts_once_across_install_and_update() (
-	local events="$TEST_HARNESS_ROOT/full-update-agentbot-restart.events" install_calls=0
-	: >"$events"
+# Agentbot owns its own install-then-update sequencing and restart budget now,
+# so Dotfiles only reads its exit contract. Exit 2 means the Agentbot checkout
+# moved forward mid-run and the user should rerun.
+test_agentbot_repository_change_stops_with_guidance() (
+	local output rc=0
 	_dotfiles_run_update() { return 0; }
-	agentbot() {
-		printf '%s\n' "$*" >>"$events"
-		if [[ "$1" == install ]]; then
-			install_calls=$((install_calls + 1))
-			((install_calls == 1)) && return 2
-		fi
-		return 0
-	}
+	agentbot() { return 2; }
 
-	cmd_full_update >/dev/null || return 1
-	[[ "$(<"$events")" == $'install\ninstall\nupdate --yes' ]]
+	output="$(cmd_full_update 2>&1)" || rc=$?
+	[[ "$rc" -eq 1 ]] || return 1
+	[[ "$output" == *'rerun dotfiles full-update'* ]]
 )
 
-test_second_agentbot_repository_change_stops() (
-	local events="$TEST_HARNESS_ROOT/full-update-agentbot-loop.events" install_calls=0
-	: >"$events"
-	_dotfiles_run_update() { return 0; }
-	agentbot() {
-		printf '%s\n' "$*" >>"$events"
-		if [[ "$1" == install ]]; then
-			install_calls=$((install_calls + 1))
-			((install_calls == 1)) && return 2
-			return 0
-		fi
-		return 2
-	}
-
+test_agentbot_failure_propagates_its_status() (
 	local rc=0
+	_dotfiles_run_update() { return 0; }
+	agentbot() { return 23; }
+
 	cmd_full_update >/dev/null 2>&1 || rc=$?
-	[[ "$rc" -eq 1 && "$(<"$events")" == $'install\ninstall\nupdate --yes' ]]
+	[[ "$rc" -eq 23 ]]
 )
 
-expect_success 'full-update runs Dotfiles, Agentbot install, and Agentbot update without confirmation' test_success_runs_all_stages_without_confirmation
+test_missing_agentbot_is_reported_not_ignored() (
+	local rc=0
+	_dotfiles_run_update() { return 0; }
+	command() {
+		[[ "$*" == '-v agentbot' ]] && return 1
+		builtin command "$@"
+	}
+
+	cmd_full_update >/dev/null 2>&1 || rc=$?
+	[[ "$rc" -eq 127 ]]
+)
+
+expect_success 'full-update runs Dotfiles, then one Agentbot full run' test_success_runs_dotfiles_then_agentbot_full
 expect_success 'Dotfiles repository change restarts once and a second change stops' test_dotfiles_change_restarts_once_and_second_change_stops
-expect_success 'Agentbot repository change reruns install once before update' test_agentbot_restarts_once_across_install_and_update
-expect_success 'a second Agentbot repository change stops the loop' test_second_agentbot_repository_change_stops
+expect_success 'Agentbot repository change stops with rerun guidance' test_agentbot_repository_change_stops_with_guidance
+expect_success 'Agentbot failure status propagates unchanged' test_agentbot_failure_propagates_its_status
+expect_success 'a missing agentbot is reported, not silently skipped' test_missing_agentbot_is_reported_not_ignored
 
 finish_tests

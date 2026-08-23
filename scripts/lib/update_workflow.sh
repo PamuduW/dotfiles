@@ -187,7 +187,7 @@ _run_update_downstream() {
 }
 
 _dotfiles_run_update() {
-	local repository_decision_fn="$1" unattended="$2" repo_rc=0
+	local repository_decision_fn="$1" unattended="$2" dry_run="${3:-false}" repo_rc=0
 	local -A repo_result=()
 	repo_update_run "$DOTFILES_DIR" 'dotfiles repo' "$repository_decision_fn" repo_result 'PamuduW/dotfiles' || repo_rc=$?
 	if ((repo_rc == 2)); then
@@ -198,6 +198,10 @@ _dotfiles_run_update() {
 	[[ "$repo_rc" -eq 0 ]] || return 1
 
 	print_report_table repo_result
+	if [[ "$dry_run" == true ]]; then
+		_msg 'Dry run: nothing was changed downstream.'
+		return 0
+	fi
 	if [[ "$unattended" != true ]] && ! _dotfiles_confirm "Proceed with apt refresh and downstream updates?"; then
 		_msg 'Downstream updates skipped.'
 		return 0
@@ -210,9 +214,11 @@ _dotfiles_run_update() {
 }
 
 cmd_update() {
-	local arg
+	local arg dry_run=false
 	for arg in "$@"; do
 		case "$arg" in
+		# Report what would change, then stop before any downstream work.
+		--dry-run) dry_run=true ;;
 		# Accepted for compatibility only: one approved update already runs every
 		# managed step, so --all selects nothing extra.
 		--all) ;;
@@ -222,10 +228,10 @@ cmd_update() {
 			;;
 		*)
 			_err "Unknown option: $arg"
-			_msg 'Usage: dotfiles update [--all]'
+			_msg 'Usage: dotfiles update [--all] [--dry-run]'
 			return 1
 			;;
 		esac
 	done
-	_dotfiles_run_update _dotfiles_confirm_repo_update false
+	_dotfiles_run_update _dotfiles_confirm_repo_update false "$dry_run"
 }

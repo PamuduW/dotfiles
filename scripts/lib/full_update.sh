@@ -8,41 +8,25 @@ full_update_restart_dotfiles() {
 	exec "$DOTFILES_DIR/bin/bin/dotfiles" full-update "$1"
 }
 
-_full_update_run_agentbot_stage() {
-	local stage="$1" rc=0
-	case "$stage" in
-	install) AGENTBOT_INSTALL_CONFIRM=yes agentbot install || rc=$? ;;
-	update) agentbot update --yes || rc=$? ;;
-	*) return 64 ;;
-	esac
-	return "$rc"
-}
-
+# Agentbot owns its own install-then-update sequencing and restart budget via
+# `agentbot full`, so this only has to run it and read the exit contract:
+# 0 continue, 1 stop, 2 the Agentbot checkout changed.
 full_update_run_agentbot() {
-	local stage rc agentbot_restarts=0
+	local rc=0
 	command -v agentbot >/dev/null 2>&1 || {
 		_err "Agentbot is not installed or is not available on PATH."
 		return 127
 	}
-	for stage in install update; do
-		while true; do
-			printf '\n%s%s=== Agentbot %s ===%s\n' "${C_BOLD:-}" "${C_ORANGE:-}" "$stage" "${C_RESET:-}"
-			rc=0
-			_full_update_run_agentbot_stage "$stage" || rc=$?
-			case "$rc" in
-			0) break ;;
-			2)
-				if ((agentbot_restarts >= 1)); then
-					_err 'Agentbot repository changed more than once; full update stopped.'
-					return 1
-				fi
-				agentbot_restarts=$((agentbot_restarts + 1))
-				_msg 'Restarting Agentbot from the updated checkout.'
-				;;
-			*) return "$rc" ;;
-			esac
-		done
-	done
+	printf '\n%s%s=== Agentbot full ===%s\n' "${C_BOLD:-}" "${C_ORANGE:-}" "${C_RESET:-}"
+	AGENTBOT_INSTALL_CONFIRM=yes agentbot full || rc=$?
+	case "$rc" in
+	0) return 0 ;;
+	2)
+		_err 'Agentbot repository changed; rerun dotfiles full-update to finish.'
+		return 1
+		;;
+	*) return "$rc" ;;
+	esac
 }
 
 cmd_full_update() {
