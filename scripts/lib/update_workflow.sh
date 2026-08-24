@@ -67,7 +67,8 @@ print_report_table() {
 	mapfile -t rows < <(_collect_check_rows "$repo_result_name")
 
 	for row in "${rows[@]}"; do
-		IFS='|' read -r _ _ _ action <<<"$row"
+		IFS='|' read -r component installed available action <<<"$row"
+		[[ -n "$component" ]] || continue
 		case "$action" in
 		upgrade | upgrade*) ((++upgrade_count)) ;;
 		pull*) ((++upgrade_count)) ;;
@@ -79,6 +80,7 @@ print_report_table() {
 
 	for row in "${rows[@]}"; do
 		IFS='|' read -r component installed available action <<<"$row"
+		[[ -n "$component" ]] || continue
 		_print_check_table_row "$component" "$installed" "$available" "$action" action
 	done
 
@@ -107,6 +109,7 @@ print_upgrade_summary() {
 
 	for row in "${rows[@]}"; do
 		IFS='|' read -r component installed available _action <<<"$row"
+		[[ -n "$component" ]] || continue
 		result="${UPGRADE_STEP_RESULT[$component]:-}"
 		if [[ -z "$result" ]]; then
 			case "$component" in

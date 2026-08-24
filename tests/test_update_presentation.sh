@@ -31,6 +31,36 @@ test_update_and_upgrade_rows_keep_the_last_column_width() (
 	[[ "$line_lengths" == $'93\n93\n93' ]]
 )
 
+test_parallel_probe_preserves_nonempty_output_from_nonzero_probe() (
+	_nonzero_probe() {
+		printf '%s\n' 'apt packages|system packages|none|up to date'
+		return 1
+	}
+	local output
+	output="$(run_probes_parallel 'fallback' _nonzero_probe)"
+	[[ "$output" == 'apt packages|system packages|none|up to date' ]]
+)
+
+test_update_report_ignores_empty_probe_rows() (
+	_collect_check_rows() {
+		printf '\n%s\n' 'apt packages|system packages|none|up to date'
+	}
+	local output
+	output="$(NO_COLOR=1 print_report_table)"
+	[[ "$(grep -c '^apt packages' <<<"$output")" -eq 1 ]] || return 1
+	! grep -Eq '^[[:space:]]+\|[[:space:]]+\|[[:space:]]+\|' <<<"$output"
+)
+
+test_upgrade_summary_ignores_empty_probe_rows() (
+	_collect_check_rows() {
+		printf '\n%s\n' 'apt packages|system packages|none|up to date'
+	}
+	local output
+	output="$(NO_COLOR=1 print_upgrade_summary)" || return 1
+	[[ "$(grep -c '^apt packages' <<<"$output")" -eq 1 ]] || return 1
+	! grep -Eq '^[[:space:]]+\|[[:space:]]+\|[[:space:]]+\|' <<<"$output"
+)
+
 test_update_rows_align_unicode_available_cells() (
 	local output
 	_collect_check_rows() { printf '%s\n' 'Cursor CLI|2026.07.09-a3815c0|—|up to date'; }
@@ -280,6 +310,9 @@ test_harness_safety_and_no_real_mutation() {
 
 expect_success 'update report title spacing and action separator are stable' test_update_report_uses_clear_title_spacing_and_aligned_action_rule
 expect_success 'update and upgrade rows preserve the fixed final column width' test_update_and_upgrade_rows_keep_the_last_column_width
+expect_success 'parallel probes preserve nonempty output from nonzero checks' test_parallel_probe_preserves_nonempty_output_from_nonzero_probe
+expect_success 'update report ignores empty probe rows' test_update_report_ignores_empty_probe_rows
+expect_success 'upgrade summary ignores empty probe rows' test_upgrade_summary_ignores_empty_probe_rows
 expect_success 'update rows align a Unicode em-dash available cell' test_update_rows_align_unicode_available_cells
 expect_success 'repository update preview uses semantic colors' test_repository_update_preview_uses_semantic_colors
 expect_success 'update subtopics use the report yellow palette' test_update_topics_use_submenu_yellow

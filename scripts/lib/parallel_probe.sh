@@ -15,8 +15,8 @@ _DOTFILES_PARALLEL_PROBE_LOADED=1
 # run_probes_parallel <fallback> <command>...
 #
 # Each argument after the fallback is run through `eval` in its own subshell.
-# A probe that fails or prints nothing contributes <fallback> instead, so one
-# broken probe cannot drop a row or stall the report.
+# Probe exit status is caller-level state (for example, no upgrade available),
+# so preserve any nonempty output and use <fallback> only when output is empty.
 run_probes_parallel() (
 	local fallback="$1"
 	shift
@@ -30,7 +30,8 @@ run_probes_parallel() (
 	index=0
 	for probe in "$@"; do
 		(
-			if output="$(eval "$probe" 2>/dev/null)" && [[ -n "$output" ]]; then
+			output="$(eval "$probe" 2>/dev/null)" || true
+			if [[ -n "$output" ]]; then
 				printf '%s\n' "$output"
 			else
 				printf '%s\n' "$fallback"
