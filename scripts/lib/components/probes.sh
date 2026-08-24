@@ -45,6 +45,10 @@ _collect_component_status_rows_stream() (
 		[[ "$enabled_only" == true ]] && { is_on "$key" || continue; }
 		indexes+=("$i")
 		(
+			# Note the deliberate difference from run_probes_parallel: a
+			# component probe's nonzero exit means the probe failed, whereas an
+			# update check returns nonzero to mean "no upgrade available". Do
+			# not unify these without changing the probe contract.
 			if probe="$(comp_probe "$key")"; then
 				probe="${probe%%$'\n'*}"
 				printf '%s\n' "${probe:-check|probe returned no result}"
