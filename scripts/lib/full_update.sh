@@ -8,16 +8,42 @@ full_update_restart_dotfiles() {
 	exec "$DOTFILES_DIR/bin/bin/dotfiles" full-update "$1"
 }
 
-# Agentbot owns its own install-then-update sequencing and restart budget via
-# `agentbot full`, so this only has to run it and read the exit contract:
-# 0 continue, 1 stop, 2 the Agentbot checkout changed.
+# Agentbot owns its install-then-update sequencing and restart budget via
+# `agentbot full`. Older checkouts need one legacy install run so their own
+# repository gate can introduce that command before Dotfiles delegates to it.
 full_update_run_agentbot() {
-	local rc=0
+	local rc=0 capability_rc=0
 	command -v agentbot >/dev/null 2>&1 || {
 		_err "Agentbot is not installed or is not available on PATH."
 		return 127
 	}
 	printf '\n%s%s=== Agentbot full ===%s\n' "${C_BOLD:-}" "${C_ORANGE:-}" "${C_RESET:-}"
+	agentbot help full >/dev/null 2>&1 || capability_rc=$?
+	case "$capability_rc" in
+	0) ;;
+	2)
+		_msg 'Agentbot checkout is missing agentbot full; updating it once for compatibility.'
+		AGENTBOT_INSTALL_CONFIRM=yes agentbot install || rc=$?
+		case "$rc" in
+		0 | 2) ;;
+		*) return "$rc" ;;
+		esac
+
+		capability_rc=0
+		agentbot help full >/dev/null 2>&1 || capability_rc=$?
+		case "$capability_rc" in
+		0) ;;
+		2)
+			_err 'Agentbot still does not support agentbot full after its compatibility update.'
+			return 1
+			;;
+		*) return "$capability_rc" ;;
+		esac
+		;;
+	*) return "$capability_rc" ;;
+	esac
+
+	rc=0
 	AGENTBOT_INSTALL_CONFIRM=yes agentbot full || rc=$?
 	case "$rc" in
 	0) return 0 ;;
