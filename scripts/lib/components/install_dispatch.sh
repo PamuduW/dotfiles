@@ -26,6 +26,10 @@ _comp_install_graphify_cli() {
 	install_graphify_cli
 }
 
+_comp_install_boost_cli() {
+	install_boost_cli
+}
+
 _comp_install_powershell() {
 	install_powershell
 }

@@ -124,6 +124,13 @@ comp_define graphify_cli \
 	--order 3 \
 	--desc $'Installs the official graphifyy package with uv, exposing the graphify CLI.\nOptional Agent Skills integration for Codex, Cursor, Claude, and compatible assistants.'
 
+comp_define boost_cli \
+	--label 'Boost CLI (preview)' \
+	--plan 'Boost CLI' \
+	--detail 'pinned v0.12.6 binary (opt-in)' \
+	--order 4 \
+	--desc $'Installs the verified JFrog Boost v0.12.6 CLI binary to ~/.local/bin.\nPreview software; disabled by default. Agentbot owns Claude/Codex integration.'
+
 comp_define powershell \
 	--label 'PowerShell (pwsh)' \
 	--plan 'PowerShell' \
@@ -351,13 +358,15 @@ comp_registry_init() {
 		COMP_ON["$_key"]=1
 	done
 
-	# Safe defaults: identity and key generation are user-specific decisions;
-	# all other setup components, including optional Graphify, start selected.
+	# Safe defaults: identity/key generation and preview Boost installation are
+	# explicit user decisions. Other setup components start selected.
 	COMP_ON[git_identity]=0
 	COMP_ON[ssh_key]=0
+	COMP_ON[boost_cli]=0
 }
 
-# Non-interactive: honor DOTFILES_COMPONENTS (comma-separated COMP_KEYS); default = all on.
+# Non-interactive: honor DOTFILES_COMPONENTS (comma-separated COMP_KEYS);
+# otherwise use the same safe defaults as the interactive menu.
 apply_dotfiles_components_env() {
 	local _key part
 

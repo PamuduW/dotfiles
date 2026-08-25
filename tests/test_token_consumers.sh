@@ -286,6 +286,7 @@ test_complete_consumer_inventory() {
 		"$REPO_DIR/scripts/lib/installers/github_release.sh"
 		"$REPO_DIR/scripts/lib/installers/fonts.sh"
 		"$REPO_DIR/scripts/lib/installers/cli_tools.sh"
+		"$REPO_DIR/scripts/lib/installers/boost.sh"
 	)
 	assert_sensitive_urls_use_boundary "${files[@]}" || return 1
 	local found

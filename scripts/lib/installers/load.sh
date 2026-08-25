@@ -22,6 +22,8 @@ source "$_INSTALL_LIB_DIR/docker.sh"
 source "$_INSTALL_LIB_DIR/cli_tools.sh"
 # shellcheck source=scripts/lib/installers/graphify.sh
 source "$_INSTALL_LIB_DIR/graphify.sh"
+# shellcheck source=scripts/lib/installers/boost.sh
+source "$_INSTALL_LIB_DIR/boost.sh"
 # shellcheck source=scripts/lib/installers/fonts.sh
 source "$_INSTALL_LIB_DIR/fonts.sh"
 # shellcheck source=scripts/lib/installers/stow.sh

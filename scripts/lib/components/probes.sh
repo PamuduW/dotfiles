@@ -230,6 +230,24 @@ _comp_probe_graphify_cli() {
 	fi
 }
 
+_comp_probe_boost_cli() {
+	local boost_path ver rc timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
+	if boost_path="$(boost_command 2>/dev/null)"; then
+		_comp_probe_capture ver "$timeout_seconds" "$boost_path" version || rc=$?
+		if [[ "${rc:-0}" -eq 124 ]]; then
+			printf 'check|boost cli probe timed out\n'
+			return
+		fi
+		if boost_cli_is_dotfiles_owned; then
+			printf 'installed|%s (Dotfiles pinned)\n' "${ver:-$boost_path}"
+		else
+			printf 'installed|%s (external)\n' "${ver:-$boost_path}"
+		fi
+	else
+		printf 'missing|boost not on PATH\n'
+	fi
+}
+
 _comp_probe_go() {
 	local raw ver rc timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
 	if command -v go >/dev/null 2>&1; then

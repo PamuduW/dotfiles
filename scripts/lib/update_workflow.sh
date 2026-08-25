@@ -168,6 +168,7 @@ _run_update_downstream() {
 	fi
 	_run_upgrade_step "apt packages" "sudo apt-get upgrade" _update_apt_packages
 	_run_upgrade_step "Graphify CLI" "uv tool upgrade graphifyy" upgrade_graphify_cli
+	_run_upgrade_step "Boost CLI" "dotfiles update" upgrade_boost_cli
 	_run_upgrade_step "Cursor CLI" "dotfiles update" upgrade_cursor_cli
 	_run_upgrade_step "Codex CLI" "npm i -g @openai/codex@latest" upgrade_codex_cli
 	_run_upgrade_step "Claude CLI" "claude update" upgrade_claude_cli

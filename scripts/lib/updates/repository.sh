@@ -43,6 +43,7 @@ dotfiles_repo_status() {
 CHECK_FUNCS=(
 	check_apt
 	check_graphify_cli
+	check_boost_cli
 	check_cursor_cli
 	check_codex_cli
 	check_claude_cli

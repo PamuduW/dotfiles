@@ -31,6 +31,12 @@ if [[ -f "$_GRAPHIFY_INSTALLER_LIB" ]]; then
 	source "$_GRAPHIFY_INSTALLER_LIB"
 fi
 
+_BOOST_INSTALLER_LIB="${DOTFILES_DIR}/scripts/lib/installers/boost.sh"
+if [[ -f "$_BOOST_INSTALLER_LIB" ]]; then
+	# shellcheck source=/dev/null
+	source "$_BOOST_INSTALLER_LIB"
+fi
+
 _ARCH_LIB="${DOTFILES_DIR}/scripts/lib/arch.sh"
 if [[ -f "$_ARCH_LIB" ]]; then
 	# shellcheck source=/dev/null
