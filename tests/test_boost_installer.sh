@@ -29,6 +29,65 @@ make_boost_archive() {
 	tar -czf "$TEST_HARNESS_ROOT/boost-linux-amd64.tar.gz" -C "$fixture_dir" boost boost-ci
 }
 
+make_boost_archive_with_members() {
+	# Same fixture, but the caller chooses the archive member list. Upstream
+	# ships a new release every day or two; the gate has to survive a member
+	# being added or reordered while still refusing anything that escapes the
+	# extraction directory.
+	local fixture_dir="$TEST_HARNESS_ROOT/boost-fixture"
+	make_boost_archive 0.12.6
+	printf 'license\n' >"$fixture_dir/LICENSE"
+	tar -czf "$TEST_HARNESS_ROOT/boost-linux-amd64.tar.gz" -C "$fixture_dir" "$@"
+}
+
+install_fixture_release() {
+	local digest
+	# Tests share $HOME, and an earlier install would otherwise satisfy the
+	# "nothing was installed" assertions in the refusal cases.
+	rm -f -- "$HOME/.local/bin/boost"
+	digest="$(sha256sum "$TEST_HARNESS_ROOT/boost-linux-amd64.tar.gz" | awk '{print $1}')"
+	github_curl() {
+		local out="" arg
+		while [[ $# -gt 0 ]]; do
+			[[ "$1" == '-o' ]] && {
+				out="$2"
+				shift 2
+				continue
+			}
+			arg="$1"
+			shift
+		done
+		cp -- "$TEST_HARNESS_ROOT/boost-linux-amd64.tar.gz" "$out"
+	}
+	boost_platform_arch() { printf 'amd64\n'; }
+	boost_install_release v0.12.6 "$digest"
+}
+
+test_extra_archive_members_do_not_block_installation() (
+	declare -F boost_install_release >/dev/null || return 1
+	make_boost_archive_with_members LICENSE boost boost-ci
+	install_fixture_release >/dev/null || return 1
+	[[ -x "$HOME/.local/bin/boost" ]] || return 1
+	[[ ! -e "$HOME/.local/bin/LICENSE" && ! -e "$HOME/.local/bin/boost-ci" ]]
+)
+
+test_archive_without_the_boost_binary_is_refused() (
+	declare -F boost_install_release >/dev/null || return 1
+	make_boost_archive_with_members LICENSE boost-ci
+	! install_fixture_release >/dev/null 2>&1 || return 1
+	[[ ! -e "$HOME/.local/bin/boost" ]]
+)
+
+test_archive_member_escaping_the_extraction_directory_is_refused() (
+	declare -F boost_install_release >/dev/null || return 1
+	local fixture_dir="$TEST_HARNESS_ROOT/boost-fixture"
+	make_boost_archive 0.12.6
+	tar -czf "$TEST_HARNESS_ROOT/boost-linux-amd64.tar.gz" \
+		-C "$fixture_dir" --transform 's|^boost-ci|../escape|' boost boost-ci
+	! install_fixture_release >/dev/null 2>&1 || return 1
+	[[ ! -e "$HOME/.local/bin/boost" ]]
+)
+
 test_fresh_install_uses_latest_verified_release_and_only_installs_boost_binary() (
 	declare -F install_boost_cli >/dev/null || return 1
 	local calls="$TEST_HARNESS_ROOT/boost-install.calls" fixture_archive digest
@@ -182,5 +241,8 @@ expect_success 'unsupported Boost architecture fails closed' test_unsupported_ar
 expect_success 'Boost update installs the latest verified release and advances ownership' test_update_installs_latest_verified_release_and_advances_stamp
 expect_success 'Boost update preserves the owned binary when release metadata is unverifiable' test_update_without_published_digest_preserves_owned_binary
 expect_success 'Boost update returns the matching release tag and asset digest' test_latest_metadata_returns_matching_tag_and_asset_digest
+expect_success 'extra Boost archive members do not block installation' test_extra_archive_members_do_not_block_installation
+expect_success 'Boost archive without the CLI binary is refused' test_archive_without_the_boost_binary_is_refused
+expect_success 'Boost archive member escaping the extraction directory is refused' test_archive_member_escaping_the_extraction_directory_is_refused
 
 finish_tests

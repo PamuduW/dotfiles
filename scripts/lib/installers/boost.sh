@@ -105,10 +105,29 @@ boost_install_release() {
 		return 1
 	fi
 
+	# Inspect the member list before extracting anything. The check is on
+	# escape, not on an exact manifest: upstream ships a release every day or
+	# two, so demanding an exact ordered member list would turn one added
+	# LICENSE file into a hard install failure. Only `boost` is extracted
+	# below, so extra members are inert.
 	local -a members=()
-	mapfile -t members < <(tar -tzf "$archive") || return 1
-	if [[ "${#members[@]}" -ne 2 || "${members[0]}" != boost || "${members[1]}" != boost-ci ]]; then
-		echo "  Boost archive contents are unexpected; refusing extraction." >&2
+	mapfile -t members < <(tar -tzf "$archive")
+	if [[ "${#members[@]}" -eq 0 ]]; then
+		echo "  Boost archive could not be listed; refusing extraction." >&2
+		return 1
+	fi
+	local member has_boost=0
+	for member in "${members[@]}"; do
+		case "$member" in
+		boost) has_boost=1 ;;
+		/* | ../* | */../* | */..)
+			echo "  Boost archive member '${member}' escapes the extraction directory; refusing extraction." >&2
+			return 1
+			;;
+		esac
+	done
+	if [[ "$has_boost" -ne 1 ]]; then
+		echo "  Boost archive does not contain a top-level boost binary; refusing extraction." >&2
 		return 1
 	fi
 	tar -xzf "$archive" -C "$tmp" boost || return $?

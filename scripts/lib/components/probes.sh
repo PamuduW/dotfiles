@@ -239,7 +239,7 @@ _comp_probe_boost_cli() {
 			return
 		fi
 		if boost_cli_is_dotfiles_owned; then
-			printf 'installed|%s (Dotfiles pinned)\n' "${ver:-$boost_path}"
+			printf 'installed|%s (Dotfiles managed)\n' "${ver:-$boost_path}"
 		else
 			printf 'installed|%s (external)\n' "${ver:-$boost_path}"
 		fi

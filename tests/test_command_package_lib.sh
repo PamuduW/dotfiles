@@ -228,7 +228,14 @@ test_boost_description_does_not_claim_a_pin() {
 	[[ ! "$description" =~ v[0-9]+\.[0-9]+\.[0-9]+ ]] || return 1
 	[[ ! "$detail" =~ v[0-9]+\.[0-9]+\.[0-9]+ ]] || return 1
 	[[ "$description" == *SHA-256* ]] || return 1
-	[[ "$description" == *"disabled by default"* ]]
+	[[ "$description" == *"disabled by default"* ]] || return 1
+
+	# The registry is not the only place the claim can appear. The status
+	# probe made exactly this claim while the registry text was being
+	# corrected, so guard every Boost UI surface at once.
+	! grep -rn 'pinned' "$REPO_DIR/scripts/lib/components/probes.sh" \
+		"$REPO_DIR/scripts/lib/components/registry.sh" \
+		"$REPO_DIR/scripts/lib/installers/boost.sh" >/dev/null
 }
 
 test_install_defaults_match_requested_selection() {
