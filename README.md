@@ -12,7 +12,7 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 - Docker Engine + Portainer CE (with `dpot`/`dpotstop` shortcuts)
 - Node.js via nvm, Python 3, Go (asdf), PowerShell, direnv
 - Optional Graphify CLI (`graphifyy` through `uv`; selected by default)
-- Optional pinned Boost CLI preview binary (disabled by default)
+- Optional verified Boost CLI preview binary (disabled by default)
 - AI CLI tools: Cursor, Codex, Claude, Copilot (updated through the explicit `dotfiles update` workflow)
 - SSH key generation with GitHub setup notes
 - WSL-specific config: systemd, Windows PATH interop (`appendWindowsPath=true`), Git credentials and recursive-submodule defaults, clipboard helper
@@ -133,7 +133,7 @@ When you choose **Run setup** interactively (TTY), the installer will:
 | System packages | Core CLI tools from apt (@core, @cli, @system)                                |
 | Python          | python3, pip, venv                                                            |
 | Graphify CLI    | Optional `graphifyy` package through `uv`; exposes the `graphify` command (selected by default) |
-| Boost CLI       | Pinned, checksum-verified Boost preview binary (disabled by default) |
+| Boost CLI       | Checksum-verified Boost preview binary (disabled by default) |
 | PowerShell      | Microsoft PowerShell from official Microsoft apt repository                   |
 | Go              | Latest Go via asdf                                                            |
 | Node.js         | v24 LTS via nvm                                                               |
@@ -170,9 +170,9 @@ does not launch or update Agentbot.
 
 ### Optional Boost CLI
 
-`boost_cli` is disabled by default. When selected, Dotfiles downloads the pinned
-Boost v0.12.6 Linux archive for the current amd64/arm64 architecture, verifies
-its published SHA-256 digest, and installs only `boost` to `~/.local/bin`.
+`boost_cli` is disabled by default. A fresh selection resolves the latest
+official Boost release for the current amd64/arm64 architecture, verifies its
+published SHA-256 digest, and installs only `boost` to `~/.local/bin`.
 Dotfiles never runs `boost init`, accepts agreements, or edits assistant files.
 
 After installing the CLI, run Agentbot setup. `agentbot install` previews and
@@ -276,10 +276,13 @@ already-enabled Agentbot integration: run `agentbot graphify setup` or
 otherwise remain temporarily out of sync; Dotfiles never calls Agentbot or
 enables the skill automatically.
 
-Boost updates restore the pinned v0.12.6 binary only when the Dotfiles ownership
-stamp proves Dotfiles installed it. Missing or externally managed Boost binaries
-are skipped and preserved. Dotfiles never runs Boost initialization during an
-install or update.
+Install and an explicitly approved `dotfiles update` use the same latest-release
+path. The release tag and architecture-specific asset digest come from one
+GitHub Releases API snapshot; a missing or invalid digest fails closed and
+preserves an installed binary or leaves a fresh install untouched.
+Missing or externally managed Boost binaries are skipped. Dotfiles never runs
+Boost initialization during an install or update, and Boost's own auto-update
+remains disabled by Agentbot.
 
 Install and Update call the same repository-update service before doing any
 setup or downstream work. It validates the repository and upstream, captures

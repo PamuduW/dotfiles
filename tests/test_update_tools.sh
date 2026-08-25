@@ -271,23 +271,23 @@ test_graphify_probe_skips_when_not_installed() (
 	[[ "$output" == 'Graphify CLI|not installed|—|skip' ]]
 )
 
-test_boost_probe_reports_pinned_external_and_absent_states() (
+test_boost_probe_reports_managed_external_and_absent_states() (
 	declare -F check_boost_cli >/dev/null || return 1
 	local output
 	boost_command() { printf '%s\n' "$HOME/.local/bin/boost"; }
 	boost_installed_version() { printf 'boost v0.12.6\n'; }
 	boost_cli_is_dotfiles_owned() { return 0; }
 	output="$(check_boost_cli || true)"
-	[[ "$output" == 'Boost CLI|boost v0.12.6|v0.12.6|pinned' ]] || return 1
+	[[ "$output" == 'Boost CLI|boost v0.12.6|—|managed; latest checked during install/update' ]] || return 1
 
 	boost_cli_is_dotfiles_owned() { return 1; }
 	output="$(check_boost_cli || true)"
-	[[ "$output" == 'Boost CLI|boost v0.12.6|v0.12.6|externally managed' ]] || return 1
+	[[ "$output" == 'Boost CLI|boost v0.12.6|—|externally managed' ]] || return 1
 
 	boost_command() { return 1; }
 	boost_installed_version() { printf 'not installed\n'; }
 	output="$(check_boost_cli || true)"
-	[[ "$output" == 'Boost CLI|not installed|v0.12.6|skip' ]]
+	[[ "$output" == 'Boost CLI|not installed|—|skip' ]]
 )
 
 test_boost_update_reconciles_only_dotfiles_owned_binary() (
@@ -296,11 +296,14 @@ test_boost_update_reconciles_only_dotfiles_owned_binary() (
 	: >"$calls"
 	boost_command() { printf '%s\n' "$HOME/.local/bin/boost"; }
 	boost_installed_version() { printf 'boost v0.12.5\n'; }
+	boost_installed_tag() { printf 'v0.12.5\n'; }
 	boost_cli_is_dotfiles_owned() { return 0; }
-	install_boost_cli() { printf 'install\n' >>"$calls"; }
+	boost_platform_arch() { printf 'amd64\n'; }
+	boost_latest_release_metadata() { printf 'v0.12.7\n%s\n' 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'; }
+	boost_install_release() { printf 'install:%s:%s\n' "$1" "$2" >>"$calls"; }
 
 	upgrade_boost_cli >/dev/null
-	[[ "$(<"$calls")" == 'install' ]] || return 1
+	[[ "$(<"$calls")" == 'install:v0.12.7:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ]] || return 1
 
 	: >"$calls"
 	boost_cli_is_dotfiles_owned() { return 1; }
@@ -527,7 +530,7 @@ expect_success 'npm failed post-check records a copyable failed step' test_npm_f
 expect_success 'unverifiable CLI probes label latest freshness unchecked' test_unverifiable_cli_probes_label_latest_unchecked
 expect_success 'Graphify update probe distinguishes uv-owned and external installs' test_graphify_probe_reports_uv_owned_and_external_states
 expect_success 'Graphify update probe skips an absent CLI' test_graphify_probe_skips_when_not_installed
-expect_success 'Boost probe reports pinned external and absent states' test_boost_probe_reports_pinned_external_and_absent_states
+expect_success 'Boost probe reports managed external and absent states' test_boost_probe_reports_managed_external_and_absent_states
 expect_success 'Boost update reconciles only a Dotfiles-owned binary' test_boost_update_reconciles_only_dotfiles_owned_binary
 expect_success 'Graphify update uses uv tool upgrade' test_graphify_upgrade_uses_uv_tool_upgrade
 expect_success 'Graphify update retries with system certificates after failure' test_graphify_upgrade_retries_with_system_certs_after_failure
