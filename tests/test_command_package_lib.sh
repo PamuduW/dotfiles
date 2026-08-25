@@ -216,6 +216,21 @@ test_component_registry_has_exact_22_with_boost() {
 	done
 }
 
+test_boost_description_does_not_claim_a_pin() {
+	# The installer resolves the latest release every run, so a "pinned"
+	# claim or a hardcoded version number in the UI text goes stale on the
+	# next upstream release -- Boost ships one every day or two.
+	local description detail
+	description="$(comp_description boost_cli)" || return 1
+	detail="${COMP_PLAN_DETAILS[boost_cli]:-}"
+	[[ -n "$detail" ]] || return 1
+	[[ "$description" != *pinned* && "$detail" != *pinned* ]] || return 1
+	[[ ! "$description" =~ v[0-9]+\.[0-9]+\.[0-9]+ ]] || return 1
+	[[ ! "$detail" =~ v[0-9]+\.[0-9]+\.[0-9]+ ]] || return 1
+	[[ "$description" == *SHA-256* ]] || return 1
+	[[ "$description" == *"disabled by default"* ]]
+}
+
 test_install_defaults_match_requested_selection() {
 	local key
 	comp_registry_init
@@ -349,6 +364,7 @@ expect_success 'Command Lib colors mutating and read-only behavior cells' test_c
 expect_success 'topic headers use the orange palette' test_topic_headers_use_orange
 expect_success 'table column headers remain bold white' test_table_column_headers_are_bold_white
 expect_success 'component registry exposes the exact 22 described component IDs' test_component_registry_has_exact_22_with_boost
+expect_success 'Boost component text does not claim a version pin' test_boost_description_does_not_claim_a_pin
 expect_success 'install defaults exclude identity key generation and preview Boost' test_install_defaults_match_requested_selection
 expect_success 'package metadata contains 30 unique described names in 9/3/9/9 tags' test_package_metadata_has_exact_30_with_descriptions
 expect_success 'Package Lib renders all 22 components without probes or side effects' test_package_lib_components_are_metadata_only

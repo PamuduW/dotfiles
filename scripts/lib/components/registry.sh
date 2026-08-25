@@ -127,9 +127,9 @@ comp_define graphify_cli \
 comp_define boost_cli \
 	--label 'Boost CLI (preview)' \
 	--plan 'Boost CLI' \
-	--detail 'pinned v0.12.6 binary (opt-in)' \
+	--detail 'latest verified release (opt-in)' \
 	--order 4 \
-	--desc $'Installs the verified JFrog Boost v0.12.6 CLI binary to ~/.local/bin.\nPreview software; disabled by default. Agentbot owns Claude/Codex integration.'
+	--desc $'Installs the latest JFrog Boost CLI release to ~/.local/bin, after verifying\nits published SHA-256 digest. Preview software; disabled by default.\nAgentbot owns Claude/Codex integration.'
 
 comp_define powershell \
 	--label 'PowerShell (pwsh)' \
