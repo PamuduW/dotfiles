@@ -105,6 +105,10 @@ if ! declare -F tool_resolve >/dev/null 2>&1; then
 	# shellcheck source=scripts/lib/tool_resolve.sh
 	source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)/lib/tool_resolve.sh"
 fi
+if ! declare -F read_packages_by_tags >/dev/null 2>&1; then
+	# shellcheck source=scripts/lib/package_metadata.sh
+	source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/package_metadata.sh"
+fi
 
 _comp_probe_version() {
 	local missing_label="$1" timeout_label="$2" names="$3"

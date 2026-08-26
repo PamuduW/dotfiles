@@ -10,16 +10,16 @@
 # checks that each record is complete and well formed.
 
 DOTFILES_COMMAND_KEYS=()
-declare -A DOTFILES_COMMAND_HANDLERS=()
-declare -A DOTFILES_COMMAND_USAGE=()
-declare -A DOTFILES_COMMAND_CLASS=()
-declare -A DOTFILES_COMMAND_DESCRIPTION=()
-declare -A DOTFILES_COMMAND_NOTE=()
-declare -A DOTFILES_COMMAND_OPTIONS=()
-declare -A DOTFILES_COMMAND_DEFAULTS=()
-declare -A DOTFILES_COMMAND_EFFECTS=()
-declare -A DOTFILES_COMMAND_EXAMPLES=()
-declare -A DOTFILES_COMMAND_RELATED=()
+declare -gA DOTFILES_COMMAND_HANDLERS=()
+declare -gA DOTFILES_COMMAND_USAGE=()
+declare -gA DOTFILES_COMMAND_CLASS=()
+declare -gA DOTFILES_COMMAND_DESCRIPTION=()
+declare -gA DOTFILES_COMMAND_NOTE=()
+declare -gA DOTFILES_COMMAND_OPTIONS=()
+declare -gA DOTFILES_COMMAND_DEFAULTS=()
+declare -gA DOTFILES_COMMAND_EFFECTS=()
+declare -gA DOTFILES_COMMAND_EXAMPLES=()
+declare -gA DOTFILES_COMMAND_RELATED=()
 
 # dotfiles_command_define <key> --handler FN --class read-only|mutating
 #     --description D --options ROWS --defaults D --effects E
@@ -206,7 +206,7 @@ DOTFILES_CONFIG_KEYS=(
 	DOTFILES_LOG_RETAIN
 )
 
-declare -A DOTFILES_CONFIG_DESCRIPTION=(
+declare -gA DOTFILES_CONFIG_DESCRIPTION=(
 	[DOTFILES_COMPONENTS]='Comma-separated component IDs for non-interactive component selection.'
 	[XDG_CONFIG_HOME]='Base directory for shared private Agentbot configuration.'
 	[GITHUB_TOKEN]='Optional GitHub API credential; its value is never rendered by Command Lib.'
@@ -216,7 +216,7 @@ declare -A DOTFILES_CONFIG_DESCRIPTION=(
 	[DOTFILES_LOG_RETAIN]='How many timestamped action logs to keep in log/.'
 )
 
-declare -A DOTFILES_CONFIG_DEFAULT=(
+declare -gA DOTFILES_CONFIG_DEFAULT=(
 	[DOTFILES_COMPONENTS]='Unset; interactive selection or all enabled components apply.'
 	[XDG_CONFIG_HOME]='$HOME/.config when unset.'
 	[GITHUB_TOKEN]='Unset; GitHub API calls remain unauthenticated.'
@@ -226,7 +226,7 @@ declare -A DOTFILES_CONFIG_DEFAULT=(
 	[DOTFILES_LOG_RETAIN]='20 when unset.'
 )
 
-declare -A DOTFILES_CONFIG_LOCATION=(
+declare -gA DOTFILES_CONFIG_LOCATION=(
 	[DOTFILES_COMPONENTS]='Process environment; comma-separated component IDs.'
 	[XDG_CONFIG_HOME]='Process environment; ${XDG_CONFIG_HOME:-$HOME/.config}/agentbot/.'
 	[GITHUB_TOKEN]='Process environment or ${XDG_CONFIG_HOME:-$HOME/.config}/agentbot/github.env.'
@@ -237,12 +237,12 @@ declare -A DOTFILES_CONFIG_LOCATION=(
 )
 
 DOTFILES_SURFACE_KEYS=(repo links components)
-declare -A DOTFILES_SURFACE_DESCRIPTION=(
+declare -gA DOTFILES_SURFACE_DESCRIPTION=(
 	[repo]='The Dotfiles repository, package manifests, installers, and logs.'
 	[links]='Stow-managed bash, bin, and readline links in the home directory.'
 	[components]='Component catalog, package metadata, probes, and selected installers.'
 )
-declare -A DOTFILES_SURFACE_LOCATION=(
+declare -gA DOTFILES_SURFACE_LOCATION=(
 	[repo]='DOTFILES_DIR and its packages/, scripts/, bin/, and log/ directories.'
 	[links]='$HOME via GNU Stow packages bash, bin, and readline.'
 	[components]='scripts/lib/components/ and packages/packages.txt.'

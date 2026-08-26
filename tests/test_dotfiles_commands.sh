@@ -10,6 +10,7 @@ source "$TEST_DIR/lib/harness.sh"
 test_harness_init
 test_harness_report_init
 DOTFILES_SOURCE_ONLY=1 source "$REPO_DIR/bin/bin/dotfiles" >/dev/null
+dotfiles_load_command full-update
 
 test_doctor_reports_only_what_needs_attention() (
 	collect_component_status_rows() {

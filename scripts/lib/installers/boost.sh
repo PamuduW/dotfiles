@@ -2,52 +2,10 @@
 
 BOOST_RELEASE_REPOSITORY="jfrog/boost"
 
-boost_install_path() {
-	printf '%s\n' "$HOME/.local/bin/boost"
-}
-
-boost_management_stamp() {
-	printf '%s\n' "$HOME/.local/share/dotfiles/boost-cli.version"
-}
-
-boost_command() {
-	if command -v boost >/dev/null 2>&1; then
-		command -v boost
-	elif [[ -x "$HOME/.local/bin/boost" ]]; then
-		printf '%s\n' "$HOME/.local/bin/boost"
-	else
-		return 1
-	fi
-}
-
-boost_installed_version() {
-	local boost_cmd version
-	boost_cmd="$(boost_command 2>/dev/null)" || {
-		printf '%s\n' 'not installed'
-		return 0
-	}
-	version="$("$boost_cmd" version 2>/dev/null | head -n1 || true)"
-	printf '%s\n' "${version:-installed}"
-}
-
-boost_cli_is_dotfiles_owned() {
-	local command_path install_path stamp
-	command_path="$(boost_command 2>/dev/null)" || return 1
-	install_path="$(boost_install_path)"
-	stamp="$(boost_management_stamp)"
-	[[ "$command_path" == "$install_path" ]] || return 1
-	[[ -f "$stamp" && ! -L "$stamp" ]] || return 1
-	[[ "$(<"$stamp")" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]
-}
-
-boost_installed_tag() {
-	local version
-	version="$(boost_installed_version)"
-	version="$(grep -Eo 'v?[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?' <<<"$version" | head -n1)"
-	[[ -n "$version" ]] || return 1
-	[[ "$version" == v* ]] || version="v$version"
-	printf '%s\n' "$version"
-}
+if ! declare -F boost_command >/dev/null 2>&1; then
+	# shellcheck source=scripts/lib/managed_tool_state.sh
+	source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/managed_tool_state.sh"
+fi
 
 boost_platform_arch() {
 	[[ "$(uname -s)" == Linux ]] || return 1

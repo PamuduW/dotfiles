@@ -4,67 +4,22 @@ set -euo pipefail
 _script="$(readlink -f "${BASH_SOURCE[0]}")"
 DOTFILES_DIR="$(dirname "$(dirname "$(dirname "$_script")")")"
 
-_REPORT_TABLE_LIB="${DOTFILES_DIR}/scripts/lib/shared/tui/report_table.sh"
-if [[ -f "$_REPORT_TABLE_LIB" ]]; then
-	# shellcheck source=/dev/null
-	source "$_REPORT_TABLE_LIB"
-fi
+declare -A _DOTFILES_LOADED_MODULES=()
 
-_COMMAND_METADATA_LIB="${DOTFILES_DIR}/scripts/lib/command_metadata.sh"
-if [[ -f "$_COMMAND_METADATA_LIB" ]]; then
+_dotfiles_source_module() {
+	local path="$1"
+	[[ -z "${_DOTFILES_LOADED_MODULES[$path]+x}" ]] || return 0
+	[[ -f "$path" ]] || {
+		printf 'Error: required Dotfiles module is missing: %s\n' "$path" >&2
+		return 1
+	}
 	# shellcheck source=/dev/null
-	source "$_COMMAND_METADATA_LIB"
-fi
+	source "$path"
+	_DOTFILES_LOADED_MODULES["$path"]=1
+}
 
-_COMPONENT_REGISTRY_LIB="${DOTFILES_DIR}/scripts/lib/components/registry.sh"
-_PACKAGE_LIB="${DOTFILES_DIR}/scripts/menus/package_lib.sh"
-if [[ -f "$_COMPONENT_REGISTRY_LIB" && -f "$_PACKAGE_LIB" ]]; then
-	# shellcheck source=/dev/null
-	source "$_COMPONENT_REGISTRY_LIB"
-	# shellcheck source=/dev/null
-	source "$_PACKAGE_LIB"
-fi
-
-_GRAPHIFY_INSTALLER_LIB="${DOTFILES_DIR}/scripts/lib/installers/graphify.sh"
-if [[ -f "$_GRAPHIFY_INSTALLER_LIB" ]]; then
-	# shellcheck source=/dev/null
-	source "$_GRAPHIFY_INSTALLER_LIB"
-fi
-
-_BOOST_INSTALLER_LIB="${DOTFILES_DIR}/scripts/lib/installers/boost.sh"
-if [[ -f "$_BOOST_INSTALLER_LIB" ]]; then
-	# shellcheck source=/dev/null
-	source "$_BOOST_INSTALLER_LIB"
-fi
-
-_ARCH_LIB="${DOTFILES_DIR}/scripts/lib/arch.sh"
-if [[ -f "$_ARCH_LIB" ]]; then
-	# shellcheck source=/dev/null
-	source "$_ARCH_LIB"
-fi
-
-_REPO_UPDATE_LIB="${DOTFILES_DIR}/scripts/lib/repo_update.sh"
-if [[ -f "$_REPO_UPDATE_LIB" ]]; then
-	# shellcheck source=/dev/null
-	source "$_REPO_UPDATE_LIB"
-fi
-
-_GITHUB_TOKEN_LIB="${DOTFILES_DIR}/scripts/lib/github_token.sh"
-if [[ -f "$_GITHUB_TOKEN_LIB" ]]; then
-	# shellcheck source=/dev/null
-	source "$_GITHUB_TOKEN_LIB"
-fi
-
-_GITHUB_API_LIB="${DOTFILES_DIR}/scripts/lib/github_api.sh"
-if [[ -f "$_GITHUB_API_LIB" ]]; then
-	# shellcheck source=/dev/null
-	source "$_GITHUB_API_LIB"
-fi
-
-# --- TTY colors ---
-_COLORS_LIB="${DOTFILES_DIR}/scripts/lib/shared/tui/colors.sh"
-# shellcheck source=scripts/lib/shared/tui/colors.sh
-source "$_COLORS_LIB"
+_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/shared/tui/report_table.sh"
+_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/command_metadata.sh"
 
 _dotfiles_use_color() {
 	[[ -n "${NO_COLOR:-}" ]] && return 1
@@ -88,50 +43,58 @@ _msg() { printf '%s\n' "$*"; }
 _warn() { printf '%s%s%s\n' "$C_YELLOW" "$*" "$C_RESET" >&2; }
 _err() { printf '%s%s%s\n' "$C_RED" "$*" "$C_RESET" >&2; }
 
-_PARALLEL_PROBE_LIB="${DOTFILES_DIR}/scripts/lib/parallel_probe.sh"
-# shellcheck source=scripts/lib/parallel_probe.sh
-source "$_PARALLEL_PROBE_LIB"
+_dotfiles_load_status_modules() {
+	local path
+	for path in \
+		"${DOTFILES_DIR}/scripts/lib/parallel_probe.sh" \
+		"${DOTFILES_DIR}/scripts/lib/tool_resolve.sh" \
+		"${DOTFILES_DIR}/scripts/lib/managed_tool_state.sh" \
+		"${DOTFILES_DIR}/scripts/lib/package_metadata.sh" \
+		"${DOTFILES_DIR}/scripts/lib/components/registry.sh" \
+		"${DOTFILES_DIR}/scripts/lib/wsl_conf.sh" \
+		"${DOTFILES_DIR}/scripts/lib/components/probes.sh"; do
+		_dotfiles_source_module "$path" || return 1
+	done
+}
 
-_TOOL_RESOLVE_LIB="${DOTFILES_DIR}/scripts/lib/tool_resolve.sh"
-# shellcheck source=scripts/lib/tool_resolve.sh
-source "$_TOOL_RESOLVE_LIB"
+_dotfiles_load_update_modules() {
+	local path
+	_dotfiles_load_status_modules || return 1
+	for path in \
+		"${DOTFILES_DIR}/scripts/lib/arch.sh" \
+		"${DOTFILES_DIR}/scripts/lib/repo_update.sh" \
+		"${DOTFILES_DIR}/scripts/lib/github_token.sh" \
+		"${DOTFILES_DIR}/scripts/lib/github_api.sh" \
+		"${DOTFILES_DIR}/scripts/lib/installers/logging.sh" \
+		"${DOTFILES_DIR}/scripts/lib/installers/remote_script.sh" \
+		"${DOTFILES_DIR}/scripts/lib/installers/github_release.sh" \
+		"${DOTFILES_DIR}/scripts/lib/installers/fonts.sh" \
+		"${DOTFILES_DIR}/scripts/lib/installers/apt.sh" \
+		"${DOTFILES_DIR}/scripts/lib/installers/graphify.sh" \
+		"${DOTFILES_DIR}/scripts/lib/installers/boost.sh" \
+		"${DOTFILES_DIR}/scripts/lib/action_log.sh" \
+		"${DOTFILES_DIR}/scripts/lib/update_components.sh" \
+		"${DOTFILES_DIR}/scripts/lib/update_workflow.sh"; do
+		_dotfiles_source_module "$path" || return 1
+	done
+}
 
-_INSTALLER_LOGGING_LIB="${DOTFILES_DIR}/scripts/lib/installers/logging.sh"
-_REMOTE_SCRIPT_LIB="${DOTFILES_DIR}/scripts/lib/installers/remote_script.sh"
-_GITHUB_RELEASE_LIB="${DOTFILES_DIR}/scripts/lib/installers/github_release.sh"
-_FONT_INSTALLER_LIB="${DOTFILES_DIR}/scripts/lib/installers/fonts.sh"
-# shellcheck source=scripts/lib/installers/logging.sh
-source "$_INSTALLER_LOGGING_LIB"
-# shellcheck source=scripts/lib/installers/remote_script.sh
-source "$_REMOTE_SCRIPT_LIB"
-# shellcheck source=scripts/lib/installers/github_release.sh
-source "$_GITHUB_RELEASE_LIB"
-# shellcheck source=scripts/lib/installers/fonts.sh
-source "$_FONT_INSTALLER_LIB"
-
-_APT_INSTALLER_LIB="${DOTFILES_DIR}/scripts/lib/installers/apt.sh"
-_WSL_CONF_LIB="${DOTFILES_DIR}/scripts/lib/wsl_conf.sh"
-_COMPONENT_PROBES_LIB="${DOTFILES_DIR}/scripts/lib/components/probes.sh"
-# shellcheck source=scripts/lib/installers/apt.sh
-source "$_APT_INSTALLER_LIB"
-# shellcheck source=scripts/lib/wsl_conf.sh
-source "$_WSL_CONF_LIB"
-# shellcheck source=scripts/lib/components/probes.sh
-source "$_COMPONENT_PROBES_LIB"
-
-_ACTION_LOG_LIB="${DOTFILES_DIR}/scripts/lib/action_log.sh"
-# shellcheck source=scripts/lib/action_log.sh
-source "$_ACTION_LOG_LIB"
-
-_UPDATE_COMPONENTS_LIB="${DOTFILES_DIR}/scripts/lib/update_components.sh"
-_UPDATE_WORKFLOW_LIB="${DOTFILES_DIR}/scripts/lib/update_workflow.sh"
-_FULL_UPDATE_LIB="${DOTFILES_DIR}/scripts/lib/full_update.sh"
-# shellcheck source=scripts/lib/update_components.sh
-source "$_UPDATE_COMPONENTS_LIB"
-# shellcheck source=scripts/lib/update_workflow.sh
-source "$_UPDATE_WORKFLOW_LIB"
-# shellcheck source=scripts/lib/full_update.sh
-source "$_FULL_UPDATE_LIB"
+dotfiles_load_command() {
+	case "$1" in
+	status | doctor) _dotfiles_load_status_modules ;;
+	packages)
+		_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/package_metadata.sh" &&
+			_dotfiles_source_module "${DOTFILES_DIR}/scripts/menus/package_lib.sh" &&
+			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/components/registry.sh"
+		;;
+	update) _dotfiles_load_update_modules ;;
+	full-update)
+		_dotfiles_load_update_modules &&
+			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/full_update.sh"
+		;;
+	*) return 0 ;;
+	esac
+}
 
 cmd_status() {
 	local row component detail result
@@ -316,6 +279,7 @@ main() {
 	handler="${DOTFILES_COMMAND_HANDLERS[$command]:-}"
 	if [[ -n "$handler" ]]; then
 		shift
+		dotfiles_load_command "$command" || return 1
 		"$handler" "$@"
 	else
 		if removed_command_guidance "$command"; then exit 1; fi
@@ -326,4 +290,6 @@ main() {
 	fi
 }
 
-main "$@"
+if [[ "${DOTFILES_SOURCE_ONLY:-0}" != 1 ]]; then
+	main "$@"
+fi

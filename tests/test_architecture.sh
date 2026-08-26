@@ -33,6 +33,18 @@ test_dotfiles_cli_is_a_thin_adapter_over_update_modules() (
 		"$REPO_DIR/bin/bin/dotfiles"
 )
 
+test_read_only_cli_commands_do_not_load_mutating_modules() (
+	local command trace
+	for command in help status; do
+		trace="$TEST_HARNESS_ROOT/${command}.source-trace"
+		NO_COLOR=1 COMP_PROBE_TIMEOUT_SECONDS=0.2 \
+			bash -x "$REPO_DIR/bin/bin/dotfiles" "$command" >/dev/null 2>"$trace" || {
+			[[ "$command" == status ]] || return 1
+		}
+		! rg -n '^\+ source .*/scripts/lib/(update[^/]*|updates/|full_update|installers/)' "$trace" || return 1
+	done
+)
+
 test_four_column_table_layout_has_one_shared_implementation() (
 	rg -q '^rt_print_four_column_header\(\)' "$REPO_DIR/scripts/lib/shared/tui/report_table.sh"
 	rg -q '^rt_print_four_column_row\(\)' "$REPO_DIR/scripts/lib/shared/tui/report_table.sh"
@@ -73,6 +85,7 @@ test_installer_help_exits_before_log_initialization() (
 check 'repository update has no reload hook' test_repository_update_has_no_reload_hook
 check 'all terminal device access goes through the shared TTY adapter' test_terminal_device_access_is_centralized
 check 'dotfiles CLI is a thin adapter over shared update modules' test_dotfiles_cli_is_a_thin_adapter_over_update_modules
+check 'read-only CLI commands do not load mutating modules' test_read_only_cli_commands_do_not_load_mutating_modules
 check 'four-column reports share one ANSI-safe table layout implementation' test_four_column_table_layout_has_one_shared_implementation
 check 'Dotfiles install and update use the same repository runner' test_single_repository_install_and_update_use_one_runner
 check 'repository has one local validation entrypoint wired into CI' test_repository_has_one_validation_entrypoint_and_ci

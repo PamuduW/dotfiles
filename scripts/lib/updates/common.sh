@@ -2,7 +2,7 @@
 # shellcheck disable=SC2034  # UPGRADE_STEP_RESULT is read by the update summary.
 # Shared update result tracking, version comparison, and command-failure output.
 
-declare -A UPGRADE_STEP_RESULT=()
+declare -gA UPGRADE_STEP_RESULT=()
 UPGRADE_STEP_ACTIVE_RESULT=checked-no-change
 
 UPDATE_CHECK_UPGRADE=upgrade

@@ -43,28 +43,28 @@ dotfiles_repo_status() {
 # Preview and apply both consume this registry. A step cannot appear in one
 # phase without declaring the handler used by the other phase.
 UPDATE_STEP_KEYS=(apt graphify boost cursor codex claude copilot lazygit lazydocker node npm go monaspace repository)
-declare -A UPDATE_STEP_LABEL=(
+declare -gA UPDATE_STEP_LABEL=(
 	[apt]='apt packages' [graphify]='Graphify CLI' [boost]='Boost CLI'
 	[cursor]='Cursor CLI' [codex]='Codex CLI' [claude]='Claude CLI'
 	[copilot]='Copilot CLI' [lazygit]='lazygit' [lazydocker]='lazydocker'
 	[node]='Node.js (nvm)' [npm]='npm' [go]='Go (asdf)'
 	[monaspace]='Monaspace fonts' [repository]='dotfiles repo'
 )
-declare -A UPDATE_STEP_CHECK=(
+declare -gA UPDATE_STEP_CHECK=(
 	[apt]=check_apt [graphify]=check_graphify_cli [boost]=check_boost_cli
 	[cursor]=check_cursor_cli [codex]=check_codex_cli [claude]=check_claude_cli
 	[copilot]=check_copilot_cli [lazygit]=check_lazygit [lazydocker]=check_lazydocker
 	[node]=check_node [npm]=check_npm [go]=check_go [monaspace]=check_monaspace
 	[repository]=dotfiles_repo_status
 )
-declare -A UPDATE_STEP_APPLY=(
+declare -gA UPDATE_STEP_APPLY=(
 	[apt]=_apply_apt_update_step [graphify]=upgrade_graphify_cli [boost]=upgrade_boost_cli
 	[cursor]=upgrade_cursor_cli [codex]=upgrade_codex_cli [claude]=upgrade_claude_cli
 	[copilot]=upgrade_copilot_cli [lazygit]=upgrade_lazygit [lazydocker]=upgrade_lazydocker
 	[node]=upgrade_node [npm]=_apply_npm_update_step [go]=upgrade_go
 	[monaspace]=upgrade_monaspace [repository]=_apply_repository_update_step
 )
-declare -A UPDATE_STEP_RETRY=(
+declare -gA UPDATE_STEP_RETRY=(
 	[apt]='sudo apt-get upgrade' [graphify]='uv tool upgrade graphifyy'
 	[boost]='dotfiles update' [cursor]='dotfiles update'
 	[codex]='npm i -g @openai/codex@latest' [claude]='claude update'

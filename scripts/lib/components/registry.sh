@@ -11,13 +11,13 @@
 COMP_KEYS=()
 COMP_LABELS=()
 COMP_INSTALL_ORDER=()
-declare -A COMP_DESCRIPTIONS=()
-declare -A COMP_PLAN_LABELS=()
-declare -A COMP_PLAN_DETAILS=()
-declare -A COMP_DEPENDS_ON=()
-declare -A COMP_PACKAGE_TAGS=()
-declare -A COMP_ON=()
-declare -A _COMP_ORDER_RANK=()
+declare -gA COMP_DESCRIPTIONS=()
+declare -gA COMP_PLAN_LABELS=()
+declare -gA COMP_PLAN_DETAILS=()
+declare -gA COMP_DEPENDS_ON=()
+declare -gA COMP_PACKAGE_TAGS=()
+declare -gA COMP_ON=()
+declare -gA _COMP_ORDER_RANK=()
 
 # comp_define <key> [--label L] [--plan L] [--detail D] [--desc D]
 #             [--depends KEY] [--tags "t1 t2"] [--order N]

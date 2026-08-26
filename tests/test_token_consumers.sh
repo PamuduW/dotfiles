@@ -274,9 +274,13 @@ test_fonts_and_asdf_routed() {
 
 test_global_dotfiles_routed() {
 	local file="$REPO_DIR/bin/bin/dotfiles"
-	# shellcheck disable=SC2016  # The source expression is the literal contract under test.
-	grep -Fq 'source "$_GITHUB_TOKEN_LIB"' "$file" || return 1
-	grep -Fq 'source "$_GITHUB_RELEASE_LIB"' "$file" || return 1
+	DOTFILES_SOURCE_ONLY=1 bash -c '
+		set -euo pipefail
+		source "$1"
+		dotfiles_load_command update
+		declare -F github_curl >/dev/null
+		declare -F install_lazygit_from_github >/dev/null
+	' _ "$file" || return 1
 	! rg -q 'https://(api\.github\.com/|github\.com/.*/releases/download/)' "$file"
 }
 

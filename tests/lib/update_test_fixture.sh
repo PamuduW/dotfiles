@@ -68,6 +68,7 @@ pull_count() { grep -c $'git\t-C\t.*\tpull\t--ff-only$' "$TEST_COMMAND_LOG" || t
 install_state_git_fake
 [[ -f "$REPO_DIR/scripts/lib/repo_update.sh" ]] && source "$REPO_DIR/scripts/lib/repo_update.sh"
 DOTFILES_SOURCE_ONLY=1 source "$REPO_DIR/bin/bin/dotfiles" >/dev/null
+dotfiles_load_command full-update
 source "$REPO_DIR/scripts/lib/shared/tui/menu_runner.sh"
 source "$REPO_DIR/scripts/menus/initial_setup.sh"
 source "$REPO_DIR/scripts/menus/update.sh"
