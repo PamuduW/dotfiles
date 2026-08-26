@@ -28,7 +28,7 @@ _menu_tty_read_size() {
 	# Ask whichever seam is active. The redirection itself has to be guarded:
 	# `2>/dev/null` silences stty, not bash's own "no such device" for a path
 	# that cannot be opened.
-	if tty_use_fds; then
+	if tty_use_input_fd; then
 		size="$(stty size <&"$DOTFILES_TTY_IN_FD" 2>/dev/null || true)"
 	elif tty_available; then
 		tty_in="$(tty_input_path)"

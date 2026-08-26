@@ -33,17 +33,16 @@ _menu_keys_decode_escape_sequence() {
 }
 
 menu_read_key() {
-	local key seq='' next tty_in
-	tty_in="$(tty_input_path)"
+	local key seq='' next
 
-	IFS= read -rsn1 key <"$tty_in" || {
+	tty_read_key_char key || {
 		printf '%s\n' 'confirm'
 		return 0
 	}
 
 	case "$key" in
 	$'\e')
-		while IFS= read -rsn1 -t 0.01 next <"$tty_in"; do
+		while tty_read_key_char next -t 0.01; do
 			seq+="$next"
 			((${#seq} >= 16)) && break
 		done

@@ -14,10 +14,19 @@ _DOTFILES_TTY_LOADED=1
 # Descriptors exist because reopening a path restarts it. A caller that reads
 # several values from one file-backed stream (the token menu, and the tests
 # that drive it) must share one read position, which only a descriptor can do.
-# When descriptors are set they win.
+# When descriptors are set they win. Input and output are independent: a
+# caller may use an already-open input stream with a path-backed transcript.
 
 tty_use_fds() {
 	[[ -n "${DOTFILES_TTY_IN_FD:-}" && -n "${DOTFILES_TTY_OUT_FD:-}" ]]
+}
+
+tty_use_input_fd() {
+	[[ -n "${DOTFILES_TTY_IN_FD:-}" ]]
+}
+
+tty_use_output_fd() {
+	[[ -n "${DOTFILES_TTY_OUT_FD:-}" ]]
 }
 
 tty_input_path() {
@@ -28,20 +37,8 @@ tty_output_path() {
 	printf '%s\n' "${DOTFILES_TTY_OUTPUT:-/dev/tty}"
 }
 
-tty_available() {
-	local input_path output_path fd
-	tty_use_fds && return 0
-	input_path="$(tty_input_path)"
-	output_path="$(tty_output_path)"
-	if [[ "$input_path" != /dev/tty || "$output_path" != /dev/tty ]]; then
-		[[ -r "$input_path" ]] || return 1
-		if [[ -e "$output_path" ]]; then
-			[[ -w "$output_path" ]]
-		else
-			[[ -d "$(dirname -- "$output_path")" && -w "$(dirname -- "$output_path")" ]]
-		fi
-		return
-	fi
+_tty_controlling_terminal_available() {
+	local fd
 	if { exec {fd}<>/dev/tty; } 2>/dev/null; then
 		exec {fd}>&-
 		return 0
@@ -49,15 +46,44 @@ tty_available() {
 	return 1
 }
 
+tty_input_available() {
+	local input_path
+	tty_use_input_fd && return 0
+	input_path="$(tty_input_path)"
+	[[ "$input_path" == /dev/tty ]] && _tty_controlling_terminal_available && return 0
+	[[ "$input_path" != /dev/tty && -r "$input_path" ]]
+}
+
+tty_output_available() {
+	local output_path
+	tty_use_output_fd && return 0
+	output_path="$(tty_output_path)"
+	if [[ "$output_path" == /dev/tty ]]; then
+		_tty_controlling_terminal_available
+		return $?
+	fi
+	if [[ "$output_path" != /dev/tty ]]; then
+		if [[ -e "$output_path" ]]; then
+			[[ -w "$output_path" ]]
+		else
+			[[ -d "$(dirname -- "$output_path")" && -w "$(dirname -- "$output_path")" ]]
+		fi
+	fi
+}
+
+tty_available() {
+	tty_input_available && tty_output_available
+}
+
 tty_printf() {
 	local output_path
-	if tty_use_fds; then
+	if tty_use_output_fd; then
 		# shellcheck disable=SC2059  # This is intentionally a printf-compatible adapter.
 		printf "$@" >&"$DOTFILES_TTY_OUT_FD"
 		return 0
 	fi
 	output_path="$(tty_output_path)"
-	tty_available || return 1
+	tty_output_available || return 1
 	# Append rather than truncate: identical on /dev/tty, but a caller that
 	# points the seam at a regular file (tests do) must accumulate output
 	# instead of each write clobbering the last.
@@ -70,17 +96,34 @@ read_tty_line() {
 	local prompt="$2"
 	local value='' input_path output_path
 
-	if tty_use_fds; then
-		printf '%s' "$prompt" >&"$DOTFILES_TTY_OUT_FD"
-		IFS= read -r value <&"$DOTFILES_TTY_IN_FD" || return 1
-		printf -v "$__var_name" '%s' "$value"
-		return 0
-	fi
-
 	tty_available || return 1
 	input_path="$(tty_input_path)"
-	output_path="$(tty_output_path)"
-	printf '%s' "$prompt" >>"$output_path"
-	IFS= read -r value <"$input_path" || return 1
+	if tty_use_output_fd; then
+		printf '%s' "$prompt" >&"$DOTFILES_TTY_OUT_FD"
+	else
+		output_path="$(tty_output_path)"
+		printf '%s' "$prompt" >>"$output_path"
+	fi
+	if tty_use_input_fd; then
+		IFS= read -r value <&"$DOTFILES_TTY_IN_FD" || return 1
+	else
+		IFS= read -r value <"$input_path" || return 1
+	fi
 	printf -v "$__var_name" '%s' "$value"
+}
+
+tty_read_key_char() {
+	local __var_name="$1"
+	shift
+	local value='' input_path rc=0
+
+	if tty_use_input_fd; then
+		IFS= read -rsn1 "$@" value <&"$DOTFILES_TTY_IN_FD" || rc=$?
+	else
+		tty_input_available || return 1
+		input_path="$(tty_input_path)"
+		IFS= read -rsn1 "$@" value <"$input_path" || rc=$?
+	fi
+	printf -v "$__var_name" '%s' "$value"
+	return "$rc"
 }

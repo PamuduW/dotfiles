@@ -13,6 +13,8 @@ source "$ROOT/scripts/lib/shared/tui/ui.sh"
 source "$ROOT/scripts/lib/shared/tui/menu_descriptions.sh"
 # shellcheck source=scripts/lib/shared/tui/menu_simple.sh
 source "$ROOT/scripts/lib/shared/tui/menu_simple.sh"
+# shellcheck source=scripts/lib/shared/tui/menu_keys.sh
+source "$ROOT/scripts/lib/shared/tui/menu_keys.sh"
 # shellcheck source=scripts/lib/shared/tui/menu_checkbox.sh
 source "$ROOT/scripts/lib/shared/tui/menu_checkbox.sh"
 # shellcheck source=scripts/lib/shared/tui/menu_paging.sh
@@ -166,6 +168,78 @@ test_terminal_geometry_is_quiet_without_a_tty() (
 	[[ "$cols" =~ ^[0-9]+$ && "$quiet" -eq 1 ]]
 )
 
+test_output_only_headless_tty_is_unavailable_without_a_shell_diagnostic() (
+	# Break caught: tty_output_available reports success for an unavailable
+	# controlling terminal, leaving the later write to fail noisily.
+	local errors="$TEST_TMP/output-only-headless.errors" rc=0
+	unset DOTFILES_TTY_IN_FD DOTFILES_TTY_OUT_FD
+	DOTFILES_TTY_INPUT="$TEST_TMP/valid-input"
+	DOTFILES_TTY_OUTPUT=/dev/tty
+	: >"$DOTFILES_TTY_INPUT"
+	set +e
+	tty_output_available 2>"$errors"
+	rc=$?
+	set -e
+	[[ "$rc" -eq 1 && ! -s "$errors" ]]
+)
+
+test_terminal_geometry_prefers_input_fd_with_path_backed_output() (
+	local input="$TEST_TMP/geometry-fd-input" output="$TEST_TMP/geometry-path-output"
+	printf '\n' >"$input"
+	: >"$output"
+	exec {DOTFILES_TTY_IN_FD}<"$input"
+	unset DOTFILES_TTY_OUT_FD
+	DOTFILES_TTY_INPUT="$TEST_TMP/missing-geometry-path"
+	DOTFILES_TTY_OUTPUT="$output"
+	stty() { printf '31 101\n'; }
+	menu_tty_invalidate_size
+	_menu_tty_read_size
+	exec {DOTFILES_TTY_IN_FD}<&-
+	[[ "$_MENU_TTY_ROWS" == 31 && "$_MENU_TTY_COLS" == 101 ]]
+)
+
+test_terminal_geometry_uses_input_path_with_fd_backed_output() (
+	local input="$TEST_TMP/geometry-path-input" output="$TEST_TMP/geometry-fd-output"
+	printf '\n' >"$input"
+	: >"$output"
+	unset DOTFILES_TTY_IN_FD
+	exec {DOTFILES_TTY_OUT_FD}>>"$output"
+	DOTFILES_TTY_INPUT="$input"
+	DOTFILES_TTY_OUTPUT="$TEST_TMP/missing-geometry-output"
+	stty() { printf '32 102\n'; }
+	menu_tty_invalidate_size
+	_menu_tty_read_size
+	exec {DOTFILES_TTY_OUT_FD}>&-
+	[[ "$_MENU_TTY_ROWS" == 32 && "$_MENU_TTY_COLS" == 102 ]]
+)
+
+test_fd_key_stream_overrides_path_for_navigation_cancel_confirm_and_pagination() (
+	# Break caught: menu_read_key reopens DOTFILES_TTY_INPUT instead of consuming
+	# the caller-owned descriptor, restarting multi-key input at the wrong stream.
+	local path_input="$TEST_TMP/path-keys.input" fd_output="$TEST_TMP/fd-keys.output"
+	local action expected bytes case_id=0
+	printf 'x' >"$path_input"
+	while IFS='|' read -r expected bytes; do
+		case_id=$((case_id + 1))
+		local fd_input="$TEST_TMP/fd-key-${case_id}.input"
+		printf '%b' "$bytes" >"$fd_input"
+		exec {DOTFILES_TTY_IN_FD}<"$fd_input"
+		exec {DOTFILES_TTY_OUT_FD}>>"$fd_output"
+		DOTFILES_TTY_INPUT="$path_input"
+		DOTFILES_TTY_OUTPUT="$fd_output"
+		export DOTFILES_TTY_INPUT DOTFILES_TTY_OUTPUT DOTFILES_TTY_IN_FD DOTFILES_TTY_OUT_FD
+		action="$(menu_read_key)"
+		exec {DOTFILES_TTY_IN_FD}<&-
+		exec {DOTFILES_TTY_OUT_FD}>&-
+		[[ "$action" == "$expected" ]] || return 1
+	done <<'EOF'
+up|\e[A
+cancel|q
+confirm|\n
+page_down|\e[6~
+EOF
+)
+
 expect_success 'simple menu has exactly one spacer before descriptions' test_simple_menu_has_one_spacer_before_descriptions
 expect_success 'down/up frames match redraw count without stale content' test_down_up_frames_match_redraw_count_without_stale_content
 expect_success 'no-description menu keeps its existing blank footer' test_no_description_keeps_existing_blank_footer
@@ -207,5 +281,9 @@ test_terminal_geometry_is_cached_and_invalidatable() (
 expect_success 'component menu adapter preserves dependency-aware toggles' test_component_menu_adapter_preserves_dependency_toggles
 expect_success 'terminal geometry is cached and invalidatable' test_terminal_geometry_is_cached_and_invalidatable
 expect_success 'terminal geometry falls back quietly without a controlling TTY' test_terminal_geometry_is_quiet_without_a_tty
+expect_success 'output-only headless TTY is unavailable without a shell diagnostic' test_output_only_headless_tty_is_unavailable_without_a_shell_diagnostic
+expect_success 'terminal geometry prefers input FD with path-backed output' test_terminal_geometry_prefers_input_fd_with_path_backed_output
+expect_success 'terminal geometry uses input path with FD-backed output' test_terminal_geometry_uses_input_path_with_fd_backed_output
+expect_success 'FD key streams override paths for navigation cancel confirm and pagination' test_fd_key_stream_overrides_path_for_navigation_cancel_confirm_and_pagination
 
 finish_tests
