@@ -337,9 +337,18 @@ test_install_summary_uses_report_table_alignment() (
 		esac
 	}
 	print_install_summary >"$output" || return 1
-	grep -Fq '  component              | detail                                   | result' "$output" || return 1
-	grep -Fq '  Git identity           | Pamudu Wijesingha <pamuduwijesingha2k...' "$output" || return 1
-	grep -Fq '  System packages        | 30 apt packages                          | ' "$output" || return 1
+	grep -Fq 'Git identity' "$output" || return 1
+	grep -Fq 'Pamudu Wijesingha' "$output" || return 1
+	grep -Fq 'System packages' "$output" || return 1
+	awk '
+	/^[[:space:]]+(component|Git identity|System packages)/ {
+		if (!width) width=length($0)
+		if (length($0) != width) exit 1
+		if (gsub(/\|/, "&") != 2) exit 1
+		seen++
+	}
+	END { exit(seen == 3 ? 0 : 1) }
+	' "$output"
 )
 
 test_narrow_reports_remain_bounded() {

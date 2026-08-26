@@ -71,19 +71,15 @@ _load_update_rows() {
 	fi
 }
 
-# Fixed-width table row: truncate text columns so pipes stay aligned; color last column only.
-_UPDATE_LABEL_W=18
-_UPDATE_INSTALLED_W=28
-_UPDATE_AVAILABLE_W=22
-_UPDATE_ACTION_W=16
-
 _print_update_table_header() {
 	local last_col="$1"
+	local -a widths=()
+	rt_four_column_widths widths
 	rt_print_four_column_header \
-		"$_UPDATE_LABEL_W" component \
-		"$_UPDATE_INSTALLED_W" installed \
-		"$_UPDATE_AVAILABLE_W" available \
-		"$_UPDATE_ACTION_W" "$last_col"
+		"${widths[0]}" component \
+		"${widths[1]}" installed \
+		"${widths[2]}" available \
+		"${widths[3]}" "$last_col"
 }
 
 _print_check_table_row() {
@@ -92,16 +88,18 @@ _print_check_table_row() {
 	local available="$3"
 	local last_col="$4"
 	local color_fn="$5"
+	local -a widths=()
+	rt_four_column_widths widths
 
 	case "$color_fn" in
 	result) color_fn=_color_result ;;
 	*) color_fn=_color_action ;;
 	esac
 	rt_print_four_column_row \
-		"$_UPDATE_LABEL_W" "$component" \
-		"$_UPDATE_INSTALLED_W" "$installed" \
-		"$_UPDATE_AVAILABLE_W" "$available" \
-		"$_UPDATE_ACTION_W" "$last_col" '' "$color_fn"
+		"${widths[0]}" "$component" \
+		"${widths[1]}" "$installed" \
+		"${widths[2]}" "$available" \
+		"${widths[3]}" "$last_col" '' "$color_fn"
 }
 
 print_report_table() {
@@ -122,7 +120,7 @@ print_report_table() {
 		esac
 	done
 
-	printf '%s%s==Update report==%s\n\n' "$C_BOLD" "$C_YELLOW" "$C_RESET"
+	printf '%s%s== Update report ==%s\n\n' "$C_BOLD" "$C_YELLOW" "$C_RESET"
 	_print_update_table_header action
 
 	for row in "${rows[@]}"; do
@@ -162,7 +160,7 @@ print_upgrade_summary() {
 
 	_load_update_rows rows "$repo_result_name" "$snapshot_name"
 
-	printf '\n%s%s==Upgrade summary==%s\n\n' "$C_BOLD" "$C_YELLOW" "$C_RESET"
+	printf '\n%s%s== Upgrade summary ==%s\n\n' "$C_BOLD" "$C_YELLOW" "$C_RESET"
 	_print_update_table_header result
 
 	for row in "${rows[@]}"; do

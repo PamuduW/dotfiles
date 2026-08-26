@@ -17,7 +17,9 @@ test_harness_report_init
 
 test_install_legend_uses_status_colors() {
 	local output
-	NO_COLOR='' FORCE_COLOR=1 ui_init_colors
+	unset NO_COLOR
+	FORCE_COLOR=1
+	ui_init_colors
 	output="$(_log_legend_line)"
 	[[ "$output" == *"${C_CYAN}STEP=starting${C_RESET}"* ]] || return 1
 	[[ "$output" == *"${C_GREEN}OK=completed${C_RESET}"* ]] || return 1
@@ -27,7 +29,9 @@ test_install_legend_uses_status_colors() {
 
 test_install_status_markers_use_semantic_colors() {
 	local output
-	NO_COLOR='' FORCE_COLOR=1 ui_init_colors
+	unset NO_COLOR
+	FORCE_COLOR=1
+	ui_init_colors
 	output="$(log_step 'starting')"
 	[[ "$output" == "${C_CYAN}[STEP]${C_RESET} starting" ]] || return 1
 	output="$(log_ok 'completed')"
@@ -48,7 +52,9 @@ test_confirm_hint_uses_colored_action_keys() {
 
 test_install_confirm_prompt_colors_full_action_text() {
 	local output
-	NO_COLOR='' FORCE_COLOR=1 ui_init_colors
+	unset NO_COLOR
+	FORCE_COLOR=1
+	ui_init_colors
 	output="$(ui_install_confirm_prompt)"
 	[[ "$output" == "  ${C_CYAN}c${C_RESET} confirm   ${C_CYAN}e${C_RESET} edit   ${C_CYAN}q${C_RESET} back_to_menu : ${C_RESET}" ]]
 }

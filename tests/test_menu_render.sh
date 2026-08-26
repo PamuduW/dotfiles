@@ -9,6 +9,8 @@ source "$ROOT/tests/lib/harness.sh"
 source "$ROOT/scripts/lib/shared/tui/menu_render.sh"
 # shellcheck source=scripts/lib/shared/tui/ui.sh
 source "$ROOT/scripts/lib/shared/tui/ui.sh"
+# shellcheck source=scripts/lib/shared/tui/report_table.sh
+source "$ROOT/scripts/lib/shared/tui/report_table.sh"
 # shellcheck source=scripts/lib/shared/tui/menu_descriptions.sh
 source "$ROOT/scripts/lib/shared/tui/menu_descriptions.sh"
 # shellcheck source=scripts/lib/shared/tui/menu_simple.sh
@@ -148,6 +150,27 @@ test_component_menu_adapter_preserves_dependency_toggles() {
 	[[ "$MENU_CB_STATUS_MESSAGE" == 'auto-disabled: Beta' ]]
 }
 
+test_report_rows_fit_long_cells_at_supported_widths() (
+	local cols output line
+	for cols in 48 80 120; do
+		output="$(DOTFILES_REPORT_COLS="$cols" NO_COLOR=1 rt_print_table_row \
+			'Git config (credentials + submodules)' \
+			'/home/pamudu/a/very/long/path/to/a/configuration/file' \
+			'refresh-required')"
+		line="${output//$'\033'/}"
+		((${#line} == cols)) || return 1
+		[[ "$(grep -o '|' <<<"$line" | wc -l)" -eq 2 ]] || return 1
+		[[ "$line" == *'…'* && "$line" != *'...'* ]] || return 1
+	done
+)
+
+test_no_color_clears_a_preloaded_report_palette() (
+	colors_set_palette
+	local output
+	output="$(NO_COLOR=1 rt_print_table_row Component Detail warning)"
+	[[ "$output" != *$'\033['* ]]
+)
+
 TEST_TMP="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-menu-render.XXXXXX")"
 trap 'rm -rf -- "$TEST_TMP"' EXIT
 NO_COLOR=1
@@ -279,6 +302,8 @@ test_terminal_geometry_is_cached_and_invalidatable() (
 )
 
 expect_success 'component menu adapter preserves dependency-aware toggles' test_component_menu_adapter_preserves_dependency_toggles
+expect_success 'report rows fit long cells at 48, 80, and 120 columns' test_report_rows_fit_long_cells_at_supported_widths
+expect_success 'NO_COLOR clears a preloaded report palette' test_no_color_clears_a_preloaded_report_palette
 expect_success 'terminal geometry is cached and invalidatable' test_terminal_geometry_is_cached_and_invalidatable
 expect_success 'terminal geometry falls back quietly without a controlling TTY' test_terminal_geometry_is_quiet_without_a_tty
 expect_success 'output-only headless TTY is unavailable without a shell diagnostic' test_output_only_headless_tty_is_unavailable_without_a_shell_diagnostic

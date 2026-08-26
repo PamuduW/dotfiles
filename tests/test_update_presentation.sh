@@ -13,22 +13,22 @@ test_update_report_uses_clear_title_spacing_and_aligned_action_rule() (
 	local output_file="$TEST_HARNESS_ROOT/update-report.output"
 	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|current'; }
 	NO_COLOR=1 print_report_table >"$output_file"
-	[[ "$(sed -n '1p' "$output_file")" == '==Update report==' ]] || return 1
-	grep -Fq $'==Update report==\n\ncomponent' "$output_file" || return 1
+	[[ "$(sed -n '1p' "$output_file")" == '== Update report ==' ]] || return 1
+	grep -Fq $'== Update report ==\n\ncomponent' "$output_file" || return 1
 	! grep -Fq 'Upgrade report' "$output_file" || return 1
 	grep -Fq $'0 verified upgrades — everything verified current.\n\n' "$output_file" || return 1
-	grep -Eq '^-------------------\+------------------------------\+------------------------\+-----------------' "$output_file"
+	awk 'NR == 4 { expected=$0; next } NR == 5 { exit(length($0) == length(expected) ? 0 : 1) }' "$output_file"
 )
 
 test_update_and_upgrade_rows_keep_the_last_column_width() (
-	local output line_lengths
+	local output line_lengths cols
 	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|current'; }
-
-	line_lengths="$(NO_COLOR=1 print_report_table | awk '/^(component|apt packages|---)/ { print length($0) }')"
-	[[ "$line_lengths" == $'93\n93\n93' ]] || return 1
-
-	line_lengths="$(NO_COLOR=1 print_upgrade_summary | awk '/^(component|apt packages|---)/ { print length($0) }')"
-	[[ "$line_lengths" == $'93\n93\n93' ]]
+	for cols in 48 80 120; do
+		line_lengths="$(DOTFILES_REPORT_COLS="$cols" NO_COLOR=1 print_report_table | awk '/\||^-/ { print length($0) }')"
+		[[ "$line_lengths" == "$cols"$'\n'"$cols"$'\n'"$cols" ]] || return 1
+		line_lengths="$(DOTFILES_REPORT_COLS="$cols" NO_COLOR=1 print_upgrade_summary | awk '/\||^-/ { print length($0) }')"
+		[[ "$line_lengths" == "$cols"$'\n'"$cols"$'\n'"$cols" ]] || return 1
+	done
 )
 
 test_mixed_preview_separates_verified_upgrades_from_remaining_checks() (
@@ -147,7 +147,7 @@ test_update_rows_align_unicode_available_cells() (
 	/^Cursor CLI/ {
 		pipes=""
 		for (i = 1; i <= length($0); i++) if (substr($0, i, 1) == "|") pipes = pipes i ","
-		if (length($0) != 93 || pipes != "20,51,76,") exit 1
+		if (length($0) != 80 || pipes != "15,41,63,") exit 1
 		found=1
 	}
 	END { exit(found ? 0 : 1) }
@@ -156,6 +156,7 @@ test_update_rows_align_unicode_available_cells() (
 
 test_repository_update_preview_uses_semantic_colors() (
 	local output prompt
+	unset NO_COLOR
 	local -A result=(
 		[dir]="$DOTFILES_DIR" [label]='dotfiles repo' [state]=behind
 		[ahead]=0 [behind]=2 [dirty]=0 [changes]='' [upstream]=origin/main
@@ -178,10 +179,11 @@ test_repository_update_preview_uses_semantic_colors() (
 
 test_update_topics_use_submenu_yellow() (
 	local output
+	unset NO_COLOR
 	C_BOLD=$'\033[1m' C_CYAN=$'\033[36m' C_ORANGE=$'\033[38;5;208m' C_YELLOW=$'\033[33m' C_RESET=$'\033[0m'
 	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|up to date'; }
 	output="$(print_report_table)" 2>/dev/null || true
-	grep -Fq $'\033[33m==Update report==' <<<"$output" || return 1
+	grep -Fq $'\033[33m== Update report ==' <<<"$output" || return 1
 
 	_upgrade_topic_probe() { :; }
 	output="$(_run_upgrade_step lazygit 'dotfiles update' _upgrade_topic_probe)"

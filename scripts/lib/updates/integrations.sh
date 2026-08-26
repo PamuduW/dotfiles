@@ -163,7 +163,7 @@ copilot_command() {
 }
 
 copilot_installed_version() {
-	local binary raw
+	local binary raw line
 	binary="$(copilot_command)" || {
 		echo "$NOT_INSTALLED"
 		return
@@ -172,7 +172,9 @@ copilot_installed_version() {
 		echo installed
 		return
 	}
-	printf '%s\n' "${raw%%$'\n'*}"
+	line="${raw%%$'\n'*}"
+	line="${line%"${line##*[![:space:]]}"}"
+	printf '%s\n' "${line%.}"
 }
 
 copilot_is_installed() {

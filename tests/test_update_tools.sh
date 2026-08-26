@@ -242,7 +242,7 @@ test_unverifiable_cli_probes_label_latest_unchecked() (
 	output="$(check_claude_cli || true)"
 	[[ "$output" == 'Claude CLI|2.1.220 (Claude Code)|—|unknown' ]] || return 1
 	output="$(check_copilot_cli || true)"
-	[[ "$output" == 'Copilot CLI|GitHub Copilot CLI 1.0.75.|—|unknown' ]]
+	[[ "$output" == 'Copilot CLI|GitHub Copilot CLI 1.0.75|—|unknown' ]]
 )
 
 test_graphify_probe_reports_uv_owned_and_external_states() (

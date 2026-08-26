@@ -131,6 +131,7 @@ test_install_dispatch_blocks_when_repository_is_not_ready() (
 
 test_install_repo_gate_uses_repository_update_topic() (
 	local output
+	unset NO_COLOR
 	DOTFILES_DIR=/tmp/dotfiles-test-repo
 	C_BOLD=$'\033[1m' C_CYAN=$'\033[36m' C_YELLOW=$'\033[33m' C_RESET=$'\033[0m'
 	repo_update_preflight() {

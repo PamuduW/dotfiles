@@ -218,6 +218,7 @@ test_cmd_update_reports_dirty_paths_and_remote_state_before_stopping() (
 
 test_declined_repository_pull_prints_one_report_and_one_pause_boundary() (
 	local output clean_output rc
+	unset NO_COLOR
 	TEST_REPO_STATE=behind
 	C_RED=$'\033[31m' C_RESET=$'\033[0m'
 	export C_RED C_RESET
