@@ -73,7 +73,7 @@ test_npm_probe_reports_upgrade_current_and_missing_states() (
 
 	npm_mode=current
 	output="$(check_npm || true)"
-	[[ "$output" == 'npm|12.0.1|12.0.1|up to date' ]] || return 1
+	[[ "$output" == 'npm|12.0.1|12.0.1|current' ]] || return 1
 
 	unset -f npm
 	command() {
@@ -238,11 +238,11 @@ test_unverifiable_cli_probes_label_latest_unchecked() (
 	copilot() { [[ "$1" == --version ]] && printf 'GitHub Copilot CLI 1.0.75.\n'; }
 
 	output="$(check_cursor_cli || true)"
-	[[ "$output" == 'Cursor CLI|2026.07.23-e383d2b|—|latest unchecked' ]] || return 1
+	[[ "$output" == 'Cursor CLI|2026.07.23-e383d2b|—|unknown' ]] || return 1
 	output="$(check_claude_cli || true)"
-	[[ "$output" == 'Claude CLI|2.1.220 (Claude Code)|—|latest unchecked' ]] || return 1
+	[[ "$output" == 'Claude CLI|2.1.220 (Claude Code)|—|unknown' ]] || return 1
 	output="$(check_copilot_cli || true)"
-	[[ "$output" == 'Copilot CLI|GitHub Copilot CLI 1.0.75.|—|latest unchecked' ]]
+	[[ "$output" == 'Copilot CLI|GitHub Copilot CLI 1.0.75.|—|unknown' ]]
 )
 
 test_graphify_probe_reports_uv_owned_and_external_states() (
@@ -255,13 +255,13 @@ test_graphify_probe_reports_uv_owned_and_external_states() (
 		esac
 	}
 	output="$(check_graphify_cli || true)"
-	[[ "$output" == 'Graphify CLI|graphify 1.2.3|—|latest unchecked' ]] || return 1
+	[[ "$output" == 'Graphify CLI|graphify 1.2.3|—|unknown' ]] || return 1
 
 	uv() {
 		[[ "$*" == 'tool list' ]] && printf '%s\n' 'other-tool v1.0.0'
 	}
 	output="$(check_graphify_cli || true)"
-	[[ "$output" == 'Graphify CLI|graphify 1.2.3|—|externally managed' ]]
+	[[ "$output" == 'Graphify CLI|graphify 1.2.3|—|external' ]]
 )
 
 test_graphify_probe_skips_when_not_installed() (
@@ -278,11 +278,11 @@ test_boost_probe_reports_managed_external_and_absent_states() (
 	boost_installed_version() { printf 'boost v0.12.6\n'; }
 	boost_cli_is_dotfiles_owned() { return 0; }
 	output="$(check_boost_cli || true)"
-	[[ "$output" == 'Boost CLI|boost v0.12.6|—|managed; latest checked during install/update' ]] || return 1
+	[[ "$output" == 'Boost CLI|boost v0.12.6|—|unknown' ]] || return 1
 
 	boost_cli_is_dotfiles_owned() { return 1; }
 	output="$(check_boost_cli || true)"
-	[[ "$output" == 'Boost CLI|boost v0.12.6|—|externally managed' ]] || return 1
+	[[ "$output" == 'Boost CLI|boost v0.12.6|—|external' ]] || return 1
 
 	boost_command() { return 1; }
 	boost_installed_version() { printf 'not installed\n'; }
@@ -424,7 +424,7 @@ test_go_upgrade_stops_when_asdf_install_fails() (
 )
 
 test_cursor_update_falls_back_to_official_installer() (
-	local calls="$TEST_HARNESS_ROOT/cursor-update.calls" output="$TEST_HARNESS_ROOT/cursor-update.output"
+	local calls="$TEST_HARNESS_ROOT/cursor-update.calls" output="$TEST_HARNESS_ROOT/cursor-update.output" label='Cursor CLI'
 	: >"$calls"
 	C_RED=$'\033[31m' C_RESET=$'\033[0m'
 	export C_RED C_RESET
@@ -442,14 +442,39 @@ test_cursor_update_falls_back_to_official_installer() (
 		printf '%s\n' 'printf "official-installer\n"' >"$output_file"
 	}
 
-	if ! upgrade_cursor_cli >"$output" 2>&1; then
+	if ! _run_upgrade_step 'Cursor CLI' 'dotfiles update' upgrade_cursor_cli >"$output" 2>&1; then
 		return 1
 	fi
 	grep -Fqx 'agent:update' "$calls" || return 1
 	grep -Fq 'curl:-fsSL --proto =https --tlsv1.2 -o ' "$calls" || return 1
 	grep -Fq ' https://cursor.com/install' "$calls" || return 1
 	grep -Fqx 'official-installer' "$output" || return 1
-	grep -Fq $'\033[31m>> FAILED (exit 7) — retry manually: agent update <<\033[0m' "$output"
+	[[ "${UPGRADE_STEP_RESULT[$label]:-}" == recovered ]] || return 1
+	grep -Fq 'primary update failed (exit 7); retrying with the official installer' "$output" || return 1
+	! grep -Fq '>> FAILED' "$output"
+)
+
+test_cursor_command_branch_uses_the_same_recovery_contract() (
+	local calls="$TEST_HARNESS_ROOT/cursor-command-update.calls" output="$TEST_HARNESS_ROOT/cursor-command-update.output" label='Cursor CLI'
+	: >"$calls"
+	command() {
+		case "$*" in
+		'-v agent') return 1 ;;
+		'-v cursor') printf '%s\n' cursor ;;
+		*) builtin command "$@" ;;
+		esac
+	}
+	cursor() {
+		printf 'cursor:%s\n' "$*" >>"$calls"
+		return 9
+	}
+	run_vendor_shell_installer() {
+		printf 'fallback:%s:%s\n' "$1" "$2" >>"$calls"
+	}
+	_run_upgrade_step 'Cursor CLI' 'dotfiles update' upgrade_cursor_cli >"$output" 2>&1
+	[[ "${UPGRADE_STEP_RESULT[$label]}" == recovered ]] || return 1
+	[[ "$(<"$calls")" == $'cursor:update\nfallback:https://cursor.com/install:Cursor CLI' ]] || return 1
+	! grep -Fq '>> FAILED' "$output"
 )
 
 test_copilot_update_uses_discovered_local_executable() (
@@ -482,7 +507,7 @@ test_apt_report_does_not_claim_cached_indices_are_current() (
 	local output
 	apt_upgradable_count() { printf '0\n'; }
 	output="$(check_apt || true)"
-	[[ "$output" == 'apt packages|system packages|none (cached)|refresh on apply' ]]
+	[[ "$output" == 'apt packages|system packages|none (cached)|refresh-required' ]]
 )
 
 test_installed_version_reports_installed_when_version_command_fails() (
@@ -540,6 +565,7 @@ expect_success 'upgrade step omits failure marker after success' test_upgrade_st
 expect_success 'Node.js upgrade stops when nvm install fails' test_node_upgrade_stops_when_nvm_install_fails
 expect_success 'Go upgrade stops when asdf install fails' test_go_upgrade_stops_when_asdf_install_fails
 expect_success 'Cursor update falls back to the official installer after agent update failure' test_cursor_update_falls_back_to_official_installer
+expect_success 'Cursor command branch shares the recovery contract' test_cursor_command_branch_uses_the_same_recovery_contract
 expect_success 'Copilot update invokes the executable discovered in the local vendor bin' test_copilot_update_uses_discovered_local_executable
 expect_success 'pre-confirmation apt report probing never invokes sudo' test_apt_report_probe_uses_cached_indices_without_sudo
 

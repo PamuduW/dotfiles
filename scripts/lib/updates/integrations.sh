@@ -29,31 +29,37 @@ check_cursor_cli() {
 	local installed action
 	installed="$(cursor_installed_version)"
 	if cursor_is_installed; then
-		action="latest unchecked"
+		action="$UPDATE_CHECK_UNKNOWN"
 	else
-		action="skip"
+		action="$UPDATE_CHECK_SKIP"
 	fi
 	printf '%s|%s|%s|%s\n' "Cursor CLI" "$installed" "—" "$action"
 	return 1
 }
 
 upgrade_cursor_cli() {
+	local executable='' update_rc=0 fallback_rc=0
 	if command -v agent >/dev/null 2>&1; then
-		local update_rc=0
-		agent update || update_rc=$?
-		if [[ $update_rc -eq 0 ]]; then
-			return 0
-		fi
-		_report_command_failure "$update_rc" "agent update"
-		_warn "  Cursor Agent update command failed; retrying with the official installer."
-		run_vendor_shell_installer 'https://cursor.com/install' 'Cursor CLI'
+		executable="$(command -v agent)"
 	elif command -v cursor >/dev/null 2>&1; then
-		cursor update
+		executable="$(command -v cursor)"
 	elif [[ -x "$HOME/.local/bin/agent" ]]; then
-		"$HOME/.local/bin/agent" update || run_vendor_shell_installer 'https://cursor.com/install' 'Cursor CLI'
-	else
-		_msg "  Cursor CLI not installed, skipping"
+		executable="$HOME/.local/bin/agent"
 	fi
+	if [[ -z "$executable" ]]; then
+		_msg "  Cursor CLI not installed, skipping"
+		upgrade_result_set skipped
+		return 0
+	fi
+	"$executable" update || update_rc=$?
+	if [[ $update_rc -eq 0 ]]; then
+		upgrade_result_set checked-no-change
+		return 0
+	fi
+	_warn "  Cursor primary update failed (exit $update_rc); retrying with the official installer."
+	run_vendor_shell_installer 'https://cursor.com/install' 'Cursor CLI' || fallback_rc=$?
+	[[ $fallback_rc -eq 0 ]] || return "$fallback_rc"
+	upgrade_result_set recovered
 }
 
 # --- Codex CLI ---
@@ -84,15 +90,15 @@ check_codex_cli() {
 	installed="$(codex_installed_version)"
 	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
 		available="—"
-		action="skip"
+		action="$UPDATE_CHECK_SKIP"
 	else
 		available="$(codex_available_version)"
 		if [[ "$available" != "—" && "$installed" != *"${available}"* ]]; then
-			action="upgrade"
+			action="$UPDATE_CHECK_UPGRADE"
 			upgradable=1
 		else
 			available="${available:-—}"
-			action="up to date"
+			action="$UPDATE_CHECK_CURRENT"
 		fi
 	fi
 	printf '%s|%s|%s|%s\n' "Codex CLI" "$installed" "$available" "$action"
@@ -102,9 +108,11 @@ check_codex_cli() {
 upgrade_codex_cli() {
 	_load_nvm
 	if command -v codex >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
-		npm i -g @openai/codex@latest
+		npm i -g @openai/codex@latest || return $?
+		upgrade_result_set updated
 	else
 		_msg "  Codex CLI or npm not installed, skipping"
+		upgrade_result_set skipped
 	fi
 }
 
@@ -127,10 +135,10 @@ check_claude_cli() {
 	installed="$(claude_installed_version)"
 	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
 		available="—"
-		action="skip"
+		action="$UPDATE_CHECK_SKIP"
 	else
 		available="—"
-		action="latest unchecked"
+		action="$UPDATE_CHECK_UNKNOWN"
 	fi
 	printf '%s|%s|%s|%s\n' "Claude CLI" "$installed" "$available" "$action"
 	[[ $upgradable -eq 1 ]]
@@ -138,12 +146,15 @@ check_claude_cli() {
 
 upgrade_claude_cli() {
 	if command -v claude >/dev/null 2>&1; then
-		claude update
+		claude update || return $?
 	elif [[ -x "$HOME/.local/bin/claude" ]]; then
-		"$HOME/.local/bin/claude" update
+		"$HOME/.local/bin/claude" update || return $?
 	else
 		_msg "  Claude CLI not installed, skipping"
+		upgrade_result_set skipped
+		return 0
 	fi
+	upgrade_result_set checked-no-change
 }
 
 # --- Copilot CLI ---
@@ -173,10 +184,10 @@ check_copilot_cli() {
 	installed="$(copilot_installed_version)"
 	if copilot_is_installed; then
 		available="—"
-		action="latest unchecked"
+		action="$UPDATE_CHECK_UNKNOWN"
 	else
 		available="—"
-		action="skip"
+		action="$UPDATE_CHECK_SKIP"
 	fi
 	printf '%s|%s|%s|%s\n' "Copilot CLI" "$installed" "$available" "$action"
 	[[ $upgradable -eq 1 ]]
@@ -185,9 +196,11 @@ check_copilot_cli() {
 upgrade_copilot_cli() {
 	local executable
 	if executable="$(copilot_command)"; then
-		"$executable" update
+		"$executable" update || return $?
+		upgrade_result_set checked-no-change
 	else
 		_msg "  Copilot CLI not installed, skipping"
+		upgrade_result_set skipped
 	fi
 }
 
@@ -211,15 +224,15 @@ check_lazygit() {
 	installed="$(lazygit_installed_version)"
 	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
 		available="—"
-		action="skip"
+		action="$UPDATE_CHECK_SKIP"
 	else
 		latest="$(_github_latest_version jesseduffield/lazygit || true)"
 		available="${latest:-—}"
 		if [[ -n "$latest" ]] && _version_gt "$latest" "$installed"; then
-			action="upgrade"
+			action="$UPDATE_CHECK_UPGRADE"
 			upgradable=1
 		else
-			action="up to date"
+			action="$UPDATE_CHECK_CURRENT"
 		fi
 	fi
 	printf '%s|%s|%s|%s\n' "lazygit" "$installed" "$available" "$action"
@@ -229,15 +242,18 @@ check_lazygit() {
 upgrade_lazygit() {
 	if ! command -v lazygit >/dev/null 2>&1; then
 		_msg "  lazygit not installed, skipping"
+		upgrade_result_set skipped
 		return 0
 	fi
 	local installed latest
 	installed="$(lazygit_installed_version)"
 	latest="$(_github_latest_version jesseduffield/lazygit || true)"
 	if [[ -n "$latest" && -n "$installed" ]] && _version_gt "$latest" "$installed"; then
-		install_lazygit_from_github
+		install_lazygit_from_github || return $?
+		upgrade_result_set updated
 	else
 		_msg "  lazygit already up to date (${installed})"
+		upgrade_result_set already-current
 	fi
 }
 
@@ -261,15 +277,15 @@ check_lazydocker() {
 	installed="$(lazydocker_installed_version)"
 	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
 		available="—"
-		action="skip"
+		action="$UPDATE_CHECK_SKIP"
 	else
 		latest="$(_github_latest_version jesseduffield/lazydocker || true)"
 		available="${latest:-—}"
 		if [[ -n "$latest" ]] && _version_gt "$latest" "$installed"; then
-			action="upgrade"
+			action="$UPDATE_CHECK_UPGRADE"
 			upgradable=1
 		else
-			action="up to date"
+			action="$UPDATE_CHECK_CURRENT"
 		fi
 	fi
 	printf '%s|%s|%s|%s\n' "lazydocker" "$installed" "$available" "$action"
@@ -279,15 +295,18 @@ check_lazydocker() {
 upgrade_lazydocker() {
 	if ! command -v lazydocker >/dev/null 2>&1; then
 		_msg "  lazydocker not installed, skipping"
+		upgrade_result_set skipped
 		return 0
 	fi
 	local installed latest
 	installed="$(lazydocker_installed_version)"
 	latest="$(_github_latest_version jesseduffield/lazydocker || true)"
 	if [[ -n "$latest" && -n "$installed" ]] && _version_gt "$latest" "$installed"; then
-		install_lazydocker_from_github
+		install_lazydocker_from_github || return $?
+		upgrade_result_set updated
 	else
 		_msg "  lazydocker already up to date (${installed})"
+		upgrade_result_set already-current
 	fi
 }
 
@@ -315,12 +334,12 @@ check_monaspace() {
 	available="$(monaspace_latest_version 2>/dev/null || true)"
 	[[ -n "$available" ]] || available="—"
 	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
-		action="skip"
+		action="$UPDATE_CHECK_SKIP"
 	elif [[ "$available" != "—" && "$installed" != "$available" ]]; then
-		action="upgrade"
+		action="$UPDATE_CHECK_UPGRADE"
 		upgradable=1
 	else
-		action="up to date"
+		action="$UPDATE_CHECK_CURRENT"
 	fi
 	printf '%s|%s|%s|%s\n' "Monaspace fonts" "$installed" "$available" "$action"
 	[[ $upgradable -eq 1 ]]
@@ -330,17 +349,21 @@ upgrade_monaspace() {
 	local installed latest
 	installed="$(monaspace_installed_version)"
 	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
-		install_monaspace_fonts
-		return $?
+		install_monaspace_fonts || return $?
+		upgrade_result_set updated
+		return 0
 	fi
 	latest="$(monaspace_latest_version 2>/dev/null || true)"
 	if [[ -z "$latest" ]]; then
 		_warn "  Could not check Monaspace release (GitHub API); keeping ${installed}"
+		upgrade_result_set checked-no-change
 		return 0
 	fi
 	if [[ "$installed" == "$latest" ]]; then
 		_msg "  Monaspace fonts already up to date (${installed})"
+		upgrade_result_set already-current
 		return 0
 	fi
-	install_monaspace_fonts --replace
+	install_monaspace_fonts --replace || return $?
+	upgrade_result_set updated
 }

@@ -18,14 +18,18 @@ check_apt() {
 		installed="system packages"
 	else
 		installed="$NOT_INSTALLED"
+		available="—"
+		action="$UPDATE_CHECK_SKIP"
+		printf '%s|%s|%s|%s\n' "apt packages" "$installed" "$available" "$action"
+		return 1
 	fi
 	if [[ "$count" -gt 0 ]]; then
 		available="${count} package(s) (cached)"
-		action="upgrade"
+		action="$UPDATE_CHECK_UPGRADE"
 		upgradable=1
 	else
 		available="none (cached)"
-		action="refresh on apply"
+		action="$UPDATE_CHECK_REFRESH_REQUIRED"
 	fi
 	printf '%s|%s|%s|%s\n' "apt packages" "$installed" "$available" "$action"
 	[[ $upgradable -eq 1 ]]

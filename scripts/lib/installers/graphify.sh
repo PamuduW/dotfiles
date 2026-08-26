@@ -43,11 +43,11 @@ check_graphify_cli() {
 	local installed action
 	installed="$(graphify_installed_version)"
 	if [[ "$installed" == "not installed" ]]; then
-		action="skip"
+		action=skip
 	elif graphify_cli_is_uv_owned; then
-		action="latest unchecked"
+		action=unknown
 	else
-		action="externally managed"
+		action=external
 	fi
 	printf '%s|%s|%s|%s\n' "Graphify CLI" "$installed" "—" "$action"
 }
@@ -56,10 +56,12 @@ upgrade_graphify_cli() {
 	local uv_cmd
 	if [[ "$(graphify_installed_version)" == "not installed" ]]; then
 		printf '%s\n' '  Graphify CLI not installed, skipping'
+		if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set skipped; fi
 		return 0
 	fi
 	if ! graphify_cli_is_uv_owned; then
 		printf '%s\n' '  Graphify CLI is externally managed, skipping uv upgrade'
+		if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set skipped; fi
 		return 0
 	fi
 	uv_cmd="$(graphify_uv_command)" || return 1
@@ -69,6 +71,7 @@ upgrade_graphify_cli() {
 	printf '%s\n' \
 		"  If Agentbot's Graphify integration is enabled, run agentbot graphify setup" \
 		"  or agentbot update to refresh the installed skill."
+	if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set checked-no-change; fi
 }
 
 ensure_graphify_uv() {

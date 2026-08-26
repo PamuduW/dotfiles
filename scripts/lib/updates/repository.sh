@@ -4,10 +4,10 @@
 dotfiles_repo_status() {
 	local result_name="${1:-}" state=unchecked ahead=0 behind=0
 	if ! command -v git >/dev/null 2>&1; then
-		echo "$NOT_INSTALLED|—|skip"
+		printf 'dotfiles repo|%s|—|%s\n' "$NOT_INSTALLED" "$UPDATE_CHECK_SKIP"
 		return
 	fi
-	local branch local_rev installed available='unchecked' action='unchecked'
+	local branch local_rev installed available='unchecked' action="$UPDATE_CHECK_UNKNOWN"
 	if [[ -n "$result_name" ]]; then
 		local -n repo_result_ref="$result_name"
 		state="${repo_result_ref[state]:-unchecked}"
@@ -20,23 +20,23 @@ dotfiles_repo_status() {
 	case "$state" in
 	current)
 		available='none'
-		action='up to date'
+		action="$UPDATE_CHECK_CURRENT"
 		;;
 	ahead)
 		available="${ahead} local commit(s) ahead"
-		action='verified'
+		action="$UPDATE_CHECK_CURRENT"
 		;;
 	behind)
 		available="${behind} commit(s) behind"
-		action='verified'
+		action="$UPDATE_CHECK_UPGRADE"
 		;;
 	diverged)
 		available="${ahead} ahead / ${behind} behind"
-		action='blocked'
+		action="$UPDATE_CHECK_UNKNOWN"
 		;;
 	esac
 	printf '%s|%s|%s|%s\n' "dotfiles repo" "$installed" "$available" "$action"
-	[[ "$action" == blocked ]]
+	[[ "$action" == "$UPDATE_CHECK_UPGRADE" ]]
 }
 
 # --- Report helpers ---

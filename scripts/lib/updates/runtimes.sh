@@ -31,12 +31,12 @@ check_node() {
 	installed="$(node_installed_version)"
 	available="$(node_lts_version)"
 	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
-		action="skip"
+		action="$UPDATE_CHECK_SKIP"
 	elif [[ "$available" != "—" ]] && _version_gt "$available" "$installed"; then
-		action="upgrade"
+		action="$UPDATE_CHECK_UPGRADE"
 		upgradable=1
 	else
-		action="up to date"
+		action="$UPDATE_CHECK_CURRENT"
 	fi
 	printf '%s|%s|%s|%s\n' "Node.js (nvm)" "$installed" "$available" "$action"
 	[[ $upgradable -eq 1 ]]
@@ -46,10 +46,12 @@ upgrade_node() {
 	_load_nvm
 	if ! command -v nvm >/dev/null 2>&1; then
 		_msg "  nvm not installed, skipping Node.js upgrade"
+		upgrade_result_set skipped
 		return 0
 	fi
 	nvm install --lts || return $?
-	nvm alias --no-colors default 'lts/*'
+	nvm alias --no-colors default 'lts/*' || return $?
+	upgrade_result_set checked-no-change
 }
 
 # --- npm (nvm) — opt-in ---
@@ -76,12 +78,12 @@ check_npm() {
 	installed="$(npm_installed_version)"
 	available="$(npm_available_version)"
 	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
-		action="skip"
+		action="$UPDATE_CHECK_SKIP"
 	elif [[ "$available" != "—" ]] && _version_gt "$available" "$installed"; then
-		action="upgrade"
+		action="$UPDATE_CHECK_UPGRADE"
 		upgradable=1
 	else
-		action="up to date"
+		action="$UPDATE_CHECK_CURRENT"
 	fi
 	printf '%s|%s|%s|%s\n' "npm" "$installed" "$available" "$action"
 	[[ $upgradable -eq 1 ]]
@@ -105,10 +107,12 @@ upgrade_npm() {
 	_load_nvm
 	if ! command -v nvm >/dev/null 2>&1; then
 		_msg "  nvm not installed, skipping npm upgrade"
+		upgrade_result_set skipped
 		return 0
 	fi
 	if [[ "$(npm_installed_version)" == "$NOT_INSTALLED" ]]; then
 		_msg "  npm not installed for the active Node version, skipping"
+		upgrade_result_set skipped
 		return 0
 	fi
 	if ! npm_version_token_is_safe "$target"; then
@@ -117,6 +121,7 @@ upgrade_npm() {
 	fi
 	if npm_version_reached "$target"; then
 		_msg "  npm is already at the target version $target"
+		upgrade_result_set already-current
 		return 0
 	fi
 
@@ -124,6 +129,7 @@ upgrade_npm() {
 	hash -r
 	if npm_version_reached "$target"; then
 		_msg "  npm verified at $(npm_installed_version)"
+		upgrade_result_set updated
 		return 0
 	fi
 
@@ -136,6 +142,7 @@ upgrade_npm() {
 		return 1
 	fi
 	_msg "  npm verified at $(npm_installed_version)"
+	upgrade_result_set recovered
 }
 
 # --- Go (asdf) — opt-in ---
@@ -168,12 +175,12 @@ check_go() {
 	installed="$(go_installed_version)"
 	available="$(go_latest_version)"
 	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
-		action="skip"
+		action="$UPDATE_CHECK_SKIP"
 	elif [[ "$available" != "—" ]] && _version_gt "$available" "$installed"; then
-		action="upgrade"
+		action="$UPDATE_CHECK_UPGRADE"
 		upgradable=1
 	else
-		action="up to date"
+		action="$UPDATE_CHECK_CURRENT"
 	fi
 	printf '%s|%s|%s|%s\n' "Go (asdf)" "$installed" "$available" "$action"
 	[[ $upgradable -eq 1 ]]
@@ -182,9 +189,11 @@ check_go() {
 upgrade_go() {
 	if ! command -v asdf >/dev/null 2>&1; then
 		_msg "  asdf not installed, skipping Go upgrade"
+		upgrade_result_set skipped
 		return 0
 	fi
 	asdf install golang latest || return $?
 	asdf set -u golang latest || return $?
-	asdf reshim golang
+	asdf reshim golang || return $?
+	upgrade_result_set checked-no-change
 }

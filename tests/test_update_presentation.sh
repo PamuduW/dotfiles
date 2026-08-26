@@ -11,24 +11,102 @@ source "$TEST_DIR/lib/update_test_fixture.sh"
 
 test_update_report_uses_clear_title_spacing_and_aligned_action_rule() (
 	local output_file="$TEST_HARNESS_ROOT/update-report.output"
-	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|up to date'; }
+	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|current'; }
 	NO_COLOR=1 print_report_table >"$output_file"
 	[[ "$(sed -n '1p' "$output_file")" == '==Update report==' ]] || return 1
 	grep -Fq $'==Update report==\n\ncomponent' "$output_file" || return 1
 	! grep -Fq 'Upgrade report' "$output_file" || return 1
-	grep -Fq $'everything looks current.\n\n' "$output_file" || return 1
+	grep -Fq $'0 verified upgrades — everything verified current.\n\n' "$output_file" || return 1
 	grep -Eq '^-------------------\+------------------------------\+------------------------\+-----------------' "$output_file"
 )
 
 test_update_and_upgrade_rows_keep_the_last_column_width() (
 	local output line_lengths
-	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|up to date'; }
+	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|current'; }
 
 	line_lengths="$(NO_COLOR=1 print_report_table | awk '/^(component|apt packages|---)/ { print length($0) }')"
 	[[ "$line_lengths" == $'93\n93\n93' ]] || return 1
 
 	line_lengths="$(NO_COLOR=1 print_upgrade_summary | awk '/^(component|apt packages|---)/ { print length($0) }')"
 	[[ "$line_lengths" == $'93\n93\n93' ]]
+)
+
+test_mixed_preview_separates_verified_upgrades_from_remaining_checks() (
+	_collect_check_rows() {
+		printf '%s\n' \
+			'apt packages|system packages|none (cached)|refresh-required' \
+			'Graphify CLI|graphify 0.9.50|—|unknown' \
+			'Boost CLI|boost v0.12.6|—|unknown' \
+			'Cursor CLI|2026.08.11-e8db854|—|unknown' \
+			'Claude CLI|2.1.233|—|unknown' \
+			'Copilot CLI|1.0.80|—|unknown' \
+			'Codex CLI|0.149.1|0.149.1|current'
+	}
+	local output
+	output="$(NO_COLOR=1 print_report_table)"
+	grep -Fq '0 verified upgrades; 6 checks or refreshes remain.' <<<"$output" || return 1
+	! grep -Fq 'everything looks current' <<<"$output" || return 1
+	grep -Fq 'refresh on apply' <<<"$output" || return 1
+	grep -Fq 'latest unchecked' <<<"$output"
+)
+
+test_upgrade_summary_counts_semantic_results_and_not_run_steps() (
+	_collect_check_rows() {
+		printf '%s\n' \
+			'apt packages|system packages|none|current' \
+			'Cursor CLI|installed|—|unknown' \
+			'Codex CLI|installed|1.0.0|upgrade' \
+			'Claude CLI|not installed|—|skip' \
+			'npm|12.0.2|12.0.2|current' \
+			'Go (asdf)|1.27.0|1.27.0|current' \
+			'dotfiles repo|main@abc123|none|current'
+	}
+	UPGRADE_STEP_RESULT=(
+		['apt packages']=checked-no-change
+		['Cursor CLI']=recovered
+		['Codex CLI']=updated
+		['Claude CLI']=skipped
+		['npm']=already-current
+		['Go (asdf)']=failed
+	)
+	local output
+	output="$(NO_COLOR=1 print_upgrade_summary)"
+	grep -Fq 'checked/no change' <<<"$output" || return 1
+	grep -Fq 'already current' <<<"$output" || return 1
+	grep -Fq 'not run' <<<"$output" || return 1
+	grep -Fq '1 updated; 1 already current; 2 checked/no change; 1 recovered; 1 skipped; 1 failed; 0 not run.' <<<"$output"
+)
+
+test_upgrade_summary_marks_unattempted_steps_after_early_failure() (
+	_collect_check_rows() {
+		printf '%s\n' \
+			'apt packages|system packages|none|refresh-required' \
+			'Cursor CLI|installed|—|unknown' \
+			'dotfiles repo|main@abc123|none|current'
+	}
+	UPGRADE_STEP_RESULT=(['apt packages']=failed)
+	local output
+	output="$(NO_COLOR=1 print_upgrade_summary)"
+	grep -Eq '^Cursor CLI[[:space:]]+\|.*\|[[:space:]]+not run[[:space:]]*$' <<<"$output" || return 1
+	grep -Fq '0 updated; 0 already current; 1 checked/no change; 0 recovered; 0 skipped; 1 failed; 1 not run.' <<<"$output"
+)
+
+test_upgrade_summary_reports_all_current_and_all_skipped_without_ok_collapse() (
+	_collect_check_rows() {
+		printf '%s\n' \
+			'apt packages|system packages|none|current' \
+			'Cursor CLI|installed|—|unknown' \
+			'dotfiles repo|main@abc123|none|current'
+	}
+	local output
+	UPGRADE_STEP_RESULT=(['apt packages']=already-current ['Cursor CLI']=already-current)
+	output="$(NO_COLOR=1 print_upgrade_summary)"
+	grep -Fq '0 updated; 2 already current; 1 checked/no change; 0 recovered; 0 skipped; 0 failed; 0 not run.' <<<"$output" || return 1
+	! grep -Fq 'step(s) ok' <<<"$output" || return 1
+
+	UPGRADE_STEP_RESULT=(['apt packages']=skipped ['Cursor CLI']=skipped)
+	output="$(NO_COLOR=1 print_upgrade_summary)"
+	grep -Fq '0 updated; 0 already current; 1 checked/no change; 0 recovered; 2 skipped; 0 failed; 0 not run.' <<<"$output"
 )
 
 test_parallel_probe_preserves_nonempty_output_from_nonzero_probe() (
@@ -156,11 +234,11 @@ test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan() (
 )
 
 test_upgrade_summary_marks_repo_gate_as_handled() (
-	_collect_check_rows() { printf '%s\n' 'dotfiles repo|main@abc123|none|up to date'; }
+	_collect_check_rows() { printf '%s\n' 'dotfiles repo|main@abc123|none|current'; }
 	local output
 	output="$(print_upgrade_summary)"
 	grep -Fq 'dotfiles repo' <<<"$output" || return 1
-	grep -Fq '| ok' <<<"$output"
+	grep -Fq 'checked/no change' <<<"$output"
 )
 
 test_tui_runs_shared_update_without_submenu() (
@@ -310,6 +388,10 @@ test_harness_safety_and_no_real_mutation() {
 
 expect_success 'update report title spacing and action separator are stable' test_update_report_uses_clear_title_spacing_and_aligned_action_rule
 expect_success 'update and upgrade rows preserve the fixed final column width' test_update_and_upgrade_rows_keep_the_last_column_width
+expect_success 'mixed preview separates verified upgrades from remaining checks' test_mixed_preview_separates_verified_upgrades_from_remaining_checks
+expect_success 'upgrade summary counts semantic results' test_upgrade_summary_counts_semantic_results_and_not_run_steps
+expect_success 'upgrade summary marks unattempted steps after early failure' test_upgrade_summary_marks_unattempted_steps_after_early_failure
+expect_success 'upgrade summary preserves all-current and all-skipped states' test_upgrade_summary_reports_all_current_and_all_skipped_without_ok_collapse
 expect_success 'parallel probes preserve nonempty output from nonzero checks' test_parallel_probe_preserves_nonempty_output_from_nonzero_probe
 expect_success 'update report ignores empty probe rows' test_update_report_ignores_empty_probe_rows
 expect_success 'upgrade summary ignores empty probe rows' test_upgrade_summary_ignores_empty_probe_rows

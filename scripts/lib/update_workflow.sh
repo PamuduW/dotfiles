@@ -3,8 +3,42 @@
 # Repository-first update orchestration and fixed-width update reports.
 # Depends on update_components.sh and repo_update.sh.
 
-_color_action() { status_color_action "$1"; }
-_color_result() { status_color_result "$1"; }
+_color_action() {
+	case "$1" in
+	refresh\ on\ apply) _colors_wrap "${C_YELLOW:-}" "$1" ;;
+	externally\ managed) _colors_wrap "${C_DIM:-}" "$1" ;;
+	*) status_color_action "$1" ;;
+	esac
+}
+_color_result() {
+	case "$1" in
+	updated | already\ current | checked/no\ change) _colors_wrap "${C_GREEN:-}" "$1" ;;
+	recovered) _colors_wrap "${C_YELLOW:-}" "$1" ;;
+	not\ run) _colors_wrap "${C_DIM:-}" "$1" ;;
+	*) status_color_result "$1" ;;
+	esac
+}
+
+_check_state_display() {
+	case "$1" in
+	upgrade) printf 'upgrade\n' ;;
+	current) printf 'up to date\n' ;;
+	unknown) printf 'latest unchecked\n' ;;
+	refresh-required) printf 'refresh on apply\n' ;;
+	external) printf 'externally managed\n' ;;
+	skip) printf 'skip\n' ;;
+	*) printf '%s\n' "$1" ;;
+	esac
+}
+
+_upgrade_result_display() {
+	case "$1" in
+	already-current) printf 'already current\n' ;;
+	checked-no-change) printf 'checked/no change\n' ;;
+	not-run) printf 'not run\n' ;;
+	*) printf '%s\n' "$1" ;;
+	esac
+}
 
 # Several checks hit the network (npm view, GitHub releases), so run them
 # concurrently. Output order still follows CHECK_FUNCS, so the report is
@@ -61,17 +95,17 @@ _print_check_table_row() {
 print_report_table() {
 	local repo_result_name="${1:-}"
 	local -a rows=()
-	local row component installed available action
-	local upgrade_count=0
+	local row component installed available state display
+	local upgrade_count=0 remaining_count=0
 
 	mapfile -t rows < <(_collect_check_rows "$repo_result_name")
 
 	for row in "${rows[@]}"; do
-		IFS='|' read -r component installed available action <<<"$row"
+		IFS='|' read -r component installed available state <<<"$row"
 		[[ -n "$component" ]] || continue
-		case "$action" in
-		upgrade | upgrade*) ((++upgrade_count)) ;;
-		pull*) ((++upgrade_count)) ;;
+		case "$state" in
+		upgrade) ((++upgrade_count)) ;;
+		unknown | refresh-required) ((++remaining_count)) ;;
 		esac
 	done
 
@@ -79,19 +113,28 @@ print_report_table() {
 	_print_update_table_header action
 
 	for row in "${rows[@]}"; do
-		IFS='|' read -r component installed available action <<<"$row"
+		IFS='|' read -r component installed available state <<<"$row"
 		[[ -n "$component" ]] || continue
-		_print_check_table_row "$component" "$installed" "$available" "$action" action
+		display="$(_check_state_display "$state")"
+		_print_check_table_row "$component" "$installed" "$available" "$display" action
 	done
 
 	printf '\n'
-	if [[ $upgrade_count -eq 0 ]]; then
-		printf '%s0 upgrades available%s — everything looks current.\n' "$C_GREEN" "$C_RESET"
+	if [[ $upgrade_count -eq 0 && $remaining_count -eq 0 ]]; then
+		printf '%s0 verified upgrades%s — everything verified current.\n' "$C_GREEN" "$C_RESET"
+	elif [[ $upgrade_count -eq 0 ]]; then
+		printf '%s0 verified upgrades; %d checks or refreshes remain.%s\n' \
+			"$C_YELLOW" "$remaining_count" "$C_RESET"
 	else
 		# shellcheck disable=SC2016  # Backticks are literal documentation formatting.
-		printf '%s%d upgrade%s available%s — run `%sdotfiles update%s` to apply.\n' \
-			"$C_YELLOW" "$upgrade_count" "$([[ $upgrade_count -eq 1 ]] && echo '' || echo 's')" "$C_RESET" \
-			"$C_BOLD" "$C_RESET"
+		printf '%s%d verified upgrade%s available' \
+			"$C_YELLOW" "$upgrade_count" "$([[ $upgrade_count -eq 1 ]] && echo '' || echo 's')"
+		if [[ $remaining_count -gt 0 ]]; then
+			printf '; %d checks or refreshes remain' "$remaining_count"
+		fi
+		# shellcheck disable=SC2016  # Backticks are literal documentation formatting.
+		printf '%s — run `%sdotfiles update%s` to apply.\n' \
+			"$C_RESET" "$C_BOLD" "$C_RESET"
 	fi
 	printf '\n'
 }
@@ -99,8 +142,9 @@ print_report_table() {
 print_upgrade_summary() {
 	local repo_result_name="${1:-}"
 	local -a rows=()
-	local row component installed available _action result
-	local ok_count=0 fail_count=0
+	local row component installed available _state result display
+	local updated_count=0 current_count=0 checked_count=0 recovered_count=0
+	local skipped_count=0 fail_count=0 not_run_count=0
 
 	mapfile -t rows < <(_collect_check_rows "$repo_result_name")
 
@@ -108,28 +152,33 @@ print_upgrade_summary() {
 	_print_update_table_header result
 
 	for row in "${rows[@]}"; do
-		IFS='|' read -r component installed available _action <<<"$row"
+		IFS='|' read -r component installed available _state <<<"$row"
 		[[ -n "$component" ]] || continue
 		result="${UPGRADE_STEP_RESULT[$component]:-}"
 		if [[ -z "$result" ]]; then
 			case "$component" in
-			"dotfiles repo") result="ok" ;;
-			*) result="—" ;;
+			"dotfiles repo") result="$UPGRADE_RESULT_CHECKED_NO_CHANGE" ;;
+			*) result="$UPGRADE_RESULT_NOT_RUN" ;;
 			esac
 		fi
 		case "$result" in
-		ok) ((++ok_count)) ;;
+		updated) ((++updated_count)) ;;
+		already-current) ((++current_count)) ;;
+		checked-no-change) ((++checked_count)) ;;
+		recovered) ((++recovered_count)) ;;
+		skipped) ((++skipped_count)) ;;
 		failed) ((++fail_count)) ;;
+		not-run) ((++not_run_count)) ;;
 		esac
-		_print_check_table_row "$component" "$installed" "$available" "$result" result
+		display="$(_upgrade_result_display "$result")"
+		_print_check_table_row "$component" "$installed" "$available" "$display" result
 	done
 
 	printf '\n'
-	if [[ $fail_count -eq 0 ]]; then
-		printf '%sUpgrade finished%s — %d step(s) ok.\n' "$C_GREEN" "$C_RESET" "$ok_count"
-	else
-		printf '%sUpgrade finished with %d failure(s)%s — see log above.\n' "$C_RED" "$fail_count" "$C_RESET"
-	fi
+	[[ $fail_count -eq 0 ]] && printf '%s' "$C_GREEN" || printf '%s' "$C_RED"
+	printf 'Upgrade finished%s — %d updated; %d already current; %d checked/no change; %d recovered; %d skipped; %d failed; %d not run.\n' \
+		"$C_RESET" "$updated_count" "$current_count" "$checked_count" "$recovered_count" \
+		"$skipped_count" "$fail_count" "$not_run_count"
 }
 
 # --- Subcommands ---
@@ -148,9 +197,11 @@ _dotfiles_confirm_repo_update() {
 _update_apt_packages() {
 	command -v apt-get >/dev/null 2>&1 || {
 		_warn '  apt-get not found, skipping'
+		upgrade_result_set skipped
 		return 0
 	}
-	sudo apt-get -o Dpkg::Use-Pty=0 upgrade -y
+	sudo apt-get -o Dpkg::Use-Pty=0 upgrade -y || return $?
+	upgrade_result_set checked-no-change
 }
 
 # One approved update runs every managed step, including the runtimes and fonts
@@ -162,7 +213,7 @@ _run_update_downstream() {
 		sudo apt-get update -qq || apt_refresh_rc=$?
 		if [[ $apt_refresh_rc -ne 0 ]]; then
 			_report_command_failure "$apt_refresh_rc" "sudo apt-get update"
-			UPGRADE_STEP_RESULT["apt packages"]="failed"
+			UPGRADE_STEP_RESULT["apt packages"]="$UPGRADE_RESULT_FAILED"
 			return "$apt_refresh_rc"
 		fi
 	fi
@@ -186,7 +237,7 @@ _run_update_downstream() {
 	_run_upgrade_step "Monaspace fonts" "dotfiles update" upgrade_monaspace
 
 	local result failures=0
-	for result in "${UPGRADE_STEP_RESULT[@]}"; do [[ "$result" == failed ]] && failures=$((failures + 1)); done
+	for result in "${UPGRADE_STEP_RESULT[@]}"; do [[ "$result" == "$UPGRADE_RESULT_FAILED" ]] && failures=$((failures + 1)); done
 	((failures == 0))
 }
 

@@ -64,9 +64,9 @@ check_boost_cli() {
 	if [[ "$installed" == 'not installed' ]]; then
 		action=skip
 	elif boost_cli_is_dotfiles_owned; then
-		action='managed; latest checked during install/update'
+		action=unknown
 	else
-		action='externally managed'
+		action=external
 	fi
 	printf 'Boost CLI|%s|—|%s\n' "$installed" "$action"
 }
@@ -213,11 +213,14 @@ boost_sync_latest_release() {
 upgrade_boost_cli() {
 	if ! boost_command >/dev/null 2>&1; then
 		printf '%s\n' '  Boost CLI not installed, skipping'
+		if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set skipped; fi
 		return 0
 	fi
 	if ! boost_cli_is_dotfiles_owned; then
 		printf '%s\n' '  Boost CLI is externally managed, preserving it'
+		if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set skipped; fi
 		return 0
 	fi
-	boost_sync_latest_release
+	boost_sync_latest_release || return $?
+	if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set checked-no-change; fi
 }
