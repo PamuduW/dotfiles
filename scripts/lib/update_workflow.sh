@@ -41,15 +41,16 @@ _upgrade_result_display() {
 }
 
 # Several checks hit the network (npm view, GitHub releases), so run them
-# concurrently. Output order still follows CHECK_FUNCS, so the report is
+# concurrently. Output order still follows UPDATE_STEP_KEYS, so the report is
 # deterministic. dotfiles_repo_status reads an already-collected nameref and
 # takes the repo result name.
 _collect_check_rows() {
 	local repo_result_name="${1:-}"
 	_load_nvm
-	local fn
+	local key fn
 	local -a probes=()
-	for fn in "${CHECK_FUNCS[@]}"; do
+	for key in "${UPDATE_STEP_KEYS[@]}"; do
+		fn="${UPDATE_STEP_CHECK[$key]}"
 		if [[ "$fn" == dotfiles_repo_status ]]; then
 			probes+=("$(printf '%s %q' "$fn" "$repo_result_name")")
 		else
@@ -57,6 +58,17 @@ _collect_check_rows() {
 		fi
 	done
 	run_probes_parallel '' "${probes[@]}"
+}
+
+_load_update_rows() {
+	local output_name="$1" repo_result_name="${2:-}" snapshot_name="${3:-}"
+	local -n output_rows="$output_name"
+	if [[ -n "$snapshot_name" ]]; then
+		local -n snapshot_rows="$snapshot_name"
+		output_rows=("${snapshot_rows[@]}")
+	else
+		mapfile -t output_rows < <(_collect_check_rows "$repo_result_name")
+	fi
 }
 
 # Fixed-width table row: truncate text columns so pipes stay aligned; color last column only.
@@ -94,11 +106,12 @@ _print_check_table_row() {
 
 print_report_table() {
 	local repo_result_name="${1:-}"
+	local snapshot_name="${2:-}"
 	local -a rows=()
 	local row component installed available state display
 	local upgrade_count=0 remaining_count=0
 
-	mapfile -t rows < <(_collect_check_rows "$repo_result_name")
+	_load_update_rows rows "$repo_result_name" "$snapshot_name"
 
 	for row in "${rows[@]}"; do
 		IFS='|' read -r component installed available state <<<"$row"
@@ -141,12 +154,13 @@ print_report_table() {
 
 print_upgrade_summary() {
 	local repo_result_name="${1:-}"
+	local snapshot_name="${2:-}"
 	local -a rows=()
 	local row component installed available _state result display
 	local updated_count=0 current_count=0 checked_count=0 recovered_count=0
 	local skipped_count=0 fail_count=0 not_run_count=0
 
-	mapfile -t rows < <(_collect_check_rows "$repo_result_name")
+	_load_update_rows rows "$repo_result_name" "$snapshot_name"
 
 	printf '\n%s%s==Upgrade summary==%s\n\n' "$C_BOLD" "$C_YELLOW" "$C_RESET"
 	_print_update_table_header result
@@ -204,37 +218,50 @@ _update_apt_packages() {
 	upgrade_result_set checked-no-change
 }
 
+_apply_apt_update_step() {
+	_update_apt_packages
+}
+
+_apply_npm_update_step() {
+	local target
+	target="$(npm_available_version)"
+	upgrade_npm "$target"
+}
+
+_apply_repository_update_step() {
+	upgrade_result_set checked-no-change
+}
+
 # One approved update runs every managed step, including the runtimes and fonts
 # that `--all` used to gate. See cmd_update for the compatibility note.
 _run_update_downstream() {
-	local apt_refresh_rc=0 npm_target='' npm_retry='nvm install-latest-npm'
+	local key label apply retry npm_target apt_refresh_rc=0
 	UPGRADE_STEP_RESULT=()
+	update_step_registry_validate || {
+		_err 'Invalid update-step registry.'
+		return 1
+	}
 	if command -v apt-get >/dev/null 2>&1; then
 		sudo apt-get update -qq || apt_refresh_rc=$?
 		if [[ $apt_refresh_rc -ne 0 ]]; then
-			_report_command_failure "$apt_refresh_rc" "sudo apt-get update"
-			UPGRADE_STEP_RESULT["apt packages"]="$UPGRADE_RESULT_FAILED"
+			_report_command_failure "$apt_refresh_rc" 'sudo apt-get update'
+			UPGRADE_STEP_RESULT["${UPDATE_STEP_LABEL[apt]}"]="$UPGRADE_RESULT_FAILED"
 			return "$apt_refresh_rc"
 		fi
 	fi
-	_run_upgrade_step "apt packages" "sudo apt-get upgrade" _update_apt_packages
-	_run_upgrade_step "Graphify CLI" "uv tool upgrade graphifyy" upgrade_graphify_cli
-	_run_upgrade_step "Boost CLI" "dotfiles update" upgrade_boost_cli
-	_run_upgrade_step "Cursor CLI" "dotfiles update" upgrade_cursor_cli
-	_run_upgrade_step "Codex CLI" "npm i -g @openai/codex@latest" upgrade_codex_cli
-	_run_upgrade_step "Claude CLI" "claude update" upgrade_claude_cli
-	_run_upgrade_step "Copilot CLI" "copilot update" upgrade_copilot_cli
-	_run_upgrade_step "lazygit" "dotfiles update" upgrade_lazygit
-	_run_upgrade_step "lazydocker" "dotfiles update" upgrade_lazydocker
-
-	_run_upgrade_step "Node.js (nvm)" "nvm install --lts" upgrade_node
-	npm_target="$(npm_available_version)"
-	if npm_version_token_is_safe "$npm_target"; then
-		npm_retry="npm install -g npm@${npm_target} --engine-strict --allow-remote=all"
-	fi
-	_run_upgrade_step "npm" "$npm_retry" upgrade_npm "$npm_target"
-	_run_upgrade_step "Go (asdf)" "asdf install golang latest" upgrade_go
-	_run_upgrade_step "Monaspace fonts" "dotfiles update" upgrade_monaspace
+	for key in "${UPDATE_STEP_KEYS[@]}"; do
+		[[ "$key" != repository ]] || continue
+		label="${UPDATE_STEP_LABEL[$key]}"
+		apply="${UPDATE_STEP_APPLY[$key]}"
+		retry="${UPDATE_STEP_RETRY[$key]}"
+		if [[ "$key" == npm ]]; then
+			npm_target="$(npm_available_version)"
+			if npm_version_token_is_safe "$npm_target"; then
+				retry="npm install -g npm@${npm_target} --engine-strict --allow-remote=all"
+			fi
+		fi
+		_run_upgrade_step "$label" "$retry" "$apply"
+	done
 
 	local result failures=0
 	for result in "${UPGRADE_STEP_RESULT[@]}"; do [[ "$result" == "$UPGRADE_RESULT_FAILED" ]] && failures=$((failures + 1)); done
@@ -244,6 +271,7 @@ _run_update_downstream() {
 _dotfiles_run_update() {
 	local repository_decision_fn="$1" unattended="$2" dry_run="${3:-false}" repo_rc=0
 	local -A repo_result=()
+	local -a observation_rows=()
 	repo_update_run "$DOTFILES_DIR" 'dotfiles repo' "$repository_decision_fn" repo_result 'PamuduW/dotfiles' || repo_rc=$?
 	if ((repo_rc == 2)); then
 		repo_update_print_changed
@@ -252,7 +280,8 @@ _dotfiles_run_update() {
 	repo_update_is_declined repo_result && return 0
 	[[ "$repo_rc" -eq 0 ]] || return 1
 
-	print_report_table repo_result
+	mapfile -t observation_rows < <(_collect_check_rows repo_result)
+	print_report_table repo_result observation_rows
 	if [[ "$dry_run" == true ]]; then
 		_msg 'Dry run: nothing was changed downstream.'
 		return 0
@@ -264,7 +293,7 @@ _dotfiles_run_update() {
 	printf '\n%s%s=== Upgrade ===%s\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
 	local downstream_rc=0
 	_run_update_downstream || downstream_rc=$?
-	print_upgrade_summary repo_result
+	print_upgrade_summary repo_result observation_rows
 	return "$downstream_rc"
 }
 

@@ -241,6 +241,43 @@ test_upgrade_summary_marks_repo_gate_as_handled() (
 	grep -Fq 'checked/no change' <<<"$output"
 )
 
+test_update_preview_and_summary_share_one_snapshot() (
+	local calls="$TEST_HARNESS_ROOT/update-snapshot.calls"
+	: >"$calls"
+	repo_update_run() {
+		local -n result_ref="$4"
+		result_ref=([outcome]=current [state]=current)
+	}
+	_collect_check_rows() {
+		printf 'collect\n' >>"$calls"
+		printf '%s\n' 'apt packages|system packages|none (cached)|refresh-required' 'dotfiles repo|main@abc123|none|current'
+	}
+	_dotfiles_confirm() { return 0; }
+	_run_update_downstream() {
+		UPGRADE_STEP_RESULT=(['apt packages']=checked-no-change)
+	}
+
+	NO_COLOR=1 _dotfiles_run_update _dotfiles_confirm_repo_update false >/dev/null || return 1
+	[[ "$(wc -l <"$calls")" -eq 1 ]]
+)
+
+test_update_step_registry_has_stable_complete_pairs() (
+	local expected=(
+		'apt packages' 'Graphify CLI' 'Boost CLI' 'Cursor CLI' 'Codex CLI'
+		'Claude CLI' 'Copilot CLI' lazygit lazydocker 'Node.js (nvm)' npm
+		'Go (asdf)' 'Monaspace fonts' 'dotfiles repo'
+	)
+	update_step_registry_validate || return 1
+	[[ "${#UPDATE_STEP_KEYS[@]}" -eq "${#expected[@]}" ]] || return 1
+	local i key
+	for i in "${!expected[@]}"; do
+		key="${UPDATE_STEP_KEYS[$i]}"
+		[[ "${UPDATE_STEP_LABEL[$key]}" == "${expected[$i]}" ]] || return 1
+		declare -F "${UPDATE_STEP_CHECK[$key]}" >/dev/null || return 1
+		declare -F "${UPDATE_STEP_APPLY[$key]}" >/dev/null || return 1
+	done
+)
+
 test_tui_runs_shared_update_without_submenu() (
 	local fake_dotfiles="$TEST_HARNESS_ROOT/fake-dotfiles"
 	local events="$TEST_HARNESS_ROOT/tui-update.events"
@@ -402,6 +439,8 @@ expect_success 'repository fetch notices use cyan' test_repository_fetch_notice_
 expect_success 'repository fetch notices color each line independently' test_repository_fetch_notice_colors_each_line
 expect_success 'update apply uses a high-level Upgrade heading without opt-in plan noise' test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan
 expect_success 'upgrade summary marks the repo gate as handled' test_upgrade_summary_marks_repo_gate_as_handled
+expect_success 'update preview and summary share one captured snapshot' test_update_preview_and_summary_share_one_snapshot
+expect_success 'update registry has stable complete check and apply pairs' test_update_step_registry_has_stable_complete_pairs
 expect_success 'TUI runs shared update directly without a submenu' test_tui_runs_shared_update_without_submenu
 expect_success 'TUI propagates the changed-repository exit from the update child' test_tui_propagates_changed_repository_from_update_child
 expect_success 'stopped paths perform no apt tool network or stow work' test_stopped_paths_have_no_downstream

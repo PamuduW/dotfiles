@@ -27,11 +27,11 @@ test_success_runs_dotfiles_then_agentbot_full() (
 	}
 	agentbot() {
 		printf 'agentbot:%s:confirm=%s\n' "$*" "${AGENTBOT_INSTALL_CONFIRM:-unset}" >>"$events"
-		[[ "$*" == 'help full' || "$*" == 'full' ]]
+		[[ "$*" == 'help full' || "$*" == 'full' || "$*" == doctor ]]
 	}
 
 	cmd_full_update >/dev/null || return 1
-	[[ "$(<"$events")" == $'dotfiles:_dotfiles_approve_repo_update:true\nagentbot:help full:confirm=unset\nagentbot:full:confirm=yes' ]]
+	[[ "$(<"$events")" == $'dotfiles:_dotfiles_approve_repo_update:true\nagentbot:help full:confirm=unset\nagentbot:full:confirm=yes\nagentbot:doctor:confirm=unset' ]]
 )
 
 test_legacy_agentbot_bootstraps_once_before_full() (
@@ -50,13 +50,13 @@ test_legacy_agentbot_bootstraps_once_before_full() (
 			supports_full=true
 			return 2
 			;;
-		full) return 0 ;;
+		full | doctor) return 0 ;;
 		esac
 		return 64
 	}
 
 	cmd_full_update >/dev/null || return 1
-	[[ "$(<"$events")" == $'agentbot:help full:confirm=unset\nagentbot:install:confirm=yes\nagentbot:help full:confirm=unset\nagentbot:full:confirm=yes' ]]
+	[[ "$(<"$events")" == $'agentbot:help full:confirm=unset\nagentbot:install:confirm=yes\nagentbot:help full:confirm=unset\nagentbot:full:confirm=yes\nagentbot:doctor:confirm=unset' ]]
 )
 
 test_agentbot_bootstrap_stops_if_full_is_still_unavailable() (
@@ -145,6 +145,72 @@ test_missing_agentbot_is_reported_not_ignored() (
 	[[ "$rc" -eq 127 ]]
 )
 
+test_full_update_reports_resolved_launcher_identity() (
+	local fake_root="$TEST_HARNESS_ROOT/agent_bootstrap" output
+	mkdir -p "$fake_root/bin"
+	printf '#!/bin/sh\nexit 0\n' >"$fake_root/bin/agentbot"
+	chmod 700 "$fake_root/bin/agentbot"
+	command() {
+		[[ "$*" == '-v agentbot' ]] && {
+			printf '%s\n' "$fake_root/bin/agentbot"
+			return 0
+		}
+		builtin command "$@"
+	}
+	output="$(FULL_UPDATE_EXPECTED_AGENTBOT_HOME="$fake_root" full_update_print_identity)" || return 1
+	grep -Fq "Dotfiles checkout: $DOTFILES_DIR" <<<"$output" || return 1
+	grep -Fq "Agentbot checkout: $fake_root" <<<"$output"
+)
+
+test_full_update_refuses_unexpected_agentbot_checkout() (
+	local fake_root="$TEST_HARNESS_ROOT/unexpected-agentbot" rc=0 output
+	mkdir -p "$fake_root/bin"
+	printf '#!/bin/sh\nexit 0\n' >"$fake_root/bin/agentbot"
+	chmod 700 "$fake_root/bin/agentbot"
+	command() {
+		[[ "$*" == '-v agentbot' ]] && {
+			printf '%s\n' "$fake_root/bin/agentbot"
+			return 0
+		}
+		builtin command "$@"
+	}
+	output="$(FULL_UPDATE_EXPECTED_AGENTBOT_HOME="$TEST_HARNESS_ROOT/expected-agentbot" full_update_print_identity 2>&1)" || rc=$?
+	[[ "$rc" -ne 0 ]] || return 1
+	grep -Fq 'Refusing unexpected Agentbot checkout' <<<"$output"
+)
+
+test_postflight_distinguishes_warnings_errors_and_health() (
+	local output rc=0
+	cmd_doctor() { return 0; }
+	agentbot() {
+		[[ "$*" == doctor ]] && return 0
+		return 64
+	}
+	output="$(full_update_postflight)" || rc=$?
+	[[ "$rc" -eq 0 && "$output" == *'Full system update completed.'* ]] || return 1
+
+	full_update_agentbot_doctor() { return 10; }
+	rc=0
+	output="$(full_update_postflight)" || rc=$?
+	[[ "$rc" -eq 0 && "$output" == *'completed with warnings'* ]] || return 1
+
+	full_update_agentbot_doctor() { return 0; }
+	cmd_doctor() { return 1; }
+	rc=0
+	output="$(full_update_postflight)" || rc=$?
+	[[ "$rc" -ne 0 && "$output" == *'Updates succeeded; system needs attention'* ]]
+)
+
+test_agentbot_doctor_warning_output_maps_to_warning_state() (
+	agentbot() {
+		[[ "$*" == doctor ]] || return 64
+		printf '0 error(s), 5 warning(s).\n'
+	}
+	local output rc=0
+	output="$(full_update_agentbot_doctor)" || rc=$?
+	[[ "$rc" -eq 10 && "$output" == *'5 warning(s)'* ]]
+)
+
 expect_success 'full-update runs Dotfiles, then one Agentbot full run' test_success_runs_dotfiles_then_agentbot_full
 expect_success 'a legacy Agentbot bootstraps once before full' test_legacy_agentbot_bootstraps_once_before_full
 expect_success 'an incompatible Agentbot stops after one bootstrap attempt' test_agentbot_bootstrap_stops_if_full_is_still_unavailable
@@ -153,5 +219,9 @@ expect_success 'Agentbot repository change stops with rerun guidance' test_agent
 expect_success 'Agentbot failure status propagates unchanged' test_agentbot_failure_propagates_its_status
 expect_success 'Agentbot capability failure status propagates unchanged' test_agentbot_capability_failure_propagates_its_status
 expect_success 'a missing agentbot is reported, not silently skipped' test_missing_agentbot_is_reported_not_ignored
+expect_success 'full-update reports resolved launcher and checkout identity' test_full_update_reports_resolved_launcher_identity
+expect_success 'full-update refuses an unexpected Agentbot checkout' test_full_update_refuses_unexpected_agentbot_checkout
+expect_success 'postflight distinguishes healthy warning and error outcomes' test_postflight_distinguishes_warnings_errors_and_health
+expect_success 'Agentbot warning output maps to the postflight warning state' test_agentbot_doctor_warning_output_maps_to_warning_state
 
 finish_tests

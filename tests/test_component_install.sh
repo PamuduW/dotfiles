@@ -101,12 +101,29 @@ test_install_orchestrator_collects_failures_and_finishes_selected_work() (
 	[[ "$(<"$calls")" == $'first\nsecond\nsummary' ]]
 )
 
+test_install_summary_preserves_failed_installer_with_probeable_artifact() (
+	declare -gA INSTALL_COMPONENT_RESULT=([partial]=failed)
+	declare -gA COMP_ON=([partial]=1)
+	COMP_KEYS=(partial)
+	COMP_LABELS=('Partial CLI')
+	menu_tty_cols() { printf '80\n'; }
+	collect_component_status_rows() {
+		local -n output_rows="$1"
+		output_rows=('Partial CLI|version 1.2.3 is probeable|installed')
+	}
+	local output
+	output="$(NO_COLOR=1 print_install_summary)"
+	grep -Eq '^[[:space:]]+Partial CLI[[:space:]]+\|.*installer failed.*\|[[:space:]]+failed[[:space:]]*$' <<<"$output" || return 1
+	grep -Fq '0 ok, 1 need attention' <<<"$output"
+)
+
 check 'component registry validates dependencies and installation order' test_component_registry_validates_dependencies_and_install_order
 check 'non-interactive install runs the repository gate before setup' test_noninteractive_install_runs_repository_gate_first
 check 'non-interactive install propagates component installation failure' test_noninteractive_install_propagates_install_failure
 check 'selected component installer failures propagate to the orchestrator' test_selected_component_install_failures_propagate
 check 'multi-step component installers preserve the first required failure' test_multi_step_component_installers_preserve_first_failure
 check 'install orchestration reports failures after attempting all selected components' test_install_orchestrator_collects_failures_and_finishes_selected_work
+check 'install summary cannot hide a failed installer behind a probeable artifact' test_install_summary_preserves_failed_installer_with_probeable_artifact
 
 test_harness_cleanup
 finish_tests

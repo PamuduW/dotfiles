@@ -121,10 +121,10 @@ dotfiles_command_define 'full-update' \
 	--handler 'cmd_full_update' \
 	--class 'mutating' \
 	--description 'Update Dotfiles and Agentbot without application prompts.' \
-	--note 'Backs up replaceable local Git state before syncing upstream.' \
+	--note 'Prints resolved checkouts, refuses an unexpected Agentbot checkout, and finishes with read-only health checks.' \
 	--options '(none)|Run the complete unattended Dotfiles and Agentbot maintenance flow.|always' \
 	--defaults 'Running the command authorizes application prompts and recoverable repository replacement.' \
-	--effects 'May stash local changes, create recovery branches, sync both repositories, and update the system.' \
+	--effects 'May preserve local Git state and update the system; postflight reports warnings separately and exits nonzero for Doctor errors.' \
 	--example 'dotfiles full-update' \
 	--related 'Use update for an interactive Dotfiles-only run.'
 

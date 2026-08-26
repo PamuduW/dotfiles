@@ -366,20 +366,33 @@ _comp_probe_git_credential() {
 }
 
 print_install_summary() {
-	local row label detail result cols
+	local row label detail result cols key install_result i
 	local ok_count=0 miss_count=0
-	local -a rows=()
+	local -a rows=() enabled_keys=()
 
 	cols="$(menu_tty_cols)"
 	rt_print_header "Install summary" "" "$cols"
 	rt_print_table_columns
 
 	collect_component_status_rows rows true
-	for row in "${rows[@]}"; do
+	for key in "${COMP_KEYS[@]}"; do
+		is_on "$key" && enabled_keys+=("$key")
+	done
+	for i in "${!rows[@]}"; do
+		row="${rows[$i]}"
 		IFS='|' read -r label detail result <<<"$row"
+		key="${enabled_keys[$i]:-}"
+		install_result=''
+		if declare -p INSTALL_COMPONENT_RESULT >/dev/null 2>&1; then
+			install_result="${INSTALL_COMPONENT_RESULT[$key]:-}"
+		fi
+		if [[ "$install_result" == failed ]]; then
+			detail="installer failed; $detail"
+			result=failed
+		fi
 		case "$result" in
 		installed | configured) ((++ok_count)) ;;
-		missing | check) ((++miss_count)) ;;
+		*) ((++miss_count)) ;;
 		esac
 		rt_print_table_row "$label" "$detail" "$result"
 	done

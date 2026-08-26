@@ -239,7 +239,7 @@ Global command (stowed to `~/bin/dotfiles`, on PATH like `ex` and `clip`):
 | `dotfiles update` | **Apply after one confirmation** — repo-first gate, then all managed apt/CLI/runtime/font changes |
 | `dotfiles update --all` | Accepted for compatibility; selects nothing extra (one approval already runs every managed update) |
 | `dotfiles update --dry-run` | Print the update report, then stop before any downstream change |
-| `dotfiles full-update` | Unattended Dotfiles update, Agentbot install, and Agentbot update |
+| `dotfiles full-update` | Unattended Dotfiles and Agentbot update, followed by read-only health checks |
 | `dotfiles doctor` | Only the components needing attention, plus the command that fixes each; exits nonzero when anything does |
 | `dotfiles status` | Local installed versions + repo state; no fetch or apt refresh |
 | `dotfiles logs [--list\|--last]` | List retained action logs, or print the newest |
@@ -391,6 +391,16 @@ dotfiles full-update
 This command automatically restarts once after either repository changes. It
 also authorizes recoverable replacement of dirty, ahead, or diverged local Git
 state. `sudo` may still request system authentication.
+
+Before crossing into Agentbot, the command prints the resolved Dotfiles and
+Agentbot launchers and checkout roots. It refuses to run an Agentbot launcher
+outside the sibling `agent_bootstrap` checkout (or the explicit
+`FULL_UPDATE_EXPECTED_AGENTBOT_HOME` used by test and recovery workflows).
+After both update stages, it runs `dotfiles doctor` and `agentbot doctor`
+without repairing anything. A healthy postflight prints `Full system update
+completed.`; Agentbot warnings print `completed with warnings` and still exit
+zero; Dotfiles Doctor failures or Agentbot errors print `Updates succeeded;
+system needs attention` and exit nonzero.
 
 It stops at the first failing stage rather than pressing on. In particular, a
 skill source that fails to install makes `agentbot install` exit nonzero, which

@@ -25,7 +25,7 @@ test_downstream_executes_apt_first_then_every_managed_step() (
 	grep -Fq 'step:Graphify CLI|' "$events" || return 1
 	grep -Fq 'step:Boost CLI|' "$events" || return 1
 	grep -Fq 'step:Node.js (nvm)|' "$events" || return 1
-	grep -Fqx 'step:npm|npm install -g npm@12.0.2 --engine-strict --allow-remote=all|upgrade_npm|12.0.2' "$events" || return 1
+	grep -Fqx 'step:npm|npm install -g npm@12.0.2 --engine-strict --allow-remote=all|_apply_npm_update_step|' "$events" || return 1
 	grep -Fq 'step:Go (asdf)|' "$events" || return 1
 	grep -Fq 'step:Monaspace fonts|' "$events"
 )
