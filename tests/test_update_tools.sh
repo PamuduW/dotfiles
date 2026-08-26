@@ -100,95 +100,61 @@ test_npm_version_reached_requires_a_safe_equal_or_newer_version() (
 	! npm_version_reached 'latest;touch /tmp/nope'
 )
 
-test_npm_upgrade_accepts_verified_nvm_result() (
-	local installed=12.0.1 calls="$TEST_HARNESS_ROOT/npm-nvm-success.calls"
-	: >"$calls"
-	_load_nvm() { :; }
-	npm() {
-		case "$*" in
-		--version) printf '%s\n' "$installed" ;;
-		*)
-			printf 'npm:%s\n' "$*" >>"$calls"
-			return 97
-			;;
-		esac
-	}
-	nvm() {
-		printf 'nvm:%s\n' "$*" >>"$calls"
-		installed=12.0.2
-	}
+test_npm_upgrade_scenario_matrix() (
+	local scenario expected_result expected_fallback scenario_nvm_rc scenario_nvm_sets_version
+	local scenario_install_rc scenario_install_sets_version installed calls rc
+	local -a cases=(
+		'verified-nvm|success|no|0|yes|97|no'
+		'false-nvm-success|success|yes|0|no|0|yes'
+		'nvm-failure-recovery|success|yes|23|no|0|yes'
+		'fallback-command-failure|failure|yes|0|no|24|no'
+		'fallback-stale-version|failure|yes|0|no|0|no'
+	)
 
-	upgrade_npm 12.0.2 || return 1
-	grep -Fqx 'nvm:install-latest-npm' "$calls" || return 1
-	! grep -Fq 'npm:install' "$calls"
-)
+	local scenario_row
+	for scenario_row in "${cases[@]}"; do
+		IFS='|' read -r scenario expected_result expected_fallback scenario_nvm_rc \
+			scenario_nvm_sets_version scenario_install_rc scenario_install_sets_version <<<"$scenario_row"
+		installed=12.0.1
+		calls="$TEST_HARNESS_ROOT/npm-${scenario}.calls"
+		: >"$calls"
+		_load_nvm() { :; }
+		nvm() {
+			printf 'nvm:%s\n' "$*" >>"$calls"
+			[[ "$scenario_nvm_sets_version" == yes ]] && installed=12.0.2
+			return "$scenario_nvm_rc"
+		}
+		npm() {
+			case "$*" in
+			--version) printf '%s\n' "$installed" ;;
+			'install -g npm@12.0.2 --engine-strict --allow-remote=all')
+				printf 'npm:%s\n' "$*" >>"$calls"
+				[[ "$scenario_install_sets_version" == yes ]] && installed=12.0.2
+				return "$scenario_install_rc"
+				;;
+			*) return 97 ;;
+			esac
+		}
 
-test_npm_upgrade_falls_back_after_false_nvm_success() (
-	local installed=12.0.1 calls="$TEST_HARNESS_ROOT/npm-false-success.calls"
-	: >"$calls"
-	_load_nvm() { :; }
-	nvm() {
-		printf 'nvm:%s\n' "$*" >>"$calls"
-		return 0
-	}
-	npm() {
-		case "$*" in
-		--version) printf '%s\n' "$installed" ;;
-		'install -g npm@12.0.2 --engine-strict --allow-remote=all')
-			printf 'npm:%s\n' "$*" >>"$calls"
-			installed=12.0.2
-			;;
-		*) return 97 ;;
-		esac
-	}
-
-	upgrade_npm 12.0.2 || return 1
-	grep -Fqx 'npm:install -g npm@12.0.2 --engine-strict --allow-remote=all' "$calls"
-)
-
-test_npm_upgrade_fallback_can_recover_from_nvm_failure() (
-	local installed=12.0.1
-	_load_nvm() { :; }
-	nvm() { return 23; }
-	npm() {
-		case "$*" in
-		--version) printf '%s\n' "$installed" ;;
-		'install -g npm@12.0.2 --engine-strict --allow-remote=all') installed=12.0.2 ;;
-		*) return 97 ;;
-		esac
-	}
-
-	upgrade_npm 12.0.2
-)
-
-test_npm_upgrade_fails_when_fallback_command_fails() (
-	local installed=12.0.1
-	_load_nvm() { :; }
-	nvm() { return 0; }
-	npm() {
-		case "$*" in
-		--version) printf '%s\n' "$installed" ;;
-		'install -g npm@12.0.2 --engine-strict --allow-remote=all') return 24 ;;
-		*) return 97 ;;
-		esac
-	}
-
-	if upgrade_npm 12.0.2; then return 1; fi
-)
-
-test_npm_upgrade_fails_when_fallback_leaves_old_version() (
-	local installed=12.0.1
-	_load_nvm() { :; }
-	nvm() { return 0; }
-	npm() {
-		case "$*" in
-		--version) printf '%s\n' "$installed" ;;
-		'install -g npm@12.0.2 --engine-strict --allow-remote=all') return 0 ;;
-		*) return 97 ;;
-		esac
-	}
-
-	if upgrade_npm 12.0.2; then return 1; fi
+		if upgrade_npm 12.0.2; then rc=0; else rc=$?; fi
+		if [[ "$expected_result" == success ]]; then
+			[[ "$rc" -eq 0 ]] || {
+				printf 'scenario failed: %s\n' "$scenario"
+				return 1
+			}
+		else
+			[[ "$rc" -ne 0 ]] || {
+				printf 'scenario unexpectedly passed: %s\n' "$scenario"
+				return 1
+			}
+		fi
+		grep -Fqx 'nvm:install-latest-npm' "$calls" || return 1
+		if [[ "$expected_fallback" == yes ]]; then
+			grep -Fqx 'npm:install -g npm@12.0.2 --engine-strict --allow-remote=all' "$calls" || return 1
+		else
+			! grep -Fq 'npm:install' "$calls" || return 1
+		fi
+	done
 )
 
 test_npm_upgrade_skips_commands_when_already_current() (
@@ -545,11 +511,7 @@ expect_success 'update accepts --all as a compatibility no-op' test_update_accep
 expect_success 'Node.js probe follows nvm default instead of a stale shell PATH' test_node_probe_uses_nvm_default_when_shell_path_is_stale
 expect_success 'npm probe reports upgrade current and missing states' test_npm_probe_reports_upgrade_current_and_missing_states
 expect_success 'npm version verification accepts only safe equal or newer versions' test_npm_version_reached_requires_a_safe_equal_or_newer_version
-expect_success 'npm upgrade accepts a verified NVM result' test_npm_upgrade_accepts_verified_nvm_result
-expect_success 'npm upgrade uses the exact fallback after false NVM success' test_npm_upgrade_falls_back_after_false_nvm_success
-expect_success 'npm fallback can recover from NVM failure' test_npm_upgrade_fallback_can_recover_from_nvm_failure
-expect_success 'npm upgrade fails when the fallback command fails' test_npm_upgrade_fails_when_fallback_command_fails
-expect_success 'npm upgrade fails when fallback leaves the old version installed' test_npm_upgrade_fails_when_fallback_leaves_old_version
+expect_success 'npm upgrade scenario matrix preserves fallback and verification contracts' test_npm_upgrade_scenario_matrix
 expect_success 'npm upgrade skips NVM and npm install when already current' test_npm_upgrade_skips_commands_when_already_current
 expect_success 'npm failed post-check records a copyable failed step' test_npm_failed_postcheck_sets_retryable_failed_step
 expect_success 'unverifiable CLI probes label latest freshness unchecked' test_unverifiable_cli_probes_label_latest_unchecked
