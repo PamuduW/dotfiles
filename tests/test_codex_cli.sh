@@ -158,9 +158,90 @@ test_shadowed_multi_node_follows_resolved_command() {
 	[[ "$(codex_cli_install_state)" == standalone-shadowed ]] || return 1
 }
 
+codex_sync_test_prepare() {
+	codex_test_reset
+	CODEX_SYNC_TEST_MODE="$1"
+	CODEX_SYNC_CALL_LOG="$TEST_HARNESS_ROOT/codex-sync-call.log"
+	CODEX_SYNC_PATH_LOG="$TEST_HARNESS_ROOT/codex-sync-path.log"
+	CODEX_SYNC_NPM_LOG="$TEST_HARNESS_ROOT/codex-sync-npm.log"
+	CODEX_SYNC_PROFILE="$HOME/.bashrc"
+	printf '%s\n' '# managed profile fixture' >"$CODEX_SYNC_PROFILE"
+	cp -- "$CODEX_SYNC_PROFILE" "$TEST_HARNESS_ROOT/profile.before"
+	: >"$CODEX_SYNC_CALL_LOG"
+	: >"$CODEX_SYNC_PATH_LOG"
+	: >"$CODEX_SYNC_NPM_LOG"
+	export CODEX_SYNC_TEST_MODE CODEX_SYNC_CALL_LOG CODEX_SYNC_PATH_LOG CODEX_SYNC_NPM_LOG CODEX_SYNC_PROFILE
+}
+
+run_vendor_shell_installer() {
+	printf '%s|%s|%s\n' "$1" "$2" "$3" >"$CODEX_SYNC_CALL_LOG"
+	printf '%s\n' "$PATH" >"$CODEX_SYNC_PATH_LOG"
+	case ":$PATH:" in
+	*":$HOME/.local/bin:"*) ;;
+	*) printf '%s\n' '# vendor path marker' >>"$CODEX_SYNC_PROFILE" ;;
+	esac
+
+	case "$CODEX_SYNC_TEST_MODE" in
+	success)
+		codex_test_create_standalone
+		codex_test_write_binary "$CODEX_HOME/packages/standalone/current/bin/codex-code-mode-host"
+		;;
+	exit-31) return 31 ;;
+	missing-visible)
+		codex_test_write_binary "$CODEX_HOME/packages/standalone/current/bin/codex-code-mode-host"
+		;;
+	external-visible)
+		codex_test_write_binary "$HOME/external/bin/codex"
+		mkdir -p -- "$CODEX_INSTALL_DIR"
+		ln -s -- "$HOME/external/bin/codex" "$CODEX_INSTALL_DIR/codex"
+		codex_test_write_binary "$CODEX_HOME/packages/standalone/current/bin/codex-code-mode-host"
+		;;
+	missing-helper) codex_test_create_standalone ;;
+	*) return 98 ;;
+	esac
+}
+
+npm() {
+	printf '%s\n' "$*" >>"$CODEX_SYNC_NPM_LOG"
+	return 97
+}
+
+test_codex_sync_uses_verified_vendor_boundary() {
+	codex_sync_test_prepare success
+	codex_sync_standalone || return 1
+	[[ "$(<"$CODEX_SYNC_CALL_LOG")" == 'https://chatgpt.com/codex/install.sh|Codex CLI|CODEX_NON_INTERACTIVE=1' ]] || return 1
+	case ":$(<"$CODEX_SYNC_PATH_LOG"):" in
+	*":$CODEX_INSTALL_DIR:"*) ;;
+	*) return 1 ;;
+	esac
+	cmp -s -- "$TEST_HARNESS_ROOT/profile.before" "$CODEX_SYNC_PROFILE" || return 1
+	[[ -x "$CODEX_HOME/packages/standalone/current/bin/codex-code-mode-host" ]] || return 1
+	[[ ! -s "$CODEX_SYNC_NPM_LOG" ]]
+}
+
+test_codex_sync_rejects_unverified_results() {
+	local mode output rc
+	for mode in exit-31 missing-visible external-visible missing-helper; do
+		codex_sync_test_prepare "$mode"
+		rc=0
+		output="$(codex_sync_standalone 2>&1)" || rc=$?
+		[[ "$rc" -ne 0 ]] || {
+			printf '%s unexpectedly succeeded\n' "$mode" >&2
+			return 1
+		}
+		if [[ "$mode" == exit-31 ]]; then
+			[[ "$rc" -eq 31 ]] || return 1
+		fi
+		[[ "$output" != *'installed successfully'* ]] || return 1
+		[[ ! -s "$CODEX_SYNC_NPM_LOG" ]] || return 1
+	done
+}
+
 expect_success 'Codex ownership state matrix uses canonical active-command ownership' test_codex_ownership_state_matrix
 expect_success 'Codex state API reports a visible standalone installation' test_codex_standalone_api
 expect_success 'Codex standalone ownership rejects lookalike and dangling paths' test_codex_path_boundary_and_canonicalization
 expect_success 'Codex multi-node shadowing follows the resolved command' test_shadowed_multi_node_follows_resolved_command
+expect_success 'Codex standalone sync uses the verified vendor boundary without profile edits' test_codex_sync_uses_verified_vendor_boundary
+expect_success 'Codex standalone sync rejects installer and ownership failures' test_codex_sync_rejects_unverified_results
 
 finish_tests

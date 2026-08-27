@@ -300,7 +300,8 @@ test_complete_consumer_inventory() {
 
 test_excluded_downloads_unchanged() {
 	local file="$REPO_DIR/scripts/lib/installers/cli_tools.sh"
-	[[ "$(grep -c 'run_vendor_shell_installer' "$file")" -eq 5 ]] || return 1
+	[[ "$(grep -c 'run_vendor_shell_installer' "$file")" -eq 6 ]] || return 1
+	rg -qF "'https://chatgpt.com/codex/install.sh'" "$file" || return 1
 	! rg -q 'curl[^|]*\|[[:space:]]*(bash|sh)' "$file"
 }
 

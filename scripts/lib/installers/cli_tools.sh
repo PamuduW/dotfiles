@@ -170,6 +170,33 @@ install_cursor_cli() {
 	log_ok "Cursor CLI installed"
 }
 
+codex_sync_standalone() {
+	local bin_dir visible helper
+	bin_dir="${CODEX_INSTALL_DIR:-$HOME/.local/bin}"
+	mkdir -p "$bin_dir" || return 1
+
+	# Keep the installer's PATH setup from editing the Stow-managed .bashrc.
+	PATH="$bin_dir:$PATH" run_vendor_shell_installer \
+		'https://chatgpt.com/codex/install.sh' \
+		'Codex CLI' \
+		'CODEX_NON_INTERACTIVE=1' || return $?
+
+	visible="$(codex_visible_install_path)"
+	codex_path_is_standalone_owned "$visible" || {
+		printf '%s\n' '  Codex installer completed without a verified standalone command.' >&2
+		return 1
+	}
+	"$visible" --version >/dev/null 2>&1 || {
+		printf '%s\n' '  The installed standalone Codex command failed its version check.' >&2
+		return 1
+	}
+	helper="${CODEX_HOME:-$HOME/.codex}/packages/standalone/current/bin/codex-code-mode-host"
+	[[ -x "$helper" ]] || {
+		printf '%s\n' '  The installed standalone Codex package is missing codex-code-mode-host.' >&2
+		return 1
+	}
+}
+
 install_codex_cli() {
 	if command -v codex >/dev/null 2>&1; then
 		log_skip "Codex CLI already installed"
