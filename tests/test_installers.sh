@@ -74,12 +74,8 @@ test_tool_installers_stop_at_the_first_required_failure() (
 	set -e
 	[[ "$rc" == 27 ]] || return 1
 
-	command() {
-		if [[ "$1" == -v && "$2" == codex ]]; then return 1; fi
-		if [[ "$1" == -v && "$2" == npm ]]; then return 0; fi
-		builtin command "$@"
-	}
-	npm() { return 28; }
+	codex_cli_install_state() { printf '%s\n' absent; }
+	codex_sync_standalone() { return 28; }
 	set +e
 	install_codex_cli >/dev/null 2>&1
 	rc=$?

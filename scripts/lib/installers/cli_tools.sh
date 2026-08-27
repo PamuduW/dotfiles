@@ -198,17 +198,34 @@ codex_sync_standalone() {
 }
 
 install_codex_cli() {
-	if command -v codex >/dev/null 2>&1; then
-		log_skip "Codex CLI already installed"
-		return 0
-	fi
-	command -v npm >/dev/null 2>&1 || {
-		echo "  npm not found. Install Node.js first." >&2
+	local state active
+	state="$(codex_cli_install_state)" || return $?
+	case "$state" in
+	absent)
+		log_step "Install Codex CLI standalone"
+		codex_sync_standalone || return $?
+		log_ok "Codex CLI standalone installed"
+		;;
+	standalone)
+		log_skip "Codex CLI standalone already installed"
+		;;
+	external)
+		active="$(codex_active_command)"
+		printf '  external Codex installation must be removed explicitly: %s\n' "${active:-unknown}" >&2
+		printf '%s\n' '  See README.md#codex-cli-migration.' >&2
 		return 1
-	}
-	log_step "Install Codex CLI"
-	npm i -g @openai/codex || return $?
-	log_ok "Codex CLI installed"
+		;;
+	standalone-shadowed)
+		active="$(codex_active_command)"
+		printf '  another Codex command shadows the standalone install: %s\n' "${active:-unknown}" >&2
+		printf '%s\n' '  See README.md#codex-cli-migration.' >&2
+		return 1
+		;;
+	*)
+		printf '  Unknown Codex installation state: %s\n' "$state" >&2
+		return 1
+		;;
+	esac
 }
 
 install_claude_cli() {

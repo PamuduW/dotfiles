@@ -237,11 +237,61 @@ test_codex_sync_rejects_unverified_results() {
 	done
 }
 
+test_codex_install_state_matrix() (
+	local fixture_state output rc expected_calls expected_rc expected_message
+	local sync_calls installer_body
+	local output_file="$TEST_HARNESS_ROOT/codex-install-output.log"
+	local config_file="$HOME/.codex/config.toml"
+	mkdir -p -- "$(dirname -- "$config_file")"
+	printf '%s\n' 'model = "fixture"' >"$config_file"
+	cp -- "$config_file" "$TEST_HARNESS_ROOT/codex-config.before"
+
+	codex_cli_install_state() { printf '%s\n' "$fixture_state"; }
+	codex_active_command() { printf '%s\n' "$HOME/.nvm/versions/node/v24.0.0/bin/codex"; }
+	log_step() { printf '%s\n' "$1"; }
+	log_ok() { printf '%s\n' "$1"; }
+	log_skip() { printf '%s\n' "$1"; }
+	codex_sync_standalone() {
+		sync_calls=$((sync_calls + 1))
+		return 0
+	}
+	installer_body="$(declare -f install_codex_cli)"
+	! rg -q '\b(npm|rm)\b' <<<"$installer_body" || return 1
+
+	while IFS='|' read -r fixture_state expected_calls expected_rc expected_message; do
+		sync_calls=0
+		rc=0
+		install_codex_cli >"$output_file" 2>&1 || rc=$?
+		output="$(<"$output_file")"
+		[[ "$sync_calls" -eq "$expected_calls" ]] || return 1
+		if [[ "$expected_rc" == zero ]]; then
+			[[ "$rc" -eq 0 ]] || return 1
+		else
+			[[ "$rc" -ne 0 ]] || return 1
+			[[ "$output" == *"$HOME/.nvm/versions/node/v24.0.0/bin/codex"* ]] || return 1
+			[[ "$output" == *'README.md#codex-cli-migration'* ]] || return 1
+		fi
+		[[ "$output" == *"$expected_message"* ]] || return 1
+		cmp -s -- "$TEST_HARNESS_ROOT/codex-config.before" "$config_file" || return 1
+	done <<'EOF'
+absent|1|zero|Codex CLI standalone installed
+standalone|0|zero|Codex CLI standalone already installed
+external|0|nonzero|external Codex installation must be removed explicitly
+standalone-shadowed|0|nonzero|another Codex command shadows the standalone install
+EOF
+)
+
+test_codex_scripts_do_not_reference_workspace_runbook() {
+	! rg -F 'temp/process.md' "$REPO_DIR/scripts"
+}
+
 expect_success 'Codex ownership state matrix uses canonical active-command ownership' test_codex_ownership_state_matrix
 expect_success 'Codex state API reports a visible standalone installation' test_codex_standalone_api
 expect_success 'Codex standalone ownership rejects lookalike and dangling paths' test_codex_path_boundary_and_canonicalization
 expect_success 'Codex multi-node shadowing follows the resolved command' test_shadowed_multi_node_follows_resolved_command
 expect_success 'Codex standalone sync uses the verified vendor boundary without profile edits' test_codex_sync_uses_verified_vendor_boundary
 expect_success 'Codex standalone sync rejects installer and ownership failures' test_codex_sync_rejects_unverified_results
+expect_success 'Codex selected-component install follows the ownership state matrix' test_codex_install_state_matrix
+expect_success 'Codex scripts do not reference the workspace-only migration runbook' test_codex_scripts_do_not_reference_workspace_runbook
 
 finish_tests
