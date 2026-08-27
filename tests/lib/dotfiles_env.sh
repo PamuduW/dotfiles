@@ -18,6 +18,8 @@ source "$REPO_DIR/scripts/lib/repo_update.sh"
 source "$REPO_DIR/scripts/lib/wsl_conf.sh"
 source "$REPO_DIR/scripts/lib/components/registry.sh"
 source "$REPO_DIR/scripts/lib/installers/apt.sh"
+# shellcheck source=scripts/lib/managed_tool_state.sh
+source "$REPO_DIR/scripts/lib/managed_tool_state.sh"
 source "$REPO_DIR/scripts/lib/installers/cli_tools.sh"
 source "$REPO_DIR/scripts/lib/installers/docker.sh"
 source "$REPO_DIR/scripts/lib/installers/remote_script.sh"

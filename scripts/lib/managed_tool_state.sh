@@ -1,6 +1,53 @@
 # shellcheck shell=bash
 # Read-only local state shared by component probes and managed CLI installers.
 
+codex_standalone_root() {
+	printf '%s\n' "${CODEX_HOME:-$HOME/.codex}/packages/standalone"
+}
+
+codex_visible_install_path() {
+	printf '%s\n' "${CODEX_INSTALL_DIR:-$HOME/.local/bin}/codex"
+}
+
+codex_active_command() {
+	command -v codex 2>/dev/null
+}
+
+codex_path_is_standalone_owned() {
+	local candidate="$1" candidate_path standalone_root
+	[[ -f "$candidate" && -x "$candidate" ]] || return 1
+	candidate_path="$(readlink -f -- "$candidate" 2>/dev/null)" || return 1
+	standalone_root="$(readlink -f -- "$(codex_standalone_root)" 2>/dev/null)" || return 1
+	[[ "$candidate_path" == "$standalone_root"/* ]]
+}
+
+codex_standalone_is_installed() {
+	codex_path_is_standalone_owned "$(codex_visible_install_path)"
+}
+
+codex_cli_is_standalone_active() {
+	local active_command active_path visible_path
+	active_command="$(codex_active_command)" || return 1
+	codex_path_is_standalone_owned "$active_command" || return 1
+	active_path="$(readlink -f -- "$active_command" 2>/dev/null)" || return 1
+	visible_path="$(readlink -f -- "$(codex_visible_install_path)" 2>/dev/null)" || return 1
+	[[ "$active_path" == "$visible_path" ]]
+}
+
+codex_cli_install_state() {
+	if codex_standalone_is_installed; then
+		if codex_cli_is_standalone_active; then
+			printf '%s\n' standalone
+		else
+			printf '%s\n' standalone-shadowed
+		fi
+	elif codex_active_command >/dev/null; then
+		printf '%s\n' external
+	else
+		printf '%s\n' absent
+	fi
+}
+
 graphify_uv_command() {
 	if command -v uv >/dev/null 2>&1; then
 		command -v uv
