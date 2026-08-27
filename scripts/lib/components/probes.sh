@@ -2,6 +2,11 @@
 # shellcheck disable=SC2034  # Namerefs are written through, not read, in this file.
 # Per-component status probes (_comp_probe_<id>).
 
+if ! declare -F codex_cli_install_state >/dev/null 2>&1; then
+	# shellcheck source=scripts/lib/managed_tool_state.sh
+	source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/managed_tool_state.sh"
+fi
+
 _comp_probe_capture() {
 	local output_name="$1" timeout_seconds="$2" captured='' rc
 	shift 2
@@ -73,7 +78,7 @@ _collect_component_status_rows_stream() (
 
 # --- Generic "is this CLI installed, and at what version?" probe ---
 #
-# Ten components differ only in the binary name, an optional ~/.local/bin
+# Nine components differ only in the binary name, an optional ~/.local/bin
 # fallback, whether nvm must be loaded first, the version arguments, and an
 # optional version-extraction regex. _comp_probe_version holds that shape once;
 # _COMP_VERSION_PROBES is the data. The two label columns are separate because
@@ -95,7 +100,6 @@ _COMP_VERSION_PROBES=(
 	'lazygit|lazygit|lazygit|lazygit|--version|[0-9]+\.[0-9]+\.[0-9]+||'
 	'lazydocker|lazydocker|lazydocker|lazydocker|--version|[0-9]+\.[0-9]+\.[0-9]+||'
 	'cursor_cli|cursor/agent|cursor cli|agent cursor|--version|||'
-	'codex_cli|codex|codex cli|codex|--version|||nvm'
 	'claude_cli|claude|claude cli|claude|--version|||'
 	'copilot_cli|copilot|copilot cli|copilot|--version|||'
 )
@@ -250,6 +254,38 @@ _comp_probe_boost_cli() {
 	else
 		printf 'missing|boost not on PATH\n'
 	fi
+}
+
+_comp_probe_codex_cli() {
+	local state codex_path ver='' rc=0 timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
+	state="$(codex_cli_install_state)" || state=absent
+	case "$state" in
+	standalone)
+		codex_path="$(codex_visible_install_path)"
+		_comp_probe_capture ver "$timeout_seconds" "$codex_path" --version || rc=$?
+		if [[ "$rc" -eq 124 ]]; then
+			printf 'check|codex cli probe timed out\n'
+			return
+		fi
+		printf 'installed|%s (standalone)\n' "${ver:-$codex_path}"
+		;;
+	external)
+		codex_path="$(codex_active_command 2>/dev/null || true)"
+		_comp_probe_capture ver "$timeout_seconds" "$codex_path" --version || rc=$?
+		if [[ "$rc" -eq 124 ]]; then
+			printf 'check|codex cli probe timed out\n'
+			return
+		fi
+		printf 'check|%s (external; migration required)\n' "${ver:-$codex_path}"
+		;;
+	standalone-shadowed)
+		codex_path="$(codex_active_command 2>/dev/null || true)"
+		printf 'check|standalone Codex is shadowed by %s\n' "${codex_path:-unknown}"
+		;;
+	*)
+		printf 'missing|codex not on PATH\n'
+		;;
+	esac
 }
 
 _comp_probe_go() {

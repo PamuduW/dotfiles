@@ -143,7 +143,7 @@ When you choose **Run setup** interactively (TTY), the installer will:
 | lazygit         | Git TUI from GitHub releases                                                  |
 | lazydocker      | Docker TUI from GitHub releases (requires Docker)                             |
 | Cursor CLI      | Cursor editor CLI from cursor.com                                             |
-| Codex CLI       | OpenAI Codex CLI via npm (requires Node.js)                                   |
+| Codex CLI       | OpenAI Codex CLI from the official standalone installer                       |
 | Claude CLI      | Anthropic Claude CLI from claude.ai                                           |
 | Copilot CLI     | GitHub Copilot CLI via gh.io/copilot-install                                  |
 | Monaspace fonts | GitHub Monaspace Nerd Fonts to `~/.local/share/fonts/`                        |

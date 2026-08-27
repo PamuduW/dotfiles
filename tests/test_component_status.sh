@@ -63,20 +63,72 @@ test_probe_capture_normalizes_forced_kill_timeout() {
 	[[ "$rc" -eq 124 && -z "$output" ]]
 }
 
-test_codex_probe_loads_nvm_in_clean_environment() (
-	local clean_home="$TEST_HARNESS_ROOT/home"
-	local node_bin="$clean_home/.nvm/versions/node/v24/bin"
-	mkdir -p "$node_bin"
-	printf '#!/usr/bin/env bash\nprintf "codex-cli 9.9.9\\n"\n' >"$node_bin/codex"
-	chmod +x "$node_bin/codex"
-	printf 'export PATH="%s:$PATH"\n' "$node_bin" >"$clean_home/.nvm/nvm.sh"
+test_codex_probe_reports_local_ownership_states() (
+	local fixture_state fixture_version fixture_rc expected actual
+	local active_path="$HOME/.nvm/versions/node/v24.0.0/bin/codex"
+	local forbidden_log="$TEST_HARNESS_ROOT/codex-probe-forbidden.log"
+	: >"$forbidden_log"
+	codex_cli_install_state() { printf '%s\n' "$fixture_state"; }
+	codex_active_command() { printf '%s\n' "$active_path"; }
+	codex_visible_install_path() { printf '%s\n' "$HOME/.local/bin/codex"; }
+	_comp_probe_capture() {
+		printf -v "$1" '%s' "$fixture_version"
+		return "$fixture_rc"
+	}
+	curl() { printf 'curl\n' >>"$forbidden_log"; }
+	npm() { printf 'npm\n' >>"$forbidden_log"; }
+	_load_nvm() { printf 'nvm\n' >>"$forbidden_log"; }
+	codex_sync_standalone() { printf 'installer\n' >>"$forbidden_log"; }
+	codex() { printf 'codex:%s\n' "$*" >>"$forbidden_log"; }
 
-	HOME="$clean_home"
-	NVM_DIR="$clean_home/.nvm"
-	PATH=/usr/bin:/bin
-	export HOME NVM_DIR PATH
+	while IFS='|' read -r fixture_state fixture_version fixture_rc expected; do
+		actual="$(_comp_probe_codex_cli)"
+		[[ "$actual" == "$expected" ]] || {
+			printf '%s returned %q\n' "$fixture_state" "$actual" >&2
+			return 1
+		}
+	done <<EOF
+standalone|codex-cli 0.150.0|0|installed|codex-cli 0.150.0 (standalone)
+external|codex-cli 0.149.1|0|check|codex-cli 0.149.1 (external; migration required)
+standalone-shadowed|ignored|0|check|standalone Codex is shadowed by $active_path
+absent|ignored|0|missing|codex not on PATH
+standalone|ignored|124|check|codex cli probe timed out
+EOF
+	[[ ! -s "$forbidden_log" ]]
+)
 
-	[[ "$(_comp_probe_codex_cli)" == 'installed|codex-cli 9.9.9' ]]
+test_doctor_routes_codex_remediation_by_ownership() (
+	DOTFILES_SOURCE_ONLY=1 source "$REPO_DIR/bin/bin/dotfiles" >/dev/null
+	dotfiles_load_command doctor
+	local fixture_row output rc active_path="$HOME/.nvm/versions/node/v24.0.0/bin/codex"
+	collect_component_status_rows() {
+		local -n rows_ref="$1"
+		rows_ref=("$fixture_row")
+	}
+	codex_active_command() { printf '%s\n' "$active_path"; }
+
+	fixture_row='Codex CLI|codex not on PATH|missing'
+	rc=0
+	output="$(NO_COLOR=1 cmd_doctor)" || rc=$?
+	[[ "$rc" -ne 0 && "$output" == *'initial setup'* && "$output" == *'select Codex CLI'* ]] || return 1
+
+	for fixture_row in \
+		'Codex CLI|codex-cli 0.149.1 (external; migration required)|check' \
+		"Codex CLI|standalone Codex is shadowed by $active_path|check"; do
+		rc=0
+		output="$(NO_COLOR=1 cmd_doctor)" || rc=$?
+		[[ "$rc" -ne 0 && "$output" == *"$active_path"* ]] || return 1
+		[[ "$output" == *'README.md#codex-cli-migration'* && "$output" != *'temp/process.md'* ]] || return 1
+	done
+
+	fixture_row='Codex CLI|codex cli probe timed out|check'
+	rc=0
+	output="$(NO_COLOR=1 cmd_doctor)" || rc=$?
+	[[ "$rc" -ne 0 && "$output" == *'dotfiles update'* && "$output" != *'README.md#codex-cli-migration'* ]] || return 1
+
+	fixture_row='Codex CLI|codex-cli 0.150.0 (standalone)|installed'
+	output="$(NO_COLOR=1 cmd_doctor)" || return 1
+	[[ "$output" == *'Nothing needs attention.'* && "$output" != *'Codex migration'* ]]
 )
 
 test_stalled_version_probe_returns_one_neutral_row() (
@@ -195,7 +247,8 @@ expect_success 'probe capture keeps only the first output line' test_probe_captu
 expect_success 'probe capture preserves command failure status' test_probe_capture_preserves_command_failure
 expect_success 'probe capture bounds a stalled command' test_probe_capture_bounds_stalled_command
 expect_success 'probe capture normalizes forced-kill timeout' test_probe_capture_normalizes_forced_kill_timeout
-expect_success 'Codex probe loads NVM in a clean environment' test_codex_probe_loads_nvm_in_clean_environment
+expect_success 'Codex probe reports standalone, external, shadowed, absent, and timeout states locally' test_codex_probe_reports_local_ownership_states
+expect_success 'Doctor routes Codex absence and ownership conflicts to actionable remediation' test_doctor_routes_codex_remediation_by_ownership
 expect_success 'stalled version probe returns one neutral row' test_stalled_version_probe_returns_one_neutral_row
 expect_success 'external probes share bounded timeout behavior' test_external_probes_share_bounded_timeout_behavior
 expect_success 'component collector overlaps probes and preserves registry order' test_component_collector_overlaps_probes_and_preserves_registry_order

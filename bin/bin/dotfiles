@@ -128,7 +128,8 @@ cmd_status() {
 # Doctor: only what needs attention, with the command that fixes it.
 # Status answers "what is installed"; this answers "what is wrong".
 cmd_doctor() {
-	local row component detail result
+	local row component detail result codex_path
+	local codex_missing=0 codex_conflict=0
 	local -a rows=() problems=()
 	collect_component_status_rows rows
 	for row in "${rows[@]}"; do
@@ -152,6 +153,13 @@ cmd_doctor() {
 	local miss_count=0 check_count=0
 	for row in "${problems[@]}"; do
 		IFS='|' read -r component detail result <<<"$row"
+		if [[ "$component" == 'Codex CLI' ]]; then
+			if [[ "$result" == missing ]]; then
+				codex_missing=1
+			elif [[ "$detail" == *'(external; migration required)'* || "$detail" == *'shadowed by'* ]]; then
+				codex_conflict=1
+			fi
+		fi
 		case "$result" in
 		missing) ((++miss_count)) ;;
 		*) ((++check_count)) ;;
@@ -162,6 +170,12 @@ cmd_doctor() {
 
 	printf '\n'
 	rt_print_section "Suggested"
+	((codex_missing > 0)) && _msg "  Run initial setup and select Codex CLI:  dotfiles menu"
+	if ((codex_conflict > 0)); then
+		codex_path="$(codex_active_command 2>/dev/null || true)"
+		_msg "  Resolve the conflicting Codex command:  ${codex_path:-unknown}"
+		_msg "  See README.md#codex-cli-migration."
+	fi
 	((miss_count > 0)) && _msg "  Install what is missing:  dotfiles menu  (Install Dotfiles)"
 	((check_count > 0)) && _msg "  Re-check after updating:  dotfiles update"
 	_msg "  Repair stow links only:   dotfiles restow"

@@ -150,7 +150,7 @@ comp_define nodejs \
 	--plan 'Node.js' \
 	--detail 'v24 via nvm' \
 	--order 12 \
-	--desc $'Installs Node.js v24 via nvm (Node Version Manager).\nAlso provides npm for global packages like Codex CLI.'
+	--desc $'Installs Node.js v24 via nvm (Node Version Manager).\nAlso provides npm for Node-based tools and development workflows.'
 
 comp_define direnv \
 	--label 'direnv (env loader + shell hook)' \
@@ -199,10 +199,9 @@ comp_define cursor_cli \
 comp_define codex_cli \
 	--label 'Codex CLI' \
 	--plan 'Codex CLI' \
-	--detail 'npm @openai/codex' \
-	--depends 'nodejs' \
+	--detail 'chatgpt.com standalone installer' \
 	--order 15 \
-	--desc $'Installs OpenAI Codex CLI via npm (requires Node.js).\nUpdate it later through the Dotfiles update workflow.'
+	--desc $'Installs OpenAI Codex CLI with the official standalone installer.\nUpdates it later through the Dotfiles update workflow.'
 
 comp_define claude_cli \
 	--label 'Claude CLI' \
