@@ -285,6 +285,45 @@ test_codex_scripts_do_not_reference_workspace_runbook() {
 	! rg -F 'temp/process.md' "$REPO_DIR/scripts"
 }
 
+test_codex_latest_channel_accepts_only_safe_rust_tags() (
+	local metadata expected output
+	# shellcheck disable=SC2031  # The stub reads each loop fixture in this test subshell.
+	codex_latest_channel_json() { printf '%s\n' "$metadata"; }
+	while IFS='|' read -r metadata expected; do
+		output="$(codex_available_version)"
+		[[ "$output" == "$expected" ]] || return 1
+	done <<'EOF'
+{"tag_name":"rust-v0.150.0","assets":[]}|0.150.0
+{"tag_name":"v0.150.0","assets":[]}|—
+{"tag_name":"rust-vlatest;touch /tmp/nope","assets":[]}|—
+{}|—
+EOF
+	[[ ! -e /tmp/nope ]]
+)
+
+test_codex_semver_comparator_follows_release_precedence() {
+	local left _relation right expected
+	while read -r left _relation right expected; do
+		[[ "$(codex_semver_compare "$left" "$right")" == "$expected" ]] || return 1
+	done <<'EOF'
+0.149.9 < 0.150.0 -1
+0.150.0-alpha < 0.150.0-alpha.1 -1
+0.150.0-alpha.1 < 0.150.0-alpha.2 -1
+0.150.0-alpha.2 < 0.150.0-beta -1
+0.150.0-beta < 0.150.0-beta.1 -1
+0.150.0-beta.1 < 0.150.0 -1
+0.150.0 = 0.150.0 0
+0.151.0 > 0.150.1 1
+EOF
+}
+
+test_codex_version_number_accepts_only_first_line_safe_versions() {
+	[[ "$(codex_version_number 'codex-cli 0.150.0')" == '0.150.0' ]] || return 1
+	! codex_version_number $'codex-cli unknown\ncodex-cli 0.150.0' >/dev/null || return 1
+	! codex_version_number 'codex-cli v0.150.0' >/dev/null || return 1
+	! codex_version_number 'codex-cli 0.150.0;touch /tmp/nope' >/dev/null
+}
+
 expect_success 'Codex ownership state matrix uses canonical active-command ownership' test_codex_ownership_state_matrix
 expect_success 'Codex state API reports a visible standalone installation' test_codex_standalone_api
 expect_success 'Codex standalone ownership rejects lookalike and dangling paths' test_codex_path_boundary_and_canonicalization
@@ -293,5 +332,8 @@ expect_success 'Codex standalone sync uses the verified vendor boundary without 
 expect_success 'Codex standalone sync rejects installer and ownership failures' test_codex_sync_rejects_unverified_results
 expect_success 'Codex selected-component install follows the ownership state matrix' test_codex_install_state_matrix
 expect_success 'Codex scripts do not reference the workspace-only migration runbook' test_codex_scripts_do_not_reference_workspace_runbook
+expect_success 'Codex latest-channel parsing accepts only validated rust release tags' test_codex_latest_channel_accepts_only_safe_rust_tags
+expect_success 'Codex version comparison follows stable and prerelease precedence' test_codex_semver_comparator_follows_release_precedence
+expect_success 'Codex installed-version parsing rejects malformed and later-line values' test_codex_version_number_accepts_only_first_line_safe_versions
 
 finish_tests

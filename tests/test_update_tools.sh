@@ -211,6 +211,73 @@ test_unverifiable_cli_probes_label_latest_unchecked() (
 	[[ "$output" == 'Copilot CLI|GitHub Copilot CLI 1.0.75|—|unknown' ]]
 )
 
+test_codex_probe_reports_ownership_and_release_states() (
+	local fixture_state fixture_installed fixture_available expected
+	codex_cli_install_state() { printf '%s\n' "$fixture_state"; }
+	codex_installed_version() { printf '%s\n' "$fixture_installed"; }
+	codex_available_version() { printf '%s\n' "$fixture_available"; }
+
+	while IFS='|' read -r fixture_state fixture_installed fixture_available expected; do
+		[[ "$(check_codex_cli || true)" == "$expected" ]] || return 1
+	done <<'EOF'
+standalone|codex-cli 0.149.1|0.150.0|Codex CLI|codex-cli 0.149.1|0.150.0|upgrade
+standalone|codex-cli 0.150.0|0.150.0|Codex CLI|codex-cli 0.150.0|0.150.0|current
+standalone|codex-cli 0.150.0|—|Codex CLI|codex-cli 0.150.0|—|unknown
+absent|ignored|ignored|Codex CLI|not installed|—|skip
+external|ignored|ignored|Codex CLI|external installation|—|external
+standalone-shadowed|ignored|ignored|Codex CLI|standalone shadowed|—|external
+EOF
+)
+
+test_codex_update_application_preserves_ownership_and_result_truth() (
+	local fixture_state before_version after_version sync_rc=0 sync_calls=0 output rc
+	local output_file="$TEST_HARNESS_ROOT/codex-update.output"
+	local label='Codex CLI'
+	codex_cli_install_state() { printf '%s\n' "$fixture_state"; }
+	codex_installed_version() {
+		if [[ "$sync_calls" -eq 0 ]]; then printf '%s\n' "$before_version"; else printf '%s\n' "$after_version"; fi
+	}
+	codex_sync_standalone() {
+		sync_calls=$((sync_calls + 1))
+		return "$sync_rc"
+	}
+
+	fixture_state=standalone
+	before_version='codex-cli 0.149.1'
+	after_version='codex-cli 0.150.0'
+	upgrade_codex_cli >"$output_file" 2>&1 || return 1
+	[[ "$sync_calls" -eq 1 && "$UPGRADE_STEP_ACTIVE_RESULT" == updated ]] || return 1
+
+	sync_calls=0
+	before_version='codex-cli 0.150.0'
+	after_version="$before_version"
+	upgrade_codex_cli >"$output_file" 2>&1 || return 1
+	[[ "$sync_calls" -eq 1 && "$UPGRADE_STEP_ACTIVE_RESULT" == checked-no-change ]] || return 1
+
+	for fixture_state in absent external standalone-shadowed; do
+		sync_calls=0
+		upgrade_codex_cli >"$output_file" 2>&1 || return 1
+		output="$(<"$output_file")"
+		[[ "$sync_calls" -eq 0 && "$UPGRADE_STEP_ACTIVE_RESULT" == skipped ]] || return 1
+		if [[ "$fixture_state" != absent ]]; then
+			[[ "$output" == *'README.md#codex-cli-migration'* ]] || return 1
+		fi
+	done
+
+	fixture_state=standalone
+	sync_calls=0
+	sync_rc=33
+	rc=0
+	_run_upgrade_step 'Codex CLI' 'dotfiles update' upgrade_codex_cli >"$output_file" 2>&1 || rc=$?
+	output="$(<"$output_file")"
+	[[ "$rc" -eq 0 && "${UPGRADE_STEP_RESULT[$label]}" == failed ]] || return 1
+	[[ "$output" == *'retry manually: dotfiles update'* ]]
+)
+
+test_codex_retry_registry_uses_dotfiles_update() {
+	[[ "${UPDATE_STEP_RETRY[codex]}" == 'dotfiles update' ]]
+}
+
 test_graphify_probe_reports_uv_owned_and_external_states() (
 	local output
 	graphify() { [[ "$1" == --version ]] && printf 'graphify 1.2.3\n'; }
@@ -515,6 +582,9 @@ expect_success 'npm upgrade scenario matrix preserves fallback and verification 
 expect_success 'npm upgrade skips NVM and npm install when already current' test_npm_upgrade_skips_commands_when_already_current
 expect_success 'npm failed post-check records a copyable failed step' test_npm_failed_postcheck_sets_retryable_failed_step
 expect_success 'unverifiable CLI probes label latest freshness unchecked' test_unverifiable_cli_probes_label_latest_unchecked
+expect_success 'Codex update probe reports standalone, absent, and external states' test_codex_probe_reports_ownership_and_release_states
+expect_success 'Codex update application records changed, unchanged, skipped, and failed outcomes' test_codex_update_application_preserves_ownership_and_result_truth
+expect_success 'Codex update retry uses the guarded Dotfiles workflow' test_codex_retry_registry_uses_dotfiles_update
 expect_success 'Graphify update probe distinguishes uv-owned and external installs' test_graphify_probe_reports_uv_owned_and_external_states
 expect_success 'Graphify update probe skips an absent CLI' test_graphify_probe_skips_when_not_installed
 expect_success 'Boost probe reports managed external and absent states' test_boost_probe_reports_managed_external_and_absent_states

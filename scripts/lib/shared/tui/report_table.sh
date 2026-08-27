@@ -97,7 +97,7 @@ rt_four_column_widths() {
 	local -n widths_ref="$output_name"
 	available=$(($(rt_report_columns) - 9))
 	if ((available >= 55)); then
-		w4=16
+		w4=18
 	else
 		w4=$((available * 25 / 100))
 	fi

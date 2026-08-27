@@ -63,10 +63,16 @@ upgrade_cursor_cli() {
 }
 
 # --- Codex CLI ---
+CODEX_RELEASE_VERSION_REGEX='^[0-9]+\.[0-9]+\.[0-9]+(-alpha(\.[0-9]+){0,2}|-beta(\.[0-9]+)?)?$'
+
+codex_release_version_is_valid() {
+	[[ "$1" =~ $CODEX_RELEASE_VERSION_REGEX ]]
+}
+
 codex_installed_version() {
 	local binary raw
-	_load_nvm
-	binary="$(tool_resolve codex)" || {
+	binary="$(codex_visible_install_path)"
+	codex_path_is_standalone_owned "$binary" || {
 		echo "$NOT_INSTALLED"
 		return
 	}
@@ -77,43 +83,195 @@ codex_installed_version() {
 	printf '%s\n' "${raw%%$'\n'*}"
 }
 
+codex_version_number() {
+	local line word
+	local -a words=()
+	line="${1:-}"
+	line="${line%%$'\n'*}"
+	read -r -a words <<<"$line"
+	for word in "${words[@]}"; do
+		if codex_release_version_is_valid "$word"; then
+			printf '%s\n' "$word"
+			return 0
+		fi
+	done
+	return 1
+}
+
+codex_latest_channel_json() {
+	curl -fsSL --proto '=https' --tlsv1.2 'https://releases.openai.com/codex/channels/latest'
+}
+
 codex_available_version() {
-	if ! command -v npm >/dev/null 2>&1; then
-		echo "—"
-		return
+	local json tag version
+	json="$(codex_latest_channel_json 2>/dev/null)" || {
+		printf '%s\n' '—'
+		return 0
+	}
+	tag="$(python3 -c 'import json, sys; print(json.load(sys.stdin).get("tag_name", ""))' <<<"$json" 2>/dev/null)" || {
+		printf '%s\n' '—'
+		return 0
+	}
+	[[ "$tag" == rust-v* ]] || {
+		printf '%s\n' '—'
+		return 0
+	}
+	version="${tag#rust-v}"
+	if codex_release_version_is_valid "$version"; then
+		printf '%s\n' "$version"
+	else
+		printf '%s\n' '—'
 	fi
-	npm view @openai/codex version 2>/dev/null || echo "—"
+}
+
+codex_semver_compare() {
+	local left="$1" right="$2" left_core right_core left_pre='' right_pre=''
+	local -a left_parts right_parts left_ids right_ids
+	local i left_number right_number left_rank right_rank
+	codex_release_version_is_valid "$left" && codex_release_version_is_valid "$right" || return 2
+
+	left_core="${left%%-*}"
+	right_core="${right%%-*}"
+	[[ "$left" == *-* ]] && left_pre="${left#*-}"
+	[[ "$right" == *-* ]] && right_pre="${right#*-}"
+	IFS='.' read -r -a left_parts <<<"$left_core"
+	IFS='.' read -r -a right_parts <<<"$right_core"
+	for i in 0 1 2; do
+		left_number=$((10#${left_parts[$i]}))
+		right_number=$((10#${right_parts[$i]}))
+		if ((left_number < right_number)); then
+			printf '%s\n' -1
+			return 0
+		fi
+		if ((left_number > right_number)); then
+			printf '%s\n' 1
+			return 0
+		fi
+	done
+
+	if [[ -z "$left_pre" && -z "$right_pre" ]]; then
+		printf '%s\n' 0
+		return 0
+	fi
+	if [[ -z "$left_pre" ]]; then
+		printf '%s\n' 1
+		return 0
+	fi
+	if [[ -z "$right_pre" ]]; then
+		printf '%s\n' -1
+		return 0
+	fi
+	IFS='.' read -r -a left_ids <<<"$left_pre"
+	IFS='.' read -r -a right_ids <<<"$right_pre"
+	[[ "${left_ids[0]}" == alpha ]] && left_rank=0 || left_rank=1
+	[[ "${right_ids[0]}" == alpha ]] && right_rank=0 || right_rank=1
+	if ((left_rank < right_rank)); then
+		printf '%s\n' -1
+		return 0
+	fi
+	if ((left_rank > right_rank)); then
+		printf '%s\n' 1
+		return 0
+	fi
+	for ((i = 1; i < ${#left_ids[@]} && i < ${#right_ids[@]}; i++)); do
+		left_number=$((10#${left_ids[$i]}))
+		right_number=$((10#${right_ids[$i]}))
+		if ((left_number < right_number)); then
+			printf '%s\n' -1
+			return 0
+		fi
+		if ((left_number > right_number)); then
+			printf '%s\n' 1
+			return 0
+		fi
+	done
+	if ((${#left_ids[@]} < ${#right_ids[@]})); then
+		printf '%s\n' -1
+		return 0
+	fi
+	if ((${#left_ids[@]} > ${#right_ids[@]})); then
+		printf '%s\n' 1
+		return 0
+	fi
+	printf '%s\n' 0
 }
 
 check_codex_cli() {
-	local installed available action upgradable=0
-	installed="$(codex_installed_version)"
-	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
-		available="—"
-		action="$UPDATE_CHECK_SKIP"
-	else
+	local state installed available installed_number comparison action upgradable=0
+	state="$(codex_cli_install_state)" || state=absent
+	case "$state" in
+	standalone)
+		installed="$(codex_installed_version)"
 		available="$(codex_available_version)"
-		if [[ "$available" != "—" && "$installed" != *"${available}"* ]]; then
-			action="$UPDATE_CHECK_UPGRADE"
-			upgradable=1
+		installed_number="$(codex_version_number "$installed" 2>/dev/null || true)"
+		if [[ "$available" == '—' || -z "$installed_number" ]]; then
+			action="$UPDATE_CHECK_UNKNOWN"
+		elif comparison="$(codex_semver_compare "$installed_number" "$available")"; then
+			if ((comparison < 0)); then
+				action="$UPDATE_CHECK_UPGRADE"
+				upgradable=1
+			else
+				action="$UPDATE_CHECK_CURRENT"
+			fi
 		else
-			available="${available:-—}"
-			action="$UPDATE_CHECK_CURRENT"
+			available='—'
+			action="$UPDATE_CHECK_UNKNOWN"
 		fi
-	fi
+		;;
+	absent)
+		installed="$NOT_INSTALLED"
+		available='—'
+		action="$UPDATE_CHECK_SKIP"
+		;;
+	external)
+		installed='external installation'
+		available='—'
+		action="$UPDATE_CHECK_EXTERNAL"
+		;;
+	standalone-shadowed)
+		installed='standalone shadowed'
+		available='—'
+		action="$UPDATE_CHECK_EXTERNAL"
+		;;
+	*)
+		installed="$NOT_INSTALLED"
+		available='—'
+		action="$UPDATE_CHECK_SKIP"
+		;;
+	esac
 	printf '%s|%s|%s|%s\n' "Codex CLI" "$installed" "$available" "$action"
 	[[ $upgradable -eq 1 ]]
 }
 
 upgrade_codex_cli() {
-	_load_nvm
-	if command -v codex >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
-		npm i -g @openai/codex@latest || return $?
-		upgrade_result_set updated
-	else
-		_msg "  Codex CLI or npm not installed, skipping"
+	local state before after active
+	state="$(codex_cli_install_state)" || state=absent
+	case "$state" in
+	standalone)
+		before="$(codex_installed_version)"
+		codex_sync_standalone || return $?
+		after="$(codex_installed_version)"
+		if [[ "$before" != "$after" ]]; then
+			upgrade_result_set updated
+		else
+			upgrade_result_set checked-no-change
+		fi
+		;;
+	absent)
+		_msg "  Codex CLI standalone is not installed, skipping"
 		upgrade_result_set skipped
-	fi
+		;;
+	external | standalone-shadowed)
+		active="$(codex_active_command 2>/dev/null || true)"
+		_msg "  Codex CLI is externally managed or shadowed: ${active:-unknown}"
+		_msg "  See README.md#codex-cli-migration."
+		upgrade_result_set skipped
+		;;
+	*)
+		_msg "  Unknown Codex installation state, skipping"
+		upgrade_result_set skipped
+		;;
+	esac
 }
 
 # --- Claude CLI ---

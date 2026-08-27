@@ -67,7 +67,7 @@ declare -gA UPDATE_STEP_APPLY=(
 declare -gA UPDATE_STEP_RETRY=(
 	[apt]='sudo apt-get upgrade' [graphify]='uv tool upgrade graphifyy'
 	[boost]='dotfiles update' [cursor]='dotfiles update'
-	[codex]='npm i -g @openai/codex@latest' [claude]='claude update'
+	[codex]='dotfiles update' [claude]='claude update'
 	[copilot]='copilot update' [lazygit]='dotfiles update' [lazydocker]='dotfiles update'
 	[node]='nvm install --lts' [npm]='nvm install-latest-npm'
 	[go]='asdf install golang latest' [monaspace]='dotfiles update'

@@ -40,13 +40,26 @@ test_mixed_preview_separates_verified_upgrades_from_remaining_checks() (
 			'Cursor CLI|2026.08.11-e8db854|—|unknown' \
 			'Claude CLI|2.1.233|—|unknown' \
 			'Copilot CLI|1.0.80|—|unknown' \
-			'Codex CLI|0.149.1|0.149.1|current'
+			'Codex CLI|codex-cli 0.149.1|0.149.1|current'
 	}
 	local output
 	output="$(NO_COLOR=1 print_report_table)"
 	grep -Fq '0 verified upgrades; 6 checks or refreshes remain.' <<<"$output" || return 1
 	! grep -Fq 'everything looks current' <<<"$output" || return 1
 	grep -Fq 'refresh on apply' <<<"$output" || return 1
+	grep -Fq 'latest unchecked' <<<"$output"
+)
+
+test_codex_preview_renders_external_and_unchecked_states() (
+	_collect_check_rows() {
+		printf '%s\n' \
+			'Codex CLI|external installation|—|external' \
+			'Codex CLI shadow fixture|standalone shadowed|—|external' \
+			'Codex CLI metadata fixture|codex-cli 0.150.0|—|unknown'
+	}
+	local output
+	output="$(NO_COLOR=1 print_report_table)"
+	[[ "$(grep -c 'externally managed[[:space:]]*$' <<<"$output")" -eq 2 ]] || return 1
 	grep -Fq 'latest unchecked' <<<"$output"
 )
 
@@ -147,7 +160,7 @@ test_update_rows_align_unicode_available_cells() (
 	/^Cursor CLI/ {
 		pipes=""
 		for (i = 1; i <= length($0); i++) if (substr($0, i, 1) == "|") pipes = pipes i ","
-		if (length($0) != 80 || pipes != "15,41,63,") exit 1
+		if (length($0) != 80 || pipes != "15,40,61,") exit 1
 		found=1
 	}
 	END { exit(found ? 0 : 1) }
@@ -428,6 +441,7 @@ test_harness_safety_and_no_real_mutation() {
 expect_success 'update report title spacing and action separator are stable' test_update_report_uses_clear_title_spacing_and_aligned_action_rule
 expect_success 'update and upgrade rows preserve the fixed final column width' test_update_and_upgrade_rows_keep_the_last_column_width
 expect_success 'mixed preview separates verified upgrades from remaining checks' test_mixed_preview_separates_verified_upgrades_from_remaining_checks
+expect_success 'Codex preview renders external ownership and unchecked metadata truthfully' test_codex_preview_renders_external_and_unchecked_states
 expect_success 'upgrade summary counts semantic results' test_upgrade_summary_counts_semantic_results_and_not_run_steps
 expect_success 'upgrade summary marks unattempted steps after early failure' test_upgrade_summary_marks_unattempted_steps_after_early_failure
 expect_success 'upgrade summary preserves all-current and all-skipped states' test_upgrade_summary_reports_all_current_and_all_skipped_without_ok_collapse
