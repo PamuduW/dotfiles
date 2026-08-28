@@ -24,6 +24,19 @@ test_backup_includes_existing_dotfiles_launcher() (
 	[[ ! -e "$fake_home/bin/dotfiles" ]]
 	find "$fake_repo" -path '*/bin/dotfiles' -type f -print -quit | grep -q .
 )
+test_backup_includes_existing_remote_control_helpers() (
+	local fake_home="$TEST_HARNESS_ROOT/stow-rc-home"
+	local fake_repo="$TEST_HARNESS_ROOT/stow-rc-repo"
+	mkdir -p "$fake_home/bin" "$fake_repo"
+	printf 'old codex helper\n' >"$fake_home/bin/codex-rc"
+	printf 'old claude helper\n' >"$fake_home/bin/claude-rc"
+	log_step() { :; }
+	log_ok() { :; }
+	HOME="$fake_home" DOTFILES_DIR="$fake_repo" backup_existing_dotfiles
+	[[ ! -e "$fake_home/bin/codex-rc" && ! -e "$fake_home/bin/claude-rc" ]] || return 1
+	find "$fake_repo" -path '*/bin/codex-rc' -type f -print -quit | grep -q . || return 1
+	find "$fake_repo" -path '*/bin/claude-rc' -type f -print -quit | grep -q .
+)
 
 test_failed_stow_restores_backed_up_user_files() (
 	local fake_home="$TEST_HARNESS_ROOT/stow-rollback-home"
@@ -188,6 +201,7 @@ test_wsl_config_renderer_updates_only_the_requested_section() (
 )
 
 check 'Stow backup includes an existing dotfiles launcher' test_backup_includes_existing_dotfiles_launcher
+check 'Stow backup includes existing Remote Control helpers' test_backup_includes_existing_remote_control_helpers
 check 'failed Stow application restores backed-up user files' test_failed_stow_restores_backed_up_user_files
 check 'apt installation failures are not hidden by warning logging' test_apt_install_failure_is_not_hidden_by_warning_logging
 check 'tool installers stop at the first required command failure' test_tool_installers_stop_at_the_first_required_failure

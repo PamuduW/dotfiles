@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -ne 1 || ("$1" != start && "$1" != stop) ]]; then
+	printf 'Usage: codex-rc {start|stop}\n' >&2
+	exit 64
+fi
+
+if ! command -v codex >/dev/null 2>&1; then
+	printf "Error: 'codex' is not installed or not on PATH.\n" >&2
+	exit 127
+fi
+
+exec codex remote-control "$1"

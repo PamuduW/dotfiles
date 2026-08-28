@@ -142,6 +142,8 @@ _dotfiles_managed_targets() {
 		"$HOME/.inputrc|.inputrc" \
 		"$HOME/bin/ex|bin/ex" \
 		"$HOME/bin/clip|bin/clip" \
+		"$HOME/bin/codex-rc|bin/codex-rc" \
+		"$HOME/bin/claude-rc|bin/claude-rc" \
 		"$HOME/bin/dotfiles|bin/dotfiles"
 }
 

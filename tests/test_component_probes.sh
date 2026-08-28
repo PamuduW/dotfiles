@@ -38,6 +38,20 @@ test_dotfiles_probe_requires_every_managed_link() (
 	output="$(HOME="$fake_home" _comp_probe_dotfiles)"
 	[[ "$output" == missing\|* || "$output" == check\|* ]]
 )
+test_dotfiles_probe_requires_remote_control_helper_links() (
+	local fake_home="$TEST_HARNESS_ROOT/remote-control-links-home"
+	local target
+	mkdir -p "$fake_home/bin"
+	ln -s "$REPO_DIR/bash/.bashrc" "$fake_home/.bashrc"
+	ln -s "$REPO_DIR/bash/.bash_aliases" "$fake_home/.bash_aliases"
+	ln -s "$REPO_DIR/readline/.inputrc" "$fake_home/.inputrc"
+	for target in ex clip dotfiles; do
+		ln -s "$REPO_DIR/bin/bin/$target" "$fake_home/bin/$target"
+	done
+	local output
+	output="$(HOME="$fake_home" _comp_probe_dotfiles)"
+	[[ "$output" == 'missing|2 managed stow target(s) missing or incorrect' ]]
+)
 
 test_wsl_probe_requires_both_settings() (
 	local conf="$TEST_HARNESS_ROOT/wsl.conf"
@@ -101,6 +115,7 @@ test_update_probes_find_vendor_local_bin_installations() (
 check 'Python probe verifies interpreter pip and venv support' test_python_probe_requires_python_pip_and_venv
 check 'Go probe rejects an asdf installation without a selected Go version' test_go_probe_does_not_treat_empty_asdf_as_installed
 check 'Dotfiles probe requires every managed Stow target' test_dotfiles_probe_requires_every_managed_link
+check 'Dotfiles probe requires both Remote Control helper links' test_dotfiles_probe_requires_remote_control_helper_links
 check 'WSL probe verifies both required settings' test_wsl_probe_requires_both_settings
 check 'absent optional components remain visible in status rollups' test_absent_optional_components_are_counted_as_missing
 check 'system package status checks only the packages owned by that component' test_system_package_probe_uses_system_package_tags_only

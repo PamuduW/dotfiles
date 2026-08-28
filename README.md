@@ -32,6 +32,8 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 │   └── bin/
 │       ├── ex          # open Windows Explorer from WSL
 │       ├── clip        # copy to Windows clipboard from WSL
+│       ├── codex-rc    # start or stop Codex Remote Control
+│       ├── claude-rc   # manage one background Claude Remote Control server
 │       └── dotfiles    # status, update, command/package libraries
 ├── readline/
 │   └── .inputrc        # better tab completion + history search
@@ -61,7 +63,7 @@ Stow packages: `bash`, `bin`, `readline`
 ```bash
 git clone <repo-url> ~/dotfiles
 cd ~/dotfiles 
-chmod +x install.sh bin/bin/ex bin/bin/clip bin/bin/dotfiles
+chmod +x install.sh bin/bin/ex bin/bin/clip bin/bin/codex-rc bin/bin/claude-rc bin/bin/dotfiles
 ./install.sh
 ```
 
@@ -285,6 +287,8 @@ After stowing:
 - `~/.inputrc` → `dotfiles/readline/.inputrc`
 - `~/bin/ex` → `dotfiles/bin/bin/ex`
 - `~/bin/clip` → `dotfiles/bin/bin/clip`
+- `~/bin/codex-rc` → `dotfiles/bin/bin/codex-rc`
+- `~/bin/claude-rc` → `dotfiles/bin/bin/claude-rc`
 - `~/bin/dotfiles` → `dotfiles/bin/bin/dotfiles`
 
 ---
@@ -402,6 +406,18 @@ Examples: `(main)` clean, `(main ✚✱?)` everything dirty.
 - `echo "text" | clip` — copy to Windows clipboard
 
 Both use full Windows paths, so they work even with `appendWindowsPath=true`.
+
+### Remote Control helpers
+
+- `codex-rc start` / `codex-rc stop` — delegate to Codex's native persistent Remote Control daemon.
+- `claude-rc start` — start one background Claude Remote Control server rooted at the current directory.
+- `claude-rc stop` — stop that server safely from any directory.
+
+Claude server state and its private log live under
+`${XDG_STATE_HOME:-$HOME/.local/state}/claude-rc/`. A second start reports the
+existing server instead of creating another one. After WSL shuts down, run the
+appropriate `*-rc start` command again; device pairings remain separate from
+the local server process.
 
 ---
 
