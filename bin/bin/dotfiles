@@ -70,6 +70,7 @@ _dotfiles_load_update_modules() {
 		"${DOTFILES_DIR}/scripts/lib/installers/github_release.sh" \
 		"${DOTFILES_DIR}/scripts/lib/installers/fonts.sh" \
 		"${DOTFILES_DIR}/scripts/lib/installers/apt.sh" \
+		"${DOTFILES_DIR}/scripts/lib/installers/cli_tools.sh" \
 		"${DOTFILES_DIR}/scripts/lib/installers/graphify.sh" \
 		"${DOTFILES_DIR}/scripts/lib/installers/boost.sh" \
 		"${DOTFILES_DIR}/scripts/lib/action_log.sh" \

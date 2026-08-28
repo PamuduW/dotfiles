@@ -33,6 +33,15 @@ test_dotfiles_cli_is_a_thin_adapter_over_update_modules() (
 		"$REPO_DIR/bin/bin/dotfiles"
 )
 
+test_full_update_loader_provides_codex_sync_dependency() (
+	bash -c '
+		set -euo pipefail
+		DOTFILES_SOURCE_ONLY=1 source "$1/bin/bin/dotfiles"
+		dotfiles_load_command full-update
+		declare -F codex_sync_standalone >/dev/null
+	' _ "$REPO_DIR"
+)
+
 test_read_only_cli_commands_do_not_load_mutating_modules() (
 	local command trace
 	for command in help status; do
@@ -85,6 +94,7 @@ test_installer_help_exits_before_log_initialization() (
 check 'repository update has no reload hook' test_repository_update_has_no_reload_hook
 check 'all terminal device access goes through the shared TTY adapter' test_terminal_device_access_is_centralized
 check 'dotfiles CLI is a thin adapter over shared update modules' test_dotfiles_cli_is_a_thin_adapter_over_update_modules
+check 'full-update loader provides the Codex standalone sync dependency' test_full_update_loader_provides_codex_sync_dependency
 check 'read-only CLI commands do not load mutating modules' test_read_only_cli_commands_do_not_load_mutating_modules
 check 'four-column reports share one ANSI-safe table layout implementation' test_four_column_table_layout_has_one_shared_implementation
 check 'Dotfiles install and update use the same repository runner' test_single_repository_install_and_update_use_one_runner
