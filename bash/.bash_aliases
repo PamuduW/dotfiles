@@ -105,7 +105,7 @@ alias aptclean='sudo apt autoremove -y && sudo apt autoclean'
 # System/CLI updates — see also: dotfiles update | dotfiles upgrade
 # ------------------------------------
 alias update-cursor='agent update'
-alias update-codex='npm i -g @openai/codex@latest'
+alias update-codex='dotfiles update'
 alias update-claude='claude update'
 alias update-copilot='copilot update'
 

@@ -199,6 +199,22 @@ On Linux, `codex-code-mode-host` stays inside
 `~/.codex/packages/standalone/current/bin/`. A separate
 `~/.local/bin/codex-code-mode-host` link is not required.
 
+### Remote Control handoff
+
+Remote Control is an explicit operator step after standalone ownership is
+healthy. Start the daemon, inspect it, and request a short-lived pairing code:
+
+```bash
+codex remote-control start --json
+codex doctor --json | jq '.checks["app_server.status"]'
+codex remote-control pair --json
+```
+
+The pairing command prints secret pairing fields to the current terminal. Read
+the manual code there and enter it in the client. Do not redirect, log, save,
+screenshot, commit, or paste the code into chat. Stop the daemon later with
+`codex remote-control stop --json` when Remote Control is no longer needed.
+
 ### Optional Graphify CLI
 
 `graphify_cli` is a selectable component enabled by default. It requires Python
@@ -403,7 +419,7 @@ Both use full Windows paths, so they work even with `appendWindowsPath=true`.
 | `aptup`          | `sudo apt update && sudo apt upgrade -y`           |
 | `cleanzone`      | Remove Windows `Zone.Identifier` files             |
 | `update-cursor`  | Update Cursor CLI (`agent update`, installer fallback) |
-| `update-codex`   | Update Codex CLI (`npm i -g @openai/codex@latest`) |
+| `update-codex`   | Run the guarded `dotfiles update` workflow        |
 | `update-claude`  | Update Claude CLI (`claude update`)                |
 | `update-copilot` | Update Copilot CLI (`copilot update`)              |
 | `update-all`     | Use `dotfiles update --all` (apt + CLIs)            |

@@ -20,6 +20,12 @@ test_update_all_calls_supported_command() (
 	[[ "$(<"$calls")" == 'update --all' ]]
 )
 
+test_update_codex_routes_through_dotfiles_update() (
+	DOTFILES_DIR="$REPO_DIR"
+	source "$REPO_DIR/bash/.bash_aliases"
+	[[ "$(alias update-codex)" == "alias update-codex='dotfiles update'" ]]
+)
+
 test_bashrc_registers_prompt_hook_once() (
 	local fake_home="$TEST_HARNESS_ROOT/bashrc-home"
 	local fake_bin="$TEST_HARNESS_ROOT/bashrc-bin"
@@ -92,6 +98,7 @@ test_action_log_retains_only_the_newest_logs() (
 )
 
 check 'update-all calls dotfiles update --all' test_update_all_calls_supported_command
+check 'update-codex routes through the guarded Dotfiles update workflow' test_update_codex_routes_through_dotfiles_update
 check '.bashrc registers the Dotfiles prompt hook only once' test_bashrc_registers_prompt_hook_once
 check 'Codex shortcuts use exact safe and automatic-approval argv contracts' test_codex_shortcuts_use_exact_approval_contracts
 check 'action log retains only the newest logs and clears orphaned captures' test_action_log_retains_only_the_newest_logs
