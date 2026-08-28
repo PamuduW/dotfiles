@@ -35,6 +35,40 @@ test_bashrc_registers_prompt_hook_once() (
 	[[ "$count" == 1 ]]
 )
 
+test_codex_shortcuts_use_exact_approval_contracts() (
+	local fake_home="$TEST_HARNESS_ROOT/shortcut-home"
+	local fake_bin="$TEST_HARNESS_ROOT/shortcut-bin"
+	local work_dir="$TEST_HARNESS_ROOT/project with spaces"
+	local calls="$TEST_HARNESS_ROOT/codex-shortcut.calls"
+	local command_name host_line token
+	mkdir -p "$fake_home" "$fake_bin" "$work_dir"
+	: >"$calls"
+	for command_name in fzf zoxide direnv; do
+		printf '#!/usr/bin/env bash\nexit 0\n' >"$fake_bin/$command_name"
+		chmod +x "$fake_bin/$command_name"
+	done
+	export TEST_BASHRC="$REPO_DIR/bash/.bashrc" TEST_SHORTCUT_DIR="$work_dir" TEST_CODEX_CALLS="$calls"
+	# shellcheck disable=SC2016  # Variables expand inside the child interactive shell.
+	HOME="$fake_home" PATH="$fake_bin:/usr/bin:/bin" timeout 5 bash --noprofile --norc -ic '
+		source "$TEST_BASHRC"
+		codex() {
+			printf "%s" "$TEST_CALL_LABEL" >>"$TEST_CODEX_CALLS"
+			printf "|%s" "$@" >>"$TEST_CODEX_CALLS"
+			printf "\n" >>"$TEST_CODEX_CALLS"
+		}
+		cd -- "$TEST_SHORTCUT_DIR"
+		TEST_CALL_LABEL=codex-safe codex-safe --user-flag "two words"
+		TEST_CALL_LABEL=codex-host codex-host --user-flag "two words"
+	' 2>/dev/null
+
+	[[ "$(sed -n '1p' "$calls")" == "codex-safe|-C|$work_dir|-s|workspace-write|-a|on-request|--user-flag|two words" ]] || return 1
+	host_line="$(sed -n '2p' "$calls")"
+	[[ "$host_line" == "codex-host|-C|$work_dir|--approve-for-me|--user-flag|two words" ]] || return 1
+	for token in -s --sandbox -a --ask-for-approval danger-full-access on-request; do
+		[[ "|$host_line|" != *"|$token|"* ]] || return 1
+	done
+)
+
 test_action_log_retains_only_the_newest_logs() (
 	local probe_dir i
 	probe_dir="$TEST_HARNESS_ROOT/action-log-retention"
@@ -59,6 +93,7 @@ test_action_log_retains_only_the_newest_logs() (
 
 check 'update-all calls dotfiles update --all' test_update_all_calls_supported_command
 check '.bashrc registers the Dotfiles prompt hook only once' test_bashrc_registers_prompt_hook_once
+check 'Codex shortcuts use exact safe and automatic-approval argv contracts' test_codex_shortcuts_use_exact_approval_contracts
 check 'action log retains only the newest logs and clears orphaned captures' test_action_log_retains_only_the_newest_logs
 
 test_harness_cleanup

@@ -353,6 +353,8 @@ Both use full Windows paths, so they work even with `appendWindowsPath=true`.
 | `dpot`           | Start Portainer at `https://localhost:9443`        |
 | `dpotstop`       | Stop Portainer                                     |
 | `reload`         | `source ~/.bashrc`                                 |
+| `codex-safe`     | Codex workspace-write sandbox with model-requested approval |
+| `codex-host`     | Codex automatic approval review with workspace-write sandbox |
 | `aptup`          | `sudo apt update && sudo apt upgrade -y`           |
 | `cleanzone`      | Remove Windows `Zone.Identifier` files             |
 | `update-cursor`  | Update Cursor CLI (`agent update`, installer fallback) |
@@ -361,6 +363,10 @@ Both use full Windows paths, so they work even with `appendWindowsPath=true`.
 | `update-copilot` | Update Copilot CLI (`copilot update`)              |
 | `update-all`     | Use `dotfiles update --all` (apt + CLIs)            |
 | `cp`, `mv`, `rm` | Safety wrappers with `-i`                          |
+
+`codex-host` no longer means danger-full-access. It selects Codex's automatic
+approval review while retaining the workspace-write sandbox. Full access
+remains an explicit direct Codex invocation and is not wrapped by Dotfiles.
 
 ---
 

@@ -98,7 +98,7 @@ codex-safe() {
 }
 
 codex-host() {
-	codex -C "$PWD" -s danger-full-access -a on-request "$@"
+	codex -C "$PWD" --approve-for-me "$@"
 }
 
 # Preserve any existing PROMPT_COMMAND; keep ours first so $? is correct.
