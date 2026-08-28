@@ -154,6 +154,51 @@ When you choose **Run setup** interactively (TTY), the installer will:
 
 Dependencies are enforced automatically (e.g., disabling Docker also disables Portainer).
 
+## Codex CLI migration
+
+Dotfiles owns Codex only when `~/.local/bin/codex` resolves into
+`~/.codex/packages/standalone/` and that same command is active on `PATH`. The
+Codex component uses the official standalone installer and has no Node.js
+dependency:
+
+```bash
+DOTFILES_COMPONENTS=codex_cli ./install.sh --initial
+```
+
+Inspect ownership before installing or updating:
+
+```bash
+which -a codex
+command -v codex
+readlink -f "$(command -v codex)" 2>/dev/null
+dotfiles status
+dotfiles doctor
+```
+
+An `external` result means the active command is outside the standalone tree.
+A `standalone shadowed` result means the managed standalone link exists, but a
+different command wins on `PATH`. Dotfiles preserves both situations and
+requires you to resolve the reported path explicitly; it never removes another
+Codex installation.
+
+For migration from npm, inventory every NVM Node tree first. Removing the
+package from only the active tree can leave older Codex commands available
+after `nvm use`. Uninstall each legacy copy as an explicit operator action,
+confirm that `which -a codex` no longer finds one, and then run the standalone
+component command above. Do not delete `~/.codex`: it contains configuration,
+authentication, sessions, skills, and local state that the standalone install
+continues to use.
+
+`dotfiles update` updates an installed, active standalone Codex through the
+same official installer. It skips an absent Codex and preserves external or
+shadowing commands. `dotfiles full-update` follows that Dotfiles lifecycle and
+then runs Agentbot; Agentbot manages policy under `~/.codex`, not the Codex
+executable.
+
+On Linux, `codex-code-mode-host` stays inside
+`~/.codex/packages/standalone/current/bin/`. A separate
+`~/.local/bin/codex-code-mode-host` link is not required.
+
 ### Optional Graphify CLI
 
 `graphify_cli` is a selectable component enabled by default. It requires Python
