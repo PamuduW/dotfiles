@@ -69,9 +69,14 @@ test_single_repository_install_and_update_use_one_runner() (
 )
 
 test_repository_has_one_validation_entrypoint_and_ci() (
+	local install_step tool
 	[[ -x "$REPO_DIR/tests/run.sh" && -x "$REPO_DIR/scripts/validate.sh" ]]
 	rg -q 'test_\*\.sh' "$REPO_DIR/tests/run.sh"
 	rg -q 'scripts/validate.sh' "$REPO_DIR/.github/workflows/validate.yml"
+	install_step="$(grep 'apt-get install' "$REPO_DIR/.github/workflows/validate.yml")"
+	for tool in shellcheck shfmt ripgrep; do
+		[[ " $install_step " == *" $tool "* ]] || return 1
+	done
 )
 
 test_installer_help_exits_before_log_initialization() (
