@@ -12,15 +12,24 @@ stow  # Symlink-farm manager for dotfiles
 shellcheck  # Static analysis for shell scripts
 shfmt  # Shell source formatter
 tree  # Recursive directory tree viewer
+build-essential  # Compiler, linker, make, and headers for native builds
+pkg-config  # Compiler and linker flag discovery for installed libraries
+cmake  # Cross-platform build-system generator
 
 # @python
 python3  # Python 3 interpreter
 python3-pip  # Python package installer
 python3-venv  # Python virtual-environment support
+python3-dev  # Python headers for building native extension modules
+pipx  # Isolated installer and launcher for Python command-line applications
 python3-pil  # Python Imaging Library for image inspection and analysis
 python3-lxml  # Python XML and HTML processing library
 python3-openpyxl  # Python Excel workbook reader and writer
 python3-docx  # Python Word document reader and writer
+python3-yaml  # YAML parser and emitter for Python
+python3-requests  # HTTP client library for Python
+python3-bs4  # Error-tolerant HTML parser for Python
+python3-jsonschema  # JSON Schema validation library for Python
 
 # @cli
 duf  # Human-friendly disk usage viewer
@@ -32,6 +41,9 @@ eza  # Modern directory listing tool
 jq  # Command-line JSON processor
 gh  # GitHub command-line interface
 moreutils  # Additional Unix command-line utilities
+git-lfs  # Git extension for versioning large files outside normal Git objects
+tmux  # Persistent terminal session multiplexer
+sqlite3  # Command-line interface for SQLite databases
 
 # @system
 lshw  # Hardware inventory utility
@@ -56,3 +68,10 @@ qpdf  # PDF page splitting, merging, inspection, and repair
 ghostscript  # PDF and PostScript conversion, compression, and repair
 inkscape  # Full SVG editing and conversion application
 magic-wormhole  # Secure peer-to-peer file transfer
+strace  # System-call tracer for process diagnostics
+dnsutils  # DNS lookup tools including dig and nslookup
+netcat-openbsd  # TCP and UDP connection testing utility
+ffmpeg  # Audio and video conversion, probing, and streaming tools
+imagemagick  # Raster image inspection, conversion, and manipulation tools
+libimage-exiftool-perl  # ExifTool metadata reader and writer for media files
+xmlstarlet  # Command-line XML query, edit, and transformation toolkit

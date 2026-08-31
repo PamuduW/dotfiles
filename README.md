@@ -133,7 +133,7 @@ When you choose **Run setup** interactively (TTY), the installer will:
 | --------------- | ----------------------------------------------------------------------------- |
 | Git identity    | Set global `user.name` / `user.email` (disabled by default)                   |
 | System packages | Core CLI tools from apt (@core, @cli, @system)                                |
-| Python packages | Global apt packages for Python, virtual environments, images, XML, Word, and Excel |
+| Python packages | Global apt packages for Python, isolated CLI apps, HTTP, structured data, images, Word, and Excel |
 | Graphify CLI    | Optional `graphifyy` package through `uv`; exposes the `graphify` command (selected by default) |
 | Boost CLI       | Checksum-verified Boost preview binary (enabled by default)  |
 | PowerShell      | Microsoft PowerShell from official Microsoft apt repository                   |

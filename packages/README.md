@@ -17,7 +17,8 @@ uses it as display metadata. Package names remain the authoritative install set.
 When you run `./install.sh` (root shim to `scripts/install.sh`), the interactive
 installer exposes package-backed components. **System packages** owns the
 `@core`, `@cli`, and `@system` groups; **Python packages** owns `@python` and
-installs those libraries globally through apt rather than system-wide pip.
+installs its runtime and libraries globally through apt rather than system-wide
+pip. Python command-line applications can use the isolated `pipx` workflow.
 Installation and status probes read that same ownership metadata. The installer also:
 
 - Adds small compatibility fixes for Debian/Ubuntu quirks:

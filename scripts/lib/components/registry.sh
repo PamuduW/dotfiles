@@ -109,12 +109,12 @@ comp_define system_packages \
 	--desc $'Installs the curated apt package catalog from packages/packages.txt.\nPackage Lib shows every package name, tag, and description.'
 
 comp_define python \
-	--label 'Python packages (runtime + document tooling)' \
+	--label 'Python packages (runtime + common libraries)' \
 	--plan 'Python packages' \
-	--detail '7 apt packages' \
+	--detail '13 apt packages' \
 	--tags 'python' \
 	--order 2 \
-	--desc $'Installs the Python runtime and document-processing libraries globally via apt.\nIncludes pip, venv, Pillow, lxml, openpyxl, and python-docx.'
+	--desc $'Installs the Python runtime and common scripting libraries globally via apt.\nIncludes pip, venv, pipx, HTTP, YAML, HTML, JSON Schema, and document tooling.'
 
 comp_define graphify_cli \
 	--label 'Graphify CLI' \
