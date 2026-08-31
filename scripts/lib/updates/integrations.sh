@@ -315,55 +315,6 @@ upgrade_claude_cli() {
 	upgrade_result_set checked-no-change
 }
 
-# --- Copilot CLI ---
-copilot_command() {
-	tool_resolve copilot
-}
-
-copilot_installed_version() {
-	local binary raw line
-	binary="$(copilot_command)" || {
-		echo "$NOT_INSTALLED"
-		return
-	}
-	raw="$(tool_version_raw "$binary" --version)" || {
-		echo installed
-		return
-	}
-	line="${raw%%$'\n'*}"
-	line="${line%"${line##*[![:space:]]}"}"
-	printf '%s\n' "${line%.}"
-}
-
-copilot_is_installed() {
-	copilot_command >/dev/null 2>&1
-}
-
-check_copilot_cli() {
-	local installed available action upgradable=0
-	installed="$(copilot_installed_version)"
-	if copilot_is_installed; then
-		available="—"
-		action="$UPDATE_CHECK_UNKNOWN"
-	else
-		available="—"
-		action="$UPDATE_CHECK_SKIP"
-	fi
-	printf '%s|%s|%s|%s\n' "Copilot CLI" "$installed" "$available" "$action"
-	[[ $upgradable -eq 1 ]]
-}
-
-upgrade_copilot_cli() {
-	local executable
-	if executable="$(copilot_command)"; then
-		"$executable" update || return $?
-		upgrade_result_set checked-no-change
-	else
-		_msg "  Copilot CLI not installed, skipping"
-		upgrade_result_set skipped
-	fi
-}
-
 # --- lazygit ---
 lazygit_installed_version() {
 	local binary raw version

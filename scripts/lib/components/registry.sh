@@ -210,24 +210,17 @@ comp_define claude_cli \
 	--order 16 \
 	--desc $'Installs Anthropic Claude CLI from claude.ai.\nUpdate it later through the Dotfiles update workflow.'
 
-comp_define copilot_cli \
-	--label 'Copilot CLI' \
-	--plan 'Copilot CLI' \
-	--detail 'gh.io/copilot-install' \
-	--order 17 \
-	--desc $'Installs GitHub Copilot CLI via the official installer script.\nDownloads and validates the vendor script before executing it.'
-
 comp_define monaspace_fonts \
 	--label 'Monaspace fonts (Nerd Fonts)' \
 	--plan 'Monaspace fonts' \
 	--detail 'Monaspace Nerd Fonts -> ~/.local/share/fonts/' \
-	--order 18 \
+	--order 17 \
 	--desc $'Downloads GitHub Monaspace Nerd Fonts to ~/.local/share/fonts/.\nIncludes all five variants with Powerline glyphs and development icons.'
 
 comp_define ssh_key \
 	--label 'Generate SSH key' \
 	--plan 'SSH key' \
-	--order 19 \
+	--order 18 \
 	--desc $'Generates an Ed25519 SSH key and adds it to ssh-agent.\nSaves the public key and GitHub setup steps to ~/.ssh/github-setup.txt.'
 
 comp_define dotfiles \
@@ -235,7 +228,7 @@ comp_define dotfiles \
 	--plan 'Dotfiles' \
 	--detail 'stow bash, bin, readline' \
 	--depends 'system_packages' \
-	--order 20 \
+	--order 19 \
 	--desc $'Uses GNU Stow to link bash, bin, and readline configuration into $HOME.\nBacks up an existing .bashrc, .bash_aliases, and .inputrc first.'
 
 comp_define wsl_conf \

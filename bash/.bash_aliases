@@ -107,7 +107,6 @@ alias aptclean='sudo apt autoremove -y && sudo apt autoclean'
 alias update-cursor='agent update'
 alias update-codex='dotfiles update'
 alias update-claude='claude update'
-alias update-copilot='copilot update'
 
 update-all() {
 	dotfiles update --all

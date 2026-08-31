@@ -39,12 +39,11 @@ test_mixed_preview_separates_verified_upgrades_from_remaining_checks() (
 			'Boost CLI|boost v0.12.6|—|unknown' \
 			'Cursor CLI|2026.08.11-e8db854|—|unknown' \
 			'Claude CLI|2.1.233|—|unknown' \
-			'Copilot CLI|1.0.80|—|unknown' \
 			'Codex CLI|codex-cli 0.149.1|0.149.1|current'
 	}
 	local output
 	output="$(NO_COLOR=1 print_report_table)"
-	grep -Fq '0 verified upgrades; 6 checks or refreshes remain.' <<<"$output" || return 1
+	grep -Fq '0 verified upgrades; 5 checks or refreshes remain.' <<<"$output" || return 1
 	! grep -Fq 'everything looks current' <<<"$output" || return 1
 	grep -Fq 'refresh on apply' <<<"$output" || return 1
 	grep -Fq 'latest unchecked' <<<"$output"
@@ -279,7 +278,7 @@ test_update_preview_and_summary_share_one_snapshot() (
 test_update_step_registry_has_stable_complete_pairs() (
 	local expected=(
 		'apt packages' 'Graphify CLI' 'Boost CLI' 'Cursor CLI' 'Codex CLI'
-		'Claude CLI' 'Copilot CLI' lazygit lazydocker 'Node.js (nvm)' npm
+		'Claude CLI' lazygit lazydocker 'Node.js (nvm)' npm
 		'Go (asdf)' 'Monaspace fonts' 'dotfiles repo'
 	)
 	update_step_registry_validate || return 1

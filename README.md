@@ -13,7 +13,7 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 - Node.js via nvm, Python 3, Go (asdf), PowerShell, direnv
 - Optional Graphify CLI (`graphifyy` through `uv`; selected by default)
 - Optional verified Boost CLI preview binary (enabled by default)
-- AI CLI tools: Cursor, Codex, Claude, Copilot (updated through the explicit `dotfiles update` workflow)
+- AI CLI tools: Cursor, Codex, Claude (updated through the explicit `dotfiles update` workflow)
 - SSH key generation with GitHub setup notes
 - WSL-specific config: systemd, Windows PATH interop (`appendWindowsPath=true`), Git credentials and recursive-submodule defaults, clipboard helper
 
@@ -147,7 +147,6 @@ When you choose **Run setup** interactively (TTY), the installer will:
 | Cursor CLI      | Cursor editor CLI from cursor.com                                             |
 | Codex CLI       | OpenAI Codex CLI from the official standalone installer                       |
 | Claude CLI      | Anthropic Claude CLI from claude.ai                                           |
-| Copilot CLI     | GitHub Copilot CLI via gh.io/copilot-install                                  |
 | Monaspace fonts | GitHub Monaspace Nerd Fonts to `~/.local/share/fonts/`                        |
 | SSH key         | ed25519 key + GitHub setup notes in `~/.ssh/github-setup.txt`                 |
 | Dotfiles        | Stow bash, bin, readline into `$HOME`                                         |
@@ -286,7 +285,7 @@ explicitly select this component.
 
 ## Security notes
 
-- Vendor shell installers (Cursor, Claude, Copilot, nvm, direnv) are downloaded over HTTPS to a temporary file and syntax-checked before Bash executes them. The vendor URLs are still moving channels rather than checksum-pinned artifacts; review upstream when stronger provenance is required.
+- Vendor shell installers (Cursor, Claude, nvm, direnv) are downloaded over HTTPS to a temporary file and syntax-checked before Bash executes them. The vendor URLs are still moving channels rather than checksum-pinned artifacts; review upstream when stronger provenance is required.
 - GitHub-release binaries (lazygit, lazydocker) are checksum-verified during install.
 - Portainer uses an explicit image version (`portainer/portainer-ce:2.43.0` by default); set `PORTAINER_IMAGE` deliberately to override it.
 - The generated SSH key prompts for a passphrase (press Enter to skip).
@@ -452,7 +451,6 @@ the local server process.
 | `update-cursor`  | Update Cursor CLI (`agent update`, installer fallback) |
 | `update-codex`   | Run the guarded `dotfiles update` workflow        |
 | `update-claude`  | Update Claude CLI (`claude update`)                |
-| `update-copilot` | Update Copilot CLI (`copilot update`)              |
 | `update-all`     | Use `dotfiles update --all` (apt + CLIs)            |
 | `cp`, `mv`, `rm` | Safety wrappers with `-i`                          |
 

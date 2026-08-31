@@ -91,10 +91,6 @@ _comp_install_claude_cli() {
 	install_claude_cli
 }
 
-_comp_install_copilot_cli() {
-	install_copilot_cli
-}
-
 _comp_install_monaspace_fonts() {
 	install_monaspace_fonts
 }

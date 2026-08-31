@@ -150,7 +150,7 @@ test_external_probes_share_bounded_timeout_behavior() (
 	mkdir -p "$fake_bin"
 	printf '#!/usr/bin/env bash\nexit 124\n' >"$fake_tool"
 	chmod +x "$fake_tool"
-	for name in timeout graphify pwsh go asdf node direnv docker lazygit lazydocker cursor codex claude copilot; do
+	for name in timeout graphify pwsh go asdf node direnv docker lazygit lazydocker cursor codex claude; do
 		ln -sf -- _probe_tool "$fake_bin/$name"
 	done
 	HOME="$TEST_HARNESS_ROOT/empty-home"
@@ -179,7 +179,6 @@ _comp_probe_lazydocker|lazydocker
 _comp_probe_cursor_cli|cursor cli
 _comp_probe_codex_cli|codex cli
 _comp_probe_claude_cli|claude cli
-_comp_probe_copilot_cli|copilot cli
 EOF
 )
 

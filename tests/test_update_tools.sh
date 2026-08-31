@@ -201,14 +201,11 @@ test_unverifiable_cli_probes_label_latest_unchecked() (
 	local output
 	agent() { [[ "$1" == --version ]] && printf '2026.07.23-e383d2b\n'; }
 	claude() { [[ "$1" == --version ]] && printf '2.1.220 (Claude Code)\n'; }
-	copilot() { [[ "$1" == --version ]] && printf 'GitHub Copilot CLI 1.0.75.\n'; }
 
 	output="$(check_cursor_cli || true)"
 	[[ "$output" == 'Cursor CLI|2026.07.23-e383d2b|—|unknown' ]] || return 1
 	output="$(check_claude_cli || true)"
-	[[ "$output" == 'Claude CLI|2.1.220 (Claude Code)|—|unknown' ]] || return 1
-	output="$(check_copilot_cli || true)"
-	[[ "$output" == 'Copilot CLI|GitHub Copilot CLI 1.0.75|—|unknown' ]]
+	[[ "$output" == 'Claude CLI|2.1.220 (Claude Code)|—|unknown' ]]
 )
 
 test_codex_probe_reports_ownership_and_release_states() (
@@ -510,19 +507,13 @@ test_cursor_command_branch_uses_the_same_recovery_contract() (
 	! grep -Fq '>> FAILED' "$output"
 )
 
-test_copilot_update_uses_discovered_local_executable() (
-	local local_bin="$HOME/.local/bin" calls="$TEST_HARNESS_ROOT/copilot-update.calls"
-	mkdir -p "$local_bin"
-	: >"$calls"
-	cat >"$local_bin/copilot" <<EOF
-#!/usr/bin/env bash
-printf '%s\n' "\$*" >>'$calls'
-EOF
-	chmod +x "$local_bin/copilot"
-
-	PATH="$TEST_FAKE_BIN:/usr/bin:/bin" upgrade_copilot_cli
-	[[ "$(<"$calls")" == update ]]
-)
+test_copilot_update_management_is_absent() {
+	! declare -F copilot_command >/dev/null || return 1
+	! declare -F copilot_installed_version >/dev/null || return 1
+	! declare -F copilot_is_installed >/dev/null || return 1
+	! declare -F check_copilot_cli >/dev/null || return 1
+	! declare -F upgrade_copilot_cli >/dev/null
+}
 
 test_apt_report_probe_uses_cached_indices_without_sudo() (
 	local count sudo_calls=0
@@ -598,7 +589,7 @@ expect_success 'Node.js upgrade stops when nvm install fails' test_node_upgrade_
 expect_success 'Go upgrade stops when asdf install fails' test_go_upgrade_stops_when_asdf_install_fails
 expect_success 'Cursor update falls back to the official installer after agent update failure' test_cursor_update_falls_back_to_official_installer
 expect_success 'Cursor command branch shares the recovery contract' test_cursor_command_branch_uses_the_same_recovery_contract
-expect_success 'Copilot update invokes the executable discovered in the local vendor bin' test_copilot_update_uses_discovered_local_executable
+expect_success 'Copilot has no update helpers' test_copilot_update_management_is_absent
 expect_success 'pre-confirmation apt report probing never invokes sudo' test_apt_report_probe_uses_cached_indices_without_sudo
 
 expect_success 'apt preview labels cached metadata without claiming it is current' test_apt_report_does_not_claim_cached_indices_are_current

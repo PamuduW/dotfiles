@@ -311,31 +311,6 @@ install_claude_cli() {
 	log_ok "Claude CLI installed"
 }
 
-install_copilot_cli() {
-	if command -v copilot >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/copilot" ]]; then
-		log_skip "Copilot CLI already installed"
-		return 0
-	fi
-	log_step "Install Copilot CLI"
-	local copilot_tmp
-	copilot_tmp="$(mktemp)"
-	if ! run_vendor_shell_installer 'https://gh.io/copilot-install' 'Copilot CLI' \
-		"PREFIX=$HOME/.local" "PATH=$HOME/.local/bin:$PATH" >"$copilot_tmp" 2>&1; then
-		echo "  Error during Copilot CLI install:" >&2
-		cat "$copilot_tmp" >&2
-		rm -f "$copilot_tmp"
-		return 1
-	fi
-	rm -f "$copilot_tmp"
-
-	if [[ -x "$HOME/.local/bin/copilot" ]]; then
-		mkdir -p "$HOME/bin"
-		ln -sf "$HOME/.local/bin/copilot" "$HOME/bin/copilot"
-	fi
-
-	log_ok "Copilot CLI installed"
-}
-
 install_powershell() {
 	if command -v pwsh >/dev/null 2>&1; then
 		log_skip "PowerShell already installed ($(pwsh --version 2>/dev/null || echo 'unknown'))"
