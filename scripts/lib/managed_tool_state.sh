@@ -48,6 +48,56 @@ codex_cli_install_state() {
 	fi
 }
 
+codex_collect_nvm_commands() {
+	local output_name="$1" root="${NVM_DIR:-$HOME/.nvm}" command_path
+	local -n output_ref="$output_name"
+	output_ref=()
+	for command_path in "$root"/versions/node/*/bin/codex; do
+		[[ -e "$command_path" ]] || continue
+		output_ref+=("$command_path")
+	done
+}
+
+codex_collect_nvm_packages() {
+	local output_name="$1" root="${NVM_DIR:-$HOME/.nvm}" package_dir
+	local -n output_ref="$output_name"
+	output_ref=()
+	for package_dir in "$root"/versions/node/*/lib/node_modules/@openai/codex; do
+		[[ -e "$package_dir" ]] || continue
+		output_ref+=("$package_dir")
+	done
+}
+
+codex_nvm_command_is_managed_package() {
+	local command_path="$1" tree package_dir canonical_command canonical_tree canonical_package
+	tree="${command_path%/bin/codex}"
+	package_dir="$tree/lib/node_modules/@openai/codex"
+	[[ -x "$command_path" && -x "$tree/bin/npm" && -f "$package_dir/package.json" ]] || return 1
+	canonical_command="$(readlink -f -- "$command_path" 2>/dev/null)" || return 1
+	canonical_tree="$(readlink -f -- "$tree" 2>/dev/null)" || return 1
+	canonical_package="$(readlink -f -- "$package_dir" 2>/dev/null)" || return 1
+	[[ "$canonical_package" == "$canonical_tree"/* && "$canonical_command" == "$canonical_package"/* ]]
+}
+
+codex_nvm_migration_inventory() {
+	local output_name="$1" active canonical_active command_path canonical_command active_matched=0
+	local -a found_commands=() found_packages=()
+	codex_collect_nvm_commands found_commands
+	((${#found_commands[@]} > 0)) || return 1
+	codex_collect_nvm_packages found_packages
+	((${#found_packages[@]} == ${#found_commands[@]})) || return 1
+	active="$(codex_active_command)" || return 1
+	canonical_active="$(readlink -f -- "$active" 2>/dev/null)" || return 1
+	for command_path in "${found_commands[@]}"; do
+		codex_nvm_command_is_managed_package "$command_path" || return 1
+		canonical_command="$(readlink -f -- "$command_path" 2>/dev/null)" || return 1
+		[[ "$canonical_active" == "$canonical_command" ]] && active_matched=1
+	done
+	[[ "$active_matched" -eq 1 ]] || return 1
+	local -n output_ref="$output_name"
+	output_ref=("${found_commands[@]}")
+}
+
 graphify_uv_command() {
 	if command -v uv >/dev/null 2>&1; then
 		command -v uv

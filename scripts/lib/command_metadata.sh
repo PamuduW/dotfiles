@@ -203,7 +203,7 @@ dotfiles_command_define 'help' \
 
 DOTFILES_CONFIG_KEYS=(
 	DOTFILES_COMPONENTS XDG_CONFIG_HOME GITHUB_TOKEN NO_COLOR FORCE_COLOR DOTFILES_TUI
-	DOTFILES_LOG_RETAIN
+	DOTFILES_LOG_RETAIN DOTFILES_MIGRATE_NPM_CODEX
 )
 
 declare -gA DOTFILES_CONFIG_DESCRIPTION=(
@@ -214,6 +214,7 @@ declare -gA DOTFILES_CONFIG_DESCRIPTION=(
 	[FORCE_COLOR]='Requests ANSI styling for non-TTY output when set.'
 	[DOTFILES_TUI]='Marks TUI execution for presentation/bridge behavior.'
 	[DOTFILES_LOG_RETAIN]='How many timestamped action logs to keep in log/.'
+	[DOTFILES_MIGRATE_NPM_CODEX]='Explicitly authorizes removal of verified NVM-managed npm Codex copies during standalone installation.'
 )
 
 declare -gA DOTFILES_CONFIG_DEFAULT=(
@@ -224,6 +225,7 @@ declare -gA DOTFILES_CONFIG_DEFAULT=(
 	[FORCE_COLOR]='Unset.'
 	[DOTFILES_TUI]='Unset for direct commands; set by menu callers when needed.'
 	[DOTFILES_LOG_RETAIN]='20 when unset.'
+	[DOTFILES_MIGRATE_NPM_CODEX]='Unset; interactive migration requires confirmation and non-interactive migration is refused.'
 )
 
 declare -gA DOTFILES_CONFIG_LOCATION=(
@@ -234,6 +236,7 @@ declare -gA DOTFILES_CONFIG_LOCATION=(
 	[FORCE_COLOR]='Process environment only.'
 	[DOTFILES_TUI]='Process environment only.'
 	[DOTFILES_LOG_RETAIN]='Process environment; applied when an action log starts.'
+	[DOTFILES_MIGRATE_NPM_CODEX]='Process environment only; the accepted authorization value is 1.'
 )
 
 DOTFILES_SURFACE_KEYS=(repo links components)

@@ -197,6 +197,62 @@ codex_sync_standalone() {
 	}
 }
 
+codex_nvm_migration_authorized() {
+	case "${DOTFILES_MIGRATE_NPM_CODEX:-}" in
+	1) return 0 ;;
+	'') ;;
+	*)
+		printf '%s\n' '  DOTFILES_MIGRATE_NPM_CODEX must be 1 when set.' >&2
+		return 1
+		;;
+	esac
+	if [[ "${DOTFILES_INTERACTIVE_TTY:-false}" == true ]] && declare -F ui_confirm_yes_no >/dev/null 2>&1; then
+		ui_confirm_yes_no '  Remove the listed npm Codex installations and install standalone?'
+		return $?
+	fi
+	printf '%s\n' '  Re-run with DOTFILES_MIGRATE_NPM_CODEX=1 to authorize this migration.' >&2
+	return 1
+}
+
+codex_migrate_nvm_installations() {
+	local command_path tree version
+	local -a commands=() leftover_commands=() leftover_packages=()
+	if ! codex_nvm_migration_inventory commands; then
+		printf '%s\n' '  cannot migrate unverified external Codex installation.' >&2
+		return 1
+	fi
+	printf '  Migrating %d npm-managed Codex installations:\n' "${#commands[@]}"
+	for command_path in "${commands[@]}"; do
+		version="$("$command_path" --version 2>/dev/null | head -n1 || true)"
+		printf '    %s%s\n' "$command_path" "${version:+ ($version)}"
+	done
+	codex_nvm_migration_authorized || {
+		printf '%s\n' '  Codex npm migration was not authorized; nothing was removed.' >&2
+		return 1
+	}
+	for command_path in "${commands[@]}"; do
+		tree="${command_path%/bin/codex}"
+		log_step "Remove npm Codex from $(basename "$tree")"
+		PATH="$tree/bin:$PATH" "$tree/bin/npm" --prefix "$tree" uninstall -g @openai/codex || {
+			printf '  Failed to remove npm Codex from %s; standalone was not installed.\n' "$tree" >&2
+			return 1
+		}
+	done
+	hash -r
+	codex_collect_nvm_commands leftover_commands
+	if ((${#leftover_commands[@]} > 0)); then
+		printf '%s\n' '  npm Codex commands remain after migration; standalone was not installed.' >&2
+		printf '    %s\n' "${leftover_commands[@]}" >&2
+		return 1
+	fi
+	codex_collect_nvm_packages leftover_packages
+	if ((${#leftover_packages[@]} > 0)); then
+		printf '%s\n' '  npm Codex artifacts remain after migration; standalone was not installed.' >&2
+		printf '    %s\n' "${leftover_packages[@]}" >&2
+		return 1
+	fi
+}
+
 install_codex_cli() {
 	local state active
 	state="$(codex_cli_install_state)" || return $?
@@ -209,17 +265,26 @@ install_codex_cli() {
 	standalone)
 		log_skip "Codex CLI standalone already installed"
 		;;
-	external)
+	external | standalone-shadowed)
 		active="$(codex_active_command)"
-		printf '  external Codex installation must be removed explicitly: %s\n' "${active:-unknown}" >&2
-		printf '%s\n' '  See README.md#codex-cli-migration.' >&2
-		return 1
-		;;
-	standalone-shadowed)
-		active="$(codex_active_command)"
-		printf '  another Codex command shadows the standalone install: %s\n' "${active:-unknown}" >&2
-		printf '%s\n' '  See README.md#codex-cli-migration.' >&2
-		return 1
+		codex_migrate_nvm_installations || {
+			printf '  Migration did not complete; original active Codex path: %s\n' "${active:-unknown}" >&2
+			printf '%s\n' '  See README.md#codex-cli-migration.' >&2
+			return 1
+		}
+		state="$(codex_cli_install_state)" || return $?
+		case "$state" in
+		absent)
+			log_step "Install Codex CLI standalone"
+			codex_sync_standalone || return $?
+			log_ok "Codex CLI migrated from npm to standalone"
+			;;
+		standalone) log_ok "npm Codex removed; standalone Codex is active" ;;
+		*)
+			printf '  Codex migration left an unexpected ownership state: %s\n' "$state" >&2
+			return 1
+			;;
+		esac
 		;;
 	*)
 		printf '  Unknown Codex installation state: %s\n' "$state" >&2

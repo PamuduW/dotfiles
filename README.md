@@ -179,21 +179,35 @@ dotfiles doctor
 
 An `external` result means the active command is outside the standalone tree.
 A `standalone shadowed` result means the managed standalone link exists, but a
-different command wins on `PATH`. Dotfiles preserves both situations and
-requires you to resolve the reported path explicitly; it never removes another
-Codex installation.
+different command wins on `PATH`.
 
-For migration from npm, inventory every NVM Node tree first. Removing the
-package from only the active tree can leave older Codex commands available
-after `nvm use`. Uninstall each legacy copy as an explicit operator action,
-confirm that `which -a codex` no longer finds one, and then run the standalone
-component command above. Do not delete `~/.codex`: it contains configuration,
-authentication, sessions, skills, and local state that the standalone install
-continues to use.
+When every external Codex command is a verified NVM installation of the
+`@openai/codex` package, the interactive Codex component inventories all Node
+trees, shows every path and version, and asks for a dedicated migration
+confirmation. Approval removes the package from each verified tree, proves no
+Codex command or package directory remains there, and then installs standalone.
+It never deletes `~/.codex`, which contains configuration, authentication,
+sessions, skills, and local state.
+
+Non-interactive installation requires separate migration authorization:
+
+```bash
+DOTFILES_COMPONENTS=codex_cli \
+DOTFILES_MIGRATE_NPM_CODEX=1 \
+./install.sh --initial
+```
+
+Without that exact opt-in, the non-interactive installer preserves npm Codex
+and fails with migration guidance. Dotfiles also refuses migration when the
+active command is unrelated, a command does not resolve into its exact
+`@openai/codex` package directory, npm is unavailable in a detected tree, an
+uninstall fails, or any command or package artifact remains afterwards. Resolve
+those states explicitly rather than forcing the standalone installer over them.
 
 `dotfiles update` updates an installed, active standalone Codex through the
 same official installer. It skips an absent Codex and preserves external or
-shadowing commands. `dotfiles full-update` follows that Dotfiles lifecycle and
+shadowing commands; it never implicitly authorizes npm removal.
+`dotfiles full-update` follows that Dotfiles lifecycle and
 then runs Agentbot; Agentbot manages policy under `~/.codex`, not the Codex
 executable.
 
