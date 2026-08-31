@@ -168,42 +168,55 @@ _comp_probe_git_identity() {
 	fi
 }
 
-_comp_probe_system_packages() {
+_comp_probe_apt_packages_for_component() {
+	local component="$1" missing_label="$2" count_name="$3"
 	local pkg_file="${PKG_FILE:-${DOTFILES_DIR:-}/packages/packages.txt}"
-	local missing=0 checked=0 tags
+	local missing=0 package_count=0 tags
 	local -a packages=()
+	local -n output_count="$count_name"
+	output_count=0
 
 	if [[ ! -f "$pkg_file" ]]; then
 		printf 'missing|packages.txt not found\n'
-		return 0
+		return 1
 	fi
 
-	tags="$(comp_package_tags system_packages)"
+	tags="$(comp_package_tags "$component")"
 	# shellcheck disable=SC2086 # Component package tags are an internal word list.
 	mapfile -t packages < <(PKG_FILE="$pkg_file" read_packages_by_tags $tags)
-	checked="${#packages[@]}"
+	package_count="${#packages[@]}"
+	output_count="$package_count"
 
 	# One dpkg-query for the whole set instead of one process per package.
-	if ((checked > 0)); then
+	if ((package_count > 0)); then
 		local installed_count
 		installed_count="$(
 			dpkg-query -W -f='${Status}\n' "${packages[@]}" 2>/dev/null |
 				grep -c '^install ok installed$' || true
 		)"
-		missing=$((checked - installed_count))
+		missing=$((package_count - installed_count))
 		((missing < 0)) && missing=0
 	fi
 
-	if [[ "$checked" -eq 0 ]]; then
+	if [[ "$package_count" -eq 0 ]]; then
 		printf 'skipped|no packages listed\n'
-	elif [[ "$missing" -eq 0 ]]; then
-		printf 'installed|%d apt packages\n' "$checked"
-	else
-		printf 'missing|%d of %d packages not installed\n' "$missing" "$checked"
+		return 1
 	fi
+	if [[ "$missing" -ne 0 ]]; then
+		printf 'missing|%d of %d %s not installed\n' "$missing" "$package_count" "$missing_label"
+		return 1
+	fi
+	return 0
+}
+
+_comp_probe_system_packages() {
+	local checked=0
+	_comp_probe_apt_packages_for_component system_packages packages checked || return 0
+	printf 'installed|%d apt packages\n' "$checked"
 }
 
 _comp_probe_python() {
+	local checked=0
 	command -v python3 >/dev/null 2>&1 || {
 		printf 'missing|python3 not on PATH\n'
 		return
@@ -216,7 +229,8 @@ _comp_probe_python() {
 		printf 'missing|python3-venv unavailable\n'
 		return
 	}
-	printf 'installed|python3 pip venv\n'
+	_comp_probe_apt_packages_for_component python 'Python packages' checked || return 0
+	printf 'installed|%d apt packages; python3 pip venv ready\n' "$checked"
 }
 
 _comp_probe_graphify_cli() {

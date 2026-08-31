@@ -91,7 +91,7 @@ Use arrow keys to navigate and Enter to select.
 
 | Option | Submenu / action |
 | ------ | ---------------- |
-| Check Status | Read-only local report for all 22 setup components. |
+| Check Status | Read-only local report for all 21 setup components. |
 | Install Dotfiles | Run the shared repository gate, then select components, review the execution plan, and apply setup. |
 | Update | Repo-first fetch/classify/pull gate, then confirmed downstream updates. |
 | Full Update (Dotfiles + Agentbot) | Confirms once, then runs `dotfiles full-update` unattended: Dotfiles update, then Agentbot install and update. |
@@ -133,7 +133,7 @@ When you choose **Run setup** interactively (TTY), the installer will:
 | --------------- | ----------------------------------------------------------------------------- |
 | Git identity    | Set global `user.name` / `user.email` (disabled by default)                   |
 | System packages | Core CLI tools from apt (@core, @cli, @system)                                |
-| Python          | python3, pip, venv                                                            |
+| Python packages | Global apt packages for Python, virtual environments, images, XML, Word, and Excel |
 | Graphify CLI    | Optional `graphifyy` package through `uv`; exposes the `graphify` command (selected by default) |
 | Boost CLI       | Checksum-verified Boost preview binary (enabled by default)  |
 | PowerShell      | Microsoft PowerShell from official Microsoft apt repository                   |

@@ -100,6 +100,25 @@ test_system_package_probe_uses_system_package_tags_only() (
 	[[ "$(wc -l <"$queried")" -eq 3 ]]
 )
 
+test_python_probe_checks_every_owned_apt_package() (
+	local pkg_file="$TEST_HARNESS_ROOT/python-packages.txt" output
+	printf '%s\n' \
+		'# @python' python3 python3-pip python3-venv python3-pil >"$pkg_file"
+	dpkg-query() {
+		local arg
+		for arg in "$@"; do
+			[[ "$arg" == -* ]] && continue
+			case "$arg" in
+			python3-pil) printf 'unknown ok not-installed\n' ;;
+			*) printf 'install ok installed\n' ;;
+			esac
+		done
+	}
+	python3() { return 0; }
+	output="$(PKG_FILE="$pkg_file" _comp_probe_python)"
+	[[ "$output" == 'missing|1 of 4 Python packages not installed' ]]
+)
+
 test_update_probes_find_vendor_local_bin_installations() (
 	local local_bin="$HOME/.local/bin" output
 	mkdir -p "$local_bin"
@@ -119,6 +138,7 @@ check 'Dotfiles probe requires both Remote Control helper links' test_dotfiles_p
 check 'WSL probe verifies both required settings' test_wsl_probe_requires_both_settings
 check 'absent optional components remain visible in status rollups' test_absent_optional_components_are_counted_as_missing
 check 'system package status checks only the packages owned by that component' test_system_package_probe_uses_system_package_tags_only
+check 'Python package status checks every apt package owned by the component' test_python_probe_checks_every_owned_apt_package
 check 'update probes find Cursor and Claude in the vendor local bin directory' test_update_probes_find_vendor_local_bin_installations
 
 test_harness_cleanup

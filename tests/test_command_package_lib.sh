@@ -268,17 +268,34 @@ test_install_defaults_enable_boost_and_exclude_identity_setup() {
 	[[ "${COMP_ON[boost_cli]:-}" -eq 1 ]]
 }
 
-test_package_metadata_has_exact_31_with_descriptions() {
+test_python_component_owns_default_global_document_packages() {
+	local expected=(
+		python3 python3-pip python3-venv python3-pil python3-lxml python3-openpyxl python3-docx
+	)
+	local python_idx
+	python_idx="$(comp_index_of python)" || return 1
+	[[ "${COMP_LABELS[$python_idx]}" == 'Python packages (runtime + document tooling)' ]] || return 1
+	[[ "${COMP_PLAN_DETAILS[python]:-}" == '7 apt packages' ]] || return 1
+	[[ "$(comp_package_tags python)" == python ]] || return 1
+	mapfile -t actual < <(read_packages_by_tags python)
+	[[ "${actual[*]}" == "${expected[*]}" ]] || return 1
+	comp_registry_init
+	[[ "${COMP_ON[python]:-}" -eq 1 ]]
+}
+
+test_package_metadata_has_exact_47_with_descriptions() {
 	declare -F package_metadata_load >/dev/null || return 1
 	package_metadata_load "$PKG_FILE" || return 1
-	[[ "${#PACKAGE_LIB_NAMES[@]}" -eq 31 ]] || return 1
+	[[ "${#PACKAGE_LIB_NAMES[@]}" -eq 47 ]] || return 1
 	local expected=(
 		git curl ca-certificates bash-completion bubblewrap stow shellcheck shfmt tree
-		python3 python3-pip python3-venv
+		python3 python3-pip python3-venv python3-pil python3-lxml python3-openpyxl python3-docx
 		duf ripgrep fd-find fzf zoxide eza jq gh moreutils
-		lshw mtr-tiny glances lsof wslu xdg-utils rsync unp poppler-utils magic-wormhole
+		lshw mtr-tiny glances lsof wslu xdg-utils rsync unp poppler-utils
+		libreoffice pandoc docx2txt xlsx2csv tesseract-ocr zip unzip fontconfig
+		librsvg2-bin qpdf ghostscript inkscape magic-wormhole
 	)
-	local -A expected_counts=([core]=9 [python]=3 [cli]=9 [system]=10)
+	local -A expected_counts=([core]=9 [python]=7 [cli]=9 [system]=22)
 	local -A actual_counts=()
 	local -A seen=()
 	local i name tag description
@@ -394,7 +411,8 @@ expect_success 'component registry exposes the exact 21 described component IDs'
 expect_success 'Boost component text does not claim a version pin' test_boost_description_does_not_claim_a_pin
 expect_success 'Codex and Node component metadata reflect standalone ownership' test_codex_and_node_metadata_match_standalone_ownership
 expect_success 'install defaults enable Boost and exclude identity key generation' test_install_defaults_enable_boost_and_exclude_identity_setup
-expect_success 'package metadata contains 31 unique described names in 9/3/9/10 tags' test_package_metadata_has_exact_31_with_descriptions
+expect_success 'Python component owns globally installed document packages and is enabled by default' test_python_component_owns_default_global_document_packages
+expect_success 'package metadata contains 47 unique described names in 9/7/9/22 tags' test_package_metadata_has_exact_47_with_descriptions
 expect_success 'Package Lib renders all 21 components without probes or side effects' test_package_lib_components_are_metadata_only
 expect_success 'Package Lib opens the system package table directly' test_package_menu_opens_system_packages_directly
 expect_success 'Package Lib all view has no paging controls' test_package_lib_all_view_has_no_paging_controls

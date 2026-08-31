@@ -17,6 +17,10 @@ tree  # Recursive directory tree viewer
 python3  # Python 3 interpreter
 python3-pip  # Python package installer
 python3-venv  # Python virtual-environment support
+python3-pil  # Python Imaging Library for image inspection and analysis
+python3-lxml  # Python XML and HTML processing library
+python3-openpyxl  # Python Excel workbook reader and writer
+python3-docx  # Python Word document reader and writer
 
 # @cli
 duf  # Human-friendly disk usage viewer
@@ -39,4 +43,16 @@ xdg-utils  # Desktop URI opener used by browser-launching CLIs
 rsync  # Incremental file synchronization
 unp  # Archive unpacking convenience wrapper
 poppler-utils  # PDF inspection and conversion tools
+libreoffice  # Office document conversion and headless rendering suite
+pandoc  # Universal document and markup converter
+docx2txt  # Quick DOCX-to-text extraction utility
+xlsx2csv  # Excel workbook to CSV conversion utility
+tesseract-ocr  # OCR engine for scanned documents and images
+zip  # ZIP archive creation utility
+unzip  # ZIP archive extraction utility
+fontconfig  # Font discovery and substitution diagnostics
+librsvg2-bin  # Exact-DPI SVG conversion with rsvg-convert
+qpdf  # PDF page splitting, merging, inspection, and repair
+ghostscript  # PDF and PostScript conversion, compression, and repair
+inkscape  # Full SVG editing and conversion application
 magic-wormhole  # Secure peer-to-peer file transfer
