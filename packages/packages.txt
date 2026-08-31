@@ -35,6 +35,7 @@ mtr-tiny  # Network route and latency diagnostic
 glances  # Interactive system monitor
 lsof  # List open files and owning processes
 wslu  # WSL integration utilities
+xdg-utils  # Desktop URI opener used by browser-launching CLIs
 rsync  # Incremental file synchronization
 unp  # Archive unpacking convenience wrapper
 poppler-utils  # PDF inspection and conversion tools

@@ -268,17 +268,17 @@ test_install_defaults_match_requested_selection() {
 	[[ "${COMP_ON[boost_cli]:-}" -eq 0 ]]
 }
 
-test_package_metadata_has_exact_30_with_descriptions() {
+test_package_metadata_has_exact_31_with_descriptions() {
 	declare -F package_metadata_load >/dev/null || return 1
 	package_metadata_load "$PKG_FILE" || return 1
-	[[ "${#PACKAGE_LIB_NAMES[@]}" -eq 30 ]] || return 1
+	[[ "${#PACKAGE_LIB_NAMES[@]}" -eq 31 ]] || return 1
 	local expected=(
 		git curl ca-certificates bash-completion bubblewrap stow shellcheck shfmt tree
 		python3 python3-pip python3-venv
 		duf ripgrep fd-find fzf zoxide eza jq gh moreutils
-		lshw mtr-tiny glances lsof wslu rsync unp poppler-utils magic-wormhole
+		lshw mtr-tiny glances lsof wslu xdg-utils rsync unp poppler-utils magic-wormhole
 	)
-	local -A expected_counts=([core]=9 [python]=3 [cli]=9 [system]=9)
+	local -A expected_counts=([core]=9 [python]=3 [cli]=9 [system]=10)
 	local -A actual_counts=()
 	local -A seen=()
 	local i name tag description
@@ -394,7 +394,7 @@ expect_success 'component registry exposes the exact 22 described component IDs'
 expect_success 'Boost component text does not claim a version pin' test_boost_description_does_not_claim_a_pin
 expect_success 'Codex and Node component metadata reflect standalone ownership' test_codex_and_node_metadata_match_standalone_ownership
 expect_success 'install defaults exclude identity key generation and preview Boost' test_install_defaults_match_requested_selection
-expect_success 'package metadata contains 30 unique described names in 9/3/9/9 tags' test_package_metadata_has_exact_30_with_descriptions
+expect_success 'package metadata contains 31 unique described names in 9/3/9/10 tags' test_package_metadata_has_exact_31_with_descriptions
 expect_success 'Package Lib renders all 22 components without probes or side effects' test_package_lib_components_are_metadata_only
 expect_success 'Package Lib opens the system package table directly' test_package_menu_opens_system_packages_directly
 expect_success 'Package Lib all view has no paging controls' test_package_lib_all_view_has_no_paging_controls
