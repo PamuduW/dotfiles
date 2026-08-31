@@ -127,9 +127,9 @@ comp_define graphify_cli \
 comp_define boost_cli \
 	--label 'Boost CLI (preview)' \
 	--plan 'Boost CLI' \
-	--detail 'latest verified release (opt-in)' \
+	--detail 'latest verified release' \
 	--order 4 \
-	--desc $'Installs the latest JFrog Boost CLI release to ~/.local/bin, after verifying\nits published SHA-256 digest. Preview software; disabled by default.\nAgentbot owns Claude/Codex integration.'
+	--desc $'Installs the latest JFrog Boost CLI release to ~/.local/bin, after verifying\nits published SHA-256 digest. Preview software; enabled by default.\nAgentbot owns Claude/Codex integration.'
 
 comp_define powershell \
 	--label 'PowerShell (pwsh)' \
@@ -357,11 +357,10 @@ comp_registry_init() {
 		COMP_ON["$_key"]=1
 	done
 
-	# Safe defaults: identity/key generation and preview Boost installation are
-	# explicit user decisions. Other setup components start selected.
+	# Identity and key generation remain explicit user decisions. All other
+	# setup components start selected.
 	COMP_ON[git_identity]=0
 	COMP_ON[ssh_key]=0
-	COMP_ON[boost_cli]=0
 }
 
 # Non-interactive: honor DOTFILES_COMPONENTS (comma-separated COMP_KEYS);

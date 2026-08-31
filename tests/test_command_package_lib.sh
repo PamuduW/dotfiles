@@ -228,7 +228,7 @@ test_boost_description_does_not_claim_a_pin() {
 	[[ ! "$description" =~ v[0-9]+\.[0-9]+\.[0-9]+ ]] || return 1
 	[[ ! "$detail" =~ v[0-9]+\.[0-9]+\.[0-9]+ ]] || return 1
 	[[ "$description" == *SHA-256* ]] || return 1
-	[[ "$description" == *"disabled by default"* ]] || return 1
+	[[ "$description" == *"enabled by default"* ]] || return 1
 
 	# The registry is not the only place the claim can appear. The status
 	# probe made exactly this claim while the registry text was being
@@ -249,13 +249,13 @@ test_codex_and_node_metadata_match_standalone_ownership() {
 	[[ "$node_description" == *npm* && "$node_description" != *Codex* ]]
 }
 
-test_install_defaults_match_requested_selection() {
+test_install_defaults_enable_boost_and_exclude_identity_setup() {
 	local key
 	comp_registry_init
 	[[ "${#COMP_KEYS[@]}" -eq 22 ]] || return 1
 	for key in "${COMP_KEYS[@]}"; do
 		case "$key" in
-		git_identity | ssh_key | boost_cli)
+		git_identity | ssh_key)
 			[[ "${COMP_ON[$key]:-}" -eq 0 ]] || return 1
 			;;
 		*)
@@ -265,7 +265,7 @@ test_install_defaults_match_requested_selection() {
 	done
 	[[ "$(comp_dependency graphify_cli)" == python ]] || return 1
 	[[ "${COMP_ON[graphify_cli]:-}" -eq 1 && "${COMP_ON[python]:-}" -eq 1 ]] || return 1
-	[[ "${COMP_ON[boost_cli]:-}" -eq 0 ]]
+	[[ "${COMP_ON[boost_cli]:-}" -eq 1 ]]
 }
 
 test_package_metadata_has_exact_31_with_descriptions() {
@@ -393,7 +393,7 @@ expect_success 'table column headers remain bold white' test_table_column_header
 expect_success 'component registry exposes the exact 22 described component IDs' test_component_registry_has_exact_22_with_boost
 expect_success 'Boost component text does not claim a version pin' test_boost_description_does_not_claim_a_pin
 expect_success 'Codex and Node component metadata reflect standalone ownership' test_codex_and_node_metadata_match_standalone_ownership
-expect_success 'install defaults exclude identity key generation and preview Boost' test_install_defaults_match_requested_selection
+expect_success 'install defaults enable Boost and exclude identity key generation' test_install_defaults_enable_boost_and_exclude_identity_setup
 expect_success 'package metadata contains 31 unique described names in 9/3/9/10 tags' test_package_metadata_has_exact_31_with_descriptions
 expect_success 'Package Lib renders all 22 components without probes or side effects' test_package_lib_components_are_metadata_only
 expect_success 'Package Lib opens the system package table directly' test_package_menu_opens_system_packages_directly
