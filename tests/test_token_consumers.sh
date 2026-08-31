@@ -23,7 +23,7 @@ args=("$@")
 for ((i = 0; i < ${#args[@]}; i++)); do
 	if [[ "${args[i]}" == '--config' && "${args[i + 1]:-}" == '-' ]]; then
 		while IFS= read -r line || [[ -n "$line" ]]; do
-			if [[ "$line" =~ ^header[[:space:]]*=[[:space:]]*\"Authorization:[[:space:]]Bearer[[:space:]]([A-Za-z0-9_]+)\"$ ]]; then
+			if [[ "$line" =~ ^header[[:space:]]*=[[:space:]]*\"Authorization:[[:space:]]Bearer[[:space:]]([A-Za-z0-9._-]+)\"$ ]]; then
 				auth=auth-present
 				secret="${BASH_REMATCH[1]}"
 			fi
@@ -59,6 +59,10 @@ reset_request() {
 	TEST_CURL_RC=0
 	export TEST_CURL_STDOUT TEST_CURL_RC
 	rm -rf -- "$XDG_CONFIG_HOME/agentbot" "$XDG_CONFIG_HOME/agent_bootstrap"
+}
+
+stateless_token() {
+	printf 'ghs_12345_%0250d.%0200d.%055d-x' 0 0 0
 }
 
 test_anonymous_exact_argv() {
@@ -97,6 +101,18 @@ test_environment_token_private_config() {
 	grep -Fqx 'auth-present' "$TEST_CURL_AUTH_LOG" || return 1
 	grep -Fqx $'curl\t--config\t-\t-fsSL\thttps://api.github.com/example' "$TEST_COMMAND_LOG" || return 1
 	! grep -Fq -- "$GITHUB_TOKEN" "$TEST_COMMAND_LOG" "$TEST_URL_LOG"
+}
+
+test_stateless_token_uses_private_config_without_leaking() {
+	local token
+	reset_request
+	token="$(stateless_token)"
+	GITHUB_TOKEN="$token"
+	export GITHUB_TOKEN
+	github_curl -fsSL https://api.github.com/example >/dev/null
+	grep -Fqx 'auth-present' "$TEST_CURL_AUTH_LOG" || return 1
+	grep -Fqx $'curl\t--config\t-\t-fsSL\thttps://api.github.com/example' "$TEST_COMMAND_LOG" || return 1
+	! grep -Fq -- "$token" "$TEST_COMMAND_LOG" "$TEST_URL_LOG"
 }
 
 test_saved_token_is_child_only() {
@@ -325,6 +341,7 @@ source "$REPO_DIR/scripts/lib/github_api.sh"
 expect_success 'missing token preserves anonymous argv and sends no auth config' test_anonymous_exact_argv
 expect_success 'malformed, invalid, and wrong-mode saved state warn and stay anonymous' test_invalid_saved_states_fall_back
 expect_success 'valid environment token uses private curl config only' test_environment_token_private_config
+expect_success 'stateless installation token uses private curl config without leaking' test_stateless_token_uses_private_config_without_leaking
 expect_success 'valid saved token is loaded only in the request child' test_saved_token_is_child_only
 expect_success 'curl status and diagnostics propagate with defensive redaction' test_status_and_error_redaction
 expect_success 'no-newline curl stderr is preserved byte-for-byte except token redaction' test_no_newline_stderr_is_redacted_byte_exactly

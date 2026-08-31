@@ -10,6 +10,10 @@ github_token_legacy_file() {
 
 github_token_is_valid() {
 	local token="$1"
+	if [[ "$token" == ghs_* ]]; then
+		[[ "$token" =~ ^ghs_[A-Za-z0-9._-]{36,}$ ]]
+		return
+	fi
 	[[ ${#token} -ge 20 && "$token" =~ ^[A-Za-z0-9_]+$ ]]
 }
 

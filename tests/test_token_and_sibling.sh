@@ -37,6 +37,10 @@ make_token() {
 	printf 'test_token_runtime_%s_%024d' "$label" "$TOKEN_SEQ"
 }
 
+make_stateless_token() {
+	printf 'ghs_12345_%0250d.%0200d.%055d-x' 0 0 0
+}
+
 active_dir() { dirname -- "$(github_token_file)"; }
 legacy_file() { printf '%s\n' "$XDG_CONFIG_HOME/agent_bootstrap/github.env"; }
 
@@ -99,6 +103,20 @@ test_valid_private_file_is_read_without_printing() (
 	github_token_read value >"$stdout" 2>"$stderr" || return 1
 	[[ "$value" == "$token" ]] || return 1
 	[[ ! -s "$stdout" && ! -s "$stderr" ]]
+)
+
+test_stateless_installation_token_round_trip() (
+	reset_token_state
+	local token value=''
+	token="$(make_stateless_token)"
+	[[ ${#token} -ge 500 ]] || return 1
+	github_token_is_valid "$token" || return 1
+	github_token_write "$token" || return 1
+	github_token_read value || return 1
+	[[ "$value" == "$token" ]] || return 1
+	! github_token_is_valid 'ghs_short' || return 1
+	! github_token_is_valid "${token}/unsafe" || return 1
+	! github_token_is_valid "ordinary.${token#ghs_}" || return 1
 )
 
 test_wrong_mode_warns_once_and_continues_anonymously() (
@@ -342,6 +360,7 @@ test_root_hook_reaches_token_menu_without_reordering() (
 expect_success 'valid environment token wins over saved state' test_environment_precedence
 expect_success 'absent saved token is silent anonymous fallback' test_absent_file_is_silent_optional
 expect_success 'valid private one-line file reads without output' test_valid_private_file_is_read_without_printing
+expect_success 'stateless GitHub App installation tokens round-trip through strict storage' test_stateless_installation_token_round_trip
 expect_success 'wrong mode warns once and continues anonymously' test_wrong_mode_warns_once_and_continues_anonymously
 expect_success 'strict parser rejects malformed content without execution' test_strict_parser_rejects_malformed_content_without_execution
 expect_success 'atomic private write, replacement, removal, and unsafe rejection work' test_atomic_private_write_replacement_removal_and_unsafe_rejection
