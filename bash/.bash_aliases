@@ -51,6 +51,46 @@ alias fgrep='fgrep --color=auto' # colorize fgrep output
 # ------------------------------------
 alias gitlog='git log --oneline --graph --decorate --all' # short visual log
 
+# `git clone` cannot be made to recurse submodules by configuration: per
+# git-config(1), submodule.recurse supports checkout/fetch/grep/pull/push/
+# read-tree/reset/restore/switch but explicitly NOT clone, there is no
+# clone.recurseSubmodules key, and git ignores aliases that shadow a builtin.
+# So wrap the command instead. `git clone` becomes recursive by default while
+# every other subcommand passes through untouched, and an explicit
+# --recurse-submodules / --no-recurse-submodules / --recursive still wins.
+git() {
+	local arg found='' skip_next=0 explicit=0
+
+	for arg in "$@"; do
+		if [[ $skip_next == 1 ]]; then
+			skip_next=0
+			continue
+		fi
+		case "$arg" in
+		--recurse-submodules | --recurse-submodules=* | --no-recurse-submodules | --recursive)
+			explicit=1
+			;;
+		-c | -C | --namespace | --work-tree | --git-dir | --exec-path)
+			# These take a separate value that must not be read as the subcommand.
+			skip_next=1
+			continue
+			;;
+		-*)
+			continue
+			;;
+		*)
+			[[ -n $found ]] || found="$arg"
+			;;
+		esac
+	done
+
+	if [[ $found == clone && $explicit == 0 ]]; then
+		command git "$@" --recurse-submodules
+	else
+		command git "$@"
+	fi
+}
+
 # ------------------------------------
 # Docker shortcuts
 # ------------------------------------
