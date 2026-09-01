@@ -110,7 +110,7 @@ configure_git_submodule_defaults() {
 	# These cover checkout/fetch/push/status. They deliberately do not cover
 	# `git clone`: git-config(1) lists clone as unsupported by submodule.recurse
 	# and there is no clone.recurseSubmodules key. Recursive clone is handled by
-	# the `git` wrapper function in bash/.bash_aliases instead.
+	# the stowed `git` executable wrapper instead.
 	git config --global submodule.recurse true || return $?
 	git config --global fetch.recurseSubmodules on-demand || return $?
 	git config --global push.recurseSubmodules check || return $?
@@ -148,6 +148,7 @@ _dotfiles_managed_targets() {
 		"$HOME/bin/clip|bin/clip" \
 		"$HOME/bin/codex-rc|bin/codex-rc" \
 		"$HOME/bin/claude-rc|bin/claude-rc" \
+		"$HOME/bin/git|bin/git" \
 		"$HOME/bin/dotfiles|bin/dotfiles"
 }
 

@@ -38,6 +38,18 @@ test_backup_includes_existing_remote_control_helpers() (
 	find "$fake_repo" -path '*/bin/claude-rc' -type f -print -quit | grep -q .
 )
 
+test_backup_includes_existing_git_wrapper() (
+	local fake_home="$TEST_HARNESS_ROOT/stow-git-home"
+	local fake_repo="$TEST_HARNESS_ROOT/stow-git-repo"
+	mkdir -p "$fake_home/bin" "$fake_repo"
+	printf 'old git wrapper\n' >"$fake_home/bin/git"
+	log_step() { :; }
+	log_ok() { :; }
+	HOME="$fake_home" DOTFILES_DIR="$fake_repo" backup_existing_dotfiles
+	[[ ! -e "$fake_home/bin/git" ]]
+	find "$fake_repo" -path '*/bin/git' -type f -print -quit | grep -q .
+)
+
 test_failed_stow_restores_backed_up_user_files() (
 	local fake_home="$TEST_HARNESS_ROOT/stow-rollback-home"
 	local fake_repo="$TEST_HARNESS_ROOT/stow-rollback-repo"
@@ -202,6 +214,7 @@ test_wsl_config_renderer_updates_only_the_requested_section() (
 
 check 'Stow backup includes an existing dotfiles launcher' test_backup_includes_existing_dotfiles_launcher
 check 'Stow backup includes existing Remote Control helpers' test_backup_includes_existing_remote_control_helpers
+check 'Stow backup includes an existing Git wrapper' test_backup_includes_existing_git_wrapper
 check 'failed Stow application restores backed-up user files' test_failed_stow_restores_backed_up_user_files
 check 'apt installation failures are not hidden by warning logging' test_apt_install_failure_is_not_hidden_by_warning_logging
 check 'tool installers stop at the first required command failure' test_tool_installers_stop_at_the_first_required_failure

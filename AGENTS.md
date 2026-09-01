@@ -101,6 +101,7 @@ This file is repository-local policy for the Dotfiles project.
 | `scripts/install.sh` | Real installer; logs to `log/` |
 | `scripts/lib/` | TUI (`menu_simple`, `report_table`), component registry |
 | `scripts/menus/` | Main, initial setup, update, and library menus |
+| `bin/bin/git` | Guarded Git executable used by shells and editors |
 | `bin/bin/dotfiles` | `update`, `restow`, `menu` |
 | `packages/packages.txt` | Apt components with `@tag` sections |
 | `bash/.bashrc` | Stowed shell config and prompt setup |
@@ -123,4 +124,8 @@ find scripts -name '*.sh' -print0 | xargs -0 -n1 bash -n   # shell syntax check
   `Git config (credentials + submodules)`; it always applies the four
   documented submodule defaults and configures Windows GCM only when found.
   Missing GCM must not erase another helper or block submodule configuration.
+- Keep `bin/bin/git`, its Stow target/probe, and `tests/test_git_wrapper.sh`
+  synchronized. Ordinary nested repositories stay untracked; only
+  `git sub add <folder>` declares a submodule. Commit-time pulls must remain
+  fast-forward-only and fail closed when fetch or pull fails.
 - Prefer minimal diffs; match existing bash patterns (`set -euo pipefail`, `shellcheck`).

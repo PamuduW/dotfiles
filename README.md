@@ -34,6 +34,7 @@ Bootstraps a consistent Bash environment on Debian/Ubuntu WSL with an **interact
 │       ├── clip        # copy to Windows clipboard from WSL
 │       ├── codex-rc    # start or stop Codex Remote Control
 │       ├── claude-rc   # manage one background Claude Remote Control server
+│       ├── git         # guarded Git wrapper for terminal and editor use
 │       └── dotfiles    # status, update, command/package libraries
 ├── readline/
 │   └── .inputrc        # better tab completion + history search
@@ -63,7 +64,7 @@ Stow packages: `bash`, `bin`, `readline`
 ```bash
 git clone <repo-url> ~/dotfiles
 cd ~/dotfiles 
-chmod +x install.sh bin/bin/ex bin/bin/clip bin/bin/codex-rc bin/bin/claude-rc bin/bin/dotfiles
+chmod +x install.sh bin/bin/ex bin/bin/clip bin/bin/codex-rc bin/bin/claude-rc bin/bin/git bin/bin/dotfiles
 ./install.sh
 ```
 
@@ -149,7 +150,7 @@ When you choose **Run setup** interactively (TTY), the installer will:
 | Claude CLI      | Anthropic Claude CLI from claude.ai                                           |
 | Monaspace fonts | GitHub Monaspace Nerd Fonts to `~/.local/share/fonts/`                        |
 | SSH key         | ed25519 key + GitHub setup notes in `~/.ssh/github-setup.txt`                 |
-| Dotfiles        | Stow bash, bin, readline into `$HOME`                                         |
+| Dotfiles        | Stow bash, guarded Git wrapper, bin, and readline into `$HOME`                 |
 | WSL config      | `systemd=true`, `appendWindowsPath=true` in `/etc/wsl.conf`                   |
 | Git config (credentials + submodules) | Windows GCM for HTTPS when available; recursive checkout/fetch/status defaults |
 
@@ -264,6 +265,7 @@ This component always writes these idempotent global Git defaults:
 ```bash
 git config --global submodule.recurse true
 git config --global fetch.recurseSubmodules on-demand
+git config --global push.recurseSubmodules check
 git config --global status.submoduleSummary true
 ```
 
@@ -271,6 +273,27 @@ They make supported Git commands recurse into initialized submodules, fetch
 changed populated submodules on demand, and show changed-submodule commit
 summaries in long `git status` output. They affect real Git submodules only,
 not unrelated sibling repositories.
+
+The stowed `~/bin/git` executable keeps terminal and editor Git behavior
+consistent when that path is the active `git` command:
+
+- `git clone` adds `--recurse-submodules` unless an explicit recursion option
+  is already present.
+- `git sub add <folder>` registers an existing nested repository, using its
+  `origin` URL, as a declared submodule.
+- `git add` leaves a newly encountered nested repository untracked unless it
+  is declared in `.gitmodules`. This prevents VS Code Commit All and
+  `git add --all` from silently creating an embedded gitlink.
+- `git commit` fetches the current upstream. When the branch is behind it runs
+  `git pull --ff-only`; a failed fetch, divergent history, or local change that
+  prevents the fast-forward stops the commit. The wrapper then displays
+  `git status` and rejects any staged gitlink missing from `.gitmodules`.
+  Branches without an upstream display a warning and continue without a
+  fetch or pull.
+
+After Stow applies the wrapper, reload VS Code so its Git extension resolves
+`~/bin/git`. An explicit VS Code `git.path` pointing at `/usr/bin/git` bypasses
+the wrapper and must be removed or changed to the stowed executable.
 
 When Git for Windows provides `git-credential-manager.exe`, the same component
 sets it as WSL Git's `credential.helper` for HTTPS authentication and Windows
@@ -303,6 +326,7 @@ After stowing:
 - `~/bin/clip` → `dotfiles/bin/bin/clip`
 - `~/bin/codex-rc` → `dotfiles/bin/bin/codex-rc`
 - `~/bin/claude-rc` → `dotfiles/bin/bin/claude-rc`
+- `~/bin/git` → `dotfiles/bin/bin/git`
 - `~/bin/dotfiles` → `dotfiles/bin/bin/dotfiles`
 
 ---

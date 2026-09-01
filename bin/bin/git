@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REAL_GIT="${DOTFILES_REAL_GIT:-/usr/bin/git}"
+
+git_prefix=()
+args=("$@")
+command_name=''
+command_index=-1
+i=0
+while ((i < ${#args[@]})); do
+	arg="${args[$i]}"
+	case "$arg" in
+	-C | -c | --namespace | --work-tree | --git-dir | --exec-path | --config-env)
+		git_prefix+=("$arg")
+		i=$((i + 1))
+		((i < ${#args[@]})) || exec "$REAL_GIT" "$@"
+		git_prefix+=("${args[$i]}")
+		;;
+	--namespace=* | --work-tree=* | --git-dir=* | --exec-path=* | --config-env=* | --bare | --no-pager | --paginate | -p)
+		git_prefix+=("$arg")
+		;;
+	-*)
+		git_prefix+=("$arg")
+		;;
+	*)
+		command_name="$arg"
+		command_index=$i
+		break
+		;;
+	esac
+	i=$((i + 1))
+done
+
+list_undeclared_gitlinks() {
+	local declared_paths index_entry mode path mapping declared
+	declared_paths="$("$REAL_GIT" "${git_prefix[@]}" config --blob :.gitmodules \
+		--get-regexp '^submodule\..*\.path$' 2>/dev/null || true)"
+	while IFS= read -r -d '' index_entry; do
+		mode="${index_entry%% *}"
+		[[ "$mode" == 160000 ]] || continue
+		path="${index_entry#*$'\t'}"
+		declared=0
+		while IFS= read -r mapping; do
+			[[ "${mapping#* }" == "$path" ]] || continue
+			declared=1
+			break
+		done <<<"$declared_paths"
+		((declared == 1)) || printf '%s\n' "$path"
+	done < <("$REAL_GIT" "${git_prefix[@]}" ls-files --stage --full-name -z)
+}
+
+if [[ "$command_name" == sub && "${args[$((command_index + 1))]:-}" == add ]]; then
+	folder="${args[$((command_index + 2))]:-}"
+	if [[ -z "$folder" || $((command_index + 3)) -ne ${#args[@]} ]]; then
+		printf 'Usage: git sub add <existing-repository-folder>\n' >&2
+		exit 2
+	fi
+	if ! "$REAL_GIT" "${git_prefix[@]}" -C "$folder" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+		printf 'git sub add: not an existing Git repository: %s\n' "$folder" >&2
+		exit 2
+	fi
+	if ! remote_url="$("$REAL_GIT" "${git_prefix[@]}" -C "$folder" remote get-url origin 2>/dev/null)"; then
+		printf 'git sub add: repository has no origin remote: %s\n' "$folder" >&2
+		exit 2
+	fi
+	exec "$REAL_GIT" "${git_prefix[@]}" submodule add "$remote_url" "$folder"
+fi
+
+if [[ "$command_name" == clone ]]; then
+	explicit_recurse=0
+	for arg in "${args[@]}"; do
+		case "$arg" in
+		--recurse-submodules | --recurse-submodules=* | --no-recurse-submodules | --recursive)
+			explicit_recurse=1
+			break
+			;;
+		esac
+	done
+	if ((explicit_recurse == 0)); then
+		exec "$REAL_GIT" "$@" --recurse-submodules
+	fi
+fi
+
+if [[ "$command_name" == add ]]; then
+	mapfile -t gitlinks_before < <(list_undeclared_gitlinks)
+	"$REAL_GIT" "$@" || exit $?
+	mapfile -t gitlinks_after < <(list_undeclared_gitlinks)
+	for path in "${gitlinks_after[@]}"; do
+		was_present=0
+		for existing_path in "${gitlinks_before[@]}"; do
+			[[ "$existing_path" == "$path" ]] || continue
+			was_present=1
+			break
+		done
+		((was_present == 0)) || continue
+		"$REAL_GIT" "${git_prefix[@]}" rm --cached -q -f -- "$path" || exit $?
+		printf 'Left nested repository untracked: %s (use git sub add %s to track it).\n' "$path" "$path" >&2
+	done
+	exit 0
+fi
+
+if [[ "$command_name" == commit ]]; then
+	if upstream="$("$REAL_GIT" "${git_prefix[@]}" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)"; then
+		if ! "$REAL_GIT" "${git_prefix[@]}" fetch; then
+			printf 'git commit stopped: fetch failed for %s.\n' "$upstream" >&2
+			exit 1
+		fi
+		read -r _ behind < <("$REAL_GIT" "${git_prefix[@]}" rev-list --left-right --count "HEAD...$upstream")
+		if ((behind > 0)); then
+			if ! "$REAL_GIT" "${git_prefix[@]}" pull --ff-only; then
+				printf 'git commit stopped: %s could not be fast-forwarded without conflicts.\n' "$upstream" >&2
+				exit 1
+			fi
+		fi
+	else
+		printf 'git commit: current branch has no upstream; skipping fetch and pull.\n' >&2
+	fi
+
+	"$REAL_GIT" "${git_prefix[@]}" status || exit $?
+
+	mapfile -t undeclared_gitlinks < <(list_undeclared_gitlinks)
+
+	if ((${#undeclared_gitlinks[@]} > 0)); then
+		for path in "${undeclared_gitlinks[@]}"; do
+			printf '%s is a staged nested repository but is not declared in .gitmodules.\n' "$path" >&2
+		done
+		printf 'Use git sub add <folder> for a submodule, or unstage the nested repository.\n' >&2
+		exit 1
+	fi
+fi
+
+exec "$REAL_GIT" "$@"

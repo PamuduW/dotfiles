@@ -50,7 +50,7 @@ test_dotfiles_probe_requires_remote_control_helper_links() (
 	done
 	local output
 	output="$(HOME="$fake_home" _comp_probe_dotfiles)"
-	[[ "$output" == 'missing|2 managed stow target(s) missing or incorrect' ]]
+	[[ "$output" == 'missing|3 managed stow target(s) missing or incorrect' ]]
 )
 
 test_wsl_probe_requires_both_settings() (
