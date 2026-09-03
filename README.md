@@ -310,7 +310,7 @@ explicitly select this component.
 
 - Vendor shell installers (Cursor, Claude, nvm, direnv) are downloaded over HTTPS to a temporary file and syntax-checked before Bash executes them. The vendor URLs are still moving channels rather than checksum-pinned artifacts; review upstream when stronger provenance is required.
 - GitHub-release binaries (lazygit, lazydocker) are checksum-verified during install.
-- Portainer uses an explicit image version (`portainer/portainer-ce:2.43.0` by default); set `PORTAINER_IMAGE` deliberately to override it.
+- Portainer follows the stable `portainer/portainer-ce:lts` stream by default; set `PORTAINER_IMAGE` deliberately to override it. Re-running the installer refreshes the image and replaces an older Dotfiles-managed container while preserving `portainer_data`. Containers with a custom storage, socket, port, or restart-policy layout are left untouched and require manual review.
 - The generated SSH key prompts for a passphrase (press Enter to skip).
 
 ---

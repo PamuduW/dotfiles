@@ -115,6 +115,7 @@ test_container_installers_stop_at_the_first_required_failure() (
 	log_warn() { :; }
 	run_docker() {
 		[[ "$1" == ps ]] && return 0
+		[[ "$1 $2" != 'image inspect' ]] || printf 'sha256:target\n'
 		[[ "$1 $2" != 'volume create' ]] || return 29
 		return 0
 	}
@@ -124,6 +125,111 @@ test_container_installers_stop_at_the_first_required_failure() (
 	rc=$?
 	set -e
 	[[ "$rc" == 29 ]]
+)
+
+test_portainer_fresh_install_uses_lts_without_starting_container() (
+	local calls="$TEST_HARNESS_ROOT/portainer-fresh.calls"
+	: >"$calls"
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	log_warn() { :; }
+	run_docker() {
+		printf '%s\n' "$*" >>"$calls"
+		[[ "$1" != ps ]] || return 0
+		[[ "$1 $2" != 'image inspect' ]] || printf 'sha256:target\n'
+	}
+
+	install_portainer >/dev/null
+
+	grep -Fxq 'pull portainer/portainer-ce:lts' "$calls" || return 1
+	grep -Fxq 'volume create portainer_data' "$calls" || return 1
+	grep -Fq 'create -p 8000:8000 -p 9443:9443 --name portainer --restart unless-stopped -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce:lts' "$calls" || return 1
+	! grep -Eq '^(run|start|stop) ' "$calls"
+)
+
+test_portainer_matching_lts_image_is_left_unchanged() (
+	local calls="$TEST_HARNESS_ROOT/portainer-current.calls"
+	: >"$calls"
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	log_warn() { :; }
+	run_docker() {
+		printf '%s\n' "$*" >>"$calls"
+		case "$1 $2" in
+		'ps -a') printf 'portainer\n' ;;
+		'image inspect') printf 'sha256:target\n' ;;
+		'inspect --format') printf 'sha256:target\n' ;;
+		esac
+	}
+
+	install_portainer >/dev/null
+
+	grep -Fxq 'pull portainer/portainer-ce:lts' "$calls" || return 1
+	! grep -Eq '^(rm|create|stop) ' "$calls"
+)
+
+test_portainer_managed_legacy_container_is_recreated_with_its_data() (
+	local calls="$TEST_HARNESS_ROOT/portainer-migrate.calls"
+	: >"$calls"
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	log_warn() { :; }
+	run_docker() {
+		printf '%s\n' "$*" >>"$calls"
+		case "$1 $2" in
+		'ps -a') printf 'portainer\n' ;;
+		'image inspect') printf 'sha256:target\n' ;;
+		'inspect --format')
+			case "$3" in
+			'{{.Image}}') printf 'sha256:legacy\n' ;;
+			'{{range .Mounts}}{{if eq .Destination "/data"}}{{.Type}}:{{.Name}}{{end}}{{end}}') printf 'volume:portainer_data\n' ;;
+			'{{range .Mounts}}{{if eq .Destination "/var/run/docker.sock"}}{{.Type}}:{{.Source}}{{end}}{{end}}') printf 'bind:/var/run/docker.sock\n' ;;
+			'{{with index .HostConfig.PortBindings "8000/tcp"}}{{(index . 0).HostPort}}{{end}}') printf '8000\n' ;;
+			'{{with index .HostConfig.PortBindings "9443/tcp"}}{{(index . 0).HostPort}}{{end}}') printf '9443\n' ;;
+			'{{.HostConfig.RestartPolicy.Name}}') printf 'unless-stopped\n' ;;
+			esac
+			;;
+		esac
+	}
+
+	install_portainer >/dev/null
+
+	grep -Fxq 'rm -f portainer' "$calls" || return 1
+	grep -Fq 'create -p 8000:8000 -p 9443:9443 --name portainer --restart unless-stopped -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce:lts' "$calls" || return 1
+	! grep -Eq 'volume (rm|create) portainer_data' "$calls" || return 1
+)
+
+test_portainer_custom_container_is_not_replaced() (
+	local calls="$TEST_HARNESS_ROOT/portainer-custom.calls" rc
+	: >"$calls"
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	log_warn() { :; }
+	run_docker() {
+		printf '%s\n' "$*" >>"$calls"
+		case "$1 $2" in
+		'ps -a') printf 'portainer\n' ;;
+		'image inspect') printf 'sha256:target\n' ;;
+		'inspect --format')
+			case "$3" in
+			'{{.Image}}') printf 'sha256:legacy\n' ;;
+			'{{range .Mounts}}{{if eq .Destination "/data"}}{{.Type}}:{{.Name}}{{end}}{{end}}') printf 'bind:\n' ;;
+			esac
+			;;
+		esac
+	}
+
+	set +e
+	install_portainer >/dev/null 2>&1
+	rc=$?
+	set -e
+
+	[[ "$rc" -ne 0 ]] || return 1
+	! grep -Eq '^(rm|create|stop) ' "$calls"
 )
 
 test_monaspace_upgrade_requests_a_replacement_install() (
@@ -198,11 +304,6 @@ test_release_manifest_must_name_the_selected_archive() (
 	[[ "$rc" -ne 0 && ! -s "$calls" ]]
 )
 
-test_portainer_uses_an_explicit_image_version() (
-	! rg -n 'portainer/portainer-ce:latest' "$REPO_DIR/scripts/lib/installers/docker.sh"
-	rg -q 'PORTAINER_IMAGE' "$REPO_DIR/scripts/lib/installers/docker.sh"
-)
-
 test_wsl_config_renderer_updates_only_the_requested_section() (
 	local conf="$TEST_HARNESS_ROOT/wsl-render.conf" rendered="$TEST_HARNESS_ROOT/wsl-rendered.conf"
 	printf '%s\n' '[interop]' 'systemd=true' 'appendWindowsPath=false' '' '[boot]' 'appendWindowsPath=true' >"$conf"
@@ -219,11 +320,14 @@ check 'failed Stow application restores backed-up user files' test_failed_stow_r
 check 'apt installation failures are not hidden by warning logging' test_apt_install_failure_is_not_hidden_by_warning_logging
 check 'tool installers stop at the first required command failure' test_tool_installers_stop_at_the_first_required_failure
 check 'container installers stop at the first required command failure' test_container_installers_stop_at_the_first_required_failure
+check 'Portainer fresh installs use LTS and remain stopped' test_portainer_fresh_install_uses_lts_without_starting_container
+check 'Portainer current LTS containers are left unchanged' test_portainer_matching_lts_image_is_left_unchanged
+check 'Portainer managed legacy containers retain their data' test_portainer_managed_legacy_container_is_recreated_with_its_data
+check 'Portainer custom containers are not replaced' test_portainer_custom_container_is_not_replaced
 check 'Monaspace upgrades replace an older installed release' test_monaspace_upgrade_requests_a_replacement_install
 check 'remote shell installers are downloaded before execution' test_remote_shell_installers_are_downloaded_before_execution
 check 'remote shell installers reject insecure and empty payloads' test_remote_shell_installer_fails_closed
 check 'release checksums must identify the selected archive' test_release_manifest_must_name_the_selected_archive
-check 'Portainer uses an explicit image version' test_portainer_uses_an_explicit_image_version
 check 'WSL config rendering updates settings only in their required sections' test_wsl_config_renderer_updates_only_the_requested_section
 
 test_harness_cleanup

@@ -175,23 +175,62 @@ DOCKEREOF
 	fi
 }
 
-install_portainer() {
-	local portainer_image="${PORTAINER_IMAGE:-portainer/portainer-ce:2.43.0}"
-	if run_docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qw portainer; then
-		log_skip "Portainer container already exists"
-		return 0
-	fi
-
-	log_step "Install Portainer CE"
-	run_docker volume create portainer_data || return $?
-	run_docker run -d \
+_create_stopped_portainer() {
+	local portainer_image="$1"
+	run_docker create \
 		-p 8000:8000 \
 		-p 9443:9443 \
 		--name portainer \
 		--restart unless-stopped \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v portainer_data:/data \
-		"$portainer_image" || return $?
-	run_docker stop portainer || return $?
-	log_ok "Portainer installed (stopped — use 'dpot' to start, 'dpotstop' to stop)"
+		"$portainer_image"
+}
+
+_portainer_has_managed_layout() {
+	local data_mount socket_mount port_8000 port_9443 restart_policy
+	data_mount="$(run_docker inspect --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Type}}:{{.Name}}{{end}}{{end}}' portainer)" || return $?
+	socket_mount="$(run_docker inspect --format '{{range .Mounts}}{{if eq .Destination "/var/run/docker.sock"}}{{.Type}}:{{.Source}}{{end}}{{end}}' portainer)" || return $?
+	port_8000="$(run_docker inspect --format '{{with index .HostConfig.PortBindings "8000/tcp"}}{{(index . 0).HostPort}}{{end}}' portainer)" || return $?
+	port_9443="$(run_docker inspect --format '{{with index .HostConfig.PortBindings "9443/tcp"}}{{(index . 0).HostPort}}{{end}}' portainer)" || return $?
+	restart_policy="$(run_docker inspect --format '{{.HostConfig.RestartPolicy.Name}}' portainer)" || return $?
+
+	[[ "$data_mount" == 'volume:portainer_data' &&
+		"$socket_mount" == 'bind:/var/run/docker.sock' &&
+		"$port_8000" == 8000 && "$port_9443" == 9443 &&
+		"$restart_policy" == 'unless-stopped' ]]
+}
+
+install_portainer() {
+	local portainer_image="${PORTAINER_IMAGE:-portainer/portainer-ce:lts}"
+	local target_image_id current_image_id
+
+	log_step "Refresh Portainer CE image"
+	run_docker pull "$portainer_image" || return $?
+	target_image_id="$(run_docker image inspect --format '{{.Id}}' "$portainer_image")" || return $?
+	[[ -n "$target_image_id" ]] || return 1
+
+	if ! run_docker ps -a --format '{{.Names}}' 2>/dev/null | grep -Fxq portainer; then
+		log_step "Install Portainer CE"
+		run_docker volume create portainer_data || return $?
+		_create_stopped_portainer "$portainer_image" || return $?
+		log_ok "Portainer installed (stopped — use 'dpot' to start, 'dpotstop' to stop)"
+		return 0
+	fi
+
+	current_image_id="$(run_docker inspect --format '{{.Image}}' portainer)" || return $?
+	if [[ "$current_image_id" == "$target_image_id" ]]; then
+		log_skip "Portainer container already uses the requested image"
+		return 0
+	fi
+
+	if ! _portainer_has_managed_layout; then
+		log_warn "Portainer container has a custom layout; refusing automatic replacement"
+		return 1
+	fi
+
+	log_step "Replace managed Portainer container with requested image"
+	run_docker rm -f portainer || return $?
+	_create_stopped_portainer "$portainer_image" || return $?
+	log_ok "Portainer updated with portainer_data preserved (stopped — use 'dpot' to start)"
 }
