@@ -10,7 +10,7 @@ PATH="$ORIGINAL_PATH"
 export PATH
 test_harness_report_init
 
-REAL_GIT="$(command -v git)"
+REAL_GIT=/usr/bin/git
 WRAPPER="$ROOT/bin/bin/git"
 export GIT_ALLOW_PROTOCOL=file GIT_CONFIG_NOSYSTEM=1
 
