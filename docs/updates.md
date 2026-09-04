@@ -61,7 +61,9 @@ components. That expansion is tracked in the workspace roadmap.
 
 ## Logs
 
-Mutating commands retain timestamped logs under `log/`. Use:
+Mutating commands retain timestamped logs under `log/`. Filenames stay
+lexicographically newest-first so `dotfiles logs --last` and retention agree.
+Each run uses an exclusive file so overlapping commands do not share a capture.
 
 ```bash
 dotfiles logs
