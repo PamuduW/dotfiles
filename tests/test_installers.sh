@@ -170,6 +170,17 @@ test_portainer_matching_lts_image_is_left_unchanged() (
 	! grep -Eq '^(rm|create|stop) ' "$calls"
 )
 
+_portainer_managed_layout_reply() {
+	case "$1" in
+	'{{range .Mounts}}{{if eq .Destination "/data"}}{{.Type}}:{{.Name}}{{end}}{{end}}') printf 'volume:portainer_data\n' ;;
+	'{{range .Mounts}}{{if eq .Destination "/var/run/docker.sock"}}{{.Type}}:{{.Source}}{{end}}{{end}}') printf 'bind:/var/run/docker.sock\n' ;;
+	'{{with index .HostConfig.PortBindings "8000/tcp"}}{{(index . 0).HostPort}}{{end}}') printf '8000\n' ;;
+	'{{with index .HostConfig.PortBindings "9443/tcp"}}{{(index . 0).HostPort}}{{end}}') printf '9443\n' ;;
+	'{{.HostConfig.RestartPolicy.Name}}') printf 'unless-stopped\n' ;;
+	*) return 1 ;;
+	esac
+}
+
 test_portainer_managed_legacy_container_is_recreated_with_its_data() (
 	local calls="$TEST_HARNESS_ROOT/portainer-migrate.calls"
 	: >"$calls"
@@ -185,11 +196,8 @@ test_portainer_managed_legacy_container_is_recreated_with_its_data() (
 		'inspect --format')
 			case "$3" in
 			'{{.Image}}') printf 'sha256:legacy\n' ;;
-			'{{range .Mounts}}{{if eq .Destination "/data"}}{{.Type}}:{{.Name}}{{end}}{{end}}') printf 'volume:portainer_data\n' ;;
-			'{{range .Mounts}}{{if eq .Destination "/var/run/docker.sock"}}{{.Type}}:{{.Source}}{{end}}{{end}}') printf 'bind:/var/run/docker.sock\n' ;;
-			'{{with index .HostConfig.PortBindings "8000/tcp"}}{{(index . 0).HostPort}}{{end}}') printf '8000\n' ;;
-			'{{with index .HostConfig.PortBindings "9443/tcp"}}{{(index . 0).HostPort}}{{end}}') printf '9443\n' ;;
-			'{{.HostConfig.RestartPolicy.Name}}') printf 'unless-stopped\n' ;;
+			'{{.State.Running}}') printf 'false\n' ;;
+			*) _portainer_managed_layout_reply "$3" || true ;;
 			esac
 			;;
 		esac
@@ -197,8 +205,137 @@ test_portainer_managed_legacy_container_is_recreated_with_its_data() (
 
 	install_portainer >/dev/null
 
-	grep -Fxq 'rm -f portainer' "$calls" || return 1
+	grep -Fxq 'rename portainer portainer.agentbot-backup' "$calls" || return 1
 	grep -Fq 'create -p 8000:8000 -p 9443:9443 --name portainer --restart unless-stopped -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce:lts' "$calls" || return 1
+	grep -Fxq 'rm -f portainer.agentbot-backup' "$calls" || return 1
+	! grep -Fxq 'rm -f portainer' "$calls" || return 1
+	! grep -Eq '^(start|stop) ' "$calls" || return 1
+	! grep -Eq 'volume (rm|create) portainer_data' "$calls" || return 1
+)
+
+test_portainer_create_failure_restores_the_original_running_container() (
+	local calls="$TEST_HARNESS_ROOT/portainer-create-fail.calls" rc
+	: >"$calls"
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	log_warn() { :; }
+	run_docker() {
+		printf '%s\n' "$*" >>"$calls"
+		case "$1 $2" in
+		'ps -a')
+			if grep -Fxq 'rename portainer portainer.agentbot-backup' "$calls" &&
+				! grep -Fxq 'rename portainer.agentbot-backup portainer' "$calls"; then
+				printf 'portainer.agentbot-backup\n'
+			else
+				printf 'portainer\n'
+			fi
+			;;
+		'image inspect') printf 'sha256:target\n' ;;
+		'inspect --format')
+			case "$3" in
+			'{{.Image}}') printf 'sha256:legacy\n' ;;
+			'{{.State.Running}}') printf 'true\n' ;;
+			*) _portainer_managed_layout_reply "$3" || true ;;
+			esac
+			;;
+		esac
+		[[ "$1" != create ]] || return 44
+		return 0
+	}
+
+	set +e
+	install_portainer >/dev/null 2>&1
+	rc=$?
+	set -e
+
+	[[ "$rc" == 44 ]] || return 1
+	grep -Fxq 'rename portainer portainer.agentbot-backup' "$calls" || return 1
+	grep -Fxq 'rename portainer.agentbot-backup portainer' "$calls" || return 1
+	grep -Fxq 'start portainer' "$calls" || return 1
+	! grep -Fxq 'rm -f portainer' "$calls" || return 1
+	! grep -Eq 'volume (rm|create) portainer_data' "$calls" || return 1
+)
+
+test_portainer_verify_failure_removes_the_partial_replacement() (
+	local calls="$TEST_HARNESS_ROOT/portainer-verify-fail.calls" rc created=0
+	: >"$calls"
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	log_warn() { :; }
+	run_docker() {
+		printf '%s\n' "$*" >>"$calls"
+		case "$1" in
+		create)
+			created=1
+			return 0
+			;;
+		esac
+		case "$1 $2" in
+		'ps -a') printf 'portainer\n' ;;
+		'image inspect') printf 'sha256:target\n' ;;
+		'inspect --format')
+			case "$3" in
+			'{{.Image}}') printf 'sha256:legacy\n' ;;
+			'{{.State.Running}}') printf 'false\n' ;;
+			*)
+				if ((created)); then
+					printf 'bind:\n'
+				else
+					_portainer_managed_layout_reply "$3" || true
+				fi
+				;;
+			esac
+			;;
+		esac
+	}
+
+	set +e
+	install_portainer >/dev/null 2>&1
+	rc=$?
+	set -e
+
+	[[ "$rc" -ne 0 ]] || return 1
+	grep -Fxq 'rename portainer portainer.agentbot-backup' "$calls" || return 1
+	grep -Fxq 'rm -f portainer' "$calls" || return 1
+	grep -Fxq 'rename portainer.agentbot-backup portainer' "$calls" || return 1
+	! grep -Eq '^start ' "$calls" || return 1
+	! grep -Eq 'volume (rm|create) portainer_data' "$calls" || return 1
+)
+
+test_portainer_interrupted_backup_is_restored_before_retry() (
+	local calls="$TEST_HARNESS_ROOT/portainer-interrupt.calls"
+	: >"$calls"
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	log_warn() { :; }
+	run_docker() {
+		printf '%s\n' "$*" >>"$calls"
+		case "$1 $2" in
+		'ps -a')
+			if grep -Fxq 'rename portainer.agentbot-backup portainer' "$calls"; then
+				printf 'portainer\n'
+			else
+				printf 'portainer.agentbot-backup\n'
+			fi
+			;;
+		'image inspect') printf 'sha256:target\n' ;;
+		'inspect --format')
+			case "$3" in
+			'{{.Image}}') printf 'sha256:legacy\n' ;;
+			'{{.State.Running}}') printf 'false\n' ;;
+			*) _portainer_managed_layout_reply "$3" || true ;;
+			esac
+			;;
+		esac
+	}
+
+	install_portainer >/dev/null
+
+	grep -Fxq 'rename portainer.agentbot-backup portainer' "$calls" || return 1
+	grep -Fxq 'rename portainer portainer.agentbot-backup' "$calls" || return 1
 	! grep -Eq 'volume (rm|create) portainer_data' "$calls" || return 1
 )
 
@@ -323,6 +460,9 @@ check 'container installers stop at the first required command failure' test_con
 check 'Portainer fresh installs use LTS and remain stopped' test_portainer_fresh_install_uses_lts_without_starting_container
 check 'Portainer current LTS containers are left unchanged' test_portainer_matching_lts_image_is_left_unchanged
 check 'Portainer managed legacy containers retain their data' test_portainer_managed_legacy_container_is_recreated_with_its_data
+check 'Portainer create failure restores the original running container' test_portainer_create_failure_restores_the_original_running_container
+check 'Portainer verify failure removes the partial replacement' test_portainer_verify_failure_removes_the_partial_replacement
+check 'Portainer interrupted backup is restored before retry' test_portainer_interrupted_backup_is_restored_before_retry
 check 'Portainer custom containers are not replaced' test_portainer_custom_container_is_not_replaced
 check 'Monaspace upgrades replace an older installed release' test_monaspace_upgrade_requests_a_replacement_install
 check 'remote shell installers are downloaded before execution' test_remote_shell_installers_are_downloaded_before_execution

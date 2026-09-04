@@ -175,6 +175,84 @@ DOCKEREOF
 	fi
 }
 
+_portainer_backup_name() {
+	printf '%s\n' 'portainer.agentbot-backup'
+}
+
+_portainer_name_exists() {
+	local name="$1"
+	run_docker ps -a --format '{{.Names}}' 2>/dev/null | grep -Fxq "$name"
+}
+
+_portainer_is_running() {
+	local running
+	running="$(run_docker inspect --format '{{.State.Running}}' portainer)" || return $?
+	[[ "$running" == true ]]
+}
+
+_portainer_recover_interrupted() {
+	local backup
+	backup="$(_portainer_backup_name)"
+	_portainer_name_exists "$backup" || return 0
+	if _portainer_name_exists portainer; then
+		if _portainer_has_managed_layout; then
+			run_docker rm -f "$backup" || return $?
+			return 0
+		fi
+		run_docker rm -f portainer || return $?
+	fi
+	run_docker rename "$backup" portainer || return $?
+}
+
+_portainer_restore_from_backup() {
+	local was_running="$1"
+	local backup
+	backup="$(_portainer_backup_name)"
+	if _portainer_name_exists portainer; then
+		run_docker rm -f portainer || return $?
+	fi
+	run_docker rename "$backup" portainer || return $?
+	if [[ "$was_running" == 1 ]]; then
+		run_docker start portainer || return $?
+	fi
+}
+
+_replace_managed_portainer() {
+	local portainer_image="$1"
+	local backup was_running=0 create_status
+	backup="$(_portainer_backup_name)"
+
+	if _portainer_is_running; then
+		was_running=1
+	fi
+
+	log_step "Replace managed Portainer container with requested image"
+	run_docker rename portainer "$backup" || return $?
+	create_status=0
+	_create_stopped_portainer "$portainer_image" || create_status=$?
+	if ((create_status != 0)); then
+		_portainer_restore_from_backup "$was_running" || return $?
+		return "$create_status"
+	fi
+	if ! _portainer_has_managed_layout; then
+		_portainer_restore_from_backup "$was_running" || return 1
+		return 1
+	fi
+	if [[ "$was_running" == 1 ]]; then
+		run_docker start portainer || create_status=$?
+		if ((create_status != 0)); then
+			_portainer_restore_from_backup "$was_running" || return $?
+			return "$create_status"
+		fi
+	fi
+	run_docker rm -f "$backup" || return $?
+	if [[ "$was_running" == 1 ]]; then
+		log_ok "Portainer updated with portainer_data preserved"
+	else
+		log_ok "Portainer updated with portainer_data preserved (stopped — use 'dpot' to start)"
+	fi
+}
+
 _create_stopped_portainer() {
 	local portainer_image="$1"
 	run_docker create \
@@ -210,7 +288,9 @@ install_portainer() {
 	target_image_id="$(run_docker image inspect --format '{{.Id}}' "$portainer_image")" || return $?
 	[[ -n "$target_image_id" ]] || return 1
 
-	if ! run_docker ps -a --format '{{.Names}}' 2>/dev/null | grep -Fxq portainer; then
+	_portainer_recover_interrupted || return $?
+
+	if ! _portainer_name_exists portainer; then
 		log_step "Install Portainer CE"
 		run_docker volume create portainer_data || return $?
 		_create_stopped_portainer "$portainer_image" || return $?
@@ -229,8 +309,5 @@ install_portainer() {
 		return 1
 	fi
 
-	log_step "Replace managed Portainer container with requested image"
-	run_docker rm -f portainer || return $?
-	_create_stopped_portainer "$portainer_image" || return $?
-	log_ok "Portainer updated with portainer_data preserved (stopped — use 'dpot' to start)"
+	_replace_managed_portainer "$portainer_image"
 }
