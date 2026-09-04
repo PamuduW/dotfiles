@@ -7,30 +7,79 @@ git_prefix=()
 args=("$@")
 command_name=''
 command_index=-1
-i=0
-while ((i < ${#args[@]})); do
-	arg="${args[$i]}"
-	case "$arg" in
-	-C | -c | --namespace | --work-tree | --git-dir | --exec-path | --config-env)
-		git_prefix+=("$arg")
+
+parse_git_argv() {
+	git_prefix=()
+	command_name=''
+	command_index=-1
+	local i=0 arg
+	while ((i < ${#args[@]})); do
+		arg="${args[$i]}"
+		case "$arg" in
+		-C | -c | --namespace | --work-tree | --git-dir | --exec-path | --config-env)
+			git_prefix+=("$arg")
+			i=$((i + 1))
+			((i < ${#args[@]})) || exec "$REAL_GIT" "${args[@]}"
+			git_prefix+=("${args[$i]}")
+			;;
+		--namespace=* | --work-tree=* | --git-dir=* | --exec-path=* | --config-env=* | --bare | --no-pager | --paginate | -p)
+			git_prefix+=("$arg")
+			;;
+		-*)
+			git_prefix+=("$arg")
+			;;
+		*)
+			command_name="$arg"
+			command_index=$i
+			break
+			;;
+		esac
 		i=$((i + 1))
-		((i < ${#args[@]})) || exec "$REAL_GIT" "$@"
-		git_prefix+=("${args[$i]}")
-		;;
-	--namespace=* | --work-tree=* | --git-dir=* | --exec-path=* | --config-env=* | --bare | --no-pager | --paginate | -p)
-		git_prefix+=("$arg")
-		;;
-	-*)
-		git_prefix+=("$arg")
-		;;
-	*)
-		command_name="$arg"
-		command_index=$i
-		break
-		;;
-	esac
-	i=$((i + 1))
-done
+	done
+}
+
+expand_git_aliases() {
+	local depth=0 expansion
+	local -A seen=()
+	local -a words prefix_args suffix_args
+	local j
+	while ((depth < 10)); do
+		[[ -n "$command_name" ]] || return 0
+		case "$command_name" in
+		commit | add | clone | sub) return 0 ;;
+		esac
+		if [[ -n "${seen[$command_name]+x}" ]]; then
+			return 1
+		fi
+		seen[$command_name]=1
+		if ! expansion="$("$REAL_GIT" "${git_prefix[@]}" config --get "alias.$command_name" 2>/dev/null)"; then
+			return 0
+		fi
+		[[ -n "$expansion" ]] || return 0
+		if [[ "${expansion:0:1}" == '!' ]]; then
+			return 1
+		fi
+		read -r -a words <<<"$expansion"
+		((${#words[@]} > 0)) || return 0
+		prefix_args=()
+		suffix_args=()
+		for ((j = 0; j < command_index; j++)); do
+			prefix_args+=("${args[j]}")
+		done
+		for ((j = command_index + 1; j < ${#args[@]}; j++)); do
+			suffix_args+=("${args[j]}")
+		done
+		args=("${prefix_args[@]}" "${words[@]}" "${suffix_args[@]}")
+		parse_git_argv
+		depth=$((depth + 1))
+	done
+	return 1
+}
+
+parse_git_argv
+if ! expand_git_aliases; then
+	exec "$REAL_GIT" "$@"
+fi
 
 list_undeclared_gitlinks() {
 	local declared_paths index_entry mode path mapping declared
@@ -78,13 +127,13 @@ if [[ "$command_name" == clone ]]; then
 		esac
 	done
 	if ((explicit_recurse == 0)); then
-		exec "$REAL_GIT" "$@" --recurse-submodules
+		exec "$REAL_GIT" "${args[@]}" --recurse-submodules
 	fi
 fi
 
 if [[ "$command_name" == add ]]; then
 	mapfile -t gitlinks_before < <(list_undeclared_gitlinks)
-	"$REAL_GIT" "$@" || exit $?
+	"$REAL_GIT" "${args[@]}" || exit $?
 	mapfile -t gitlinks_after < <(list_undeclared_gitlinks)
 	for path in "${gitlinks_after[@]}"; do
 		was_present=0
@@ -130,4 +179,4 @@ if [[ "$command_name" == commit ]]; then
 	fi
 fi
 
-exec "$REAL_GIT" "$@"
+exec "$REAL_GIT" "${args[@]}"

@@ -127,5 +127,6 @@ find scripts -name '*.sh' -print0 | xargs -0 -n1 bash -n   # shell syntax check
 - Keep `bin/bin/git`, its Stow target/probe, and `tests/test_git_wrapper.sh`
   synchronized. Ordinary nested repositories stay untracked; only
   `git sub add <folder>` declares a submodule. Commit-time pulls must remain
-  fast-forward-only and fail closed when fetch or pull fails.
+  fast-forward-only and fail closed when fetch or pull fails. Guards must
+  follow Git aliases that expand to `commit`, `add`, `clone`, or `sub add`.
 - Prefer minimal diffs; match existing bash patterns (`set -euo pipefail`, `shellcheck`).

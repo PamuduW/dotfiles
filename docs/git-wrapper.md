@@ -5,6 +5,13 @@ editors such as VS Code use the same nested-repository policy. It delegates to
 `${DOTFILES_REAL_GIT:-/usr/bin/git}` and preserves ordinary Git behavior outside
 the guarded operations below.
 
+Guards apply to Git aliases that expand to `commit`, `add`, `clone`, or
+`sub add`. The wrapper looks up `alias.<name>` through system Git (including
+`-c` / `-C` prefixes), splices a non-shell expansion in place of the alias
+name, and then runs the same checks as the expanded command. Git shell aliases
+(`!…`) and alias loops are passed through unchanged. POSIX shell aliases such
+as `alias gcm='git commit'` are outside this wrapper.
+
 ## Clone
 
 `git clone` adds `--recurse-submodules` unless the command already contains an

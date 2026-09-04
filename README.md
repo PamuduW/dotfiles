@@ -159,8 +159,9 @@ git sub add path/to/repository
 ```
 
 The Stow-managed Git wrapper prevents `git add --all` and editor Commit All
-from silently staging undeclared nested repositories as gitlinks. See the
-[Git wrapper contract](docs/git-wrapper.md).
+from silently staging undeclared nested repositories as gitlinks. Git aliases
+that expand to `commit`, `add`, `clone`, or `sub add` use the same guards.
+See the [Git wrapper contract](docs/git-wrapper.md).
 
 ## Documentation
 
