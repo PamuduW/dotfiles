@@ -243,6 +243,8 @@ cmd_restow() {
 		_err "Error: 'stow' is not installed."
 		exit 1
 	fi
+	_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/installers/stow.sh" || exit 1
+	remove_obsolete_claude_rc_link
 	stow --dir "$DOTFILES_DIR" --target "$HOME" --restow bash bin readline
 	_msg "Dotfiles restowed."
 }

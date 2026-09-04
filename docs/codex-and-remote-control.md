@@ -52,12 +52,10 @@ saved, committed, pasted into chat, or captured in screenshots.
 
 ## Claude Remote Control
 
-`claude-rc start` launches one background server for the current project and
-stores private PID, process-start, directory, and log state under
-`${XDG_STATE_HOME:-$HOME/.local/state}/claude-rc/`. `claude-rc stop` verifies
-both PID and process start time before sending a signal, which prevents PID
-reuse from stopping an unrelated process.
+Claude Remote Control starts automatically after Claude CLI setup. Dotfiles
+does not provide a `claude-rc` lifecycle command.
 
-Use `claude-rc` separately for each intended project lifecycle; it manages one
-recorded server at a time.
+During setup or restow, Dotfiles removes an obsolete managed `~/bin/claude-rc`
+symlink when that link points at this checkout. Regular files, directories, and
+symlinks owned elsewhere are left unchanged. `codex-rc` is unaffected.
 

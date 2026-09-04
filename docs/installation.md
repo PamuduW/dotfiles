@@ -64,7 +64,7 @@ Stow manages these targets:
 ~/.bashrc
 ~/.bash_aliases
 ~/.inputrc
-~/bin/{dotfiles,git,ex,clip,codex-rc,claude-rc}
+~/bin/{dotfiles,git,ex,clip,codex-rc}
 ```
 
 ## After installation

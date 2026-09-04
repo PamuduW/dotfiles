@@ -381,7 +381,6 @@ $HOME/.inputrc|$repo_dir/readline/.inputrc
 $HOME/bin/ex|$repo_dir/bin/bin/ex
 $HOME/bin/clip|$repo_dir/bin/bin/clip
 $HOME/bin/codex-rc|$repo_dir/bin/bin/codex-rc
-$HOME/bin/claude-rc|$repo_dir/bin/bin/claude-rc
 $HOME/bin/git|$repo_dir/bin/bin/git
 $HOME/bin/dotfiles|$repo_dir/bin/bin/dotfiles
 EOF

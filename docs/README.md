@@ -11,7 +11,7 @@ scripts and tests are authoritative when prose drifts.
 | [Installation](installation.md) | Interactive and non-interactive setup, selection, and failure behavior |
 | [Updates](updates.md) | Repository gate, tool updates, full update, restart limits, and postflight |
 | [Git wrapper](git-wrapper.md) | Nested repositories, submodules, clone, add, and commit guards |
-| [Codex and Remote Control](codex-and-remote-control.md) | Standalone Codex ownership and remote-control helpers |
+| [Codex and Remote Control](codex-and-remote-control.md) | Standalone Codex ownership and Codex Remote Control; Claude Remote Control auto-starts after setup |
 | [Security](security.md) | Download, credential, privilege, and configuration boundaries |
 | [Development](development.md) | Test layout, validation gate, formatting, and shared-library synchronization |
 | [Troubleshooting](troubleshooting.md) | Stow, Docker, ownership, repository, and command recovery |

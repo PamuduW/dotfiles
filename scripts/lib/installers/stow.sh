@@ -147,7 +147,6 @@ _dotfiles_managed_targets() {
 		"$HOME/bin/ex|bin/ex" \
 		"$HOME/bin/clip|bin/clip" \
 		"$HOME/bin/codex-rc|bin/codex-rc" \
-		"$HOME/bin/claude-rc|bin/claude-rc" \
 		"$HOME/bin/git|bin/git" \
 		"$HOME/bin/dotfiles|bin/dotfiles"
 }
@@ -197,11 +196,24 @@ restore_dotfiles_backup() {
 	[[ -d "$DOTFILES_BACKUP_DIR" ]] || DOTFILES_BACKUP_DIR=''
 }
 
+remove_obsolete_claude_rc_link() {
+	local link="$HOME/bin/claude-rc"
+	local expected resolved
+	expected="$(readlink -f -- "${DOTFILES_DIR:?}/bin/bin/claude-rc" 2>/dev/null || true)"
+	[[ -n "$expected" ]] || return 0
+	[[ -L "$link" ]] || return 0
+	resolved="$(readlink -f -- "$link" 2>/dev/null || true)"
+	[[ -n "$resolved" && "$resolved" == "$expected" ]] || return 0
+	rm -f -- "$link"
+}
+
 stow_dotfiles() {
 	if ! command -v stow >/dev/null 2>&1; then
 		echo "Error: 'stow' is not installed." >&2
 		return 1
 	fi
+
+	remove_obsolete_claude_rc_link
 
 	log_step "Apply stow packages: bash, bin, readline"
 	if stow --dir "$DOTFILES_DIR" --target "$HOME" bash bin readline; then

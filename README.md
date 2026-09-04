@@ -7,7 +7,7 @@ Bash and GNU Stow.
 
 - A component-based installer with an execution plan and local health probes.
 - Bash prompt, shared history, modern CLI defaults, and improved Readline.
-- Stow-managed helper commands for Dotfiles, Git, WSL, and Remote Control.
+- Stow-managed helper commands for Dotfiles, Git, WSL, and Codex Remote Control.
 - Optional language runtimes, Docker and Portainer, developer tools, fonts, and
   coding-agent CLIs.
 - Safe repository-first updates and one-command Dotfiles plus Agentbot
@@ -140,14 +140,15 @@ dpot
 dpotstop
 ```
 
-Remote Control helpers accept explicit start/stop actions:
+Codex Remote Control accepts explicit start/stop actions:
 
 ```bash
 codex-rc start
 codex-rc stop
-claude-rc start
-claude-rc stop
 ```
+
+Claude Remote Control starts automatically after Claude CLI setup. Dotfiles
+does not ship a separate lifecycle helper for it.
 
 Treat Codex pairing values as terminal-only secrets. Do not redirect, log,
 save, commit, screenshot, or paste them into chat.
