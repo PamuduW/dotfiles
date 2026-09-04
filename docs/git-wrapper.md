@@ -47,12 +47,15 @@ Before committing, the wrapper:
 4. Fast-forwards with `git pull --ff-only` when behind.
 5. Stops if local state prevents the fast-forward.
 6. Displays `git status`.
-7. Rejects staged gitlinks absent from `.gitmodules`.
+7. Unstages newly added gitlinks that are absent from `.gitmodules`, leaving
+   those nested repositories untracked, then continues the commit. Gitlinks
+   already recorded in `HEAD` without `.gitmodules` are left as they are.
 
 A repository with remotes but no upstream warns and continues without
 fetch/pull. Local-only tracking (no remotes) is not treated as an upstream
-sync. The wrapper does not merge, rebase, force-push, or create submodules
-during commit.
+sync. Nested repositories that were never declared as submodules do not block
+the commit. The wrapper does not merge, rebase, force-push, or create
+submodules during commit.
 
 ## Global Git defaults
 

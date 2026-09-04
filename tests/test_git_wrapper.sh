@@ -80,22 +80,49 @@ test_clone_initializes_declared_submodules_by_default() (
 	[[ "$(<"$checkout/repoB/child.txt")" == child ]]
 )
 
-test_commit_rejects_an_undeclared_gitlink() (
+test_commit_unstages_a_new_undeclared_gitlink_and_commits_other_files() (
 	local parent="$TEST_HARNESS_ROOT/undeclared-parent"
 	local nested="$parent/repoB"
-	local output rc=0
+	local output
 
 	init_repo "$parent"
 	commit_file "$parent" README.md parent base
 	init_repo "$nested"
 	commit_file "$nested" README.md child base
 	"$REAL_GIT" -C "$parent" add repoB 2>/dev/null
+	printf '%s\n' note >"$parent/note.txt"
+	"$REAL_GIT" -C "$parent" add note.txt
 
-	output="$(DOTFILES_REAL_GIT="$REAL_GIT" "$WRAPPER" -C "$parent" commit -m 'accidental gitlink' 2>&1)" || rc=$?
+	output="$(DOTFILES_REAL_GIT="$REAL_GIT" "$WRAPPER" -C "$parent" commit -m 'keep nested local' 2>&1)" || return 1
 
-	[[ "$rc" -ne 0 ]] || return 1
-	[[ "$output" == *'repoB is a staged nested repository but is not declared in .gitmodules'* ]] || return 1
-	[[ "$("$REAL_GIT" -C "$parent" rev-list --count HEAD)" == 1 ]]
+	[[ "$output" == *'Left nested repository untracked: repoB'* ]] || return 1
+	[[ "$("$REAL_GIT" -C "$parent" rev-list --count HEAD)" == 2 ]] || return 1
+	[[ "$("$REAL_GIT" -C "$parent" ls-files --stage -- repoB)" == '' ]] || return 1
+	[[ "$("$REAL_GIT" -C "$parent" show HEAD:note.txt)" == note ]] || return 1
+	[[ "$("$REAL_GIT" -C "$parent" status --short -- repoB)" == '?? repoB/' ]]
+)
+
+test_commit_keeps_an_existing_undeclared_gitlink() (
+	local parent="$TEST_HARNESS_ROOT/existing-gitlink-parent"
+	local nested="$parent/repoB"
+	local output mode
+
+	init_repo "$parent"
+	commit_file "$parent" README.md parent base
+	init_repo "$nested"
+	commit_file "$nested" README.md child base
+	"$REAL_GIT" -C "$parent" add repoB 2>/dev/null
+	"$REAL_GIT" -C "$parent" commit -q -m 'record nested gitlink'
+	printf '%s\n' note >"$parent/note.txt"
+	"$REAL_GIT" -C "$parent" add note.txt
+
+	output="$(DOTFILES_REAL_GIT="$REAL_GIT" "$WRAPPER" -C "$parent" commit -m 'docs only' 2>&1)" || return 1
+
+	[[ "$output" != *'not declared in .gitmodules'* ]] || return 1
+	[[ "$("$REAL_GIT" -C "$parent" rev-list --count HEAD)" == 3 ]] || return 1
+	[[ "$("$REAL_GIT" -C "$parent" show HEAD:note.txt)" == note ]] || return 1
+	mode="$("$REAL_GIT" -C "$parent" ls-files --stage -- repoB | awk '{print $1}')"
+	[[ "$mode" == 160000 ]]
 )
 
 test_add_all_leaves_an_undeclared_nested_repository_untracked() (
@@ -257,62 +284,67 @@ setup_undeclared_nested_repo() {
 	init_repo "$parent/repoB"
 	commit_file "$parent/repoB" README.md child base
 	"$REAL_GIT" -C "$parent" add repoB 2>/dev/null
+	printf '%s\n' note >"$parent/note.txt"
+	"$REAL_GIT" -C "$parent" add note.txt
 }
 
-test_commit_alias_rejects_an_undeclared_gitlink() (
+expect_unstaged_nested_and_note_committed() {
+	local parent="$1"
+	[[ "$("$REAL_GIT" -C "$parent" rev-list --count HEAD)" == 2 ]] || return 1
+	[[ "$("$REAL_GIT" -C "$parent" ls-files --stage -- repoB)" == '' ]] || return 1
+	[[ "$("$REAL_GIT" -C "$parent" show HEAD:note.txt)" == note ]]
+}
+
+test_commit_alias_unstages_an_undeclared_gitlink() (
 	local parent="$TEST_HARNESS_ROOT/alias-ci-parent"
-	local output rc=0
+	local output
 
 	setup_undeclared_nested_repo "$parent"
 	"$REAL_GIT" -C "$parent" config alias.ci commit
 
-	output="$(DOTFILES_REAL_GIT="$REAL_GIT" "$WRAPPER" -C "$parent" ci -m 'accidental gitlink' 2>&1)" || rc=$?
+	output="$(DOTFILES_REAL_GIT="$REAL_GIT" "$WRAPPER" -C "$parent" ci -m 'keep nested local' 2>&1)" || return 1
 
-	[[ "$rc" -ne 0 ]] || return 1
-	[[ "$output" == *'repoB is a staged nested repository but is not declared in .gitmodules'* ]] || return 1
-	[[ "$("$REAL_GIT" -C "$parent" rev-list --count HEAD)" == 1 ]]
+	[[ "$output" == *'Left nested repository untracked: repoB'* ]] || return 1
+	expect_unstaged_nested_and_note_committed "$parent"
 )
 
-test_chained_commit_alias_rejects_an_undeclared_gitlink() (
+test_chained_commit_alias_unstages_an_undeclared_gitlink() (
 	local parent="$TEST_HARNESS_ROOT/alias-chain-parent"
-	local output rc=0
+	local output
 
 	setup_undeclared_nested_repo "$parent"
 	"$REAL_GIT" -C "$parent" config alias.cci cmt
 	"$REAL_GIT" -C "$parent" config alias.cmt commit
 
-	output="$(DOTFILES_REAL_GIT="$REAL_GIT" "$WRAPPER" -C "$parent" cci -m 'accidental gitlink' 2>&1)" || rc=$?
+	output="$(DOTFILES_REAL_GIT="$REAL_GIT" "$WRAPPER" -C "$parent" cci -m 'keep nested local' 2>&1)" || return 1
 
-	[[ "$rc" -ne 0 ]] || return 1
-	[[ "$output" == *'repoB is a staged nested repository but is not declared in .gitmodules'* ]] || return 1
-	[[ "$("$REAL_GIT" -C "$parent" rev-list --count HEAD)" == 1 ]]
+	[[ "$output" == *'Left nested repository untracked: repoB'* ]] || return 1
+	expect_unstaged_nested_and_note_committed "$parent"
 )
 
-test_commit_alias_with_fixed_args_rejects_an_undeclared_gitlink() (
+test_commit_alias_with_fixed_args_unstages_an_undeclared_gitlink() (
 	local parent="$TEST_HARNESS_ROOT/alias-fixed-parent"
-	local output rc=0
+	local output
 
 	setup_undeclared_nested_repo "$parent"
 	"$REAL_GIT" -C "$parent" config alias.ci 'commit -m via-alias'
 
-	output="$(DOTFILES_REAL_GIT="$REAL_GIT" "$WRAPPER" -C "$parent" ci 2>&1)" || rc=$?
+	output="$(DOTFILES_REAL_GIT="$REAL_GIT" "$WRAPPER" -C "$parent" ci 2>&1)" || return 1
 
-	[[ "$rc" -ne 0 ]] || return 1
-	[[ "$output" == *'repoB is a staged nested repository but is not declared in .gitmodules'* ]] || return 1
-	[[ "$("$REAL_GIT" -C "$parent" rev-list --count HEAD)" == 1 ]]
+	[[ "$output" == *'Left nested repository untracked: repoB'* ]] || return 1
+	expect_unstaged_nested_and_note_committed "$parent"
 )
 
-test_oneshot_commit_alias_rejects_an_undeclared_gitlink() (
+test_oneshot_commit_alias_unstages_an_undeclared_gitlink() (
 	local parent="$TEST_HARNESS_ROOT/alias-c-parent"
-	local output rc=0
+	local output
 
 	setup_undeclared_nested_repo "$parent"
 
-	output="$(DOTFILES_REAL_GIT="$REAL_GIT" "$WRAPPER" -C "$parent" -c alias.ci=commit ci -m 'accidental gitlink' 2>&1)" || rc=$?
+	output="$(DOTFILES_REAL_GIT="$REAL_GIT" "$WRAPPER" -C "$parent" -c alias.ci=commit ci -m 'keep nested local' 2>&1)" || return 1
 
-	[[ "$rc" -ne 0 ]] || return 1
-	[[ "$output" == *'repoB is a staged nested repository but is not declared in .gitmodules'* ]] || return 1
-	[[ "$("$REAL_GIT" -C "$parent" rev-list --count HEAD)" == 1 ]]
+	[[ "$output" == *'Left nested repository untracked: repoB'* ]] || return 1
+	expect_unstaged_nested_and_note_committed "$parent"
 )
 
 test_commit_alias_stops_when_fetch_fails() (
@@ -432,7 +464,8 @@ test_alias_loop_is_passed_to_system_git() (
 
 expect_success 'git sub add registers an existing nested repository' test_sub_add_registers_an_existing_nested_repository
 expect_success 'git clone initializes declared submodules by default' test_clone_initializes_declared_submodules_by_default
-expect_success 'git commit rejects an undeclared nested-repository gitlink' test_commit_rejects_an_undeclared_gitlink
+expect_success 'git commit unstages a new undeclared gitlink and commits other files' test_commit_unstages_a_new_undeclared_gitlink_and_commits_other_files
+expect_success 'git commit keeps an existing undeclared gitlink' test_commit_keeps_an_existing_undeclared_gitlink
 expect_success 'git add --all leaves undeclared nested repositories untracked' test_add_all_leaves_an_undeclared_nested_repository_untracked
 expect_success 'git add --all stages an updated declared submodule' test_add_all_stages_an_updated_declared_submodule
 expect_success 'git commit fast-forwards from upstream before committing' test_commit_fast_forwards_from_upstream_before_committing
@@ -440,10 +473,10 @@ expect_success 'git commit without a remote skips fetch and succeeds' test_commi
 expect_success 'git commit with a local upstream and no remote skips fetch' test_commit_with_local_upstream_and_no_remote_skips_fetch
 expect_success 'git commit stops when fast-forward would overwrite local changes' test_commit_stops_when_fast_forward_would_overwrite_local_changes
 expect_success 'git commit stops when fetch fails' test_commit_stops_when_fetch_fails
-expect_success 'git commit alias rejects an undeclared gitlink' test_commit_alias_rejects_an_undeclared_gitlink
-expect_success 'git chained commit alias rejects an undeclared gitlink' test_chained_commit_alias_rejects_an_undeclared_gitlink
-expect_success 'git commit alias with fixed args rejects an undeclared gitlink' test_commit_alias_with_fixed_args_rejects_an_undeclared_gitlink
-expect_success 'git -c commit alias rejects an undeclared gitlink' test_oneshot_commit_alias_rejects_an_undeclared_gitlink
+expect_success 'git commit alias unstages an undeclared gitlink' test_commit_alias_unstages_an_undeclared_gitlink
+expect_success 'git chained commit alias unstages an undeclared gitlink' test_chained_commit_alias_unstages_an_undeclared_gitlink
+expect_success 'git commit alias with fixed args unstages an undeclared gitlink' test_commit_alias_with_fixed_args_unstages_an_undeclared_gitlink
+expect_success 'git -c commit alias unstages an undeclared gitlink' test_oneshot_commit_alias_unstages_an_undeclared_gitlink
 expect_success 'git commit alias stops when fetch fails' test_commit_alias_stops_when_fetch_fails
 expect_success 'git add alias leaves undeclared nested repositories untracked' test_add_alias_leaves_an_undeclared_nested_repository_untracked
 expect_success 'git clone alias initializes declared submodules by default' test_clone_alias_initializes_declared_submodules_by_default

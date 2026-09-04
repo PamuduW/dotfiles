@@ -81,6 +81,16 @@ if ! expand_git_aliases; then
 	exec "$REAL_GIT" "$@"
 fi
 
+list_head_gitlinks() {
+	local tree_entry mode
+	"$REAL_GIT" "${git_prefix[@]}" rev-parse --verify --quiet HEAD >/dev/null 2>&1 || return 0
+	while IFS= read -r -d '' tree_entry; do
+		mode="${tree_entry%% *}"
+		[[ "$mode" == 160000 ]] || continue
+		printf '%s\n' "${tree_entry#*$'\t'}"
+	done < <("$REAL_GIT" "${git_prefix[@]}" ls-tree -r -z HEAD)
+}
+
 list_undeclared_gitlinks() {
 	local declared_paths index_entry mode path mapping declared
 	declared_paths="$("$REAL_GIT" "${git_prefix[@]}" config --blob :.gitmodules \
@@ -171,15 +181,19 @@ if [[ "$command_name" == commit ]]; then
 
 	"$REAL_GIT" "${git_prefix[@]}" status || exit $?
 
+	mapfile -t head_gitlinks < <(list_head_gitlinks)
 	mapfile -t undeclared_gitlinks < <(list_undeclared_gitlinks)
-
-	if ((${#undeclared_gitlinks[@]} > 0)); then
-		for path in "${undeclared_gitlinks[@]}"; do
-			printf '%s is a staged nested repository but is not declared in .gitmodules.\n' "$path" >&2
+	for path in "${undeclared_gitlinks[@]}"; do
+		already_tracked=0
+		for existing_path in "${head_gitlinks[@]}"; do
+			[[ "$existing_path" == "$path" ]] || continue
+			already_tracked=1
+			break
 		done
-		printf 'Use git sub add <folder> for a submodule, or unstage the nested repository.\n' >&2
-		exit 1
-	fi
+		((already_tracked == 0)) || continue
+		"$REAL_GIT" "${git_prefix[@]}" rm --cached -q -f -- "$path" || exit $?
+		printf 'Left nested repository untracked: %s (use git sub add %s to track it).\n' "$path" "$path" >&2
+	done
 fi
 
 exec "$REAL_GIT" "${args[@]}"
