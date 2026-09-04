@@ -41,15 +41,18 @@ untracked. Updated declared submodules continue to stage normally.
 
 Before committing, the wrapper:
 
-1. Resolves the current upstream.
-2. Fetches it and stops if fetch fails.
-3. Fast-forwards with `git pull --ff-only` when behind.
-4. Stops if local state prevents the fast-forward.
-5. Displays `git status`.
-6. Rejects staged gitlinks absent from `.gitmodules`.
+1. Continues without fetch/pull when the repository has no remotes.
+2. Resolves the current upstream when at least one remote is configured.
+3. Fetches it and stops if fetch fails.
+4. Fast-forwards with `git pull --ff-only` when behind.
+5. Stops if local state prevents the fast-forward.
+6. Displays `git status`.
+7. Rejects staged gitlinks absent from `.gitmodules`.
 
-A branch without an upstream warns and continues without fetch/pull. The
-wrapper does not merge, rebase, force-push, or create submodules during commit.
+A repository with remotes but no upstream warns and continues without
+fetch/pull. Local-only tracking (no remotes) is not treated as an upstream
+sync. The wrapper does not merge, rebase, force-push, or create submodules
+during commit.
 
 ## Global Git defaults
 

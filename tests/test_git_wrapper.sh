@@ -191,6 +191,42 @@ test_commit_stops_when_fast_forward_would_overwrite_local_changes() (
 	[[ "$("$REAL_GIT" -C "$local_repo" rev-parse HEAD)" == "$base_commit" ]]
 )
 
+test_commit_without_a_remote_skips_fetch_and_succeeds() (
+	local repo="$TEST_HARNESS_ROOT/commit-no-remote"
+	local output
+
+	init_repo "$repo"
+	printf '%s\n' local >"$repo/local.txt"
+	"$REAL_GIT" -C "$repo" add local.txt
+
+	output="$(DOTFILES_REAL_GIT="$REAL_GIT" "$WRAPPER" -C "$repo" commit -q -m local 2>&1)" || return 1
+
+	[[ "$output" != *'skipping fetch and pull'* ]] || return 1
+	[[ "$output" != *'fetch failed'* ]] || return 1
+	[[ "$output" != *'From .'* ]] || return 1
+	[[ "$("$REAL_GIT" -C "$repo" rev-list --count HEAD)" == 1 ]]
+)
+
+test_commit_with_local_upstream_and_no_remote_skips_fetch() (
+	local repo="$TEST_HARNESS_ROOT/commit-local-upstream"
+	local output
+
+	init_repo "$repo"
+	commit_file "$repo" README.md base base
+	"$REAL_GIT" -C "$repo" checkout -q -b feature
+	"$REAL_GIT" -C "$repo" branch --quiet --set-upstream-to=main
+	printf '%s\n' local >"$repo/local.txt"
+	"$REAL_GIT" -C "$repo" add local.txt
+
+	output="$(DOTFILES_REAL_GIT="$REAL_GIT" "$WRAPPER" -C "$repo" commit -q -m local 2>&1)" || return 1
+
+	[[ "$output" != *'From .'* ]] || return 1
+	[[ "$output" != *'fetch failed'* ]] || return 1
+	[[ "$output" != *'skipping fetch and pull'* ]] || return 1
+	[[ "$("$REAL_GIT" -C "$repo" rev-parse --abbrev-ref HEAD)" == feature ]] || return 1
+	[[ "$("$REAL_GIT" -C "$repo" rev-list --count HEAD)" == 2 ]]
+)
+
 test_commit_stops_when_fetch_fails() (
 	local source="$TEST_HARNESS_ROOT/fetch-source"
 	local remote="$TEST_HARNESS_ROOT/fetch-remote.git"
@@ -400,6 +436,8 @@ expect_success 'git commit rejects an undeclared nested-repository gitlink' test
 expect_success 'git add --all leaves undeclared nested repositories untracked' test_add_all_leaves_an_undeclared_nested_repository_untracked
 expect_success 'git add --all stages an updated declared submodule' test_add_all_stages_an_updated_declared_submodule
 expect_success 'git commit fast-forwards from upstream before committing' test_commit_fast_forwards_from_upstream_before_committing
+expect_success 'git commit without a remote skips fetch and succeeds' test_commit_without_a_remote_skips_fetch_and_succeeds
+expect_success 'git commit with a local upstream and no remote skips fetch' test_commit_with_local_upstream_and_no_remote_skips_fetch
 expect_success 'git commit stops when fast-forward would overwrite local changes' test_commit_stops_when_fast_forward_would_overwrite_local_changes
 expect_success 'git commit stops when fetch fails' test_commit_stops_when_fetch_fails
 expect_success 'git commit alias rejects an undeclared gitlink' test_commit_alias_rejects_an_undeclared_gitlink

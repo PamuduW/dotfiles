@@ -129,7 +129,7 @@ comp_define boost_cli \
 	--plan 'Boost CLI' \
 	--detail 'latest verified release' \
 	--order 4 \
-	--desc $'Installs the latest JFrog Boost CLI release to ~/.local/bin, after verifying\nits published SHA-256 digest. Preview software; enabled by default.\nAgentbot owns Claude/Codex integration.'
+	--desc $'Installs the latest JFrog Boost CLI release to ~/.local/bin, after verifying\nits published SHA-256 digest. Preview software; enabled by default.\nAgentbot owns Claude, Codex, and Cursor integration.'
 
 comp_define powershell \
 	--label 'PowerShell (pwsh)' \

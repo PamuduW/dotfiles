@@ -150,20 +150,23 @@ if [[ "$command_name" == add ]]; then
 fi
 
 if [[ "$command_name" == commit ]]; then
-	if upstream="$("$REAL_GIT" "${git_prefix[@]}" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)"; then
-		if ! "$REAL_GIT" "${git_prefix[@]}" fetch; then
-			printf 'git commit stopped: fetch failed for %s.\n' "$upstream" >&2
-			exit 1
-		fi
-		read -r _ behind < <("$REAL_GIT" "${git_prefix[@]}" rev-list --left-right --count "HEAD...$upstream")
-		if ((behind > 0)); then
-			if ! "$REAL_GIT" "${git_prefix[@]}" pull --ff-only; then
-				printf 'git commit stopped: %s could not be fast-forwarded without conflicts.\n' "$upstream" >&2
+	mapfile -t remotes < <("$REAL_GIT" "${git_prefix[@]}" remote)
+	if ((${#remotes[@]} > 0)); then
+		if upstream="$("$REAL_GIT" "${git_prefix[@]}" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null)"; then
+			if ! "$REAL_GIT" "${git_prefix[@]}" fetch; then
+				printf 'git commit stopped: fetch failed for %s.\n' "$upstream" >&2
 				exit 1
 			fi
+			read -r _ behind < <("$REAL_GIT" "${git_prefix[@]}" rev-list --left-right --count "HEAD...$upstream")
+			if ((behind > 0)); then
+				if ! "$REAL_GIT" "${git_prefix[@]}" pull --ff-only; then
+					printf 'git commit stopped: %s could not be fast-forwarded without conflicts.\n' "$upstream" >&2
+					exit 1
+				fi
+			fi
+		else
+			printf 'git commit: current branch has no upstream; skipping fetch and pull.\n' >&2
 		fi
-	else
-		printf 'git commit: current branch has no upstream; skipping fetch and pull.\n' >&2
 	fi
 
 	"$REAL_GIT" "${git_prefix[@]}" status || exit $?
