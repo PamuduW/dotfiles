@@ -131,6 +131,47 @@ test_update_probes_find_vendor_local_bin_installations() (
 	[[ "$output" == claude-local ]]
 )
 
+test_portainer_probe_separates_an_unreachable_daemon_from_a_missing_container() (
+	# Break caught: the probe ran `docker ps -a` as the current user and read any
+	# failure as "container not found". The docker group is granted during the
+	# same install run and is not active until the next session, so a Portainer
+	# that had just been created reported missing.
+	local fake_bin="$TEST_HARNESS_ROOT/portainer-probe-bin"
+	mkdir -p -- "$fake_bin"
+	cat >"$fake_bin/docker" <<'EOF'
+#!/usr/bin/env bash
+printf 'permission denied while trying to connect to the Docker daemon socket
+' >&2
+exit 1
+EOF
+	chmod +x -- "$fake_bin/docker"
+
+	local output
+	output="$(PATH="$fake_bin:/usr/bin:/bin" _comp_probe_portainer)"
+	[[ "$output" == check\|* ]] || return 1
+	[[ "$output" == *'new docker group'* ]] || return 1
+
+	# A reachable daemon with no such container still reports missing.
+	cat >"$fake_bin/docker" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+	chmod +x -- "$fake_bin/docker"
+	output="$(PATH="$fake_bin:/usr/bin:/bin" _comp_probe_portainer)"
+	[[ "$output" == missing\|*'not found'* ]] || return 1
+
+	# And a reachable daemon that has it reports installed.
+	cat >"$fake_bin/docker" <<'EOF'
+#!/usr/bin/env bash
+printf 'portainer
+'
+EOF
+	chmod +x -- "$fake_bin/docker"
+	output="$(PATH="$fake_bin:/usr/bin:/bin" _comp_probe_portainer)"
+	[[ "$output" == installed\|* ]]
+)
+
+check 'Portainer probe separates an unreachable daemon from a missing container' test_portainer_probe_separates_an_unreachable_daemon_from_a_missing_container
 check 'Python probe verifies interpreter pip and venv support' test_python_probe_requires_python_pip_and_venv
 check 'Go probe rejects an asdf installation without a selected Go version' test_go_probe_does_not_treat_empty_asdf_as_installed
 check 'Dotfiles probe requires every managed Stow target' test_dotfiles_probe_requires_every_managed_link

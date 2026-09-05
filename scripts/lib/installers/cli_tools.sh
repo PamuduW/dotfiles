@@ -357,6 +357,13 @@ install_powershell() {
 	fi
 
 	sudo apt-get update -qq || return $?
+	# Microsoft publishes per-release feeds and a brand-new Ubuntu often has no
+	# feed yet. That is a "not offered here", not an install failure.
+	if declare -F apt_package_is_available >/dev/null 2>&1 &&
+		! apt_package_is_available powershell; then
+		log_warn "PowerShell is not published for ${distro} ${version_id} yet; skipping"
+		return 0
+	fi
 	sudo apt-get -o Dpkg::Use-Pty=0 install -y powershell || return $?
 
 	if command -v pwsh >/dev/null 2>&1; then

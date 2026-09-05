@@ -334,13 +334,23 @@ _comp_probe_go() {
 }
 
 _comp_probe_portainer() {
-	local name rc timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
+	local name rc=0 timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
+	if ! command -v docker >/dev/null 2>&1; then
+		printf 'missing|docker is not installed\n'
+		return 0
+	fi
 	_comp_probe_capture name "$timeout_seconds" docker ps -a \
 		--filter 'name=^/portainer$' --format '{{.Names}}' || rc=$?
-	if [[ "${rc:-0}" -eq 124 ]]; then
+	if [[ "$rc" -eq 124 ]]; then
 		printf 'check|portainer probe timed out\n'
 	elif [[ "$name" == portainer ]]; then
 		printf 'installed|container exists (stopped by default)\n'
+	elif [[ "$rc" -ne 0 ]]; then
+		# The daemon refused the query, so this says nothing about the
+		# container. Reporting "not found" here made a fresh install look
+		# failed: the docker group is granted during that same run and is not
+		# active until the next session.
+		printf 'check|cannot query docker yet (new docker group needs a new session)\n'
 	else
 		printf 'missing|portainer container not found\n'
 	fi

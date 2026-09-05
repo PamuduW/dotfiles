@@ -79,6 +79,73 @@ test_apt_install_failure_is_not_hidden_by_warning_logging() (
 	[[ "$rc" == 26 ]]
 )
 
+test_unavailable_packages_do_not_block_the_available_ones() (
+	# Break caught: apt-get install is all-or-nothing, so one package dropped
+	# from a new Ubuntu release left all 53 uninstalled -- which then failed the
+	# dotfiles component, because stow was among the casualties.
+	local pkg_file="$TEST_HARNESS_ROOT/mixed-apt-packages.txt"
+	local calls="$TEST_HARNESS_ROOT/mixed-apt.calls" warnings="$TEST_HARNESS_ROOT/mixed-apt.warn"
+	printf '%s\n' '# @core' 'git' 'gone-from-this-release' 'stow' >"$pkg_file"
+	: >"$calls"
+	: >"$warnings"
+	PKG_FILE="$pkg_file"
+	apt_package_is_available() { [[ "$1" != 'gone-from-this-release' ]]; }
+	_run_quiet_command() {
+		shift
+		printf '%s\n' "$*" >>"$calls"
+	}
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	log_warn() { printf '%s\n' "$*" >>"$warnings"; }
+
+	apt_install_packages core >/dev/null 2>&1 || return 1
+
+	grep -q 'git' "$calls" || return 1
+	grep -q 'stow' "$calls" || return 1
+	! grep -q 'gone-from-this-release' "$calls" || return 1
+	grep -q 'gone-from-this-release' "$warnings"
+)
+
+test_all_packages_unavailable_is_reported_not_installed() (
+	local pkg_file="$TEST_HARNESS_ROOT/absent-apt-packages.txt"
+	local calls="$TEST_HARNESS_ROOT/absent-apt.calls" rc=0
+	printf '%s\n' '# @core' 'gone-one' 'gone-two' >"$pkg_file"
+	: >"$calls"
+	PKG_FILE="$pkg_file"
+	apt_package_is_available() { return 1; }
+	_run_quiet_command() { printf 'called\n' >>"$calls"; }
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	log_warn() { :; }
+
+	apt_install_packages core >/dev/null 2>&1 || rc=$?
+	[[ "$rc" -eq 0 ]] || return 1
+	# apt is never invoked with an empty package list.
+	[[ ! -s "$calls" ]]
+)
+
+test_powershell_skips_a_release_with_no_microsoft_feed() (
+	local warnings="$TEST_HARNESS_ROOT/pwsh.warn" rc=0
+	: >"$warnings"
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	log_warn() { printf '%s\n' "$*" >>"$warnings"; }
+	command() {
+		[[ "$*" == '-v pwsh' ]] && return 1
+		builtin command "$@"
+	}
+	apt_package_is_available() { [[ "$1" != powershell ]]; }
+	sudo() { :; }
+	wget() { :; }
+
+	install_powershell >/dev/null 2>&1 || rc=$?
+	[[ "$rc" -eq 0 ]] || return 1
+	grep -q 'not published' "$warnings"
+)
+
 test_tool_installers_stop_at_the_first_required_failure() (
 	log_step() { :; }
 	log_ok() { :; }
@@ -550,6 +617,9 @@ check 'Stow backup includes an existing codex-rc helper' test_backup_includes_ex
 check 'Stow backup includes an existing Git wrapper' test_backup_includes_existing_git_wrapper
 check 'failed Stow application restores backed-up user files' test_failed_stow_restores_backed_up_user_files
 check 'apt installation failures are not hidden by warning logging' test_apt_install_failure_is_not_hidden_by_warning_logging
+check 'unavailable packages do not block the available ones' test_unavailable_packages_do_not_block_the_available_ones
+check 'all packages unavailable is reported, not installed' test_all_packages_unavailable_is_reported_not_installed
+check 'PowerShell skips a release with no Microsoft feed' test_powershell_skips_a_release_with_no_microsoft_feed
 check 'tool installers stop at the first required command failure' test_tool_installers_stop_at_the_first_required_failure
 check 'container installers stop at the first required command failure' test_container_installers_stop_at_the_first_required_failure
 check 'Portainer fresh installs use LTS and remain stopped' test_portainer_fresh_install_uses_lts_without_starting_container
