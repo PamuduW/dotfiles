@@ -22,6 +22,7 @@ AGENTBOT_DIR="${BOOTSTRAP_AGENTBOT_DIR:-$HOME/agentbot}"
 BOOTSTRAP_SELECTION="${BOOTSTRAP_SELECTION:-}"
 WANT_DOTFILES=0
 WANT_AGENTBOT=0
+SELECTION=1
 
 _bold=''
 _reset=''
@@ -109,8 +110,9 @@ choose_targets() {
 		ask '  Choice [1]: ' 1
 		choice="$ANSWER"
 	fi
+	SELECTION="${choice:-1}"
 	case "$choice" in
-	1 | '') WANT_DOTFILES=1 WANT_AGENTBOT=1 ;;
+	1 | '') WANT_DOTFILES=1 WANT_AGENTBOT=1 SELECTION=1 ;;
 	2) WANT_DOTFILES=1 WANT_AGENTBOT=0 ;;
 	3) WANT_DOTFILES=0 WANT_AGENTBOT=1 ;;
 	*)
@@ -221,13 +223,37 @@ agentbot_prerequisites() {
 	return 1
 }
 
+# Both installers return 2 to mean "the checkout moved forward, so stop and
+# rerun from the new state". That is a normal outcome, not a failure: it is how
+# an adopted checkout catches up. Restart from the updated script rather than
+# reporting a failure the operator would have to interpret.
+restart_after_repository_update() {
+	local what="$1"
+	if [[ -n "${BOOTSTRAP_RESTARTED:-}" ]]; then
+		err "$what updated its checkout again after a restart; stopping to avoid a loop."
+		err "Rerun $DOTFILES_DIR/bootstrap.sh when ready."
+		return 1
+	fi
+	msg ''
+	msg "  $what updated its checkout. Restarting from the updated script."
+	BOOTSTRAP_RESTARTED=1 \
+		BOOTSTRAP_SELECTION="$SELECTION" \
+		exec "$DOTFILES_DIR/bootstrap.sh"
+}
+
 run_dotfiles() {
+	local rc=0
 	step 'Install Dotfiles'
 	msg '  The component menu opens next. Nothing outside it is selected for you.'
-	"$DOTFILES_DIR/install.sh" --initial || {
+	"$DOTFILES_DIR/install.sh" --initial || rc=$?
+	if ((rc == 2)); then
+		restart_after_repository_update Dotfiles
+		return 1
+	fi
+	if ((rc != 0)); then
 		record 'FAILED   dotfiles install'
 		return 1
-	}
+	fi
 	record 'ran      dotfiles install'
 
 	# Always update straight after install, before anything moves on. Never
@@ -243,12 +269,18 @@ run_dotfiles() {
 }
 
 run_agentbot() {
+	local rc=0
 	agentbot_prerequisites || return 1
 	step 'Install Agentbot'
-	AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" install || {
+	AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" install || rc=$?
+	if ((rc == 2)); then
+		restart_after_repository_update Agentbot
+		return 1
+	fi
+	if ((rc != 0)); then
 		record 'FAILED   agentbot install'
 		return 1
-	}
+	fi
 	record 'ran      agentbot install'
 	step 'Update Agentbot'
 	AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" update || {
@@ -287,6 +319,10 @@ print_plan() {
 			msg '  Then: Agentbot install and update.'
 		fi
 	fi
+	if [[ -n "${BOOTSTRAP_RESTARTED:-}" ]]; then
+		msg '  (already confirmed before the checkout was updated)'
+		return 0
+	fi
 	ask '  Continue? [Y/n]: ' Y
 	case "$ANSWER" in
 	[Yy] | [Yy][Ee][Ss] | '') ;;
@@ -313,6 +349,9 @@ print_summary() {
 }
 
 main() {
+	# Report whatever happened, including on failure: a run that dies with no
+	# summary leaves the operator guessing which steps ran.
+	trap print_summary EXIT
 	preflight
 	choose_targets
 	print_plan
@@ -346,7 +385,6 @@ main() {
 		esac
 	fi
 
-	print_summary
 }
 
 if [[ "${BOOTSTRAP_SOURCE_ONLY:-0}" != 1 ]]; then

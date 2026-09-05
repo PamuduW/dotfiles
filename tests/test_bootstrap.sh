@@ -36,7 +36,16 @@ make_remote() {
 	cat >"$work/install.sh" <<EOF
 #!/usr/bin/env bash
 printf '$repo_name-install %s\n' "\$*" >>"\$BOOTSTRAP_TEST_LOG"
+# Seam for the restart and failure tests: exit with the code in the file, then
+# reset it so the next invocation succeeds.
+if [[ -n "\${BOOTSTRAP_TEST_RC_FILE:-}" && -f "\${BOOTSTRAP_TEST_RC_FILE}" ]]; then
+	rc="\$(cat "\$BOOTSTRAP_TEST_RC_FILE")"
+	printf '0\n' >"\$BOOTSTRAP_TEST_RC_FILE"
+	exit "\$rc"
+fi
 EOF
+	# The real script, so the restart path has something to exec.
+	cp -- "$REPO_DIR/bootstrap.sh" "$work/bootstrap.sh"
 	cat >"$work/bin/bin/dotfiles" <<EOF
 #!/usr/bin/env bash
 printf '$repo_name-cli %s\n' "\$*" >>"\$BOOTSTRAP_TEST_LOG"
@@ -289,6 +298,40 @@ test_declining_agentbot_leaves_the_clone_and_reports_the_command() (
 	[[ "$output" == *"$MACHINE/home/agentbot/install.sh install"* ]]
 )
 
+test_a_repository_update_restarts_instead_of_failing() (
+	# Break caught: both installers return 2 to mean "the checkout moved
+	# forward, rerun from the new state". Bootstrap treated that as a failure,
+	# died before the update phase, and printed no summary at all.
+	setup_machine restart
+	local rc_file="$MACHINE/install-rc"
+	printf '2\n' >"$rc_file"
+
+	local output
+	output="$(BOOTSTRAP_ANSWERS_OVERRIDE=$'Y\nY' \
+		run_bootstrap 1 BOOTSTRAP_TEST_RC_FILE="$rc_file" 2>&1)" || return 1
+
+	[[ "$output" == *'updated its checkout. Restarting'* ]] || return 1
+	[[ "$(grep -c 'dotfiles-install --initial' "$BOOTSTRAP_TEST_LOG")" -eq 2 ]] || return 1
+	log_has 'dotfiles-cli update' || return 1
+	log_has 'agentbot-install install' || return 1
+	[[ "$output" != *'FAILED'* ]]
+)
+
+test_a_failed_step_still_prints_a_summary() (
+	setup_machine failed-step
+	local rc_file="$MACHINE/install-rc"
+	printf '9\n' >"$rc_file"
+
+	local rc=0 output
+	output="$(BOOTSTRAP_ANSWERS_OVERRIDE=$'Y' \
+		run_bootstrap 2 BOOTSTRAP_TEST_RC_FILE="$rc_file" 2>&1)" || rc=$?
+
+	[[ "$rc" -ne 0 ]] || return 1
+	[[ "$output" == *'Summary'* ]] || return 1
+	[[ "$output" == *'FAILED   dotfiles install'* ]] || return 1
+	[[ "$output" == *'cloned   Dotfiles'* ]]
+)
+
 expect_success 'both clones, installs, updates, then runs Agentbot' test_both_clones_installs_updates_then_runs_agentbot
 expect_success 'Dotfiles only skips every Agentbot step' test_dotfiles_only_skips_every_agentbot_step
 expect_success 'Agentbot only skips Dotfiles and does not ask' test_agentbot_only_skips_dotfiles_and_does_not_ask
@@ -307,6 +350,8 @@ expect_success 'a piped run still reads the prompts' test_a_piped_run_still_read
 expect_success 'scripted answers drive the selection prompt' test_scripted_answers_drive_the_selection_prompt
 expect_success 'declining the plan changes nothing' test_declining_the_plan_changes_nothing
 expect_success 'declining Agentbot leaves the clone and reports the command' test_declining_agentbot_leaves_the_clone_and_reports_the_command
+expect_success 'a repository update restarts instead of failing' test_a_repository_update_restarts_instead_of_failing
+expect_success 'a failed step still prints a summary' test_a_failed_step_still_prints_a_summary
 
 test_harness_cleanup
 finish_tests
