@@ -40,18 +40,33 @@ record() { SUMMARY+=("$1"); }
 
 has() { command -v "$1" >/dev/null 2>&1; }
 
+# `curl ... | bash` makes stdin the pipe, so `-t 0` is false even though the
+# operator is sitting at a terminal. That is the documented way to run this
+# script, so ask whether the controlling terminal can be opened instead -- it is
+# what the prompts actually read from.
 interactive() {
-	[[ -t 0 && -t 1 ]]
+	(exec 3</dev/tty) 2>/dev/null
 }
 
+# Answers are returned in ANSWER rather than on stdout: command substitution
+# would run this in a subshell, and the scripted-answer cursor below has to
+# survive between prompts.
+ANSWER=''
+_answer_index=0
+
 ask() {
-	local prompt="$1" default="$2" reply
-	if ! interactive; then
-		printf '%s\n' "$default"
-		return 0
+	local prompt="$1" default="$2" reply=''
+	if [[ -n "${BOOTSTRAP_ANSWERS+x}" ]]; then
+		# Test and automation seam: newline-separated answers, consumed in
+		# order. An exhausted or blank entry falls back to the default.
+		local -a scripted=()
+		mapfile -t scripted <<<"$BOOTSTRAP_ANSWERS"
+		reply="${scripted[$_answer_index]:-}"
+		_answer_index=$((_answer_index + 1))
+	elif interactive; then
+		read -r -p "$prompt" reply </dev/tty || reply=''
 	fi
-	read -r -p "$prompt" reply </dev/tty || reply=''
-	printf '%s\n' "${reply:-$default}"
+	ANSWER="${reply:-$default}"
 }
 
 # --- preflight ---------------------------------------------------------------
@@ -91,7 +106,8 @@ choose_targets() {
 		msg '  2) Dotfiles only'
 		msg '  3) Agentbot only'
 		msg ''
-		choice="$(ask '  Choice [1]: ' 1)"
+		ask '  Choice [1]: ' 1
+		choice="$ANSWER"
 	fi
 	case "$choice" in
 	1 | '') WANT_DOTFILES=1 WANT_AGENTBOT=1 ;;
@@ -271,9 +287,8 @@ print_plan() {
 			msg '  Then: Agentbot install and update.'
 		fi
 	fi
-	local reply
-	reply="$(ask '  Continue? [Y/n]: ' Y)"
-	case "$reply" in
+	ask '  Continue? [Y/n]: ' Y
+	case "$ANSWER" in
 	[Yy] | [Yy][Ee][Ss] | '') ;;
 	*)
 		msg 'Nothing was changed.'
@@ -315,15 +330,15 @@ main() {
 	fi
 
 	if ((WANT_AGENTBOT == 1)); then
-		local reply=Y
+		ANSWER=Y
 		# Only ask when Dotfiles just ran. A single-repository selection already
 		# answered this question.
 		if ((WANT_DOTFILES == 1)); then
 			msg ''
 			msg 'Dotfiles setup is complete.'
-			reply="$(ask 'Install and update Agentbot as well? [Y/n]: ' Y)"
+			ask 'Install and update Agentbot as well? [Y/n]: ' Y
 		fi
-		case "$reply" in
+		case "$ANSWER" in
 		[Yy] | [Yy][Ee][Ss] | '') run_agentbot ;;
 		*)
 			record "skipped  agentbot install (run $AGENTBOT_DIR/install.sh install when ready)"

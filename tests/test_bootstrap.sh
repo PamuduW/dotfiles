@@ -83,6 +83,7 @@ run_bootstrap() {
 		NO_COLOR=1 \
 		BOOTSTRAP_TEST_LOG="$BOOTSTRAP_TEST_LOG" \
 		BOOTSTRAP_SELECTION="$selection" \
+		BOOTSTRAP_ANSWERS="${BOOTSTRAP_ANSWERS_OVERRIDE:-}" \
 		BOOTSTRAP_DOTFILES_URL="$DOTFILES_REMOTE" \
 		BOOTSTRAP_AGENTBOT_URL="$AGENTBOT_REMOTE" \
 		BOOTSTRAP_DOTFILES_DIR="$MACHINE/home/dotfiles" \
@@ -240,6 +241,54 @@ test_the_published_one_liner_matches_the_script_location() (
 	grep -Fq 'raw.githubusercontent.com/PamuduW/dotfiles/main/bootstrap.sh' "$REPO_DIR/README.md"
 )
 
+test_a_piped_run_still_reads_the_prompts() (
+	# Break caught: `interactive` tested `-t 0`, which is false under the
+	# documented `curl ... | bash` invocation, so every prompt silently took its
+	# default and the selection menu printed without ever waiting for an answer.
+	# The gate must depend on the controlling terminal, not on stdin.
+	grep -Fq '(exec 3</dev/tty) 2>/dev/null' "$BOOTSTRAP" || return 1
+	! grep -Eq '^\s*\[\[ -t 0 ' "$BOOTSTRAP"
+)
+
+test_scripted_answers_drive_the_selection_prompt() (
+	setup_machine scripted-selection
+	# No BOOTSTRAP_SELECTION: the answer comes from the prompt itself.
+	env PATH="$MACHINE/bin:$ORIGINAL_PATH" HOME="$MACHINE/home" NO_COLOR=1 \
+		BOOTSTRAP_TEST_LOG="$BOOTSTRAP_TEST_LOG" \
+		BOOTSTRAP_ANSWERS=$'2\nY' \
+		BOOTSTRAP_DOTFILES_URL="$DOTFILES_REMOTE" \
+		BOOTSTRAP_AGENTBOT_URL="$AGENTBOT_REMOTE" \
+		BOOTSTRAP_DOTFILES_DIR="$MACHINE/home/dotfiles" \
+		BOOTSTRAP_AGENTBOT_DIR="$MACHINE/home/agentbot" \
+		bash "$BOOTSTRAP" </dev/null >/dev/null 2>&1 || return 1
+
+	# Answer "2" means Dotfiles only, so Agentbot must never be obtained.
+	[[ -d "$MACHINE/home/dotfiles/.git" ]] || return 1
+	[[ ! -e "$MACHINE/home/agentbot" ]]
+)
+
+test_declining_the_plan_changes_nothing() (
+	setup_machine decline-plan
+	local output
+	output="$(BOOTSTRAP_ANSWERS_OVERRIDE=$'n' run_bootstrap 1 2>&1)" || return 1
+	[[ "$output" == *'Nothing was changed.'* ]] || return 1
+	[[ ! -e "$MACHINE/home/dotfiles" && ! -e "$MACHINE/home/agentbot" ]]
+)
+
+test_declining_agentbot_leaves_the_clone_and_reports_the_command() (
+	setup_machine decline-agentbot
+	local output
+	# Plan yes, Agentbot no.
+	output="$(BOOTSTRAP_ANSWERS_OVERRIDE=$'Y\nn' run_bootstrap 1 2>&1)" || return 1
+
+	log_has 'dotfiles-cli update' || return 1
+	! grep -q 'agentbot-install' "$BOOTSTRAP_TEST_LOG" || return 1
+	# The clone stays, so accepting later costs only the install.
+	[[ -d "$MACHINE/home/agentbot/.git" ]] || return 1
+	[[ "$output" == *'skipped  agentbot install'* ]] || return 1
+	[[ "$output" == *"$MACHINE/home/agentbot/install.sh install"* ]]
+)
+
 expect_success 'both clones, installs, updates, then runs Agentbot' test_both_clones_installs_updates_then_runs_agentbot
 expect_success 'Dotfiles only skips every Agentbot step' test_dotfiles_only_skips_every_agentbot_step
 expect_success 'Agentbot only skips Dotfiles and does not ask' test_agentbot_only_skips_dotfiles_and_does_not_ask
@@ -254,6 +303,10 @@ expect_success 'a non-repository destination stops without deleting it' test_a_n
 expect_success 'preflight reports every missing prerequisite together' test_preflight_reports_every_missing_prerequisite_together
 expect_success 'an unknown selection is rejected before any write' test_an_unknown_selection_is_rejected_before_any_write
 expect_success 'the published one-liner matches the script location' test_the_published_one_liner_matches_the_script_location
+expect_success 'a piped run still reads the prompts' test_a_piped_run_still_reads_the_prompts
+expect_success 'scripted answers drive the selection prompt' test_scripted_answers_drive_the_selection_prompt
+expect_success 'declining the plan changes nothing' test_declining_the_plan_changes_nothing
+expect_success 'declining Agentbot leaves the clone and reports the command' test_declining_agentbot_leaves_the_clone_and_reports_the_command
 
 test_harness_cleanup
 finish_tests
