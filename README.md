@@ -25,8 +25,42 @@ It is not installed by Stow.
 
 ## Quick start
 
+On a clean machine, one command does everything — it asks what to install,
+obtains the repositories, opens the component selector, then installs and
+updates:
+
 ```bash
-git clone <repo-url> "$HOME/dotfiles"
+curl -fsSL https://raw.githubusercontent.com/PamuduW/dotfiles/main/bootstrap.sh | bash
+```
+
+It asks first:
+
+```text
+What should this machine get?
+
+  1) Dotfiles and Agentbot   (recommended)
+  2) Dotfiles only
+  3) Agentbot only
+```
+
+Dotfiles is cloned to `$HOME/dotfiles` and Agentbot to `$HOME/agentbot`; they
+must stay siblings because `dotfiles full-update` resolves Agentbot that way.
+An existing destination is reused when it is a clean checkout of the same
+repository, and anything else stops the run with a report — nothing is ever
+deleted or moved. After the Dotfiles phases finish, bootstrap asks before
+installing Agentbot.
+
+To read the script before running it, or on a machine that already has Git:
+
+```bash
+sudo apt-get install -y git
+git clone https://github.com/PamuduW/dotfiles "$HOME/dotfiles"
+"$HOME/dotfiles"/bootstrap.sh
+```
+
+To work with an existing checkout directly:
+
+```bash
 cd "$HOME/dotfiles"
 ./install.sh
 ```

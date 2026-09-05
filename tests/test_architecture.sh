@@ -25,8 +25,12 @@ test_sibling_repository_is_named_agentbot() (
 	# being listed file by file.
 	local old_name hits
 	old_name='agent'"_bootstrap"
+	# Two deliberate exceptions: the legacy token config directory, and the
+	# bootstrap line that adopts a checkout made before the rename.
 	hits="$(rg -n --glob '!log/**' --glob '!tests/test_architecture.sh' \
-		"$old_name" "$REPO_DIR" | rg -v 'github\.env|XDG_CONFIG_HOME' || true)"
+		"$old_name" "$REPO_DIR" |
+		rg -v 'github\.env|XDG_CONFIG_HOME' |
+		rg -v "^[^:]*bootstrap\.sh:[0-9]+:\s*local legacy=" || true)"
 	[[ -z "$hits" ]] || {
 		printf 'unexpected old repository name:\n%s\n' "$hits" >&2
 		return 1
