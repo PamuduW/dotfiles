@@ -239,6 +239,15 @@ _replace_managed_portainer() {
 		return 1
 	fi
 	if [[ "$was_running" == 1 ]]; then
+		# A rename does not release published ports, so the backup still holds
+		# 8000 and 9443 and the replacement could never start. Stop it here,
+		# after the replacement exists, to keep the window with no Portainer as
+		# short as possible. Every failure below restores and restarts it.
+		run_docker stop "$backup" || create_status=$?
+		if ((create_status != 0)); then
+			_portainer_restore_from_backup "$was_running" || return $?
+			return "$create_status"
+		fi
 		run_docker start portainer || create_status=$?
 		if ((create_status != 0)); then
 			_portainer_restore_from_backup "$was_running" || return $?

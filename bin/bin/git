@@ -4,6 +4,9 @@ set -euo pipefail
 REAL_GIT="${DOTFILES_REAL_GIT:-/usr/bin/git}"
 
 git_prefix=()
+# The argv as typed. Every handoff to real Git uses this, never the alias-
+# expanded copy -- see expand_git_aliases.
+original_args=("$@")
 args=("$@")
 command_name=''
 command_index=-1
@@ -19,7 +22,7 @@ parse_git_argv() {
 		-C | -c | --namespace | --work-tree | --git-dir | --exec-path | --config-env)
 			git_prefix+=("$arg")
 			i=$((i + 1))
-			((i < ${#args[@]})) || exec "$REAL_GIT" "${args[@]}"
+			((i < ${#args[@]})) || exec "$REAL_GIT" "${original_args[@]}"
 			git_prefix+=("${args[$i]}")
 			;;
 		--namespace=* | --work-tree=* | --git-dir=* | --exec-path=* | --config-env=* | --bare | --no-pager | --paginate | -p)
@@ -38,6 +41,12 @@ parse_git_argv() {
 	done
 }
 
+# Resolve what an alias ultimately runs, so the guarded commands below can be
+# recognised through it. The rewritten argv is for classification only: `read
+# -a` splits on IFS and performs no quote removal, so an alias body such as
+# `log --pretty=format:"%h %s"` would be re-split into two arguments. Every
+# handoff below therefore passes the original "$@" and lets Git expand the
+# alias itself, exactly once, with its own quoting rules.
 expand_git_aliases() {
 	local depth=0 expansion
 	local -A seen=()
@@ -78,7 +87,7 @@ expand_git_aliases() {
 
 parse_git_argv
 if ! expand_git_aliases; then
-	exec "$REAL_GIT" "$@"
+	exec "$REAL_GIT" "${original_args[@]}"
 fi
 
 list_head_gitlinks() {
@@ -137,13 +146,13 @@ if [[ "$command_name" == clone ]]; then
 		esac
 	done
 	if ((explicit_recurse == 0)); then
-		exec "$REAL_GIT" "${args[@]}" --recurse-submodules
+		exec "$REAL_GIT" "${original_args[@]}" --recurse-submodules
 	fi
 fi
 
 if [[ "$command_name" == add ]]; then
 	mapfile -t gitlinks_before < <(list_undeclared_gitlinks)
-	"$REAL_GIT" "${args[@]}" || exit $?
+	"$REAL_GIT" "${original_args[@]}" || exit $?
 	mapfile -t gitlinks_after < <(list_undeclared_gitlinks)
 	for path in "${gitlinks_after[@]}"; do
 		was_present=0
@@ -196,4 +205,4 @@ if [[ "$command_name" == commit ]]; then
 	done
 fi
 
-exec "$REAL_GIT" "${args[@]}"
+exec "$REAL_GIT" "${original_args[@]}"

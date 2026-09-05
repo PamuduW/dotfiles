@@ -211,6 +211,103 @@ test_portainer_managed_legacy_container_is_recreated_with_its_data() (
 	! grep -Eq 'volume (rm|create) portainer_data' "$calls" || return 1
 )
 
+test_portainer_running_container_is_stopped_before_the_replacement_starts() (
+	# Break caught: the renamed backup kept holding ports 8000 and 9443, so the
+	# replacement could never start and every update of a running Portainer
+	# rolled back and reported failure.
+	local calls="$TEST_HARNESS_ROOT/portainer-running-replace.calls"
+	: >"$calls"
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	log_warn() { :; }
+	run_docker() {
+		printf '%s\n' "$*" >>"$calls"
+		case "$1 $2" in
+		'ps -a')
+			if grep -Fxq 'rename portainer portainer.agentbot-backup' "$calls"; then
+				printf 'portainer\nportainer.agentbot-backup\n'
+			else
+				printf 'portainer\n'
+			fi
+			;;
+		'image inspect') printf 'sha256:target\n' ;;
+		'inspect --format')
+			case "$3" in
+			'{{.Image}}') printf 'sha256:legacy\n' ;;
+			'{{.State.Running}}') printf 'true\n' ;;
+			*) _portainer_managed_layout_reply "$3" || true ;;
+			esac
+			;;
+		esac
+		return 0
+	}
+
+	install_portainer >/dev/null || return 1
+
+	grep -Fxq 'stop portainer.agentbot-backup' "$calls" || return 1
+	grep -Fxq 'start portainer' "$calls" || return 1
+	grep -Fxq 'rm -f portainer.agentbot-backup' "$calls" || return 1
+	# The backup has to be stopped before the replacement starts, and removed
+	# only once that start is confirmed.
+	local stop_line start_line remove_line
+	stop_line="$(grep -Fxn 'stop portainer.agentbot-backup' "$calls" | head -1 | cut -d: -f1)"
+	start_line="$(grep -Fxn 'start portainer' "$calls" | head -1 | cut -d: -f1)"
+	remove_line="$(grep -Fxn 'rm -f portainer.agentbot-backup' "$calls" | head -1 | cut -d: -f1)"
+	((stop_line < start_line)) || return 1
+	((start_line < remove_line)) || return 1
+	! grep -Fxq 'rm -f portainer' "$calls" || return 1
+	! grep -Eq 'volume (rm|create) portainer_data' "$calls"
+)
+
+test_portainer_start_failure_restores_and_restarts_the_original() (
+	local calls="$TEST_HARNESS_ROOT/portainer-start-fail.calls" rc
+	: >"$calls"
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	log_warn() { :; }
+	run_docker() {
+		printf '%s\n' "$*" >>"$calls"
+		case "$1 $2" in
+		'ps -a')
+			if grep -Fxq 'rename portainer portainer.agentbot-backup' "$calls" &&
+				! grep -Fxq 'rename portainer.agentbot-backup portainer' "$calls"; then
+				printf 'portainer\nportainer.agentbot-backup\n'
+			else
+				printf 'portainer\n'
+			fi
+			;;
+		'image inspect') printf 'sha256:target\n' ;;
+		'inspect --format')
+			case "$3" in
+			'{{.Image}}') printf 'sha256:legacy\n' ;;
+			'{{.State.Running}}') printf 'true\n' ;;
+			*) _portainer_managed_layout_reply "$3" || true ;;
+			esac
+			;;
+		esac
+		# Only the replacement's start fails; the restore path's start works.
+		if [[ "$1 $2" == 'start portainer' ]] &&
+			! grep -Fxq 'rename portainer.agentbot-backup portainer' "$calls"; then
+			return 45
+		fi
+		return 0
+	}
+
+	set +e
+	install_portainer >/dev/null 2>&1
+	rc=$?
+	set -e
+
+	[[ "$rc" == 45 ]] || return 1
+	grep -Fxq 'stop portainer.agentbot-backup' "$calls" || return 1
+	grep -Fxq 'rename portainer.agentbot-backup portainer' "$calls" || return 1
+	# The original must come back running, not left stopped by the aborted swap.
+	[[ "$(grep -Fxc 'start portainer' "$calls")" == 2 ]] || return 1
+	! grep -Fxq 'rm -f portainer.agentbot-backup' "$calls"
+)
+
 test_portainer_create_failure_restores_the_original_running_container() (
 	local calls="$TEST_HARNESS_ROOT/portainer-create-fail.calls" rc
 	: >"$calls"
@@ -459,6 +556,8 @@ check 'Portainer fresh installs use LTS and remain stopped' test_portainer_fresh
 check 'Portainer current LTS containers are left unchanged' test_portainer_matching_lts_image_is_left_unchanged
 check 'Portainer managed legacy containers retain their data' test_portainer_managed_legacy_container_is_recreated_with_its_data
 check 'Portainer create failure restores the original running container' test_portainer_create_failure_restores_the_original_running_container
+check 'Portainer running container is stopped before the replacement starts' test_portainer_running_container_is_stopped_before_the_replacement_starts
+check 'Portainer start failure restores and restarts the original' test_portainer_start_failure_restores_and_restarts_the_original
 check 'Portainer verify failure removes the partial replacement' test_portainer_verify_failure_removes_the_partial_replacement
 check 'Portainer interrupted backup is restored before retry' test_portainer_interrupted_backup_is_restored_before_retry
 check 'Portainer custom containers are not replaced' test_portainer_custom_container_is_not_replaced

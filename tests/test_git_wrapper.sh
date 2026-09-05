@@ -462,6 +462,78 @@ test_alias_loop_is_passed_to_system_git() (
 	[[ "$rc" -ne 0 ]]
 )
 
+test_quoted_alias_runs_the_same_argv_as_real_git() (
+	# Break caught: the wrapper re-split an alias body with `read -a`, which
+	# performs no quote removal, and then ran the mangled argv. A formatting
+	# alias silently produced empty output and still exited 0.
+	local repo="$TEST_HARNESS_ROOT/quoted-alias"
+	init_repo "$repo"
+	commit_file "$repo" file.txt content 'first commit here'
+	"$REAL_GIT" -C "$repo" config alias.lg 'log --pretty=format:"%h [%s]"'
+
+	local expected actual
+	expected="$("$REAL_GIT" -C "$repo" lg)"
+	actual="$(DOTFILES_REAL_GIT="$REAL_GIT" "$WRAPPER" -C "$repo" lg)"
+
+	[[ -n "$expected" ]] || return 1
+	[[ "$actual" == "$expected" ]]
+)
+
+test_quoted_alias_argv_is_not_resplit() (
+	local repo="$TEST_HARNESS_ROOT/argv-alias"
+	init_repo "$repo"
+	commit_file "$repo" file.txt content 'first commit here'
+	"$REAL_GIT" -C "$repo" config alias.lg 'log --pretty=format:"%h [%s]"'
+
+	local stub="$TEST_HARNESS_ROOT/argv-stub"
+	cat >"$stub" <<STUB
+#!/usr/bin/env bash
+case "\$1" in
+-C) case "\$3" in config | rev-parse | ls-tree | ls-files) exec $REAL_GIT "\$@" ;; esac ;;
+config | rev-parse | ls-tree | ls-files) exec $REAL_GIT "\$@" ;;
+esac
+printf '[%s]' "\$@"
+printf '\n'
+STUB
+	chmod +x "$stub"
+
+	local argv
+	argv="$(DOTFILES_REAL_GIT="$stub" "$WRAPPER" -C "$repo" lg)"
+	# The alias must reach Git as typed, for Git to expand once and correctly.
+	[[ "$argv" == '[-C][${repo}][lg]' || "$argv" == "[-C][$repo][lg]" ]]
+)
+
+test_unquoted_alias_still_behaves_identically() (
+	local repo="$TEST_HARNESS_ROOT/plain-alias"
+	init_repo "$repo"
+	commit_file "$repo" file.txt content 'first commit here'
+	"$REAL_GIT" -C "$repo" config alias.st 'status --short --branch'
+
+	local expected actual
+	expected="$("$REAL_GIT" -C "$repo" st)"
+	actual="$(DOTFILES_REAL_GIT="$REAL_GIT" "$WRAPPER" -C "$repo" st)"
+	[[ "$actual" == "$expected" ]]
+)
+
+test_quoted_alias_resolving_to_a_guarded_command_still_guards() (
+	local repo="$TEST_HARNESS_ROOT/guarded-quoted-alias"
+	init_repo "$repo"
+	commit_file "$repo" file.txt content 'first commit here'
+	"$REAL_GIT" -C "$repo" config alias.aa 'add -A'
+
+	local nested="$repo/nested"
+	init_repo "$nested"
+	commit_file "$nested" nested.txt nested 'nested commit'
+	printf 'tracked\n' >"$repo/tracked.txt"
+
+	DOTFILES_REAL_GIT="$REAL_GIT" "$WRAPPER" -C "$repo" aa . >/dev/null 2>&1 || return 1
+
+	local staged
+	staged="$("$REAL_GIT" -C "$repo" diff --cached --name-only)"
+	[[ "$staged" == *tracked.txt* ]] || return 1
+	[[ "$staged" != *nested* ]]
+)
+
 expect_success 'git sub add registers an existing nested repository' test_sub_add_registers_an_existing_nested_repository
 expect_success 'git clone initializes declared submodules by default' test_clone_initializes_declared_submodules_by_default
 expect_success 'git commit unstages a new undeclared gitlink and commits other files' test_commit_unstages_a_new_undeclared_gitlink_and_commits_other_files
@@ -483,6 +555,10 @@ expect_success 'git clone alias initializes declared submodules by default' test
 expect_success 'git sub add alias registers an existing nested repository' test_sub_add_alias_registers_an_existing_nested_repository
 expect_success 'git shell commit alias is not classified as commit' test_shell_commit_alias_is_not_classified_as_commit
 expect_success 'git alias loop is passed to system Git' test_alias_loop_is_passed_to_system_git
+expect_success 'quoted alias runs the same argv as real Git' test_quoted_alias_runs_the_same_argv_as_real_git
+expect_success 'quoted alias argv is handed to Git unsplit' test_quoted_alias_argv_is_not_resplit
+expect_success 'unquoted alias behaviour is unchanged' test_unquoted_alias_still_behaves_identically
+expect_success 'quoted alias resolving to a guarded command still guards' test_quoted_alias_resolving_to_a_guarded_command_still_guards
 
 test_harness_cleanup
 finish_tests

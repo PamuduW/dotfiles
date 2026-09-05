@@ -16,7 +16,6 @@ set -euo pipefail
 # this without --check.
 
 REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-REPO_NAME="$(basename "$REPO_DIR")"
 SHARED_RELS=('scripts/lib/shared' 'tests/lib/shared')
 CANONICAL_REPO_NAME='dotfiles'
 SIBLING_REPO_NAME='agent_bootstrap'
@@ -30,17 +29,72 @@ sync | --check) ;;
 	;;
 esac
 
-if [[ "$REPO_NAME" == "$CANONICAL_REPO_NAME" ]]; then
-	canonical_root="$REPO_DIR"
-	sibling_root="$(dirname -- "$REPO_DIR")/$SIBLING_REPO_NAME"
-else
-	canonical_root="$(dirname -- "$REPO_DIR")/$CANONICAL_REPO_NAME"
-	sibling_root="$REPO_DIR"
+# Identify a checkout by what it contains, never by its directory name. The
+# name-based version silently mistook any checkout not called "dotfiles" for
+# the sibling: --check then passed without comparing anything, and sync could
+# delete a repository's own shared tree and refill it from an unrelated
+# directory that merely had the right name.
+repo_role() {
+	local dir="$1"
+	[[ -d "$dir/scripts/lib/shared" ]] || return 1
+	if [[ -f "$dir/scripts/install.sh" && -f "$dir/bin/bin/dotfiles" ]]; then
+		printf 'canonical\n'
+		return 0
+	fi
+	if [[ -f "$dir/src/cli.py" && -f "$dir/agentos.yaml" ]]; then
+		printf 'sibling\n'
+		return 0
+	fi
+	return 1
+}
+
+if ! own_role="$(repo_role "$REPO_DIR")"; then
+	printf 'Error: %s is neither the %s nor the %s checkout.\n' \
+		"$REPO_DIR" "$CANONICAL_REPO_NAME" "$SIBLING_REPO_NAME" >&2
+	exit 1
 fi
 
-if [[ ! -d "$canonical_root" || ! -d "$sibling_root" ]]; then
+if [[ "$own_role" == canonical ]]; then
+	wanted_role='sibling'
+	wanted_name="$SIBLING_REPO_NAME"
+else
+	wanted_role='canonical'
+	wanted_name="$CANONICAL_REPO_NAME"
+fi
+
+parent_dir="$(dirname -- "$REPO_DIR")"
+counterparts=()
+for candidate in "$parent_dir"/*/; do
+	candidate="${candidate%/}"
+	[[ -d "$candidate" && "$candidate" != "$REPO_DIR" ]] || continue
+	[[ "$(repo_role "$candidate" || true)" == "$wanted_role" ]] || continue
+	counterparts+=("$candidate")
+done
+
+if ((${#counterparts[@]} > 1)); then
+	printf 'Error: more than one %s checkout beside %s: %s\n' \
+		"$wanted_name" "$REPO_DIR" "${counterparts[*]}" >&2
+	exit 1
+fi
+
+if ((${#counterparts[@]} == 0)); then
+	# A directory with the expected name that fails identification is a
+	# different problem from an absent sibling, and must not pass as one.
+	if [[ -d "$parent_dir/$wanted_name" ]]; then
+		printf 'Error: %s exists but is not a %s checkout.\n' \
+			"$parent_dir/$wanted_name" "$wanted_name" >&2
+		exit 1
+	fi
 	printf 'Sibling repository not checked out; nothing to sync.\n'
 	exit 0
+fi
+
+if [[ "$own_role" == canonical ]]; then
+	canonical_root="$REPO_DIR"
+	sibling_root="${counterparts[0]}"
+else
+	canonical_root="${counterparts[0]}"
+	sibling_root="$REPO_DIR"
 fi
 
 diverged=0
