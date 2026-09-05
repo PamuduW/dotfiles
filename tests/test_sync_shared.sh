@@ -106,13 +106,13 @@ test_a_wrongly_named_counterpart_fails_loudly() (
 	local work fork impostor rc=0 output
 	work="$(workspace named-impostor)"
 	fork="$work/dotfiles-fork"
-	impostor="$work/agent_bootstrap"
+	impostor="$work/agentbot"
 	make_canonical "$fork"
 	mkdir -p -- "$impostor/scripts/lib/shared"
 
 	output="$(bash "$fork/$SYNC_REL" --check 2>&1)" || rc=$?
 	[[ "$rc" -ne 0 ]] || return 1
-	[[ "$output" == *'is not a agent_bootstrap checkout'* ]]
+	[[ "$output" == *'is not a agentbot checkout'* ]]
 )
 
 test_an_unidentifiable_checkout_fails_loudly() (
@@ -124,7 +124,7 @@ test_an_unidentifiable_checkout_fails_loudly() (
 
 	output="$(bash "$stranger/$SYNC_REL" --check 2>&1)" || rc=$?
 	[[ "$rc" -ne 0 ]] || return 1
-	[[ "$output" == *'is neither the dotfiles nor the agent_bootstrap checkout'* ]]
+	[[ "$output" == *'is neither the dotfiles nor the agentbot checkout'* ]]
 )
 
 test_an_absent_counterpart_stays_a_no_op() (
@@ -147,7 +147,7 @@ test_two_counterparts_are_reported_as_ambiguous() (
 
 	output="$(bash "$canonical/$SYNC_REL" --check 2>&1)" || rc=$?
 	[[ "$rc" -ne 0 ]] || return 1
-	[[ "$output" == *'more than one agent_bootstrap checkout'* ]]
+	[[ "$output" == *'more than one agentbot checkout'* ]]
 )
 
 expect_success 'check detects drift when both checkouts are renamed' test_check_detects_drift_when_both_checkouts_are_renamed

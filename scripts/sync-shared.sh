@@ -18,7 +18,7 @@ set -euo pipefail
 REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 SHARED_RELS=('scripts/lib/shared' 'tests/lib/shared')
 CANONICAL_REPO_NAME='dotfiles'
-SIBLING_REPO_NAME='agent_bootstrap'
+SIBLING_REPO_NAME='agentbot'
 
 mode="${1:-sync}"
 case "$mode" in

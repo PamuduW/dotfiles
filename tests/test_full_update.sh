@@ -146,7 +146,7 @@ test_missing_agentbot_is_reported_not_ignored() (
 )
 
 test_full_update_reports_resolved_launcher_identity() (
-	local fake_root="$TEST_HARNESS_ROOT/agent_bootstrap" output
+	local fake_root="$TEST_HARNESS_ROOT/agentbot" output
 	mkdir -p "$fake_root/bin"
 	printf '#!/bin/sh\nexit 0\n' >"$fake_root/bin/agentbot"
 	chmod 700 "$fake_root/bin/agentbot"

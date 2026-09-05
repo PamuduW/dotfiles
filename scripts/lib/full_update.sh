@@ -11,7 +11,7 @@ full_update_print_identity() {
 		_err 'Agentbot is not installed or is not available on PATH.'
 		return 127
 	}
-	expected_home="${FULL_UPDATE_EXPECTED_AGENTBOT_HOME:-$(dirname -- "$DOTFILES_DIR")/agent_bootstrap}"
+	expected_home="${FULL_UPDATE_EXPECTED_AGENTBOT_HOME:-$(dirname -- "$DOTFILES_DIR")/agentbot}"
 	expected_home="$(realpath -m -- "$expected_home")"
 	if [[ "$agentbot_launcher" == */* ]]; then
 		agentbot_resolved="$(readlink -f "$agentbot_launcher")" || return 1

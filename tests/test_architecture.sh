@@ -15,6 +15,24 @@ test_harness_init
 test_harness_report_init
 source "$TEST_DIR/lib/dotfiles_env.sh"
 
+test_sibling_repository_is_named_agentbot() (
+	# The sibling repository and its checkout directory are `agentbot`, matching
+	# the CLI. The only surviving references to the old name are the legacy
+	# GitHub-token config directory and the tests that pin it: that is a real
+	# historical path on disk from the earlier product rename, not a repository
+	# name, and renaming it would strand an existing token file. Those lines all
+	# name a config directory, so they are recognised by that rather than by
+	# being listed file by file.
+	local old_name hits
+	old_name='agent'"_bootstrap"
+	hits="$(rg -n --glob '!log/**' --glob '!tests/test_architecture.sh' \
+		"$old_name" "$REPO_DIR" | rg -v 'github\.env|XDG_CONFIG_HOME' || true)"
+	[[ -z "$hits" ]] || {
+		printf 'unexpected old repository name:\n%s\n' "$hits" >&2
+		return 1
+	}
+)
+
 test_repository_update_has_no_reload_hook() (
 	! declare -F repo_update_wait_for_reload >/dev/null 2>&1
 	! declare -F repo_update_relaunch >/dev/null 2>&1
@@ -97,6 +115,7 @@ test_installer_help_exits_before_log_initialization() (
 )
 
 check 'repository update has no reload hook' test_repository_update_has_no_reload_hook
+check 'sibling repository is named agentbot' test_sibling_repository_is_named_agentbot
 check 'all terminal device access goes through the shared TTY adapter' test_terminal_device_access_is_centralized
 check 'dotfiles CLI is a thin adapter over shared update modules' test_dotfiles_cli_is_a_thin_adapter_over_update_modules
 check 'full-update loader provides the Codex standalone sync dependency' test_full_update_loader_provides_codex_sync_dependency
