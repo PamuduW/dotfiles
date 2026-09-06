@@ -484,27 +484,37 @@ test_cursor_update_falls_back_to_official_installer() (
 	! grep -Fq '>> FAILED' "$output"
 )
 
-test_cursor_command_branch_uses_the_same_recovery_contract() (
-	local calls="$TEST_HARNESS_ROOT/cursor-command-update.calls" output="$TEST_HARNESS_ROOT/cursor-command-update.output" label='Cursor CLI'
+test_a_windows_cursor_is_never_executed() (
+	# Break caught: the update resolved `cursor` with a bare `command -v`, which
+	# under appendWindowsPath is the Windows editor, and then ran
+	# "<Windows Cursor> update" -- launching the IDE on the operator's desktop
+	# mid-install. `cursor` is the editor launcher and is never the CLI.
+	local machine="$TEST_HARNESS_ROOT/windows-cursor"
+	local calls="$machine/calls" output="$machine/output" label='Cursor CLI'
+	local win_bin="$machine/mnt/c/cursor/bin"
+	mkdir -p -- "$win_bin" "$machine/home"
 	: >"$calls"
-	command() {
-		case "$*" in
-		'-v agent') return 1 ;;
-		'-v cursor') printf '%s\n' cursor ;;
-		*) builtin command "$@" ;;
-		esac
-	}
-	cursor() {
-		printf 'cursor:%s\n' "$*" >>"$calls"
-		return 9
-	}
-	run_vendor_shell_installer() {
-		printf 'fallback:%s:%s\n' "$1" "$2" >>"$calls"
-	}
-	_run_upgrade_step 'Cursor CLI' 'dotfiles update' upgrade_cursor_cli >"$output" 2>&1
-	[[ "${UPGRADE_STEP_RESULT[$label]}" == recovered ]] || return 1
-	[[ "$(<"$calls")" == $'cursor:update\nfallback:https://cursor.com/install:Cursor CLI' ]] || return 1
-	! grep -Fq '>> FAILED' "$output"
+	printf '#!/usr/bin/env bash\nprintf "launched-ide:%%s\\n" "$*" >>"%s"\n' "$calls" >"$win_bin/cursor"
+	chmod +x -- "$win_bin/cursor"
+
+	local result
+	result="$(
+		export HOME="$machine/home"
+		# A fixed PATH, not an extended one: the developer's own machine may
+		# carry a real Cursor CLI, and this test is about what happens when the
+		# only thing that answers to a Cursor name is the Windows editor.
+		export PATH="$win_bin:/usr/bin:/bin"
+		export DOTFILES_WINDOWS_MOUNT_ROOT="$machine/mnt"
+		run_vendor_shell_installer() { printf 'fallback\n' >>"$calls"; }
+		_run_upgrade_step 'Cursor CLI' 'dotfiles update' upgrade_cursor_cli >"$output" 2>&1
+		printf '%s' "${UPGRADE_STEP_RESULT[$label]:-}"
+	)" || return 1
+
+	# Nothing was executed and nothing was reinstalled: with no Linux CLI
+	# present the honest outcome is "not installed".
+	[[ ! -s "$calls" ]] || return 1
+	[[ "$result" == skipped ]] || return 1
+	grep -Fq 'not installed, skipping' "$output"
 )
 
 test_copilot_update_management_is_absent() {
@@ -588,7 +598,7 @@ expect_success 'upgrade step omits failure marker after success' test_upgrade_st
 expect_success 'Node.js upgrade stops when nvm install fails' test_node_upgrade_stops_when_nvm_install_fails
 expect_success 'Go upgrade stops when asdf install fails' test_go_upgrade_stops_when_asdf_install_fails
 expect_success 'Cursor update falls back to the official installer after agent update failure' test_cursor_update_falls_back_to_official_installer
-expect_success 'Cursor command branch shares the recovery contract' test_cursor_command_branch_uses_the_same_recovery_contract
+expect_success 'a Windows cursor is never executed' test_a_windows_cursor_is_never_executed
 expect_success 'Copilot has no update helpers' test_copilot_update_management_is_absent
 expect_success 'pre-confirmation apt report probing never invokes sudo' test_apt_report_probe_uses_cached_indices_without_sudo
 

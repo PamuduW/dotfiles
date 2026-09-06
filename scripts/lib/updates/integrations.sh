@@ -39,13 +39,12 @@ check_cursor_cli() {
 
 upgrade_cursor_cli() {
 	local executable='' update_rc=0 fallback_rc=0
-	if command -v agent >/dev/null 2>&1; then
-		executable="$(command -v agent)"
-	elif command -v cursor >/dev/null 2>&1; then
-		executable="$(command -v cursor)"
-	elif [[ -x "$HOME/.local/bin/agent" ]]; then
-		executable="$HOME/.local/bin/agent"
-	fi
+	# Through the resolver, which rejects Windows interop paths and covers the
+	# ~/.local/bin fallback. `cursor` is not a candidate at all: it is the
+	# editor launcher, and appendWindowsPath resolves it to the Windows app, so
+	# `"$executable" update` opened the Cursor IDE on the operator's desktop
+	# instead of updating the CLI.
+	executable="$(tool_resolve 'agent cursor-agent')" || executable=''
 	if [[ -z "$executable" ]]; then
 		_msg "  Cursor CLI not installed, skipping"
 		upgrade_result_set skipped
@@ -303,15 +302,16 @@ check_claude_cli() {
 }
 
 upgrade_claude_cli() {
-	if command -v claude >/dev/null 2>&1; then
-		claude update || return $?
-	elif [[ -x "$HOME/.local/bin/claude" ]]; then
-		"$HOME/.local/bin/claude" update || return $?
-	else
+	local executable=''
+	# Same resolver, same reason: a Windows Claude on PATH would be updated
+	# instead of the Linux one, or launched.
+	executable="$(tool_resolve 'claude')" || executable=''
+	if [[ -z "$executable" ]]; then
 		_msg "  Claude CLI not installed, skipping"
 		upgrade_result_set skipped
 		return 0
 	fi
+	"$executable" update || return $?
 	upgrade_result_set checked-no-change
 }
 
