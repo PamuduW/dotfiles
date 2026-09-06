@@ -15,6 +15,24 @@ test_harness_init
 test_harness_report_init
 source "$TEST_DIR/lib/dotfiles_env.sh"
 
+test_interactivity_depends_on_the_terminal_not_stdin() (
+	# Break caught: `-t 0` is false whenever the installer is a child of
+	# something reading a pipe -- `curl ... | bash` running bootstrap.sh above
+	# all -- so the component menu was skipped for exactly the operator sitting
+	# there waiting to use it. The menu reads the terminal through the shared
+	# adapter, so the terminal is what the decision must depend on.
+	local hits
+	hits="$(rg -n 'DOTFILES_INTERACTIVE_TTY=true' -A0 -B3 \
+		"$REPO_DIR/scripts" --glob '!tests/**' | rg -- '-t 0' || true)"
+	[[ -z "$hits" ]] || {
+		printf 'interactivity decided by stdin rather than the terminal:\n%s\n' "$hits" >&2
+		return 1
+	}
+	# And the adapter is what answers it.
+	rg -q 'if tty_available; then' "$REPO_DIR/scripts/install.sh" &&
+		rg -q 'if tty_available; then' "$REPO_DIR/scripts/lib/bootstrap.sh"
+)
+
 test_sibling_repository_is_named_agentbot() (
 	# The sibling repository and its checkout directory are `agentbot`, matching
 	# the CLI. The only surviving references to the old name are the legacy
@@ -120,6 +138,7 @@ test_installer_help_exits_before_log_initialization() (
 
 check 'repository update has no reload hook' test_repository_update_has_no_reload_hook
 check 'sibling repository is named agentbot' test_sibling_repository_is_named_agentbot
+check 'interactivity depends on the terminal, not stdin' test_interactivity_depends_on_the_terminal_not_stdin
 check 'all terminal device access goes through the shared TTY adapter' test_terminal_device_access_is_centralized
 check 'dotfiles CLI is a thin adapter over shared update modules' test_dotfiles_cli_is_a_thin_adapter_over_update_modules
 check 'full-update loader provides the Codex standalone sync dependency' test_full_update_loader_provides_codex_sync_dependency

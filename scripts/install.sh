@@ -38,16 +38,22 @@ fi
 # shellcheck disable=SC2034  # Consumed by sourced component/install modules.
 PKG_FILE="$DOTFILES_DIR/packages/packages.txt"
 
-DOTFILES_INTERACTIVE_TTY=false
-if [[ -t 0 ]]; then
-	DOTFILES_INTERACTIVE_TTY=true
-fi
-
 # shellcheck source=scripts/lib/action_log.sh
 source "$DOTFILES_DIR/scripts/lib/action_log.sh"
 
 # shellcheck source=scripts/lib/load.sh
 source "$DOTFILES_DIR/scripts/lib/load.sh"
+
+# Whether a person is here to answer, decided by the controlling terminal
+# rather than by stdin. `-t 0` is false whenever the installer is a child of
+# something reading a pipe -- `curl ... | bash` running bootstrap.sh, most of
+# all -- so the component menu was skipped for exactly the operator who was
+# sitting there waiting to use it. The menu reads the terminal through the
+# shared adapter, so the terminal is what the answer depends on.
+DOTFILES_INTERACTIVE_TTY=false
+if tty_available; then
+	DOTFILES_INTERACTIVE_TTY=true
+fi
 # shellcheck source=scripts/lib/installers/load.sh
 source "$DOTFILES_DIR/scripts/lib/installers/load.sh"
 # shellcheck source=scripts/lib/components/load.sh
