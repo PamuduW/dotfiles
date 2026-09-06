@@ -13,6 +13,42 @@ test_harness_init
 test_harness_report_init
 source "$TEST_DIR/lib/dotfiles_env.sh"
 
+test_docker_daemon_config_is_written_one_way_only() (
+	# Break caught: a fresh install emitted its own JSON literal while an
+	# existing file went through the Python merge, and the two disagreed on key
+	# order. The first full-update on every new machine therefore found a
+	# difference, backed the file up, rewrote it without changing what the
+	# configuration means, and restarted Docker to do it.
+	local machine="$TEST_HARNESS_ROOT/docker-daemon"
+	local fake_bin="$machine/bin" etc="$machine/etc-docker"
+	mkdir -p -- "$fake_bin" "$etc"
+	# sudo runs the command directly: every path here is inside the sandbox.
+	printf '#!/usr/bin/env bash\nexec "$@"\n' >"$fake_bin/sudo"
+	chmod +x -- "$fake_bin/sudo"
+
+	_run_configure() (
+		export PATH="$fake_bin:$PATH"
+		export DOCKER_DAEMON_JSON="$etc/daemon.json"
+		log_warn() { :; }
+		log_step() { :; }
+		log_skip() { printf 'SKIP\n'; }
+		log_ok() { printf 'WROTE\n'; }
+		configure_docker_daemon
+	)
+
+	local first second
+	first="$(_run_configure)" || return 1
+	[[ "$first" == WROTE ]] || return 1
+	[[ -f "$etc/daemon.json" ]] || return 1
+
+	# The second run is the one that used to rewrite and back up: both paths
+	# must now produce the same bytes.
+	second="$(_run_configure)" || return 1
+	[[ "$second" == SKIP ]] || return 1
+	# And nothing was backed up, because nothing changed.
+	[[ -z "$(find "$etc" -name 'daemon.json.bak.*' -print -quit)" ]]
+)
+
 test_git_identity_without_a_name_reports_instead_of_crashing() (
 	# Break caught: apply_git_config read SETUP_GIT_NAME unguarded, so a caller
 	# that never collected it killed the entire run with "unbound variable"
@@ -720,6 +756,7 @@ test_wsl_config_renderer_updates_only_the_requested_section() (
 	grep -Fqx 'systemd=true' "$rendered"
 )
 
+check 'docker daemon config is written one way only' test_docker_daemon_config_is_written_one_way_only
 check 'git identity without a name reports instead of crashing' test_git_identity_without_a_name_reports_instead_of_crashing
 check 'Stow backup includes an existing dotfiles launcher' test_backup_includes_existing_dotfiles_launcher
 check 'Stow backup includes an existing codex-rc helper' test_backup_includes_existing_remote_control_helpers

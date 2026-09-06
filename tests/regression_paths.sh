@@ -19,10 +19,15 @@ test_docker_stops_before_restart_on_config_failure() {
 }
 
 test_docker_merge_temp_file_uses_sudo_boundary() {
+	# Both temporaries: the merge destination, and the empty-object source the
+	# fresh-install path merges onto. A user-owned 0600 mktemp file can reject
+	# the root-run Python writer on constrained WSL mounts.
 	local installer="$ROOT/scripts/lib/installers/docker.sh"
 	grep -Fq 'tmp_file="$(sudo mktemp)"' "$installer" &&
-		grep -Fq 'sudo tee "$tmp_file" >/dev/null' "$installer" &&
-		grep -Fq 'sudo rm -f "$tmp_file"' "$installer"
+		grep -Fq 'source_file="$(sudo mktemp)"' "$installer" &&
+		grep -Fq 'sudo tee "$source_file" >/dev/null' "$installer" &&
+		grep -Fq 'sudo rm -f "$tmp_file"' "$installer" &&
+		grep -Fq 'sudo rm -f "$source_file"' "$installer"
 }
 
 test_removed_commands_have_migration_guidance() {

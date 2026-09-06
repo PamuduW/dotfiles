@@ -2,7 +2,9 @@
 # run_docker() is provided by scripts/lib/docker.sh (sourced via load.sh before installers).
 
 configure_docker_daemon() {
-	local daemon_json="/etc/docker/daemon.json"
+	# Overridable so the merge can be exercised without a root filesystem;
+	# defaults to the real path everywhere else.
+	local daemon_json="${DOCKER_DAEMON_JSON:-/etc/docker/daemon.json}"
 	local tmp_file backup_file merge_status
 
 	command -v python3 >/dev/null 2>&1 || {
@@ -16,12 +18,25 @@ configure_docker_daemon() {
 	# mounts.
 	tmp_file="$(sudo mktemp)"
 
-	sudo install -d -m 0755 /etc/docker
+	sudo install -d -m 0755 "$(dirname -- "$daemon_json")"
 
+	# One writer, one format. A fresh install used to emit its own JSON literal
+	# whose key order differed from the merge's sorted output, so the first
+	# full-update on every new machine found a difference, backed the file up
+	# and rewrote it without changing what it means. Merging onto an empty
+	# object gives both paths byte-identical results.
+	local source_file source_is_temp=false
 	if sudo test -f "$daemon_json"; then
-		# Do not replace a user's daemon configuration. Merge only our logging
-		# defaults, preserve unrelated keys, and refuse conflicting log settings.
-		if sudo python3 - "$daemon_json" "$tmp_file" <<'PY'; then
+		source_file="$daemon_json"
+	else
+		source_file="$(sudo mktemp)"
+		source_is_temp=true
+		printf '%s\n' '{}' | sudo tee "$source_file" >/dev/null
+	fi
+
+	# Do not replace a user's daemon configuration. Merge only our logging
+	# defaults, preserve unrelated keys, and refuse conflicting log settings.
+	if sudo python3 - "$source_file" "$tmp_file" <<'PY'; then
 import json
 import sys
 
@@ -61,17 +76,25 @@ with open(destination, "w", encoding="utf-8") as handle:
     json.dump(config, handle, indent=2, sort_keys=True)
     handle.write("\n")
 PY
-			:
-		else
-			merge_status=$?
-			sudo rm -f "$tmp_file"
-			if [[ "$merge_status" -eq 3 ]]; then
-				log_warn "Existing Docker daemon settings conflict with dotfiles defaults; leaving $daemon_json unchanged"
-				return 1
-			fi
-			log_warn "Existing Docker daemon config is invalid or cannot be safely read; leaving it unchanged"
+		:
+	else
+		merge_status=$?
+		sudo rm -f "$tmp_file"
+		if [[ "$source_is_temp" == true ]]; then
+			sudo rm -f "$source_file"
+		fi
+		if [[ "$merge_status" -eq 3 ]]; then
+			log_warn "Existing Docker daemon settings conflict with dotfiles defaults; leaving $daemon_json unchanged"
 			return 1
 		fi
+		log_warn "Existing Docker daemon config is invalid or cannot be safely read; leaving it unchanged"
+		return 1
+	fi
+	if [[ "$source_is_temp" == true ]]; then
+		sudo rm -f "$source_file"
+	fi
+
+	if sudo test -f "$daemon_json"; then
 		if sudo cmp -s "$tmp_file" "$daemon_json"; then
 			log_skip "Docker daemon config already contains the dotfiles defaults"
 			sudo rm -f "$tmp_file"
@@ -80,16 +103,6 @@ PY
 		backup_file="/etc/docker/daemon.json.bak.$(date +%Y%m%d_%H%M%S)"
 		sudo cp "$daemon_json" "$backup_file"
 		log_step "Backed up existing Docker daemon config to $backup_file"
-	else
-		sudo tee "$tmp_file" >/dev/null <<'EOF'
-{
-  "log-driver": "json-file",
-  "log-opts": {
-    "max-size": "10m",
-    "max-file": "3"
-  }
-}
-EOF
 	fi
 
 	# Modern Docker selects its storage driver automatically. Validate the exact
@@ -107,7 +120,7 @@ EOF
 
 	sudo install -m 0644 "$tmp_file" "$daemon_json"
 	sudo rm -f "$tmp_file"
-	log_ok "Docker daemon logging config safely written to /etc/docker/daemon.json"
+	log_ok "Docker daemon logging config safely written to $daemon_json"
 }
 
 restart_docker_service() {
