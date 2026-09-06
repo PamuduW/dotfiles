@@ -119,6 +119,9 @@ _run_install_preamble() {
 	fi
 }
 
+# Exit status meaning "installed, but some components failed".
+DOTFILES_INSTALL_PARTIAL_RC=4
+
 run_install() {
 	local key failures=0
 	declare -gA INSTALL_COMPONENT_RESULT=()
@@ -146,5 +149,9 @@ run_install() {
 	echo ""
 	echo "Done. Log saved to: $LOG_FILE"
 	echo "Open a new terminal, or run: source ~/.bashrc"
-	((failures == 0))
+	# A distinct status for "the run completed, but N components need
+	# attention". A caller sequencing further work -- bootstrap.sh -- can then
+	# carry on and report, instead of treating one failed component as a reason
+	# to abandon the rest of the machine setup.
+	((failures == 0)) || return "$DOTFILES_INSTALL_PARTIAL_RC"
 }

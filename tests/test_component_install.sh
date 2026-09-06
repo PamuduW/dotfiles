@@ -97,7 +97,9 @@ test_install_orchestrator_collects_failures_and_finishes_selected_work() (
 	run_install >/dev/null
 	local rc=$?
 	set -e
-	[[ "$rc" == 1 ]] || return 1
+	# 4 means "completed, some components need attention" -- distinct from a
+	# run that could not start, so a caller can continue and report.
+	[[ "$rc" == 4 ]] || return 1
 	[[ "$(<"$calls")" == $'first\nsecond\nsummary' ]]
 )
 
@@ -122,6 +124,24 @@ check 'non-interactive install runs the repository gate before setup' test_nonin
 check 'non-interactive install propagates component installation failure' test_noninteractive_install_propagates_install_failure
 check 'selected component installer failures propagate to the orchestrator' test_selected_component_install_failures_propagate
 check 'multi-step component installers preserve the first required failure' test_multi_step_component_installers_preserve_first_failure
+test_repository_update_can_be_pre_authorized() (
+	# bootstrap.sh confirms the plan once and restarts itself when the checkout
+	# moves, so the installer must not ask a second time.
+	local prompted=0
+	ui_confirm_yes_no() {
+		prompted=1
+		return 1
+	}
+	DOTFILES_REPO_UPDATE_ASSUME_YES=1 _dotfiles_install_repo_decision behind 'Pull?' >/dev/null || return 1
+	((prompted == 0)) || return 1
+
+	# Without the flag the prompt is still the decision.
+	prompted=0
+	DOTFILES_REPO_UPDATE_ASSUME_YES='' _dotfiles_install_repo_decision behind 'Pull?' >/dev/null && return 1
+	((prompted == 1))
+)
+
+check 'repository update can be pre-authorized by the caller' test_repository_update_can_be_pre_authorized
 check 'install orchestration reports failures after attempting all selected components' test_install_orchestrator_collects_failures_and_finishes_selected_work
 check 'install summary cannot hide a failed installer behind a probeable artifact' test_install_summary_preserves_failed_installer_with_probeable_artifact
 

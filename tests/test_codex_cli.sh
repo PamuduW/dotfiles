@@ -137,7 +137,7 @@ test_codex_ownership_state_matrix() {
 		'partial-standalone-root|absent'
 		'standalone-active|standalone'
 		'standalone-other-release-active|standalone-shadowed'
-		'standalone-not-on-path|standalone-shadowed'
+		'standalone-not-on-path|standalone-not-on-path'
 		'standalone-shadowed|standalone-shadowed'
 		'standalone-shadowed-multi-node|standalone-shadowed'
 		'nvm-node-wrapper|external'

@@ -200,7 +200,7 @@ check_codex_cli() {
 	local state installed available installed_number comparison action upgradable=0
 	state="$(codex_cli_install_state)" || state=absent
 	case "$state" in
-	standalone)
+	standalone | standalone-not-on-path)
 		installed="$(codex_installed_version)"
 		available="$(codex_available_version)"
 		installed_number="$(codex_version_number "$installed" 2>/dev/null || true)"
@@ -247,7 +247,7 @@ upgrade_codex_cli() {
 	local state before after active
 	state="$(codex_cli_install_state)" || state=absent
 	case "$state" in
-	standalone)
+	standalone | standalone-not-on-path)
 		before="$(codex_installed_version)"
 		codex_sync_standalone || return $?
 		after="$(codex_installed_version)"

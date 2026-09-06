@@ -241,20 +241,31 @@ restart_after_repository_update() {
 		exec "$DOTFILES_DIR/bootstrap.sh"
 }
 
+# The Dotfiles installer returns 4 when it finished but some components need
+# attention. That is a report, not a reason to abandon the rest of the setup:
+# the remaining phases are independent, and the component summary already said
+# what went wrong.
+DOTFILES_INSTALL_PARTIAL_RC=4
+
 run_dotfiles() {
 	local rc=0
 	step 'Install Dotfiles'
 	msg '  The component menu opens next. Nothing outside it is selected for you.'
-	"$DOTFILES_DIR/install.sh" --initial || rc=$?
+	# Pre-authorize the checkout update: the plan was already confirmed, and a
+	# moved checkout restarts this script rather than proceeding blindly.
+	DOTFILES_REPO_UPDATE_ASSUME_YES=1 "$DOTFILES_DIR/install.sh" --initial || rc=$?
 	if ((rc == 2)); then
 		restart_after_repository_update Dotfiles
 		return 1
 	fi
-	if ((rc != 0)); then
+	if ((rc == DOTFILES_INSTALL_PARTIAL_RC)); then
+		record 'ran      dotfiles install (some components need attention)'
+	elif ((rc != 0)); then
 		record 'FAILED   dotfiles install'
 		return 1
+	else
+		record 'ran      dotfiles install'
 	fi
-	record 'ran      dotfiles install'
 
 	# Always update straight after install, before anything moves on. Never
 	# full-update: that asserts the Agentbot sibling and delegates to

@@ -171,6 +171,42 @@ EOF
 	[[ "$output" == installed\|* ]]
 )
 
+test_codex_installed_but_not_on_path_is_not_shadowed() (
+	# Break caught: a standalone Codex at the managed path with nothing else
+	# claiming the name was reported "shadowed", which routed the component into
+	# the npm migration. That found no npm Codex and failed the component --
+	# right after a successful install, because ~/.local/bin was not yet on the
+	# PATH of the session doing the installing.
+	local root="$TEST_HARNESS_ROOT/codex-state"
+	local bin="$root/.local/bin"
+	local pkg="$root/.codex/packages/standalone/releases/1.0.0/bin"
+	mkdir -p -- "$bin" "$pkg"
+	printf '#!/usr/bin/env bash\nprintf "codex 1.0.0\\n"\n' >"$pkg/codex"
+	chmod +x -- "$pkg/codex"
+	ln -sfn "$pkg/codex" "$bin/codex"
+
+	local state
+	# Nothing named codex on PATH: installed, just not reachable yet.
+	state="$(HOME="$root" CODEX_HOME="$root/.codex" CODEX_INSTALL_DIR="$bin" \
+		PATH="/usr/bin:/bin" codex_cli_install_state)"
+	[[ "$state" == standalone-not-on-path ]] || return 1
+
+	# On PATH: fully active.
+	state="$(HOME="$root" CODEX_HOME="$root/.codex" CODEX_INSTALL_DIR="$bin" \
+		PATH="$bin:/usr/bin:/bin" codex_cli_install_state)"
+	[[ "$state" == standalone ]] || return 1
+
+	# A different codex winning on PATH is still a genuine shadow.
+	local foreign="$root/foreign"
+	mkdir -p -- "$foreign"
+	printf '#!/usr/bin/env bash\nprintf "other\\n"\n' >"$foreign/codex"
+	chmod +x -- "$foreign/codex"
+	state="$(HOME="$root" CODEX_HOME="$root/.codex" CODEX_INSTALL_DIR="$bin" \
+		PATH="$foreign:/usr/bin:/bin" codex_cli_install_state)"
+	[[ "$state" == standalone-shadowed ]]
+)
+
+check 'Codex installed but not on PATH is not reported as shadowed' test_codex_installed_but_not_on_path_is_not_shadowed
 check 'Portainer probe separates an unreachable daemon from a missing container' test_portainer_probe_separates_an_unreachable_daemon_from_a_missing_container
 check 'Python probe verifies interpreter pip and venv support' test_python_probe_requires_python_pip_and_venv
 check 'Go probe rejects an asdf installation without a selected Go version' test_go_probe_does_not_treat_empty_asdf_as_installed

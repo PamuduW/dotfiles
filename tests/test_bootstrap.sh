@@ -332,6 +332,29 @@ test_a_failed_step_still_prints_a_summary() (
 	[[ "$output" == *'cloned   Dotfiles'* ]]
 )
 
+test_component_failures_do_not_abandon_the_remaining_phases() (
+	# Break caught: any non-zero installer status ended the run, so one failed
+	# component meant no Dotfiles update and no Agentbot at all. Status 4 means
+	# "finished, some components need attention" and must not stop the rest.
+	setup_machine partial
+	local rc_file="$MACHINE/install-rc"
+	printf '4\n' >"$rc_file"
+
+	local output
+	output="$(BOOTSTRAP_ANSWERS_OVERRIDE=$'Y\nY' \
+		run_bootstrap 1 BOOTSTRAP_TEST_RC_FILE="$rc_file" 2>&1)" || return 1
+
+	log_has 'dotfiles-cli update' || return 1
+	log_has 'agentbot-install install' || return 1
+	[[ "$output" == *'some components need attention'* ]] || return 1
+	[[ "$output" != *'FAILED'* ]]
+)
+
+test_the_checkout_update_is_pre_authorized() (
+	# The plan was already confirmed, so the installer must not ask again.
+	grep -Fq 'DOTFILES_REPO_UPDATE_ASSUME_YES=1' "$BOOTSTRAP"
+)
+
 expect_success 'both clones, installs, updates, then runs Agentbot' test_both_clones_installs_updates_then_runs_agentbot
 expect_success 'Dotfiles only skips every Agentbot step' test_dotfiles_only_skips_every_agentbot_step
 expect_success 'Agentbot only skips Dotfiles and does not ask' test_agentbot_only_skips_dotfiles_and_does_not_ask
@@ -352,6 +375,8 @@ expect_success 'declining the plan changes nothing' test_declining_the_plan_chan
 expect_success 'declining Agentbot leaves the clone and reports the command' test_declining_agentbot_leaves_the_clone_and_reports_the_command
 expect_success 'a repository update restarts instead of failing' test_a_repository_update_restarts_instead_of_failing
 expect_success 'a failed step still prints a summary' test_a_failed_step_still_prints_a_summary
+expect_success 'component failures do not abandon the remaining phases' test_component_failures_do_not_abandon_the_remaining_phases
+expect_success 'the checkout update is pre-authorized' test_the_checkout_update_is_pre_authorized
 
 test_harness_cleanup
 finish_tests

@@ -40,6 +40,13 @@ run_status_action() {
 
 _dotfiles_install_repo_decision() {
 	local _event="$1" prompt="$2"
+	# bootstrap.sh already asked whether to proceed and restarts itself once the
+	# checkout moves, so a second confirmation for its own update is noise.
+	# full_update takes the same position through _dotfiles_approve_repo_update.
+	if [[ "${DOTFILES_REPO_UPDATE_ASSUME_YES:-}" == 1 ]]; then
+		printf '%s yes (pre-authorized)\n' "$prompt"
+		return 0
+	fi
 	ui_confirm_yes_no "$prompt"
 }
 

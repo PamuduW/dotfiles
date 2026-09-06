@@ -265,6 +265,9 @@ install_codex_cli() {
 	standalone)
 		log_skip "Codex CLI standalone already installed"
 		;;
+	standalone-not-on-path)
+		log_warn "Codex CLI is installed but $(dirname -- "$(codex_visible_install_path)") is not on PATH yet"
+		;;
 	external | standalone-shadowed)
 		active="$(codex_active_command)"
 		codex_migrate_nvm_installations || {

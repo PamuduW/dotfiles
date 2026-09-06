@@ -38,6 +38,13 @@ codex_cli_install_state() {
 	if codex_standalone_is_installed; then
 		if codex_cli_is_standalone_active; then
 			printf '%s\n' standalone
+		elif ! codex_active_command >/dev/null 2>&1; then
+			# Installed at the managed path with nothing else claiming the name.
+			# The directory is simply not on PATH in this session yet, which is
+			# the normal state right after a fresh install. Calling that
+			# "shadowed" sent it into the npm migration path, which then failed
+			# because there was no npm Codex to migrate.
+			printf '%s\n' standalone-not-on-path
 		else
 			printf '%s\n' standalone-shadowed
 		fi

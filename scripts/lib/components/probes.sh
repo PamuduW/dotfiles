@@ -273,14 +273,18 @@ _comp_probe_codex_cli() {
 	local state codex_path ver='' rc=0 timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
 	state="$(codex_cli_install_state)" || state=absent
 	case "$state" in
-	standalone)
+	standalone | standalone-not-on-path)
 		codex_path="$(codex_visible_install_path)"
 		_comp_probe_capture ver "$timeout_seconds" "$codex_path" --version || rc=$?
 		if [[ "$rc" -eq 124 ]]; then
 			printf 'check|codex cli probe timed out\n'
 			return
 		fi
-		printf 'installed|%s (standalone)\n' "${ver:-$codex_path}"
+		if [[ "$state" == standalone-not-on-path ]]; then
+			printf 'installed|%s (standalone, not on PATH in this session)\n' "${ver:-$codex_path}"
+		else
+			printf 'installed|%s (standalone)\n' "${ver:-$codex_path}"
+		fi
 		;;
 	external)
 		codex_path="$(codex_active_command 2>/dev/null || true)"
