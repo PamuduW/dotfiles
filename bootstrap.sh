@@ -277,7 +277,7 @@ run_dotfiles() {
 	msg '  The component menu opens next. Nothing outside it is selected for you.'
 	# Pre-authorize the checkout update: the plan was already confirmed, and a
 	# moved checkout restarts this script rather than proceeding blindly.
-	DOTFILES_REPO_UPDATE_ASSUME_YES=1 "$DOTFILES_DIR/install.sh" --initial || rc=$?
+	DOTFILES_REPO_UPDATE_ASSUME_YES=1 "$DOTFILES_DIR/install.sh" --install || rc=$?
 	if ((rc == 2)); then
 		restart_after_repository_update Dotfiles
 		return 1

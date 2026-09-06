@@ -141,6 +141,30 @@ test_repository_update_can_be_pre_authorized() (
 	((prompted == 1))
 )
 
+test_install_mode_goes_straight_to_component_selection() (
+	# Break caught: bootstrap used --initial, which lands on the submenu
+	# offering "Check status / Run setup / Back". A caller that has already
+	# said "install Dotfiles" wants the component selection itself.
+	local calls="$TEST_HARNESS_ROOT/install-mode.calls"
+	: >"$calls"
+	initial_setup_menu() { printf 'submenu\n' >>"$calls"; }
+	run_install_action() { printf 'install-action\n' >>"$calls"; }
+	run_initial_setup_flow() { printf 'flow\n' >>"$calls"; }
+
+	DOTFILES_SOURCE_ONLY=1 source "$REPO_DIR/scripts/install.sh"
+	# Redefine after sourcing: install.sh pulls in the real implementations.
+	initial_setup_menu() { printf 'submenu\n' >>"$calls"; }
+	run_install_action() { printf 'install-action\n' >>"$calls"; }
+	run_initial_setup_flow() { printf 'flow\n' >>"$calls"; }
+
+	DOTFILES_INTERACTIVE_TTY=true _dotfiles_dispatch_mode install
+	DOTFILES_INTERACTIVE_TTY=true _dotfiles_dispatch_mode initial
+	DOTFILES_INTERACTIVE_TTY=false _dotfiles_dispatch_mode install
+
+	[[ "$(<"$calls")" == $'install-action\nsubmenu\nflow' ]]
+)
+
+check 'install mode goes straight to component selection' test_install_mode_goes_straight_to_component_selection
 check 'repository update can be pre-authorized by the caller' test_repository_update_can_be_pre_authorized
 check 'install orchestration reports failures after attempting all selected components' test_install_orchestrator_collects_failures_and_finishes_selected_work
 check 'install summary cannot hide a failed installer behind a probeable artifact' test_install_summary_preserves_failed_installer_with_probeable_artifact

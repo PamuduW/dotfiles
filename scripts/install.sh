@@ -22,6 +22,7 @@ Usage: $(basename "$0") [OPTIONS]
 
 Options:
   --initial     Open initial setup submenu (or run setup non-interactively)
+  --install     Go straight to component selection and install
   --update      Open update workflow
   --help        Show this help and exit
 
@@ -119,6 +120,37 @@ toggle_component() {
 	fi
 }
 
+# Mode dispatch, extracted so the routing can be asserted without driving a
+# terminal.
+_dotfiles_dispatch_mode() {
+	case "$1" in
+	initial)
+		if [[ "$DOTFILES_INTERACTIVE_TTY" == true ]]; then
+			initial_setup_menu
+		else
+			run_initial_setup_flow
+		fi
+		;;
+	# The submenu above is the right landing place for someone browsing. A
+	# caller that has already said "install Dotfiles" -- bootstrap.sh -- wants
+	# the component selection itself, not a menu offering it.
+	install)
+		if [[ "$DOTFILES_INTERACTIVE_TTY" == true ]]; then
+			run_install_action
+		else
+			run_initial_setup_flow
+		fi
+		;;
+	update)
+		run_update_flow
+		;;
+	*)
+		printf 'unknown mode: %s\n' "$1" >&2
+		exit 1
+		;;
+	esac
+}
+
 main() {
 	if ! command -v apt-get >/dev/null 2>&1; then
 		echo "Error: apt-get not found. This installer targets Debian/Ubuntu." >&2
@@ -131,6 +163,10 @@ main() {
 		case "$1" in
 		--initial)
 			mode="initial"
+			shift
+			;;
+		--install)
+			mode="install"
 			shift
 			;;
 		--update)
@@ -158,22 +194,11 @@ main() {
 		return $?
 	fi
 
-	case "$mode" in
-	initial)
-		if [[ "$DOTFILES_INTERACTIVE_TTY" == true ]]; then
-			initial_setup_menu
-		else
-			run_initial_setup_flow
-		fi
-		;;
-	update)
-		run_update_flow
-		;;
-	*)
-		printf 'unknown mode: %s\n' "$mode" >&2
-		exit 1
-		;;
-	esac
+	_dotfiles_dispatch_mode "$mode"
 }
 
-main "$@"
+# Source-only guard, matching bin/bin/dotfiles and the Agentbot installer, so
+# the routing can be loaded and asserted without running a setup.
+if [[ "${DOTFILES_SOURCE_ONLY:-0}" != 1 ]]; then
+	main "$@"
+fi

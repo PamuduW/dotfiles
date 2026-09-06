@@ -109,7 +109,7 @@ test_both_clones_installs_updates_then_runs_agentbot() (
 	run_bootstrap 1 >/dev/null 2>&1 || return 1
 
 	[[ -d "$MACHINE/home/dotfiles/.git" && -d "$MACHINE/home/agentbot/.git" ]] || return 1
-	log_has 'dotfiles-install --initial' || return 1
+	log_has 'dotfiles-install --install' || return 1
 	log_has 'dotfiles-cli update' || return 1
 	log_has 'agentbot-install install' || return 1
 	log_has 'agentbot-install update' || return 1
@@ -126,7 +126,7 @@ test_dotfiles_only_skips_every_agentbot_step() (
 
 	[[ -d "$MACHINE/home/dotfiles/.git" ]] || return 1
 	[[ ! -e "$MACHINE/home/agentbot" ]] || return 1
-	log_has 'dotfiles-install --initial' || return 1
+	log_has 'dotfiles-install --install' || return 1
 	log_has 'dotfiles-cli update' || return 1
 	! grep -q 'agentbot' "$BOOTSTRAP_TEST_LOG"
 )
@@ -148,7 +148,7 @@ test_dotfiles_update_always_follows_install() (
 	setup_machine ordering
 	run_bootstrap 2 >/dev/null 2>&1 || return 1
 	local install_at update_at
-	install_at="$(log_line 'dotfiles-install --initial')"
+	install_at="$(log_line 'dotfiles-install --install')"
 	update_at="$(log_line 'dotfiles-cli update')"
 	((install_at < update_at))
 )
@@ -285,7 +285,7 @@ test_the_plan_is_shown_not_asked() (
 	output="$(run_bootstrap 1 2>&1)" || return 1
 	[[ "$output" == *'Proceeding.'* ]] || return 1
 	[[ "$output" != *'Continue?'* ]] || return 1
-	log_has 'dotfiles-install --initial'
+	log_has 'dotfiles-install --install'
 )
 
 test_agentbot_runs_without_a_second_question() (
@@ -321,7 +321,7 @@ test_a_repository_update_restarts_instead_of_failing() (
 		run_bootstrap 1 BOOTSTRAP_TEST_RC_FILE="$rc_file" 2>&1)" || return 1
 
 	[[ "$output" == *'updated its checkout. Restarting'* ]] || return 1
-	[[ "$(grep -c 'dotfiles-install --initial' "$BOOTSTRAP_TEST_LOG")" -eq 2 ]] || return 1
+	[[ "$(grep -c 'dotfiles-install --install' "$BOOTSTRAP_TEST_LOG")" -eq 2 ]] || return 1
 	log_has 'dotfiles-cli update' || return 1
 	log_has 'agentbot-install install' || return 1
 	[[ "$output" != *'FAILED'* ]]
