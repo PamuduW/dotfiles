@@ -91,7 +91,12 @@ dotfiles_load_command() {
 		;;
 	update) _dotfiles_load_update_modules ;;
 	full-update)
+		# full-update installs as well as updates (roadmap item 2), so it needs
+		# the component installers the update path alone never loaded.
 		_dotfiles_load_update_modules &&
+			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/installers/docker.sh" &&
+			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/installers/stow.sh" &&
+			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/components/install_dispatch.sh" &&
 			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/full_update.sh"
 		;;
 	*) return 0 ;;

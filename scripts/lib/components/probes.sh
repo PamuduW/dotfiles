@@ -38,8 +38,21 @@ collect_component_status_rows() {
 	mapfile -t output_rows < <(_collect_component_status_rows_stream "$enabled_only")
 }
 
+# collect_component_probe_results <assoc-array-name>
+# key -> probe result, from the same parallel probe the status table uses, so
+# full-update and status cannot disagree about what is installed.
+collect_component_probe_results() {
+	local output_name="$1" key result
+	local -n output_map="$output_name"
+	output_map=()
+	while IFS='|' read -r key result; do
+		[[ -n "$key" ]] || continue
+		output_map["$key"]="$result"
+	done < <(_collect_component_status_rows_stream false keys)
+}
+
 _collect_component_status_rows_stream() (
-	local enabled_only="${1:-false}"
+	local enabled_only="${1:-false}" emit="${2:-rows}"
 	local probe_dir i key label probe result detail pid
 	local -a pids=() indexes=()
 	probe_dir="$(mktemp -d)" || return 1
@@ -69,9 +82,13 @@ _collect_component_status_rows_stream() (
 	done
 
 	for i in "${indexes[@]}"; do
-		label="$(_install_short_label "${COMP_LABELS[$i]}")"
 		probe="$(<"$probe_dir/$i")"
 		IFS='|' read -r result detail <<<"$probe"
+		if [[ "$emit" == keys ]]; then
+			printf '%s|%s\n' "${COMP_KEYS[$i]}" "$result"
+			continue
+		fi
+		label="$(_install_short_label "${COMP_LABELS[$i]}")"
 		printf '%s|%s|%s\n' "$label" "$detail" "$result"
 	done
 )

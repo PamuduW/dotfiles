@@ -1,7 +1,55 @@
 # shellcheck shell=bash
+# shellcheck disable=SC2034  # COMP_ON is the registry's selection state, read by is_on.
 
 _dotfiles_approve_repo_update() {
 	return 0
+}
+
+# Roadmap item 2: full-update is install + update, so install-time work (bashrc
+# hooks, stow links, config writes) stops drifting on a machine that was set up
+# once and only ever updated since.
+#
+# The selection is derived from probes, never from a stored answer: a full
+# update must not silently add a component the operator did not choose.
+full_update_select_applied_components() {
+	local -A probe_results=()
+	local key result
+	local -a unverified=()
+
+	collect_component_probe_results probe_results || return 1
+	for key in "${COMP_KEYS[@]}"; do
+		result="${probe_results[$key]:-missing}"
+		case "$result" in
+		installed | configured) COMP_ON["$key"]=1 ;;
+		# `check` means the probe could not reach a verdict, not that the
+		# component is absent -- Portainer reads that way in any session that
+		# predates the docker group. Reinstalling is the safe direction, since
+		# installers are idempotent and skipping means silent drift, but the run
+		# says which components it is guessing about.
+		check)
+			COMP_ON["$key"]=1
+			unverified+=("$key")
+			;;
+		*) COMP_ON["$key"]=0 ;;
+		esac
+	done
+
+	if ((${#unverified[@]} > 0)); then
+		_msg "  Probe could not verify, reinstalling anyway: ${unverified[*]}"
+	fi
+}
+
+full_update_install_applied_components() {
+	local rc=0
+	full_update_select_applied_components || return 1
+	run_install || rc=$?
+	# The installer returns a distinct status for "finished, but components need
+	# attention". The update phases after this are independent, so report it and
+	# carry on rather than abandoning the rest of the machine.
+	if ((rc == ${DOTFILES_INSTALL_PARTIAL_RC:-4})); then
+		return 0
+	fi
+	return "$rc"
 }
 
 full_update_print_identity() {
@@ -129,7 +177,10 @@ cmd_full_update() {
 	declare -F start_action_log >/dev/null 2>&1 && start_action_log
 
 	printf '%s%s=== Dotfiles full update ===%s\n' "${C_BOLD:-}" "${C_ORANGE:-}" "${C_RESET:-}"
-	_dotfiles_run_update _dotfiles_approve_repo_update true || dotfiles_rc=$?
+	# repo update -> component install -> downstream updates, the order
+	# bootstrap uses, so the first run and every run after it converge.
+	_dotfiles_run_update _dotfiles_approve_repo_update true false \
+		full_update_install_applied_components || dotfiles_rc=$?
 	case "$dotfiles_rc" in
 	0) ;;
 	2)

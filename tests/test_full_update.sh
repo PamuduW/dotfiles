@@ -14,6 +14,96 @@ _err() { printf '%s\n' "$*" >&2; }
 C_BOLD='' C_ORANGE='' C_GREEN='' C_RESET=''
 [[ -f "$REPO_DIR/scripts/lib/full_update.sh" ]] && source "$REPO_DIR/scripts/lib/full_update.sh"
 
+test_full_update_installs_only_components_that_probe_as_present() (
+	# Roadmap item 2: full-update is install + update, so install-time work
+	# stops drifting. The selection is derived from probes and must never add a
+	# component the operator did not choose.
+	local installed="$TEST_HARNESS_ROOT/full-update-selection.installed"
+	: >"$installed"
+	COMP_KEYS=(present_one configured_one absent_one skipped_one)
+	declare -A COMP_ON=()
+	collect_component_probe_results() {
+		local -n out="$1"
+		out=(
+			[present_one]=installed
+			[configured_one]=configured
+			[absent_one]=missing
+			[skipped_one]=skipped
+		)
+	}
+	run_install() {
+		local key
+		for key in "${COMP_KEYS[@]}"; do
+			[[ "${COMP_ON[$key]}" -eq 1 ]] && printf '%s\n' "$key" >>"$installed"
+		done
+		return 0
+	}
+
+	full_update_install_applied_components >/dev/null || return 1
+	[[ "$(<"$installed")" == $'present_one\nconfigured_one' ]]
+)
+
+test_an_unverifiable_component_is_reinstalled_and_said_so() (
+	# `check` means the probe reached no verdict, not that the component is
+	# absent -- Portainer reads that way in any session predating the docker
+	# group. Skipping it would be the silent drift this item exists to fix, so
+	# it is reinstalled and the run names what it guessed about.
+	local installed="$TEST_HARNESS_ROOT/full-update-unverified.installed"
+	: >"$installed"
+	COMP_KEYS=(solid unverified gone)
+	declare -A COMP_ON=()
+	collect_component_probe_results() {
+		local -n out="$1"
+		out=([solid]=installed [unverified]=check [gone]=missing)
+	}
+	run_install() {
+		local key
+		for key in "${COMP_KEYS[@]}"; do
+			[[ "${COMP_ON[$key]}" -eq 1 ]] && printf '%s\n' "$key" >>"$installed"
+		done
+		return 0
+	}
+
+	local output
+	output="$(full_update_install_applied_components)" || return 1
+	[[ "$(<"$installed")" == $'solid\nunverified' ]] || return 1
+	[[ "$output" == *'could not verify, reinstalling anyway: unverified'* ]] || return 1
+	# Only the guess is named, not everything that was installed.
+	[[ "$output" != *solid* ]]
+)
+
+test_components_needing_attention_do_not_stop_the_update() (
+	# The installer returns a distinct status for "finished, but N components
+	# need attention". The update phases after it are independent.
+	COMP_KEYS=(one)
+	declare -A COMP_ON=()
+	collect_component_probe_results() {
+		local -n out="$1"
+		out=([one]=installed)
+	}
+	run_install() { return "${DOTFILES_INSTALL_PARTIAL_RC:-4}"; }
+
+	full_update_install_applied_components >/dev/null
+)
+
+test_install_runs_between_the_repository_gate_and_downstream_updates() (
+	# Bootstrap and full-update must apply things in the same order or they
+	# converge on different machine state.
+	local events="$TEST_HARNESS_ROOT/full-update-order.events"
+	: >"$events"
+	_dotfiles_run_update() {
+		printf 'repo-gate\n' >>"$events"
+		[[ -n "${4:-}" ]] || return 1
+		"$4" || return $?
+		printf 'downstream\n' >>"$events"
+	}
+	full_update_install_applied_components() { printf 'install\n' >>"$events"; }
+	agentbot() { [[ "$*" == 'help full' || "$*" == 'full' || "$*" == doctor ]]; }
+
+	cmd_full_update >/dev/null || return 1
+	[[ "$(<"$events")" == $'repo-gate\ninstall\ndownstream' ]]
+)
+
 test_success_runs_dotfiles_then_agentbot_full() (
 	local events="$TEST_HARNESS_ROOT/full-update-success.events"
 	: >"$events"
@@ -211,6 +301,10 @@ test_agentbot_doctor_warning_output_maps_to_warning_state() (
 	[[ "$rc" -eq 10 && "$output" == *'5 warning(s)'* ]]
 )
 
+expect_success 'full-update installs only components that probe as present' test_full_update_installs_only_components_that_probe_as_present
+expect_success 'an unverifiable component is reinstalled and said so' test_an_unverifiable_component_is_reinstalled_and_said_so
+expect_success 'components needing attention do not stop the update' test_components_needing_attention_do_not_stop_the_update
+expect_success 'install runs between the repository gate and downstream updates' test_install_runs_between_the_repository_gate_and_downstream_updates
 expect_success 'full-update runs Dotfiles, then one Agentbot full run' test_success_runs_dotfiles_then_agentbot_full
 expect_success 'a legacy Agentbot bootstraps once before full' test_legacy_agentbot_bootstraps_once_before_full
 expect_success 'an incompatible Agentbot stops after one bootstrap attempt' test_agentbot_bootstrap_stops_if_full_is_still_unavailable

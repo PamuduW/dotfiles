@@ -289,8 +289,13 @@ _run_update_downstream() {
 	((failures == 0))
 }
 
+# post_repo_fn runs between the repository gate and the downstream updates, so
+# a caller can install with the newest checkout already in place and still have
+# the update phases follow. Bootstrap and full-update must apply things in the
+# same order or they converge on different machine state.
 _dotfiles_run_update() {
-	local repository_decision_fn="$1" unattended="$2" dry_run="${3:-false}" repo_rc=0
+	local repository_decision_fn="$1" unattended="$2" dry_run="${3:-false}"
+	local post_repo_fn="${4:-}" repo_rc=0
 	local -A repo_result=()
 	local -a observation_rows=()
 	repo_update_run "$DOTFILES_DIR" 'dotfiles repo' "$repository_decision_fn" repo_result 'PamuduW/dotfiles' || repo_rc=$?
@@ -300,6 +305,10 @@ _dotfiles_run_update() {
 	fi
 	repo_update_is_declined repo_result && return 0
 	[[ "$repo_rc" -eq 0 ]] || return 1
+
+	if [[ -n "$post_repo_fn" ]]; then
+		"$post_repo_fn" || return $?
+	fi
 
 	mapfile -t observation_rows < <(_collect_check_rows repo_result)
 	print_report_table repo_result observation_rows
