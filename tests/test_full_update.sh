@@ -14,6 +14,45 @@ _err() { printf '%s\n' "$*" >&2; }
 C_BOLD='' C_ORANGE='' C_GREEN='' C_RESET=''
 [[ -f "$REPO_DIR/scripts/lib/full_update.sh" ]] && source "$REPO_DIR/scripts/lib/full_update.sh"
 
+test_force_flag_reaches_the_installers_and_survives_a_restart() (
+	# The unattended equivalent of the plan screen's `x`. A repository change
+	# restarts full-update through exec, so the flag has to be carried across
+	# that restart or the run quietly drops back to skipping everything already
+	# present -- the opposite of what was asked for.
+	local events="$TEST_HARNESS_ROOT/full-update-force.events"
+	: >"$events"
+	_dotfiles_run_update() {
+		printf 'force=%s\n' "${DOTFILES_FORCE_REINSTALL:-unset}" >>"$events"
+		printf 'exported=%s\n' "$(bash -c 'printf "%s" "${DOTFILES_FORCE_REINSTALL:-unset}"')" >>"$events"
+	}
+	full_update_print_identity() { :; }
+	full_update_run_agentbot() { :; }
+	full_update_postflight() { :; }
+
+	cmd_full_update --force >/dev/null || return 1
+	grep -Fqx 'force=1' "$events" || return 1
+	# Exported, so the installers in any child see it too.
+	grep -Fqx 'exported=1' "$events" || return 1
+
+	# Restarting after a repository change re-passes the flag rather than
+	# leaning on the inherited environment.
+	full_update_restart_dotfiles() { printf '%s\n' "$*" >"$TEST_HARNESS_ROOT/full-update-force.restart"; }
+	_dotfiles_run_update() { return 2; }
+	repo_update_print_changed() { :; }
+	cmd_full_update --force >/dev/null || true
+	local restart_line
+	restart_line="$(<"$TEST_HARNESS_ROOT/full-update-force.restart")"
+	[[ "$restart_line" == '--resume-after-dotfiles-repo --force' ]] || return 1
+
+	# And an ambient value does not force a run that did not ask for it.
+	: >"$events"
+	_dotfiles_run_update() {
+		printf 'force=%s\n' "${DOTFILES_FORCE_REINSTALL:-unset}" >>"$events"
+	}
+	DOTFILES_FORCE_REINSTALL=1 cmd_full_update >/dev/null || return 1
+	grep -Fqx 'force=0' "$events"
+)
+
 test_full_update_loads_everything_its_install_phase_needs() (
 	# Break caught: full-update installs as well as updates, and its module list
 	# was written by hand. It missed run_docker, menu_tty_cols and PKG_FILE, so
@@ -357,6 +396,7 @@ test_agentbot_doctor_warning_output_maps_to_warning_state() (
 	[[ "$rc" -eq 10 && "$output" == *'5 warning(s)'* ]]
 )
 
+expect_success 'the force flag reaches the installers and survives a restart' test_force_flag_reaches_the_installers_and_survives_a_restart
 expect_success 'full-update loads everything its install phase needs' test_full_update_loads_everything_its_install_phase_needs
 expect_success 'operator-input components are never installed by full-update' test_operator_input_components_are_never_installed_by_full_update
 expect_success 'full-update installs only components that probe as present' test_full_update_installs_only_components_that_probe_as_present

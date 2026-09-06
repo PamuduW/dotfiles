@@ -122,7 +122,7 @@ dotfiles_command_define 'full-update' \
 	--class 'mutating' \
 	--description 'Update Dotfiles and Agentbot without application prompts.' \
 	--note 'Prints resolved checkouts, refuses an unexpected Agentbot checkout, and finishes with read-only health checks.' \
-	--options '(none)|Run the complete unattended Dotfiles and Agentbot maintenance flow.|always' \
+	--options $'(none)|Run the complete unattended Dotfiles and Agentbot maintenance flow.|always\n--force|Reinstall components that are already present, like the execution plan\'s x key.|off' \
 	--defaults 'Running the command authorizes application prompts and recoverable repository replacement.' \
 	--effects 'May preserve local Git state and update the system; postflight reports warnings separately and exits nonzero for Doctor errors.' \
 	--example 'dotfiles full-update' \

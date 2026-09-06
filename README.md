@@ -95,6 +95,10 @@ bypass *content* checks — `/etc/wsl.conf`, `/etc/docker/daemon.json` and
 `~/.bash_profile` compare what is on disk and rewrite when it differs, so they
 already repair themselves and forcing them would only add churn and backups.
 
+The same behaviour is available unattended as `dotfiles full-update --force`,
+which reinstalls the components it finds already present. It carries the flag
+across the restart a repository update triggers, so a forced run stays forced.
+
 Two components ignore `x` entirely. Git identity reads answers the plan screen
 has already collected, and regenerating the SSH key would replace the private
 key registered with GitHub and every server that trusts it. To replace a key,

@@ -97,7 +97,7 @@ full_update_print_identity() {
 }
 
 full_update_restart_dotfiles() {
-	exec "$DOTFILES_DIR/bin/bin/dotfiles" full-update "$1"
+	exec "$DOTFILES_DIR/bin/bin/dotfiles" full-update "$@"
 }
 
 # Agentbot owns its install-then-update sequencing and restart budget via
@@ -180,15 +180,27 @@ full_update_postflight() {
 
 cmd_full_update() {
 	local resumed=false arg dotfiles_rc=0
+	# Reset, then set from the flag alone. Inheriting an ambient
+	# DOTFILES_FORCE_REINSTALL would let an exported shell variable silently
+	# force every run; the restart below carries the flag explicitly instead.
+	export DOTFILES_FORCE_REINSTALL=0
 	for arg in "$@"; do
 		case "$arg" in
 		--resume-after-dotfiles-repo) resumed=true ;;
+		# Reinstall components that are already present, the unattended
+		# equivalent of the execution plan's `x`. Git identity and the SSH key
+		# are unaffected, and full-update never installs them anyway.
+		--force) DOTFILES_FORCE_REINSTALL=1 ;;
 		*)
 			_err "Unknown full-update option: $arg"
+			_msg 'Usage: dotfiles full-update [--force]'
 			return 64
 			;;
 		esac
 	done
+	if [[ "$DOTFILES_FORCE_REINSTALL" == 1 ]]; then
+		_msg 'Forced reinstall: already-installed components will be reinstalled.'
+	fi
 
 	# The longest and most mutating command in the product: capture it, so an
 	# unattended failure leaves something to read.
@@ -207,7 +219,11 @@ cmd_full_update() {
 			return 1
 		fi
 		_msg 'Restarting Dotfiles from the updated checkout.'
-		full_update_restart_dotfiles --resume-after-dotfiles-repo
+		local -a restart_args=(--resume-after-dotfiles-repo)
+		if [[ "$DOTFILES_FORCE_REINSTALL" == 1 ]]; then
+			restart_args+=(--force)
+		fi
+		full_update_restart_dotfiles "${restart_args[@]}"
 		return $?
 		;;
 	*) return "$dotfiles_rc" ;;
