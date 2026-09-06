@@ -5,7 +5,6 @@
 if [[ -z "${DOTFILES_DIR:-}" ]]; then
 	SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 	DOTFILES_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
-	export PKG_FILE="$DOTFILES_DIR/packages/packages.txt"
 
 	# See scripts/install.sh: the controlling terminal decides this, not stdin.
 	# shellcheck source=scripts/lib/shared/tui/tty.sh
@@ -15,3 +14,10 @@ if [[ -z "${DOTFILES_DIR:-}" ]]; then
 		DOTFILES_INTERACTIVE_TTY=true
 	fi
 fi
+
+# Derived from DOTFILES_DIR however it arrived, not only when this file had to
+# resolve it. It used to be set inside that branch, so a caller that already
+# knew its checkout -- the dotfiles CLI always does -- left PKG_FILE unbound,
+# and the apt components then installed nothing while their probes still
+# reported "installed".
+export PKG_FILE="${PKG_FILE:-$DOTFILES_DIR/packages/packages.txt}"

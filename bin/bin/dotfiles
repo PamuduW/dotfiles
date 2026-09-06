@@ -91,12 +91,21 @@ dotfiles_load_command() {
 		;;
 	update) _dotfiles_load_update_modules ;;
 	full-update)
-		# full-update installs as well as updates (roadmap item 2), so it needs
-		# the component installers the update path alone never loaded.
+		# full-update installs as well as updates (roadmap item 2). The installer
+		# and component families come in through their own loaders: a list
+		# written file by file already missed PKG_FILE, run_docker and
+		# menu_tty_cols, and the apt components then installed nothing while
+		# their probes still reported "installed".
+		#
+		# Deliberately not scripts/lib/load.sh: that installs a colour palette
+		# and the menu stack into a command that has never had either, and
+		# print_report_table reads the palette without honouring NO_COLOR.
 		_dotfiles_load_update_modules &&
-			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/installers/docker.sh" &&
-			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/installers/stow.sh" &&
-			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/components/install_dispatch.sh" &&
+			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/bootstrap.sh" &&
+			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/docker.sh" &&
+			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/shared/tui/menu_render.sh" &&
+			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/installers/load.sh" &&
+			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/components/load.sh" &&
 			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/full_update.sh"
 		;;
 	*) return 0 ;;

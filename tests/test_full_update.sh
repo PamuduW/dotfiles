@@ -14,6 +14,35 @@ _err() { printf '%s\n' "$*" >&2; }
 C_BOLD='' C_ORANGE='' C_GREEN='' C_RESET=''
 [[ -f "$REPO_DIR/scripts/lib/full_update.sh" ]] && source "$REPO_DIR/scripts/lib/full_update.sh"
 
+test_full_update_loads_everything_its_install_phase_needs() (
+	# Break caught: full-update installs as well as updates, and its module list
+	# was written by hand. It missed run_docker, menu_tty_cols and PKG_FILE, so
+	# Portainer failed outright and both apt components installed nothing while
+	# their probes still reported "installed" in the summary.
+	#
+	# Driven through the real loader, not a restated list, so it cannot drift
+	# again the same way.
+	local probe
+	probe="$(
+		export DOTFILES_DIR="$REPO_DIR" DOTFILES_SOURCE_ONLY=1
+		source "$REPO_DIR/bin/bin/dotfiles" >/dev/null 2>&1
+		dotfiles_load_command full-update >/dev/null 2>&1 || exit 1
+		for fn in run_install comp_install run_docker menu_tty_cols \
+			read_packages_by_tags install_portainer apply_git_config \
+			full_update_select_applied_components; do
+			declare -F "$fn" >/dev/null || printf 'missing-fn:%s\n' "$fn"
+		done
+		[[ -n "${PKG_FILE:-}" ]] || printf 'missing-var:PKG_FILE\n'
+		# The packages file has to exist, not merely be named: an unbound or
+		# wrong PKG_FILE reads as "no packages for tags" rather than an error.
+		[[ -f "${PKG_FILE:-/nonexistent}" ]] || printf 'unreadable:PKG_FILE\n'
+	)" || return 1
+	[[ -z "$probe" ]] || {
+		printf 'full-update cannot install: %s\n' "$probe" >&2
+		return 1
+	}
+)
+
 test_operator_input_components_are_never_installed_by_full_update() (
 	# Break caught: full-update selected git_identity, whose installer needs a
 	# name and email that only the menu collects, and the run died on an unbound
@@ -328,6 +357,7 @@ test_agentbot_doctor_warning_output_maps_to_warning_state() (
 	[[ "$rc" -eq 10 && "$output" == *'5 warning(s)'* ]]
 )
 
+expect_success 'full-update loads everything its install phase needs' test_full_update_loads_everything_its_install_phase_needs
 expect_success 'operator-input components are never installed by full-update' test_operator_input_components_are_never_installed_by_full_update
 expect_success 'full-update installs only components that probe as present' test_full_update_installs_only_components_that_probe_as_present
 expect_success 'an unverifiable component is reinstalled and said so' test_an_unverifiable_component_is_reinstalled_and_said_so
