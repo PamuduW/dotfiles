@@ -89,17 +89,24 @@ menu_fit_indent() {
 	menu_fit_line "$text" "$usable_cols"
 }
 
+# Cursor control shares the menu body's stream. Writing it to stdout put it on
+# the far side of the action log's tee, so it arrived at the terminal out of
+# order with the lines it was meant to position.
 menu_cursor_hide() {
-	tput civis 2>/dev/null || true
+	local sequence
+	sequence="$(tput civis 2>/dev/null)" || return 0
+	tty_printf '%s' "$sequence"
 }
 
 menu_cursor_show() {
-	tput cnorm 2>/dev/null || true
+	local sequence
+	sequence="$(tput cnorm 2>/dev/null)" || return 0
+	tty_printf '%s' "$sequence"
 }
 
 menu_redraw_up() {
 	local lines="$1"
-	printf '\e[%dA' "$lines"
+	tty_printf '\e[%dA' "$lines"
 }
 
 # Full clear when layout changes (page/line count); otherwise cursor-up in-place redraw.

@@ -17,9 +17,18 @@ ui_init_colors() {
 }
 
 ui_clear() {
-	if [[ -t 0 ]]; then
-		tput clear 2>/dev/null || tty_printf '\033[2J\033[H'
-	fi
+	# Gated on the terminal, not on stdin: `-t 0` is false whenever the caller
+	# is a child of something reading a pipe, so under the piped bootstrap this
+	# silently did nothing and every menu redraw appended instead of replacing.
+	#
+	# The sequence also goes through the adapter rather than stdout. The action
+	# log replaces stdout with a pipe to tee, so a clear written there reaches
+	# the terminal by a different route than the menu body and lands out of
+	# order with it.
+	local sequence
+	tty_output_available || return 0
+	sequence="$(tput clear 2>/dev/null)" || sequence=''
+	tty_printf '%s' "${sequence:-$'\033[2J\033[H'}"
 }
 
 ui_pause() {

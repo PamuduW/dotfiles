@@ -304,6 +304,33 @@ test_terminal_geometry_is_cached_and_invalidatable() (
 expect_success 'component menu adapter preserves dependency-aware toggles' test_component_menu_adapter_preserves_dependency_toggles
 expect_success 'report rows fit long cells at 48, 80, and 120 columns' test_report_rows_fit_long_cells_at_supported_widths
 expect_success 'NO_COLOR clears a preloaded report palette' test_no_color_clears_a_preloaded_report_palette
+test_screen_clearing_survives_a_piped_stdin() (
+	# Break caught: ui_clear tested `-t 0`, which is false whenever the caller
+	# is a child of something reading a pipe. Under the piped bootstrap it
+	# silently did nothing, so every menu redraw appended instead of replacing
+	# and the descriptions piled up down the screen.
+	local capture="$TEST_TMP/clear-capture"
+	: >"$capture"
+	DOTFILES_TTY_OUTPUT="$capture" ui_clear </dev/null
+	[[ -s "$capture" ]]
+)
+
+test_cursor_control_goes_to_the_same_stream_as_the_menu() (
+	# Break caught: the cursor-up and cursor-visibility sequences went to
+	# stdout. The action log replaces stdout with a pipe to tee, so they
+	# reached the terminal by a different route than the menu body and landed
+	# out of order with the lines they were meant to position.
+	local capture="$TEST_TMP/cursor-capture"
+	local stdout_capture="$TEST_TMP/cursor-stdout"
+	: >"$capture"
+	DOTFILES_TTY_OUTPUT="$capture" menu_redraw_up 4 >"$stdout_capture"
+	grep -q '4A' "$capture" || return 1
+	# Nothing may leak to stdout, which is where the tee sits.
+	[[ ! -s "$stdout_capture" ]]
+)
+
+expect_success 'screen clearing survives a piped stdin' test_screen_clearing_survives_a_piped_stdin
+expect_success 'cursor control goes to the same stream as the menu' test_cursor_control_goes_to_the_same_stream_as_the_menu
 expect_success 'terminal geometry is cached and invalidatable' test_terminal_geometry_is_cached_and_invalidatable
 expect_success 'terminal geometry falls back quietly without a controlling TTY' test_terminal_geometry_is_quiet_without_a_tty
 expect_success 'output-only headless TTY is unavailable without a shell diagnostic' test_output_only_headless_tty_is_unavailable_without_a_shell_diagnostic
