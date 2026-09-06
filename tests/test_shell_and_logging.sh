@@ -88,7 +88,10 @@ test_action_log_retains_only_the_newest_logs() (
 	for i in $(seq -w 1 25); do
 		: >"$probe_dir/log/2026-01-01_00-00-${i}.log"
 	done
+	# Backdated: a real orphan is left by a dead run, so it is older than the
+	# grace that protects a capture whose lock holder is still starting up.
 	: >"$probe_dir/log/orphan.log.raw"
+	touch -d '2 hours ago' -- "$probe_dir/log/orphan.log.raw"
 	(
 		DOTFILES_DIR="$probe_dir"
 		DOTFILES_LOG_RETAIN=20

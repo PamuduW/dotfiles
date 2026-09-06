@@ -68,6 +68,24 @@ _action_log_release_lock() {
 	fi
 }
 
+# A raw capture exists before its lock holder can take the lock: the file is
+# created here, and the flock is acquired a process spawn later. Inside that
+# window the file is indistinguishable from one abandoned by a dead run, and a
+# concurrent prune deleted it -- which made the starting run's lock holder fail
+# to open its own capture and report "could not lock action log", or, a moment
+# later, leave that run writing its whole log to an unlinked inode.
+#
+# The window is milliseconds; the grace is seconds. An abandoned capture younger
+# than the grace simply waits for the next prune.
+_ACTION_LOG_RAW_GRACE_SECONDS="${DOTFILES_ACTION_LOG_RAW_GRACE_SECONDS:-60}"
+
+_action_log_raw_is_recent() {
+	local file="$1" now mtime
+	printf -v now '%(%s)T' -1 || return 1
+	mtime="$(stat -c %Y -- "$file" 2>/dev/null)" || return 1
+	((now - mtime < _ACTION_LOG_RAW_GRACE_SECONDS))
+}
+
 _action_log_raw_is_idle() {
 	local file="$1" fd
 	exec {fd}<>"$file" || return 0
@@ -136,6 +154,7 @@ _prune_action_logs() {
 	for file in "$LOG_DIR"/*.log.raw; do
 		[[ -f "$file" ]] || continue
 		[[ "$file" == "$RAW_LOG_FILE" ]] && continue
+		_action_log_raw_is_recent "$file" && continue
 		_action_log_raw_is_idle "$file" || continue
 		rm -f -- "$file"
 	done

@@ -140,6 +140,9 @@ test_killed_writer_raw_is_pruned_without_harming_a_peer() (
 	(
 		DOTFILES_DIR="$probe_dir"
 		PATH="$fake_bin:/usr/bin:/bin"
+		# No grace: the abandoned capture is seconds old, and this test is about
+		# what prune does once a capture is old enough to judge.
+		DOTFILES_ACTION_LOG_RAW_GRACE_SECONDS=0
 		# shellcheck source=scripts/lib/action_log.sh
 		source "$REPO_DIR/scripts/lib/action_log.sh"
 		start_action_log
@@ -154,6 +157,49 @@ test_killed_writer_raw_is_pruned_without_harming_a_peer() (
 	[[ -z "$(raw_logs "$probe_dir")" ]]
 )
 
+test_a_starting_peers_raw_capture_is_not_pruned() (
+	# Break caught: a raw capture is created before its lock holder can take the
+	# lock. In that window it looks exactly like one abandoned by a dead run, so
+	# a concurrent prune deleted it -- and the starting run then failed to open
+	# its own capture and reported "could not lock action log". Intermittently,
+	# which is how it hid in the suite for so long.
+	local probe_dir="$TEST_HARNESS_ROOT/action-log-starting"
+	local fake_bin="$TEST_HARNESS_ROOT/action-log-starting-date"
+	mkdir -p "$probe_dir"
+	install_constant_date "$fake_bin"
+
+	# A peer mid-startup: its capture exists and nothing holds the lock yet.
+	local peer="$probe_dir/log/2026-01-01_00-00-00_000000000_999.log.raw"
+	mkdir -p "$probe_dir/log"
+	: >"$peer"
+
+	(
+		DOTFILES_DIR="$probe_dir"
+		PATH="$fake_bin:/usr/bin:/bin"
+		# shellcheck source=scripts/lib/action_log.sh
+		source "$REPO_DIR/scripts/lib/action_log.sh"
+		start_action_log
+		printf 'B1\n'
+	) >/dev/null || return 1
+
+	[[ -f "$peer" ]] || return 1
+
+	# Once it is old enough to judge, the same capture is prunable: the grace
+	# defers the decision, it does not abandon it.
+	touch -d '2 hours ago' -- "$peer"
+	(
+		DOTFILES_DIR="$probe_dir"
+		PATH="$fake_bin:/usr/bin:/bin"
+		# shellcheck source=scripts/lib/action_log.sh
+		source "$REPO_DIR/scripts/lib/action_log.sh"
+		start_action_log
+		printf 'C1\n'
+	) >/dev/null || return 1
+
+	[[ ! -e "$peer" ]]
+)
+
+expect_success 'a starting peer raw capture is not pruned' test_a_starting_peers_raw_capture_is_not_pruned
 expect_success 'overlapping action logs keep separate complete output' test_overlapping_action_logs_keep_separate_complete_output
 expect_success 'prune does not delete a live peer raw capture' test_prune_does_not_delete_a_live_peer_raw_capture
 expect_success 'killed writer raw is pruned without harming a peer' test_killed_writer_raw_is_pruned_without_harming_a_peer
