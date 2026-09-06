@@ -219,7 +219,23 @@ _update_apt_packages() {
 		upgrade_result_set skipped
 		return 0
 	}
-	sudo apt-get -o Dpkg::Use-Pty=0 upgrade -y || return $?
+	local pending
+	pending="$(apt_upgradable_count)"
+	# Through the quiet wrapper, like the install path: a 140-package upgrade
+	# prints several hundred lines of dpkg unpacking, which buried every other
+	# phase of the run. A failure still prints its whole output.
+	if ((pending > 0)); then
+		_msg "  Upgrading ${pending} package(s)..."
+	fi
+	_run_quiet_command 'apt upgrade' sudo apt-get -qq -o Dpkg::Use-Pty=0 upgrade -y || return $?
+	if ((pending > 0)); then
+		_msg "  Upgraded ${pending} package(s)"
+		# Not checked-no-change: the summary reported "no change" for a run that
+		# had just replaced 140 packages, and hiding the dpkg output would have
+		# left that line as the only thing the operator saw.
+		upgrade_result_set updated
+		return 0
+	fi
 	upgrade_result_set checked-no-change
 }
 

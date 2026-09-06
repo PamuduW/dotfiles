@@ -215,6 +215,12 @@ test_powershell_skips_a_release_with_no_microsoft_feed() (
 	apt_package_is_available() { [[ "$1" != powershell ]]; }
 	sudo() { :; }
 	wget() { :; }
+	# Runs the command, like the real wrapper: this test is about the feed
+	# fallback, not about where apt's output goes.
+	_run_quiet_command() {
+		shift
+		"$@"
+	}
 
 	install_powershell_from_github() {
 		printf 'github-fallback\n' >>"$warnings"

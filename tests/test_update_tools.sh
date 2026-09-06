@@ -517,6 +517,51 @@ test_a_windows_cursor_is_never_executed() (
 	grep -Fq 'not installed, skipping' "$output"
 )
 
+test_the_apt_upgrade_is_quiet_and_reported_as_updated() (
+	# Break caught: the upgrade ran apt-get raw, so a 140-package run printed
+	# several hundred lines of dpkg unpacking and buried every other phase --
+	# and then reported "checked/no change" for it.
+	local machine="$TEST_HARNESS_ROOT/apt-quiet"
+	local output="$machine/output"
+	mkdir -p -- "$machine"
+
+	local result
+	result="$(
+		apt_upgradable_count() { printf '140\n'; }
+		sudo() { printf 'DPKG-NOISE\n'; }
+		_update_apt_packages >"$output" 2>&1
+		printf '%s' "$UPGRADE_STEP_ACTIVE_RESULT"
+	)" || return 1
+
+	# The dpkg output is captured, not printed; the count is what the operator
+	# is told, so a hidden upgrade is still an announced one.
+	! grep -Fq 'DPKG-NOISE' "$output" || return 1
+	grep -Fq 'Upgrading 140 package(s)' "$output" || return 1
+	grep -Fq 'Upgraded 140 package(s)' "$output" || return 1
+	[[ "$result" == updated ]]
+)
+
+test_a_failed_apt_upgrade_still_shows_its_output() (
+	# Quiet on success only: a failure that swallowed its own diagnostics would
+	# be worse than the noise.
+	local machine="$TEST_HARNESS_ROOT/apt-loud"
+	local output="$machine/output"
+	mkdir -p -- "$machine"
+
+	local rc=0
+	(
+		apt_upgradable_count() { printf '3\n'; }
+		sudo() {
+			printf 'E: could not resolve archive.ubuntu.com\n'
+			return 100
+		}
+		_update_apt_packages >"$output" 2>&1
+	) || rc=$?
+
+	[[ "$rc" -ne 0 ]] || return 1
+	grep -Fq 'could not resolve archive.ubuntu.com' "$output"
+)
+
 test_copilot_update_management_is_absent() {
 	! declare -F copilot_command >/dev/null || return 1
 	! declare -F copilot_installed_version >/dev/null || return 1
@@ -599,6 +644,8 @@ expect_success 'Node.js upgrade stops when nvm install fails' test_node_upgrade_
 expect_success 'Go upgrade stops when asdf install fails' test_go_upgrade_stops_when_asdf_install_fails
 expect_success 'Cursor update falls back to the official installer after agent update failure' test_cursor_update_falls_back_to_official_installer
 expect_success 'a Windows cursor is never executed' test_a_windows_cursor_is_never_executed
+expect_success 'the apt upgrade is quiet and reported as updated' test_the_apt_upgrade_is_quiet_and_reported_as_updated
+expect_success 'a failed apt upgrade still shows its output' test_a_failed_apt_upgrade_still_shows_its_output
 expect_success 'Copilot has no update helpers' test_copilot_update_management_is_absent
 expect_success 'pre-confirmation apt report probing never invokes sudo' test_apt_report_probe_uses_cached_indices_without_sudo
 

@@ -285,7 +285,8 @@ install_powershell_from_github() {
 	github_curl -fsSL -o "$tmp/$deb" \
 		"https://github.com/PowerShell/PowerShell/releases/download/v${ver}/${deb}" || return $?
 	# apt resolves the package's own dependencies; dpkg alone would not.
-	sudo apt-get -o Dpkg::Use-Pty=0 install -y "$tmp/$deb" || return $?
+	_run_quiet_command 'PowerShell package install' \
+		sudo apt-get -qq -o Dpkg::Use-Pty=0 install -y "$tmp/$deb" || return $?
 	rm -rf -- "$tmp"
 	trap - RETURN
 	log_ok "PowerShell ${ver} installed from the upstream release"
@@ -386,7 +387,8 @@ install_powershell() {
 	# after the Microsoft repository is added, below.
 	# HTTPS transport is built into supported modern apt releases; the legacy
 	# apt-transport-https package is unnecessary and may not exist on newer systems.
-	sudo apt-get -o Dpkg::Use-Pty=0 install -y wget software-properties-common || return $?
+	_run_quiet_command 'PowerShell prerequisites' \
+		sudo apt-get -qq -o Dpkg::Use-Pty=0 install -y wget software-properties-common || return $?
 
 	if [[ ! -f /etc/apt/sources.list.d/microsoft-prod.list && ! -f /etc/apt/sources.list.d/microsoft-prod.sources ]]; then
 		local deb_file
@@ -413,7 +415,8 @@ install_powershell() {
 		command -v pwsh >/dev/null 2>&1 && return 0
 		return 1
 	fi
-	sudo apt-get -o Dpkg::Use-Pty=0 install -y powershell || return $?
+	_run_quiet_command 'PowerShell install' \
+		sudo apt-get -qq -o Dpkg::Use-Pty=0 install -y powershell || return $?
 
 	if command -v pwsh >/dev/null 2>&1; then
 		log_ok "PowerShell installed ($(pwsh --version 2>/dev/null || echo 'unknown'))"
