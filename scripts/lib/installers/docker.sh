@@ -141,8 +141,9 @@ restart_docker_service() {
 }
 
 install_docker() {
-	if command -v docker >/dev/null 2>&1; then
-		log_skip "Docker already installed ($(docker --version 2>/dev/null || echo 'unknown'))"
+	if command -v docker >/dev/null 2>&1 &&
+		skip_unless_forced "Docker already installed ($(docker --version 2>/dev/null || echo 'unknown'))"; then
+		:
 	else
 		log_step "Install Docker Engine from official repo"
 		local docker_distro codename
@@ -328,8 +329,10 @@ install_portainer() {
 	fi
 
 	current_image_id="$(run_docker inspect --format '{{.Image}}' portainer)" || return $?
-	if [[ "$current_image_id" == "$target_image_id" ]]; then
-		log_skip "Portainer container already uses the requested image"
+	# Safe to force: the container is recreated but portainer_data is a named
+	# volume, so what Portainer stores survives.
+	if [[ "$current_image_id" == "$target_image_id" ]] &&
+		skip_unless_forced "Portainer container already uses the requested image"; then
 		return 0
 	fi
 

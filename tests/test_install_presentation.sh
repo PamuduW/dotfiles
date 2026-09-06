@@ -56,7 +56,7 @@ test_install_confirm_prompt_colors_full_action_text() {
 	FORCE_COLOR=1
 	ui_init_colors
 	output="$(ui_install_confirm_prompt)"
-	[[ "$output" == "  ${C_CYAN}c${C_RESET} confirm   ${C_CYAN}e${C_RESET} edit   ${C_CYAN}q${C_RESET} back_to_menu : ${C_RESET}" ]]
+	[[ "$output" == "  ${C_CYAN}c${C_RESET} confirm   ${C_CYAN}x${C_RESET} confirm_forced   ${C_CYAN}e${C_RESET} edit   ${C_CYAN}q${C_RESET} back_to_menu : ${C_RESET}" ]]
 }
 
 test_shortcut_hint_keeps_labels_undimmed() {

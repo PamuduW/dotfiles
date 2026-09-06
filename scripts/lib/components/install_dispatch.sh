@@ -39,19 +39,17 @@ _comp_install_go() {
 }
 
 _comp_install_lazygit() {
-	if command -v lazygit >/dev/null 2>&1; then
-		log_skip "lazygit already installed"
-	else
-		install_lazygit_from_github
+	if command -v lazygit >/dev/null 2>&1 && skip_unless_forced "lazygit already installed"; then
+		return 0
 	fi
+	install_lazygit_from_github
 }
 
 _comp_install_lazydocker() {
-	if command -v lazydocker >/dev/null 2>&1; then
-		log_skip "lazydocker already installed"
-	else
-		install_lazydocker_from_github
+	if command -v lazydocker >/dev/null 2>&1 && skip_unless_forced "lazydocker already installed"; then
+		return 0
 	fi
+	install_lazydocker_from_github
 }
 
 _comp_install_wsl_conf() {

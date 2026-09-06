@@ -130,6 +130,8 @@ run_initial_setup_flow() {
 confirm_loop() {
 	local need_git_prompt=true
 	local answer=""
+	DOTFILES_FORCE_REINSTALL=0
+	export DOTFILES_FORCE_REINSTALL
 	while true; do
 		if [[ "$need_git_prompt" == "true" ]]; then
 			is_on git_identity && prompt_git_identity
@@ -140,7 +142,19 @@ confirm_loop() {
 		read_tty_line answer "$(ui_install_confirm_prompt)"
 		tty_printf '%s' "${C_RESET:-}"
 		case "$answer" in
-		c | C) return 0 ;;
+		c | C)
+			DOTFILES_FORCE_REINSTALL=0
+			return 0
+			;;
+		# Forced: reinstall what is already present, so a corrupted install can
+		# be repaired without deleting things by hand. Git identity and the SSH
+		# key are unaffected -- one needs answers this screen already has, and
+		# the other would replace a private key you have registered elsewhere.
+		x | X)
+			DOTFILES_FORCE_REINSTALL=1
+			tty_printf '%s\n' "    Forced reinstall: already-installed components will be reinstalled."
+			return 0
+			;;
 		e | E)
 			component_menu || return 1
 			need_git_prompt=true

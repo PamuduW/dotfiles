@@ -7,8 +7,8 @@ install_node_via_nvm() {
 	if command -v node >/dev/null 2>&1; then
 		local current_major
 		current_major="$(node --version | grep -oP '^v\K[0-9]+')"
-		if [[ "$current_major" -ge "$NVM_MIN_NODE" ]]; then
-			log_skip "Node.js v$(node --version | tr -d 'v') already installed"
+		if [[ "$current_major" -ge "$NVM_MIN_NODE" ]] &&
+			skip_unless_forced "Node.js v$(node --version | tr -d 'v') already installed"; then
 			return 0
 		fi
 	fi
@@ -153,8 +153,9 @@ install_cursor_cli() {
 			mkdir -p "$HOME/bin"
 			ln -sf "$HOME/.local/bin/agent" "$HOME/bin/agent"
 		fi
-		log_skip "Cursor CLI already installed"
-		return 0
+		if skip_unless_forced "Cursor CLI already installed"; then
+			return 0
+		fi
 	fi
 	log_step "Install Cursor CLI"
 	local cursor_tmp
@@ -305,7 +306,11 @@ install_codex_cli() {
 		log_ok "Codex CLI standalone installed"
 		;;
 	standalone)
-		log_skip "Codex CLI standalone already installed"
+		if ! skip_unless_forced "Codex CLI standalone already installed"; then
+			log_step "Reinstall Codex CLI standalone"
+			codex_sync_standalone || return $?
+			log_ok "Codex CLI standalone reinstalled"
+		fi
 		;;
 	standalone-not-on-path)
 		log_warn "Codex CLI is installed but $(dirname -- "$(codex_visible_install_path)") is not on PATH yet"
@@ -339,8 +344,8 @@ install_codex_cli() {
 }
 
 install_claude_cli() {
-	if command -v claude >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/claude" ]]; then
-		log_skip "Claude CLI already installed"
+	if { command -v claude >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/claude" ]]; } &&
+		skip_unless_forced "Claude CLI already installed"; then
 		return 0
 	fi
 	log_step "Install Claude CLI"
@@ -357,8 +362,8 @@ install_claude_cli() {
 }
 
 install_powershell() {
-	if command -v pwsh >/dev/null 2>&1; then
-		log_skip "PowerShell already installed ($(pwsh --version 2>/dev/null || echo 'unknown'))"
+	if command -v pwsh >/dev/null 2>&1 &&
+		skip_unless_forced "PowerShell already installed ($(pwsh --version 2>/dev/null || echo 'unknown'))"; then
 		return 0
 	fi
 

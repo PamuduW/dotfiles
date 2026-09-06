@@ -82,6 +82,24 @@ execution plan, and asks for confirmation. Git identity and SSH-key generation
 are off by default; other registered components start selected. Dependencies
 such as Portainer requiring Docker are enforced automatically.
 
+The execution plan offers two ways to confirm:
+
+| Key | Meaning |
+|---|---|
+| `c` | Install, skipping components that are already present |
+| `x` | Install, reinstalling components that are already present |
+
+`x` exists to repair a corrupted install without deleting things by hand. It
+bypasses *presence* checks only ("lazygit is already installed"). It does not
+bypass *content* checks — `/etc/wsl.conf`, `/etc/docker/daemon.json` and
+`~/.bash_profile` compare what is on disk and rewrite when it differs, so they
+already repair themselves and forcing them would only add churn and backups.
+
+Two components ignore `x` entirely. Git identity reads answers the plan screen
+has already collected, and regenerating the SSH key would replace the private
+key registered with GitHub and every server that trusts it. To replace a key,
+delete it and install again.
+
 After installation, open a new terminal or run:
 
 ```bash

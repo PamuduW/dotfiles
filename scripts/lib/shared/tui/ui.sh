@@ -130,7 +130,7 @@ ui_format_shortcuts() {
 }
 
 ui_install_confirm_prompt() {
-	printf '  %s : %s' "$(ui_format_shortcuts c confirm e edit q back_to_menu)" "${C_RESET:-}"
+	printf '  %s : %s' "$(ui_format_shortcuts c confirm x confirm_forced e edit q back_to_menu)" "${C_RESET:-}"
 }
 
 ui_color_word() {

@@ -8,8 +8,8 @@ install_monaspace_fonts() {
 		echo "  Unknown Monaspace install option: $mode" >&2
 		return 1
 	fi
-	if [[ "$mode" != --replace && -d "$font_dir" ]] && compgen -G "$font_dir/*.otf" >/dev/null 2>&1; then
-		log_skip "Monaspace fonts already installed in $font_dir"
+	if [[ "$mode" != --replace && -d "$font_dir" ]] && compgen -G "$font_dir/*.otf" >/dev/null 2>&1 &&
+		skip_unless_forced "Monaspace fonts already installed in $font_dir"; then
 		return 0
 	fi
 

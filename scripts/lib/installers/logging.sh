@@ -49,4 +49,23 @@ _log_legend_line() {
 log_step() { _log_prefix STEP "$1"; }
 log_ok() { _log_prefix OK "$1"; }
 log_skip() { _log_prefix SKIP "$1"; }
+
+# A forced reinstall (the plan screen's `x`) bypasses "this is already here"
+# checks, so a corrupted install can be repaired without deleting things by
+# hand. It deliberately does not bypass content checks: writers that compare
+# what is on disk already rewrite when it differs, so they repair drift on
+# their own, and forcing them only adds churn and backup files.
+force_reinstall_requested() {
+	[[ "${DOTFILES_FORCE_REINSTALL:-0}" == 1 ]]
+}
+
+# Report "already present, nothing to do" -- unless a forced reinstall is in
+# progress, in which case the caller falls through and does the work again.
+skip_unless_forced() {
+	if force_reinstall_requested; then
+		return 1
+	fi
+	log_skip "$1"
+	return 0
+}
 log_warn() { _log_prefix WARN "$1"; }

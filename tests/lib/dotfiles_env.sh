@@ -17,6 +17,10 @@ source "$REPO_DIR/scripts/lib/shared/tui/menu_render.sh"
 source "$REPO_DIR/scripts/lib/repo_update.sh"
 source "$REPO_DIR/scripts/lib/wsl_conf.sh"
 source "$REPO_DIR/scripts/lib/components/registry.sh"
+# Loaded here rather than stubbed per test file: installers depend on log_skip,
+# _run_quiet_command and skip_unless_forced, and three test files had grown
+# their own copies of them.
+source "$REPO_DIR/scripts/lib/installers/logging.sh"
 source "$REPO_DIR/scripts/lib/installers/apt.sh"
 # shellcheck source=scripts/lib/managed_tool_state.sh
 source "$REPO_DIR/scripts/lib/managed_tool_state.sh"

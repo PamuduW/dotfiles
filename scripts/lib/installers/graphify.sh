@@ -90,7 +90,8 @@ install_graphify_cli() {
 	local graphify_cmd uv_cmd
 	if graphify_cmd="$(graphify_command 2>/dev/null)"; then
 		if graphify_cli_is_uv_owned; then
-			log_skip "Graphify CLI already installed via uv"
+			# Forced: fall through and let uv reinstall over its own copy.
+			skip_unless_forced "Graphify CLI already installed via uv" || return 1
 		else
 			log_warn "Graphify CLI already exists outside uv; preserving external installation"
 		fi
