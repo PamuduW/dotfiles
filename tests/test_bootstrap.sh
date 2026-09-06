@@ -35,6 +35,11 @@ make_remote() {
 	mkdir -p -- "$work/bin/bin"
 	cat >"$work/install.sh" <<EOF
 #!/usr/bin/env bash
+# A real checkout advertises its modes; bootstrap asks before using one.
+if [[ "\${1:-}" == --help ]]; then
+	printf 'Options:\n  --initial\n  --install\n  --update\n'
+	exit 0
+fi
 printf '$repo_name-install %s\n' "\$*" >>"\$BOOTSTRAP_TEST_LOG"
 # Seam for the restart and failure tests: exit with the code in the file, then
 # reset it so the next invocation succeeds.
@@ -415,6 +420,43 @@ test_a_non_interactive_run_does_not_exec_a_shell() (
 	[[ "$output" == *'exec bash -l'* ]]
 )
 
+test_an_older_checkout_falls_back_to_the_mode_it_has() (
+	# Break caught: this script is always fetched fresh but drives a checkout of
+	# any age. It invoked --install on a checkout that predated the flag, whose
+	# argument parser rejected it before reaching the repository gate that would
+	# have updated it -- so the run could never recover on its own.
+	setup_machine legacy-mode
+	# A checkout that only knows --initial.
+	local legacy="$MACHINE/home/dotfiles"
+	run_bootstrap 2 >/dev/null 2>&1 || return 1
+	cat >"$legacy/install.sh" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == --help ]]; then
+	printf 'Options:\n  --initial\n  --update\n'
+	exit 0
+fi
+case "${1:-}" in
+--initial) printf 'dotfiles-install %s\n' "$*" >>"$BOOTSTRAP_TEST_LOG" ;;
+*)
+	printf 'Unknown option: %s\n' "$1" >&2
+	exit 1
+	;;
+esac
+EOF
+	chmod +x -- "$legacy/install.sh"
+	# Commit it: the adoption policy refuses a dirty checkout, and rightly so.
+	"$REAL_GIT" -C "$legacy" add -A >/dev/null 2>&1
+	"$REAL_GIT" -C "$legacy" -c user.name=T -c user.email=t@e.invalid \
+		commit -qm 'legacy installer' >/dev/null 2>&1
+	: >"$BOOTSTRAP_TEST_LOG"
+
+	local output
+	output="$(run_bootstrap 2 2>&1)" || return 1
+	[[ "$output" == *'predates direct component selection'* ]] || return 1
+	log_has 'dotfiles-install --initial' || return 1
+	! grep -q -- '--install' "$BOOTSTRAP_TEST_LOG"
+)
+
 expect_success 'both clones, installs, updates, then runs Agentbot' test_both_clones_installs_updates_then_runs_agentbot
 expect_success 'Dotfiles only skips every Agentbot step' test_dotfiles_only_skips_every_agentbot_step
 expect_success 'Agentbot only skips Dotfiles and does not ask' test_agentbot_only_skips_dotfiles_and_does_not_ask
@@ -438,6 +480,7 @@ expect_success 'a repository update restarts instead of failing' test_a_reposito
 expect_success 'a failed step still prints a summary' test_a_failed_step_still_prints_a_summary
 expect_success 'component failures do not abandon the remaining phases' test_component_failures_do_not_abandon_the_remaining_phases
 expect_success 'the checkout update is pre-authorized' test_the_checkout_update_is_pre_authorized
+expect_success 'an older checkout falls back to the mode it has' test_an_older_checkout_falls_back_to_the_mode_it_has
 expect_success 'the Agentbot phase sees tools Dotfiles just installed' test_agentbot_phase_sees_tools_dotfiles_just_installed
 expect_success 'the summary prints exactly once before the shell offer' test_the_summary_prints_exactly_once_before_the_shell_offer
 expect_success 'a non-interactive run does not exec a shell' test_a_non_interactive_run_does_not_exec_a_shell

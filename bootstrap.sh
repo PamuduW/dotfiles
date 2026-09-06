@@ -271,13 +271,31 @@ restart_after_repository_update() {
 # what went wrong.
 DOTFILES_INSTALL_PARTIAL_RC=4
 
+# This script is always fetched fresh, but it drives a checkout of any age, so
+# a flag it knows about may be one the checkout has never heard of. Ask before
+# using it. An older checkout takes --initial, whose repository gate pulls the
+# newer code and restarts this script, and the second pass gets --install.
+# Dotfiles takes the same position for `agentbot full` in full_update.sh.
+dotfiles_install_mode() {
+	if "$DOTFILES_DIR/install.sh" --help 2>/dev/null | grep -Fq -- '--install'; then
+		printf '%s\n' '--install'
+	else
+		printf '%s\n' '--initial'
+	fi
+}
+
 run_dotfiles() {
-	local rc=0
+	local rc=0 mode
+	mode="$(dotfiles_install_mode)"
 	step 'Install Dotfiles'
-	msg '  The component menu opens next. Nothing outside it is selected for you.'
+	if [[ "$mode" == '--initial' ]]; then
+		msg '  This checkout predates direct component selection; updating it first.'
+	else
+		msg '  The component menu opens next. Nothing outside it is selected for you.'
+	fi
 	# Pre-authorize the checkout update: the plan was already confirmed, and a
 	# moved checkout restarts this script rather than proceeding blindly.
-	DOTFILES_REPO_UPDATE_ASSUME_YES=1 "$DOTFILES_DIR/install.sh" --install || rc=$?
+	DOTFILES_REPO_UPDATE_ASSUME_YES=1 "$DOTFILES_DIR/install.sh" "$mode" || rc=$?
 	if ((rc == 2)); then
 		restart_after_repository_update Dotfiles
 		return 1
