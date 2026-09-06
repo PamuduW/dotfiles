@@ -40,14 +40,21 @@ SUMMARY=()
 record() { SUMMARY+=("$1"); }
 
 # Wall-clock, so "how long did that take" is answered by the run rather than by
-# subtracting log timestamps afterwards.
-RUN_STARTED="${SECONDS}"
+# subtracting log timestamps afterwards. The start is an epoch carried across a
+# restart: `exec` resets SECONDS, which would have reported only the time since
+# the last restart as though it were the whole run.
+# The bash builtin rather than date(1): preflight reports a stripped PATH as a
+# missing-prerequisite list, and a clock that forks would die before it could.
+now_epoch() { printf '%(%s)T\n' -1 2>/dev/null || printf '0\n'; }
+RUN_STARTED_EPOCH="${BOOTSTRAP_RUN_STARTED_EPOCH:-$(now_epoch)}"
 PHASE_STARTED="${SECONDS}"
 
 format_duration() {
 	local total="$1"
 	printf '%dm %02ds' "$((total / 60))" "$((total % 60))"
 }
+
+clock_time() { printf '%(%H:%M:%S)T\n' "$1" 2>/dev/null || printf '??:??:??\n'; }
 
 # Close the current phase, record it with its duration, and start the next.
 record_phase() {
@@ -289,6 +296,7 @@ restart_after_repository_update() {
 	msg "  $what updated its checkout. Restarting from the updated script."
 	BOOTSTRAP_RESTARTED="${BOOTSTRAP_RESTARTED:-} $what" \
 		BOOTSTRAP_SELECTION="$SELECTION" \
+		BOOTSTRAP_RUN_STARTED_EPOCH="$RUN_STARTED_EPOCH" \
 		exec "$DOTFILES_DIR/bootstrap.sh"
 }
 
@@ -436,7 +444,11 @@ print_summary() {
 	else
 		printf '  %s\n' "${SUMMARY[@]}"
 		msg ''
-		msg "  Total $(format_duration "$((SECONDS - RUN_STARTED))")."
+		local finished
+		finished="$(now_epoch)"
+		msg "  Started   $(clock_time "$RUN_STARTED_EPOCH")"
+		msg "  Finished  $(clock_time "$finished")"
+		msg "  Total     $(format_duration "$((finished - RUN_STARTED_EPOCH))")."
 	fi
 	msg ''
 	if ((WANT_AGENTBOT == 1)); then
@@ -468,6 +480,8 @@ main() {
 	# Report whatever happened, including on failure: a run that dies with no
 	# summary leaves the operator guessing which steps ran.
 	trap print_summary EXIT
+	msg ''
+	msg "Started at $(clock_time "$RUN_STARTED_EPOCH")."
 	preflight
 	choose_targets
 	print_plan

@@ -73,6 +73,9 @@ printf '$repo_name-install %s\n' "\$*" >>"\$BOOTSTRAP_TEST_LOG"
 # reset it so the next invocation succeeds. Each repository may have its own
 # file, so a test can ask both of them for a restart independently.
 rc_file="\${BOOTSTRAP_TEST_RC_FILE_$repo_name:-\${BOOTSTRAP_TEST_RC_FILE:-}}"
+# Seam for the clock tests: spend real wall time, so a run that restarts can
+# tell a carried start time from one recomputed after the restart.
+[[ -n "\${BOOTSTRAP_TEST_INSTALL_DELAY:-}" ]] && sleep "\$BOOTSTRAP_TEST_INSTALL_DELAY"
 if [[ -n "\$rc_file" && -f "\$rc_file" ]]; then
 	rc="\$(cat "\$rc_file")"
 	printf '0\n' >"\$rc_file"
@@ -589,7 +592,35 @@ test_the_run_reports_a_duration_per_phase_and_a_total() (
 	# Each phase carries its own wall-clock, and the run carries the sum.
 	printf '%s\n' "$output" | grep -Eq '^ +[0-9]+m [0-9]{2}s +dotfiles install$' || return 1
 	printf '%s\n' "$output" | grep -Eq '^ +[0-9]+m [0-9]{2}s +agentbot update$' || return 1
-	printf '%s\n' "$output" | grep -Eq '^ +Total [0-9]+m [0-9]{2}s\.$'
+	printf '%s\n' "$output" | grep -Eq '^ +Total +[0-9]+m [0-9]{2}s\.$' || return 1
+	# End to end: the clock is announced before the first question and closed
+	# in the summary, so the wall time needs no log arithmetic afterwards.
+	printf '%s\n' "$output" | grep -Eq '^Started at [0-9]{2}:[0-9]{2}:[0-9]{2}\.$' || return 1
+	printf '%s\n' "$output" | grep -Eq '^ +Started +[0-9]{2}:[0-9]{2}:[0-9]{2}$' || return 1
+	printf '%s\n' "$output" | grep -Eq '^ +Finished +[0-9]{2}:[0-9]{2}:[0-9]{2}$'
+)
+
+test_the_start_clock_survives_a_restart() (
+	# Break caught: the run clock was SECONDS-based, and `exec` resets it, so a
+	# run that restarted reported only the time since the restart as the total.
+	setup_machine restart-clock
+	local rc_file="$MACHINE/install-rc"
+	printf '2\n' >"$rc_file"
+
+	local output
+	# The delay is what makes this test able to fail: the restart lands in a
+	# later second, so a recomputed start time cannot coincide with the real one.
+	output="$(BOOTSTRAP_ANSWERS_OVERRIDE=$'Y\nY' \
+		run_bootstrap 1 BOOTSTRAP_TEST_INSTALL_DELAY=1.2 \
+		BOOTSTRAP_TEST_RC_FILE="$rc_file" 2>&1)" || return 1
+
+	[[ "$output" == *'updated its checkout. Restarting'* ]] || return 1
+	local -a announced
+	mapfile -t announced < <(printf '%s\n' "$output" | sed -n 's/^Started at \(.*\)\.$/\1/p')
+	[[ "${#announced[@]}" -eq 2 ]] || return 1
+	[[ "${announced[0]}" == "${announced[1]}" ]] || return 1
+	# The summary closes against that same start, not against the restart.
+	printf '%s\n' "$output" | grep -Fq "  Started   ${announced[0]}"
 )
 
 expect_success 'both clones, installs, updates, then runs Agentbot' test_both_clones_installs_updates_then_runs_agentbot
@@ -612,6 +643,7 @@ expect_success 'the plan is shown, not asked' test_the_plan_is_shown_not_asked
 expect_success 'Agentbot runs without a second question' test_agentbot_runs_without_a_second_question
 expect_success 'only the selection is asked' test_only_the_selection_is_asked
 expect_success 'the run reports a duration per phase and a total' test_the_run_reports_a_duration_per_phase_and_a_total
+expect_success 'the start clock survives a restart' test_the_start_clock_survives_a_restart
 expect_success 'a repository update restarts instead of failing' test_a_repository_update_restarts_instead_of_failing
 expect_success 'a failed step still prints a summary' test_a_failed_step_still_prints_a_summary
 expect_success 'component failures do not abandon the remaining phases' test_component_failures_do_not_abandon_the_remaining_phases
