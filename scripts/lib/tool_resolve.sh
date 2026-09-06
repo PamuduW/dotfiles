@@ -13,10 +13,22 @@ _DOTFILES_TOOL_RESOLVE_LOADED=1
 # Print the path of the first usable executable: every candidate on PATH first,
 # then the vendor-local ~/.local/bin fallback several installers use.
 # NAMES is a space-separated candidate list in preference order.
+# Whether a resolved path is a Windows executable reached through WSL interop.
+#
+# `appendWindowsPath` puts the Windows PATH on ours, so `command -v cursor`
+# happily returns "/mnt/c/Program Files/cursor/...". That is the Windows editor,
+# not the Linux CLI: the installer skipped as though the CLI were present, and
+# the probe then invoked a Windows binary through interop and timed out.
+tool_path_is_windows_interop() {
+	local path="$1"
+	[[ "$path" == "${DOTFILES_WINDOWS_MOUNT_ROOT:-/mnt}"/* || "$path" == *.exe ]]
+}
+
 tool_resolve() {
 	local names="$1" name resolved
 	for name in $names; do
 		if resolved="$(command -v "$name" 2>/dev/null)"; then
+			tool_path_is_windows_interop "$resolved" && continue
 			printf '%s\n' "$resolved"
 			return 0
 		fi

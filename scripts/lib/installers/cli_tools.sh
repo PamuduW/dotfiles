@@ -145,7 +145,10 @@ install_go_via_asdf() {
 }
 
 install_cursor_cli() {
-	if command -v agent >/dev/null 2>&1 || command -v cursor >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/agent" ]]; then
+	# `agent` and `cursor-agent` are what Cursor's installer creates; `cursor`
+	# is the editor launcher, and under WSL that name resolves to the Windows
+	# one, which made this skip on every fresh machine.
+	if tool_resolve 'agent cursor-agent' >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/agent" ]]; then
 		if [[ ! -x "$HOME/bin/agent" && -x "$HOME/.local/bin/agent" ]]; then
 			mkdir -p "$HOME/bin"
 			ln -sf "$HOME/.local/bin/agent" "$HOME/bin/agent"

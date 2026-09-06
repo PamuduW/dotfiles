@@ -374,6 +374,8 @@ test_a_failed_step_still_prints_a_summary() (
 	[[ "$rc" -ne 0 ]] || return 1
 	[[ "$output" == *'Summary'* ]] || return 1
 	[[ "$output" == *'FAILED   dotfiles install'* ]] || return 1
+	# The total is reported so the run answers "how long did that take".
+	[[ "$output" == *'Total '* ]] || return 1
 	[[ "$output" == *'cloned   Dotfiles'* ]]
 )
 
@@ -391,7 +393,7 @@ test_component_failures_do_not_abandon_the_remaining_phases() (
 
 	log_has 'dotfiles-cli update' || return 1
 	log_has 'agentbot-install install' || return 1
-	[[ "$output" == *'some components need attention'* ]] || return 1
+	[[ "$output" == *'dotfiles install (some components need attention)'* ]] || return 1
 	[[ "$output" != *'FAILED'* ]]
 )
 
@@ -580,6 +582,16 @@ EOF
 	[[ "$output" == *'stopping to avoid a loop'* ]]
 )
 
+test_the_run_reports_a_duration_per_phase_and_a_total() (
+	setup_machine durations
+	local output
+	output="$(run_bootstrap 1 2>&1)" || return 1
+	# Each phase carries its own wall-clock, and the run carries the sum.
+	printf '%s\n' "$output" | grep -Eq '^ +[0-9]+m [0-9]{2}s +dotfiles install$' || return 1
+	printf '%s\n' "$output" | grep -Eq '^ +[0-9]+m [0-9]{2}s +agentbot update$' || return 1
+	printf '%s\n' "$output" | grep -Eq '^ +Total [0-9]+m [0-9]{2}s\.$'
+)
+
 expect_success 'both clones, installs, updates, then runs Agentbot' test_both_clones_installs_updates_then_runs_agentbot
 expect_success 'Dotfiles only skips every Agentbot step' test_dotfiles_only_skips_every_agentbot_step
 expect_success 'Agentbot only skips Dotfiles and does not ask' test_agentbot_only_skips_dotfiles_and_does_not_ask
@@ -599,6 +611,7 @@ expect_success 'scripted answers drive the selection prompt' test_scripted_answe
 expect_success 'the plan is shown, not asked' test_the_plan_is_shown_not_asked
 expect_success 'Agentbot runs without a second question' test_agentbot_runs_without_a_second_question
 expect_success 'only the selection is asked' test_only_the_selection_is_asked
+expect_success 'the run reports a duration per phase and a total' test_the_run_reports_a_duration_per_phase_and_a_total
 expect_success 'a repository update restarts instead of failing' test_a_repository_update_restarts_instead_of_failing
 expect_success 'a failed step still prints a summary' test_a_failed_step_still_prints_a_summary
 expect_success 'component failures do not abandon the remaining phases' test_component_failures_do_not_abandon_the_remaining_phases

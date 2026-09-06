@@ -239,6 +239,31 @@ EOF
 )
 
 check 'package probe counts a renamed package as present' test_package_probe_counts_a_renamed_package_as_present
+test_tool_resolution_ignores_windows_binaries_reached_through_interop() (
+	# Break caught: appendWindowsPath puts the Windows PATH on ours, so
+	# `command -v cursor` returned the Windows editor. The installer skipped as
+	# though the Linux CLI were present, and the probe then invoked a Windows
+	# binary through interop and timed out -- on every single run.
+	local root="$TEST_HARNESS_ROOT/interop"
+	rm -rf -- "$root"
+	mkdir -p -- "$root/win" "$root/linux"
+	printf '#!/bin/sh\necho windows\n' >"$root/win/cursor"
+	printf '#!/bin/sh\necho linux\n' >"$root/linux/agent"
+	chmod +x -- "$root/win/cursor" "$root/linux/agent"
+
+	# Only a Windows cursor on PATH: nothing usable.
+	local resolved rc=0
+	resolved="$(PATH="$root/win:/usr/bin:/bin" HOME="$root" \
+		DOTFILES_WINDOWS_MOUNT_ROOT="$root/win" tool_resolve 'agent cursor')" || rc=$?
+	[[ "$rc" -ne 0 ]] || return 1
+
+	# A Linux one is still found, and preferred over the Windows name.
+	resolved="$(PATH="$root/linux:$root/win:/usr/bin:/bin" HOME="$root" \
+		DOTFILES_WINDOWS_MOUNT_ROOT="$root/win" tool_resolve 'agent cursor')" || return 1
+	[[ "$resolved" == "$root/linux/agent" ]]
+)
+
+check 'tool resolution ignores Windows binaries reached through interop' test_tool_resolution_ignores_windows_binaries_reached_through_interop
 check 'Portainer probe separates an unreachable daemon from a missing container' test_portainer_probe_separates_an_unreachable_daemon_from_a_missing_container
 check 'Python probe verifies interpreter pip and venv support' test_python_probe_requires_python_pip_and_venv
 check 'Go probe rejects an asdf installation without a selected Go version' test_go_probe_does_not_treat_empty_asdf_as_installed

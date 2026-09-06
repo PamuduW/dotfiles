@@ -39,6 +39,23 @@ err() { printf 'Error: %s\n' "$*" >&2; }
 SUMMARY=()
 record() { SUMMARY+=("$1"); }
 
+# Wall-clock, so "how long did that take" is answered by the run rather than by
+# subtracting log timestamps afterwards.
+RUN_STARTED="${SECONDS}"
+PHASE_STARTED="${SECONDS}"
+
+format_duration() {
+	local total="$1"
+	printf '%dm %02ds' "$((total / 60))" "$((total % 60))"
+}
+
+# Close the current phase, record it with its duration, and start the next.
+record_phase() {
+	local label="$1" elapsed=$((SECONDS - PHASE_STARTED))
+	PHASE_STARTED="$SECONDS"
+	record "$(printf '%-9s %s' "$(format_duration "$elapsed")" "$label")"
+}
+
 has() { command -v "$1" >/dev/null 2>&1; }
 
 # `curl ... | bash` makes stdin the pipe, so `-t 0` is false even though the
@@ -336,12 +353,12 @@ run_dotfiles() {
 		return 1
 	fi
 	if ((rc == DOTFILES_INSTALL_PARTIAL_RC)); then
-		record 'ran      dotfiles install (some components need attention)'
+		record_phase 'dotfiles install (some components need attention)'
 	elif ((rc != 0)); then
 		record 'FAILED   dotfiles install'
 		return 1
 	else
-		record 'ran      dotfiles install'
+		record_phase 'dotfiles install'
 	fi
 
 	# Always update straight after install, before anything moves on. Never
@@ -353,7 +370,7 @@ run_dotfiles() {
 		record 'FAILED   dotfiles update'
 		return 1
 	}
-	record 'ran      dotfiles update'
+	record_phase 'dotfiles update'
 }
 
 run_agentbot() {
@@ -370,13 +387,13 @@ run_agentbot() {
 		record 'FAILED   agentbot install'
 		return 1
 	fi
-	record 'ran      agentbot install'
+	record_phase 'agentbot install'
 	step 'Update Agentbot'
 	AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" update || {
 		record 'FAILED   agentbot update'
 		return 1
 	}
-	record 'ran      agentbot update'
+	record_phase 'agentbot update'
 }
 
 # --- plan and summary --------------------------------------------------------
@@ -418,6 +435,8 @@ print_summary() {
 		msg '  Nothing to do.'
 	else
 		printf '  %s\n' "${SUMMARY[@]}"
+		msg ''
+		msg "  Total $(format_duration "$((SECONDS - RUN_STARTED))")."
 	fi
 	msg ''
 	if ((WANT_AGENTBOT == 1)); then
