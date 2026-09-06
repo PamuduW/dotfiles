@@ -378,7 +378,9 @@ install_powershell() {
 	fi
 
 	log_step "Install PowerShell from Microsoft packages repo"
-	sudo apt-get update -qq || return $?
+	# No refresh here: the install preamble already refreshed the indexes, and
+	# nothing has added a repository yet. The refresh that matters is the one
+	# after the Microsoft repository is added, below.
 	# HTTPS transport is built into supported modern apt releases; the legacy
 	# apt-transport-https package is unnecessary and may not exist on newer systems.
 	sudo apt-get -o Dpkg::Use-Pty=0 install -y wget software-properties-common || return $?

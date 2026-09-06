@@ -384,6 +384,26 @@ test_agentbot_phase_sees_tools_dotfiles_just_installed() (
 	' _ "$BOOTSTRAP"
 )
 
+test_the_summary_prints_exactly_once_before_the_shell_offer() (
+	# offer_new_shell may exec, and exec does not run EXIT traps, so the summary
+	# is printed explicitly at the end of main. It must not also come from the
+	# trap, or a successful run reports itself twice.
+	setup_machine summary-once
+	local output count
+	output="$(BOOTSTRAP_ANSWERS_OVERRIDE=$'Y\nY' run_bootstrap 1 2>&1)" || return 1
+	count="$(printf '%s\n' "$output" | grep -c '==> Summary')"
+	[[ "$count" -eq 1 ]]
+)
+
+test_a_non_interactive_run_does_not_exec_a_shell() (
+	# With no terminal the offer is skipped entirely; execing there would
+	# replace the run with a shell reading an exhausted pipe.
+	setup_machine no-shell-offer
+	local output
+	output="$(BOOTSTRAP_ANSWERS_OVERRIDE=$'Y\nY' run_bootstrap 1 2>&1)" || return 1
+	[[ "$output" != *'Starting a new login shell'* ]]
+)
+
 expect_success 'both clones, installs, updates, then runs Agentbot' test_both_clones_installs_updates_then_runs_agentbot
 expect_success 'Dotfiles only skips every Agentbot step' test_dotfiles_only_skips_every_agentbot_step
 expect_success 'Agentbot only skips Dotfiles and does not ask' test_agentbot_only_skips_dotfiles_and_does_not_ask
@@ -407,6 +427,8 @@ expect_success 'a failed step still prints a summary' test_a_failed_step_still_p
 expect_success 'component failures do not abandon the remaining phases' test_component_failures_do_not_abandon_the_remaining_phases
 expect_success 'the checkout update is pre-authorized' test_the_checkout_update_is_pre_authorized
 expect_success 'the Agentbot phase sees tools Dotfiles just installed' test_agentbot_phase_sees_tools_dotfiles_just_installed
+expect_success 'the summary prints exactly once before the shell offer' test_the_summary_prints_exactly_once_before_the_shell_offer
+expect_success 'a non-interactive run does not exec a shell' test_a_non_interactive_run_does_not_exec_a_shell
 
 test_harness_cleanup
 finish_tests

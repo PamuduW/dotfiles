@@ -122,6 +122,28 @@ _run_install_preamble() {
 # Exit status meaning "installed, but some components failed".
 DOTFILES_INSTALL_PARTIAL_RC=4
 
+_install_now_seconds() {
+	printf '%s\n' "${EPOCHSECONDS:-$(date +%s)}"
+}
+
+# The slowest handful and the total. Enough to tell a network-bound component
+# from a slow one without turning the summary into a profile.
+print_install_timing() {
+	local total="$1" key seconds
+	((${#INSTALL_COMPONENT_SECONDS[@]} > 0)) || return 0
+	echo ""
+	printf '%sInstall took %dm %02ds. Slowest components:%s\n' \
+		"${C_ORANGE:-}" "$((total / 60))" "$((total % 60))" "${C_RESET:-}"
+	while read -r seconds key; do
+		((seconds > 0)) || continue
+		printf '  %4ds  %s\n' "$seconds" "$key"
+	done < <(
+		for key in "${!INSTALL_COMPONENT_SECONDS[@]}"; do
+			printf '%s %s\n' "${INSTALL_COMPONENT_SECONDS[$key]}" "$key"
+		done | sort -rn | head -6
+	)
+}
+
 run_install() {
 	local key failures=0
 	declare -gA INSTALL_COMPONENT_RESULT=()
@@ -133,8 +155,15 @@ run_install() {
 
 	_run_install_preamble || return $?
 
+	# Per-component wall-clock, so where a long install actually spends its time
+	# is a measurement rather than a guess.
+	declare -gA INSTALL_COMPONENT_SECONDS=()
+	local run_started started
+	run_started="$(_install_now_seconds)"
+
 	for key in "${COMP_INSTALL_ORDER[@]}"; do
 		is_on "$key" || continue
+		started="$(_install_now_seconds)"
 		if comp_install "$key"; then
 			INSTALL_COMPONENT_RESULT["$key"]=completed
 		else
@@ -142,13 +171,15 @@ run_install() {
 			failures=$((failures + 1))
 			log_warn "Component install failed: $key"
 		fi
+		INSTALL_COMPONENT_SECONDS["$key"]=$(($(_install_now_seconds) - started))
 	done
 
 	print_install_summary
+	print_install_timing "$((($(_install_now_seconds)) - run_started))"
 
 	echo ""
 	echo "Done. Log saved to: $LOG_FILE"
-	echo "Open a new terminal, or run: source ~/.bashrc"
+	echo "Open a new terminal, or run: exec bash -l"
 	# A distinct status for "the run completed, but N components need
 	# attention". A caller sequencing further work -- bootstrap.sh -- can then
 	# carry on and report, instead of treating one failed component as a reason

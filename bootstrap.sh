@@ -384,6 +384,28 @@ print_summary() {
 	fi
 }
 
+# The shell that ran this predates everything just installed: the stowed
+# .bashrc, ~/.local/bin, nvm, and the docker group are all invisible to it.
+# Offer a fresh login shell rather than leaving the operator to work out why
+# half the new commands are missing.
+offer_new_shell() {
+	((WANT_DOTFILES == 1)) || return 0
+	interactive || return 0
+	msg ''
+	ask '  Start a new shell so the new PATH, aliases, and groups apply? [Y/n]: ' Y
+	case "$ANSWER" in
+	[Yy] | [Yy][Ee][Ss] | '')
+		msg '  Starting a new login shell. Type "exit" to return to the old one.'
+		# stdin is the curl pipe under the documented one-liner, so the new
+		# shell reads the terminal directly or it would exit immediately.
+		exec bash -l </dev/tty
+		;;
+	*)
+		msg '  Run "exec bash -l" when ready, or open a new terminal.'
+		;;
+	esac
+}
+
 main() {
 	# Report whatever happened, including on failure: a run that dies with no
 	# summary leaves the operator guessing which steps ran.
@@ -421,6 +443,12 @@ main() {
 		esac
 	fi
 
+	# Print the summary here rather than leaving it to the trap: offer_new_shell
+	# may exec, and exec does not run EXIT traps. The trap stays armed for every
+	# path that fails before reaching this point.
+	print_summary
+	trap - EXIT
+	offer_new_shell
 }
 
 if [[ "${BOOTSTRAP_SOURCE_ONLY:-0}" != 1 ]]; then
