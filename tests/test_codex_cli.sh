@@ -198,6 +198,13 @@ codex_sync_test_prepare() {
 	export CODEX_SYNC_TEST_MODE CODEX_SYNC_CALL_LOG CODEX_SYNC_PATH_LOG CODEX_SYNC_NPM_LOG CODEX_SYNC_PROFILE
 }
 
+# Runs the command, like the real wrapper: these tests are about the vendor
+# boundary and ownership checks, not about where the installer's output goes.
+_run_quiet_command() {
+	shift
+	"$@"
+}
+
 run_vendor_shell_installer() {
 	printf '%s|%s|%s\n' "$1" "$2" "$3" >"$CODEX_SYNC_CALL_LOG"
 	printf '%s\n' "$PATH" >"$CODEX_SYNC_PATH_LOG"

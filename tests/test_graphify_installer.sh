@@ -73,13 +73,18 @@ test_missing_uv_uses_official_astral_installer() (
 	curl() {
 		printf 'curl:%s\n' "$*" >>"$calls"
 		printf '%s\n' \
+			'printf "UV-INSTALLER-NOISE\\n"' \
 			'mkdir -p "$HOME/.local/bin"' \
 			'printf "%s\\n" "#!/usr/bin/env bash" "exit 0" >"$HOME/.local/bin/uv"' \
 			'chmod +x "$HOME/.local/bin/uv"'
 	}
-	ensure_graphify_uv >/dev/null
-	grep -Fqx 'curl:-LsSf https://astral.sh/uv/install.sh' "$calls"
-	[[ -x "$HOME/.local/bin/uv" ]]
+	local output
+	output="$(ensure_graphify_uv 2>&1)" || return 1
+	grep -Fqx 'curl:-LsSf https://astral.sh/uv/install.sh' "$calls" || return 1
+	[[ -x "$HOME/.local/bin/uv" ]] || return 1
+	# The vendor script narrates its own progress and the step reports its own
+	# result, so the narration stays out of the run transcript.
+	[[ "$output" != *UV-INSTALLER-NOISE* ]]
 )
 
 expect_success 'missing Graphify installs the official graphifyy package' test_install_missing_graphify_uses_official_package

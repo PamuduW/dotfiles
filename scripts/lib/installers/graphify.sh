@@ -73,7 +73,7 @@ ensure_graphify_uv() {
 		echo "  Failed to download the official uv installer." >&2
 		return 1
 	fi
-	if ! sh "$tmp"; then
+	if ! _run_quiet_command 'uv installer' sh "$tmp"; then
 		rm -f -- "$tmp"
 		echo "  The official uv installer failed." >&2
 		return 1

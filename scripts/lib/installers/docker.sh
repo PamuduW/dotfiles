@@ -298,7 +298,9 @@ install_portainer() {
 	local target_image_id current_image_id
 
 	log_step "Refresh Portainer CE image"
-	run_docker pull "$portainer_image" || return $?
+	# -q: the per-layer pull progress was twenty-five lines of a run that
+	# reports its own result on the next line anyway.
+	run_docker pull -q "$portainer_image" || return $?
 	target_image_id="$(run_docker image inspect --format '{{.Id}}' "$portainer_image")" || return $?
 	[[ -n "$target_image_id" ]] || return 1
 

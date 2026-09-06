@@ -294,7 +294,7 @@ test_portainer_fresh_install_uses_lts_without_starting_container() (
 
 	install_portainer >/dev/null
 
-	grep -Fxq 'pull portainer/portainer-ce:lts' "$calls" || return 1
+	grep -Fxq 'pull -q portainer/portainer-ce:lts' "$calls" || return 1
 	grep -Fxq 'volume create portainer_data' "$calls" || return 1
 	grep -Fq 'create -p 8000:8000 -p 9443:9443 --name portainer --restart unless-stopped -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce:lts' "$calls" || return 1
 	! grep -Eq '^(run|start|stop) ' "$calls"
@@ -318,7 +318,7 @@ test_portainer_matching_lts_image_is_left_unchanged() (
 
 	install_portainer >/dev/null
 
-	grep -Fxq 'pull portainer/portainer-ce:lts' "$calls" || return 1
+	grep -Fxq 'pull -q portainer/portainer-ce:lts' "$calls" || return 1
 	! grep -Eq '^(rm|create|stop) ' "$calls"
 )
 

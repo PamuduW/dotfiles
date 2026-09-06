@@ -179,7 +179,10 @@ codex_sync_standalone() {
 	mkdir -p "$bin_dir" || return 1
 
 	# Keep the installer's PATH setup from editing the Stow-managed .bashrc.
-	PATH="$bin_dir:$PATH" run_vendor_shell_installer \
+	# Captured like the Cursor and Claude installers already are: the vendor
+	# script narrates its own progress, and the step reports its own result.
+	PATH="$bin_dir:$PATH" _run_quiet_command 'Codex CLI install' \
+		run_vendor_shell_installer \
 		'https://chatgpt.com/codex/install.sh' \
 		'Codex CLI' \
 		'CODEX_NON_INTERACTIVE=1' || return $?
