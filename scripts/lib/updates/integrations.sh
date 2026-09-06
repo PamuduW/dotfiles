@@ -250,9 +250,14 @@ upgrade_codex_cli() {
 		before="$(codex_installed_version)"
 		codex_sync_standalone || return $?
 		after="$(codex_installed_version)"
+		# The vendor installer's own narration is captured, so this step has to
+		# say what happened or it prints a section heading and nothing under it,
+		# which reads as a step that died.
 		if [[ "$before" != "$after" ]]; then
+			_msg "  Codex CLI updated to ${after:-unknown}"
 			upgrade_result_set updated
 		else
+			_msg "  Codex CLI already up to date (${after:-unknown})"
 			upgrade_result_set checked-no-change
 		fi
 		;;

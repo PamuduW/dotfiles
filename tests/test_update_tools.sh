@@ -562,6 +562,28 @@ test_a_failed_apt_upgrade_still_shows_its_output() (
 	grep -Fq 'could not resolve archive.ubuntu.com' "$output"
 )
 
+test_every_upgrade_step_says_something() (
+	# Break caught: capturing the Codex installer's narration left its update
+	# section as a heading with nothing under it, which reads as a step that
+	# died. A step that prints nothing is indistinguishable from one that hung.
+	local machine="$TEST_HARNESS_ROOT/codex-speaks"
+	local output="$machine/output"
+	mkdir -p -- "$machine"
+
+	local result
+	result="$(
+		codex_cli_install_state() { printf 'standalone\n'; }
+		codex_installed_version() { printf 'codex-cli 0.153.4\n'; }
+		codex_sync_standalone() { printf 'VENDOR-NARRATION\n'; }
+		upgrade_codex_cli >"$output" 2>&1
+		printf '%s' "$UPGRADE_STEP_ACTIVE_RESULT"
+	)" || return 1
+
+	[[ -s "$output" ]] || return 1
+	grep -Fq 'already up to date (codex-cli 0.153.4)' "$output" || return 1
+	[[ "$result" == checked-no-change ]]
+)
+
 test_copilot_update_management_is_absent() {
 	! declare -F copilot_command >/dev/null || return 1
 	! declare -F copilot_installed_version >/dev/null || return 1
@@ -646,6 +668,7 @@ expect_success 'Cursor update falls back to the official installer after agent u
 expect_success 'a Windows cursor is never executed' test_a_windows_cursor_is_never_executed
 expect_success 'the apt upgrade is quiet and reported as updated' test_the_apt_upgrade_is_quiet_and_reported_as_updated
 expect_success 'a failed apt upgrade still shows its output' test_a_failed_apt_upgrade_still_shows_its_output
+expect_success 'every upgrade step says something' test_every_upgrade_step_says_something
 expect_success 'Copilot has no update helpers' test_copilot_update_management_is_absent
 expect_success 'pre-confirmation apt report probing never invokes sudo' test_apt_report_probe_uses_cached_indices_without_sudo
 
