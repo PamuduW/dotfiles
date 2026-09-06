@@ -6,6 +6,26 @@ if ! declare -F read_packages_by_tags >/dev/null 2>&1; then
 	source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/package_metadata.sh"
 fi
 
+# Refresh only the source list a component just added.
+#
+# A bare `apt-get update` re-fetches every configured index, which on a fresh
+# machine is the dominant cost of adding one vendor repository: the install
+# preamble has already refreshed the rest, and nothing else has changed since.
+# Falls back to a full refresh when the targeted form is unavailable, so a
+# component is never left installing against an index that does not list it.
+apt_refresh_source_list() {
+	local list="$1"
+	[[ -f "$list" ]] || {
+		sudo apt-get update -qq
+		return $?
+	}
+	sudo apt-get update -qq \
+		-o Dir::Etc::sourcelist="$list" \
+		-o Dir::Etc::sourceparts=- \
+		-o APT::Get::List-Cleanup=0 ||
+		sudo apt-get update -qq
+}
+
 # Whether apt can install this name on this release. A package that exists in
 # the index has a Candidate line; an unknown name produces no output at all, and
 # a name that exists only as a stale record has `Candidate: (none)`.

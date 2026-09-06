@@ -126,6 +126,34 @@ test_all_packages_unavailable_is_reported_not_installed() (
 	[[ ! -s "$calls" ]]
 )
 
+test_a_new_repository_refreshes_only_its_own_source_list() (
+	# A bare `apt-get update` re-fetches every configured index. On a cold
+	# machine that was the dominant cost of adding one vendor repository, and
+	# the preamble had already refreshed everything else moments earlier.
+	local calls="$TEST_HARNESS_ROOT/apt-refresh.calls"
+	local list="$TEST_HARNESS_ROOT/vendor.sources"
+	: >"$calls"
+	: >"$list"
+	sudo() { printf '%s\n' "$*" >>"$calls"; }
+
+	apt_refresh_source_list "$list" || return 1
+	grep -q "Dir::Etc::sourcelist=$list" "$calls" || return 1
+	grep -q 'sourceparts=-' "$calls" || return 1
+	[[ "$(grep -c 'apt-get update' "$calls")" -eq 1 ]]
+)
+
+test_a_missing_source_list_still_refreshes_everything() (
+	# Never leave a component installing against an index that does not list
+	# what it is about to ask for.
+	local calls="$TEST_HARNESS_ROOT/apt-refresh-missing.calls"
+	: >"$calls"
+	sudo() { printf '%s\n' "$*" >>"$calls"; }
+
+	apt_refresh_source_list "$TEST_HARNESS_ROOT/not-there.sources" || return 1
+	grep -q 'apt-get update' "$calls" || return 1
+	! grep -q 'Dir::Etc::sourcelist' "$calls"
+)
+
 test_renamed_packages_fall_back_to_the_available_name() (
 	# Break caught: `dnsutils` became `bind9-dnsutils` and the transitional name
 	# was dropped in a later release, so the tool went missing on new machines
@@ -671,6 +699,8 @@ check 'failed Stow application restores backed-up user files' test_failed_stow_r
 check 'apt installation failures are not hidden by warning logging' test_apt_install_failure_is_not_hidden_by_warning_logging
 check 'unavailable packages do not block the available ones' test_unavailable_packages_do_not_block_the_available_ones
 check 'all packages unavailable is reported, not installed' test_all_packages_unavailable_is_reported_not_installed
+check 'a new repository refreshes only its own source list' test_a_new_repository_refreshes_only_its_own_source_list
+check 'a missing source list still refreshes everything' test_a_missing_source_list_still_refreshes_everything
 check 'renamed packages fall back to the available name' test_renamed_packages_fall_back_to_the_available_name
 check 'a rename falls back to the older name when needed' test_a_rename_falls_back_to_the_older_name_when_needed
 check 'PowerShell falls back to the upstream release' test_powershell_skips_a_release_with_no_microsoft_feed
