@@ -188,12 +188,33 @@ _comp_probe_apt_packages_for_component() {
 	output_count="$package_count"
 
 	# One dpkg-query for the whole set instead of one process per package.
+	# Entries may be `preferred|fallback` package renames, so every alternative
+	# goes into the one query and an entry counts as present when any of its
+	# names is installed. Querying the raw entry counted a renamed package as
+	# missing even though it was installed under its current name.
 	if ((package_count > 0)); then
-		local installed_count
-		installed_count="$(
-			dpkg-query -W -f='${Status}\n' "${packages[@]}" 2>/dev/null |
-				grep -c '^install ok installed$' || true
-		)"
+		local entry alt installed_count=0
+		local -a all_names=()
+		for entry in "${packages[@]}"; do
+			while IFS= read -r alt; do
+				[[ -n "$alt" ]] && all_names+=("$alt")
+			done < <(printf '%s\n' "${entry//|/$'\n'}")
+		done
+
+		local -A installed_set=()
+		local name rest
+		while read -r name rest; do
+			[[ "$rest" == 'install ok installed' ]] && installed_set["$name"]=1
+		done < <(dpkg-query -W -f='${Package} ${Status}\n' "${all_names[@]}" 2>/dev/null)
+
+		for entry in "${packages[@]}"; do
+			while IFS= read -r alt; do
+				if [[ -n "$alt" && -n "${installed_set[$alt]+x}" ]]; then
+					installed_count=$((installed_count + 1))
+					break
+				fi
+			done < <(printf '%s\n' "${entry//|/$'\n'}")
+		done
 		missing=$((package_count - installed_count))
 		((missing < 0)) && missing=0
 	fi

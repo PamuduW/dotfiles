@@ -86,9 +86,11 @@ test_system_package_probe_uses_system_package_tags_only() (
 		for arg in "$@"; do
 			[[ "$arg" == -* ]] && continue
 			printf '%s\n' "$arg" >>"$queried"
+			# The probe asks for `${Package} ${Status}` so it can match an
+			# installed name back to the entry that offered it.
 			case "$arg" in
-			core-package | cli-package | system-package) printf 'install ok installed\n' ;;
-			*) printf 'unknown ok not-installed\n' ;;
+			core-package | cli-package | system-package) printf '%s install ok installed\n' "$arg" ;;
+			*) printf '%s unknown ok not-installed\n' "$arg" ;;
 			esac
 		done
 	}
@@ -109,8 +111,8 @@ test_python_probe_checks_every_owned_apt_package() (
 		for arg in "$@"; do
 			[[ "$arg" == -* ]] && continue
 			case "$arg" in
-			python3-pil) printf 'unknown ok not-installed\n' ;;
-			*) printf 'install ok installed\n' ;;
+			python3-pil) printf '%s unknown ok not-installed\n' "$arg" ;;
+			*) printf '%s install ok installed\n' "$arg" ;;
 			esac
 		done
 	}
@@ -207,6 +209,36 @@ test_codex_installed_but_not_on_path_is_not_shadowed() (
 )
 
 check 'Codex installed but not on PATH is not reported as shadowed' test_codex_installed_but_not_on_path_is_not_shadowed
+test_package_probe_counts_a_renamed_package_as_present() (
+	# Break caught: the probe passed the raw `preferred|fallback` entry to
+	# dpkg-query, which knows no such package, so a package installed under its
+	# current name was still counted missing.
+	local pkg_file="$TEST_HARNESS_ROOT/probe-renamed-packages.txt"
+	printf '%s\n' '# @system' 'bind9-dnsutils|dnsutils  # dns tools' 'git  # vcs' >"$pkg_file"
+
+	local fake_bin="$TEST_HARNESS_ROOT/probe-dpkg-bin"
+	mkdir -p -- "$fake_bin"
+	# Only the new name is installed on this imaginary release.
+	cat >"$fake_bin/dpkg-query" <<'EOF'
+#!/usr/bin/env bash
+for arg in "$@"; do
+	case "$arg" in
+	bind9-dnsutils | git) printf '%s install ok installed
+' "$arg" ;;
+	esac
+done
+EOF
+	chmod +x -- "$fake_bin/dpkg-query"
+
+	comp_package_tags() { printf 'system
+'; }
+	local checked=0 output
+	output="$(PATH="$fake_bin:$PATH" PKG_FILE="$pkg_file" \
+		_comp_probe_apt_packages_for_component system_packages packages checked && printf 'all-present\n')"
+	[[ "$output" == all-present ]]
+)
+
+check 'package probe counts a renamed package as present' test_package_probe_counts_a_renamed_package_as_present
 check 'Portainer probe separates an unreachable daemon from a missing container' test_portainer_probe_separates_an_unreachable_daemon_from_a_missing_container
 check 'Python probe verifies interpreter pip and venv support' test_python_probe_requires_python_pip_and_venv
 check 'Go probe rejects an asdf installation without a selected Go version' test_go_probe_does_not_treat_empty_asdf_as_installed
