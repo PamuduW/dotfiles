@@ -293,13 +293,17 @@ _create_stopped_portainer() {
 		"$portainer_image"
 }
 
+# 0 = ours, 1 = somebody else's, 2 = could not ask Docker. The third case used
+# to be reported as the second, so a session that simply predates the docker
+# group was told its container had a custom layout -- a claim about the
+# container made without being able to look at it.
 _portainer_has_managed_layout() {
 	local data_mount socket_mount port_8000 port_9443 restart_policy
-	data_mount="$(run_docker inspect --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Type}}:{{.Name}}{{end}}{{end}}' portainer)" || return $?
-	socket_mount="$(run_docker inspect --format '{{range .Mounts}}{{if eq .Destination "/var/run/docker.sock"}}{{.Type}}:{{.Source}}{{end}}{{end}}' portainer)" || return $?
-	port_8000="$(run_docker inspect --format '{{with index .HostConfig.PortBindings "8000/tcp"}}{{(index . 0).HostPort}}{{end}}' portainer)" || return $?
-	port_9443="$(run_docker inspect --format '{{with index .HostConfig.PortBindings "9443/tcp"}}{{(index . 0).HostPort}}{{end}}' portainer)" || return $?
-	restart_policy="$(run_docker inspect --format '{{.HostConfig.RestartPolicy.Name}}' portainer)" || return $?
+	data_mount="$(run_docker inspect --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Type}}:{{.Name}}{{end}}{{end}}' portainer)" || return 2
+	socket_mount="$(run_docker inspect --format '{{range .Mounts}}{{if eq .Destination "/var/run/docker.sock"}}{{.Type}}:{{.Source}}{{end}}{{end}}' portainer)" || return 2
+	port_8000="$(run_docker inspect --format '{{with index .HostConfig.PortBindings "8000/tcp"}}{{(index . 0).HostPort}}{{end}}' portainer)" || return 2
+	port_9443="$(run_docker inspect --format '{{with index .HostConfig.PortBindings "9443/tcp"}}{{(index . 0).HostPort}}{{end}}' portainer)" || return 2
+	restart_policy="$(run_docker inspect --format '{{.HostConfig.RestartPolicy.Name}}' portainer)" || return 2
 
 	[[ "$data_mount" == 'volume:portainer_data' &&
 		"$socket_mount" == 'bind:/var/run/docker.sock' &&
@@ -336,7 +340,13 @@ install_portainer() {
 		return 0
 	fi
 
-	if ! _portainer_has_managed_layout; then
+	local layout_rc=0
+	_portainer_has_managed_layout || layout_rc=$?
+	if ((layout_rc == 2)); then
+		log_warn "Cannot inspect the Portainer container; refusing automatic replacement"
+		return 1
+	fi
+	if ((layout_rc != 0)); then
 		log_warn "Portainer container has a custom layout; refusing automatic replacement"
 		return 1
 	fi

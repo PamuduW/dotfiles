@@ -13,6 +13,38 @@ test_harness_init
 test_harness_report_init
 source "$TEST_DIR/lib/dotfiles_env.sh"
 
+test_an_unreachable_docker_does_not_accuse_the_container() (
+	# Break caught: the layout check returned 1 both when the container was
+	# somebody else's and when Docker could not be queried at all, so a session
+	# that merely predates the docker group was told its Portainer container had
+	# a custom layout -- a claim about the container made without looking at it.
+	local warnings="$TEST_HARNESS_ROOT/portainer-layout.warn"
+	: >"$warnings"
+	log_warn() { printf '%s\n' "$*" >>"$warnings"; }
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	_portainer_name_exists() { return 0; }
+	_portainer_recover_interrupted() { return 0; }
+	run_docker() {
+		case "$*" in
+		"pull -q"*) return 0 ;;
+		"image inspect"*) printf 'sha256:target\n' ;;
+		"inspect --format {{.Image}} portainer") printf 'sha256:other\n' ;;
+		# Everything the layout check asks is refused, as it is before the
+		# docker group takes effect in a new session.
+		inspect*) return 1 ;;
+		*) return 0 ;;
+		esac
+	}
+
+	local rc=0
+	install_portainer >/dev/null 2>&1 || rc=$?
+	[[ "$rc" -ne 0 ]] || return 1
+	grep -q 'Cannot inspect the Portainer container' "$warnings" || return 1
+	! grep -q 'custom layout' "$warnings"
+)
+
 test_force_reinstalls_what_is_already_present() (
 	# Roadmap item 3: installers skip what already looks present, so a corrupted
 	# install could never be repaired from the menu. `x` on the plan screen
@@ -803,6 +835,7 @@ test_wsl_config_renderer_updates_only_the_requested_section() (
 	grep -Fqx 'systemd=true' "$rendered"
 )
 
+check 'an unreachable docker does not accuse the container' test_an_unreachable_docker_does_not_accuse_the_container
 check 'force reinstalls what is already present' test_force_reinstalls_what_is_already_present
 check 'force never touches the ssh key' test_force_never_touches_the_ssh_key
 check 'docker daemon config is written one way only' test_docker_daemon_config_is_written_one_way_only
