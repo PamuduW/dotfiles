@@ -56,6 +56,10 @@ package_metadata_load() {
 		package_part="${line%%#*}"
 		description="${line#*#}"
 		name="$(_package_lib_trim "$package_part")"
+		# `preferred|fallback` records a package rename for the installer. The
+		# catalogue shows the preferred name; the alternation is an install-time
+		# detail, not something to put in front of a reader.
+		name="${name%%|*}"
 		description="$(_package_lib_trim "$description")"
 		[[ -n "$name" && -n "$description" && -z "${seen[$name]+x}" ]] || {
 			printf 'Invalid or duplicate package metadata: %s\n' "$name" >&2

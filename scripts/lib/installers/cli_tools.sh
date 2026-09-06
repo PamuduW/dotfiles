@@ -253,6 +253,41 @@ codex_migrate_nvm_installations() {
 	fi
 }
 
+# PowerShell straight from the upstream release, for releases the Microsoft
+# feed has not caught up with yet.
+install_powershell_from_github() {
+	command -v curl >/dev/null 2>&1 || {
+		echo "  curl required for the PowerShell fallback install." >&2
+		return 1
+	}
+	local ver tmp arch deb
+	ver="$(github_latest_release_version PowerShell/PowerShell)" || {
+		echo "  Could not determine the latest PowerShell release." >&2
+		return 1
+	}
+	case "$(uname -m)" in
+	x86_64) arch=amd64 ;;
+	aarch64 | arm64) arch=arm64 ;;
+	*)
+		echo "  No PowerShell package for architecture $(uname -m)." >&2
+		return 1
+		;;
+	esac
+
+	tmp="$(mktemp -d)"
+	# shellcheck disable=SC2064  # Capture this invocation's temp path for RETURN cleanup.
+	trap "rm -rf -- '$tmp'; trap - RETURN" RETURN
+	deb="powershell_${ver}-1.deb_${arch}.deb"
+	log_step "Install PowerShell ${ver} from the upstream release"
+	github_curl -fsSL -o "$tmp/$deb" \
+		"https://github.com/PowerShell/PowerShell/releases/download/v${ver}/${deb}" || return $?
+	# apt resolves the package's own dependencies; dpkg alone would not.
+	sudo apt-get -o Dpkg::Use-Pty=0 install -y "$tmp/$deb" || return $?
+	rm -rf -- "$tmp"
+	trap - RETURN
+	log_ok "PowerShell ${ver} installed from the upstream release"
+}
+
 install_codex_cli() {
 	local state active
 	state="$(codex_cli_install_state)" || return $?
@@ -360,12 +395,15 @@ install_powershell() {
 	fi
 
 	sudo apt-get update -qq || return $?
-	# Microsoft publishes per-release feeds and a brand-new Ubuntu often has no
-	# feed yet. That is a "not offered here", not an install failure.
+	# Microsoft's per-release feed lags new Ubuntu releases by months. The
+	# upstream .deb works on those releases well before the feed carries them,
+	# so fall back to it rather than leaving the component uninstalled.
 	if declare -F apt_package_is_available >/dev/null 2>&1 &&
 		! apt_package_is_available powershell; then
-		log_warn "PowerShell is not published for ${distro} ${version_id} yet; skipping"
-		return 0
+		log_warn "PowerShell is not in the Microsoft feed for ${distro} ${version_id} yet"
+		install_powershell_from_github || return $?
+		command -v pwsh >/dev/null 2>&1 && return 0
+		return 1
 	fi
 	sudo apt-get -o Dpkg::Use-Pty=0 install -y powershell || return $?
 

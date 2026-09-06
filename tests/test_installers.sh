@@ -126,6 +126,52 @@ test_all_packages_unavailable_is_reported_not_installed() (
 	[[ ! -s "$calls" ]]
 )
 
+test_renamed_packages_fall_back_to_the_available_name() (
+	# Break caught: `dnsutils` became `bind9-dnsutils` and the transitional name
+	# was dropped in a later release, so the tool went missing on new machines
+	# even though the package was right there under its current name.
+	local pkg_file="$TEST_HARNESS_ROOT/renamed-apt-packages.txt"
+	local calls="$TEST_HARNESS_ROOT/renamed-apt.calls"
+	printf '%s\n' '# @core' 'bind9-dnsutils|dnsutils' 'git' >"$pkg_file"
+	: >"$calls"
+	PKG_FILE="$pkg_file"
+	# Only the new name exists on this imaginary release.
+	apt_package_is_available() { [[ "$1" != dnsutils ]]; }
+	_run_quiet_command() {
+		shift
+		printf '%s\n' "$*" >>"$calls"
+	}
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	log_warn() { :; }
+
+	apt_install_packages core >/dev/null 2>&1 || return 1
+	grep -q 'bind9-dnsutils' "$calls" || return 1
+	! grep -qw 'dnsutils$' "$calls"
+)
+
+test_a_rename_falls_back_to_the_older_name_when_needed() (
+	local pkg_file="$TEST_HARNESS_ROOT/renamed-old-apt.txt"
+	local calls="$TEST_HARNESS_ROOT/renamed-old-apt.calls"
+	printf '%s\n' '# @core' 'bind9-dnsutils|dnsutils' >"$pkg_file"
+	: >"$calls"
+	PKG_FILE="$pkg_file"
+	# Only the transitional name exists on this older release.
+	apt_package_is_available() { [[ "$1" == dnsutils ]]; }
+	_run_quiet_command() {
+		shift
+		printf '%s\n' "$*" >>"$calls"
+	}
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	log_warn() { :; }
+
+	apt_install_packages core >/dev/null 2>&1 || return 1
+	grep -qw 'dnsutils' "$calls"
+)
+
 test_powershell_skips_a_release_with_no_microsoft_feed() (
 	local warnings="$TEST_HARNESS_ROOT/pwsh.warn" rc=0
 	: >"$warnings"
@@ -141,9 +187,15 @@ test_powershell_skips_a_release_with_no_microsoft_feed() (
 	sudo() { :; }
 	wget() { :; }
 
+	install_powershell_from_github() {
+		printf 'github-fallback\n' >>"$warnings"
+		return 0
+	}
 	install_powershell >/dev/null 2>&1 || rc=$?
-	[[ "$rc" -eq 0 ]] || return 1
-	grep -q 'not published' "$warnings"
+	# Not in the feed is not the end of the road: fall back to the upstream
+	# release rather than leaving the component uninstalled.
+	grep -q 'not in the Microsoft feed' "$warnings" || return 1
+	grep -q 'github-fallback' "$warnings"
 )
 
 test_tool_installers_stop_at_the_first_required_failure() (
@@ -619,7 +671,9 @@ check 'failed Stow application restores backed-up user files' test_failed_stow_r
 check 'apt installation failures are not hidden by warning logging' test_apt_install_failure_is_not_hidden_by_warning_logging
 check 'unavailable packages do not block the available ones' test_unavailable_packages_do_not_block_the_available_ones
 check 'all packages unavailable is reported, not installed' test_all_packages_unavailable_is_reported_not_installed
-check 'PowerShell skips a release with no Microsoft feed' test_powershell_skips_a_release_with_no_microsoft_feed
+check 'renamed packages fall back to the available name' test_renamed_packages_fall_back_to_the_available_name
+check 'a rename falls back to the older name when needed' test_a_rename_falls_back_to_the_older_name_when_needed
+check 'PowerShell falls back to the upstream release' test_powershell_skips_a_release_with_no_microsoft_feed
 check 'tool installers stop at the first required command failure' test_tool_installers_stop_at_the_first_required_failure
 check 'container installers stop at the first required command failure' test_container_installers_stop_at_the_first_required_failure
 check 'Portainer fresh installs use LTS and remain stopped' test_portainer_fresh_install_uses_lts_without_starting_container

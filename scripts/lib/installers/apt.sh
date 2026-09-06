@@ -31,12 +31,23 @@ apt_install_packages() {
 	fi
 
 	local -a available=() unavailable=()
-	local pkg
-	for pkg in "${pkgs[@]}"; do
-		if apt_package_is_available "$pkg"; then
-			available+=("$pkg")
+	local entry pkg chosen
+	for entry in "${pkgs[@]}"; do
+		# `a|b` means "a, or b where a does not exist". Package renames are the
+		# common case: `dnsutils` became `bind9-dnsutils`, and the transitional
+		# name was dropped in a later release.
+		chosen=''
+		while IFS= read -r pkg; do
+			[[ -n "$pkg" ]] || continue
+			if apt_package_is_available "$pkg"; then
+				chosen="$pkg"
+				break
+			fi
+		done < <(printf '%s\n' "${entry//|/$'\n'}")
+		if [[ -n "$chosen" ]]; then
+			available+=("$chosen")
 		else
-			unavailable+=("$pkg")
+			unavailable+=("${entry//|/ or }")
 		fi
 	done
 

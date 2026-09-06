@@ -284,7 +284,8 @@ test_release_installer_standalone_source_stays_anonymous() {
 test_fonts_and_asdf_routed() {
 	local fonts="$REPO_DIR/scripts/lib/installers/fonts.sh" cli="$REPO_DIR/scripts/lib/installers/cli_tools.sh"
 	[[ "$(grep -c 'github_curl -fsSL' "$fonts")" -eq 1 ]] || return 1
-	[[ "$(grep -c 'github_curl -fsSL' "$cli")" -eq 1 ]] || return 1
+	# Two: the Codex standalone installer and the PowerShell upstream fallback.
+	[[ "$(grep -c 'github_curl -fsSL' "$cli")" -eq 2 ]] || return 1
 	assert_sensitive_urls_use_boundary "$fonts" "$cli"
 }
 

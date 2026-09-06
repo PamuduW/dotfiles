@@ -69,7 +69,7 @@ ghostscript  # PDF and PostScript conversion, compression, and repair
 inkscape  # Full SVG editing and conversion application
 magic-wormhole  # Secure peer-to-peer file transfer
 strace  # System-call tracer for process diagnostics
-dnsutils  # DNS lookup tools including dig and nslookup
+bind9-dnsutils|dnsutils  # DNS lookup tools including dig and nslookup
 netcat-openbsd  # TCP and UDP connection testing utility
 ffmpeg  # Audio and video conversion, probing, and streaming tools
 imagemagick  # Raster image inspection, conversion, and manipulation tools

@@ -355,6 +355,35 @@ test_the_checkout_update_is_pre_authorized() (
 	grep -Fq 'DOTFILES_REPO_UPDATE_ASSUME_YES=1' "$BOOTSTRAP"
 )
 
+test_agentbot_phase_sees_tools_dotfiles_just_installed() (
+	# Break caught: Dotfiles installs Node through nvm and drops tools in
+	# ~/.local/bin, but the shell running bootstrap predates both. The Agentbot
+	# phase refused to run for a missing `node` moments after Dotfiles reported
+	# installing it.
+	local root="$TEST_HARNESS_ROOT/late-path"
+	rm -rf -- "$root"
+	mkdir -p -- "$root/.nvm/bin" "$root/.local/bin"
+	printf '#!/usr/bin/env bash\nprintf "v24\\n"\n' >"$root/.nvm/bin/node"
+	chmod +x -- "$root/.nvm/bin/node"
+	printf '#!/usr/bin/env bash\nexit 0\n' >"$root/.local/bin/late-tool"
+	chmod +x -- "$root/.local/bin/late-tool"
+	# nvm publishes its own PATH entry only when the script is sourced.
+	printf 'PATH="%s:$PATH"\nexport PATH\n' "$root/.nvm/bin" >"$root/.nvm/nvm.sh"
+
+	# PATH is emptied for the assertions so the harness's own node cannot mask
+	# the point: only the loader may make these reachable. Everything used here
+	# is a shell builtin.
+	HOME="$root" NVM_DIR="$root/.nvm" BOOTSTRAP_SOURCE_ONLY=1 bash -c '
+		source "$1"
+		PATH=""
+		command -v node >/dev/null 2>&1 && exit 10
+		command -v late-tool >/dev/null 2>&1 && exit 11
+		load_dotfiles_environment
+		command -v node >/dev/null 2>&1 || exit 12
+		command -v late-tool >/dev/null 2>&1 || exit 13
+	' _ "$BOOTSTRAP"
+)
+
 expect_success 'both clones, installs, updates, then runs Agentbot' test_both_clones_installs_updates_then_runs_agentbot
 expect_success 'Dotfiles only skips every Agentbot step' test_dotfiles_only_skips_every_agentbot_step
 expect_success 'Agentbot only skips Dotfiles and does not ask' test_agentbot_only_skips_dotfiles_and_does_not_ask
@@ -377,6 +406,7 @@ expect_success 'a repository update restarts instead of failing' test_a_reposito
 expect_success 'a failed step still prints a summary' test_a_failed_step_still_prints_a_summary
 expect_success 'component failures do not abandon the remaining phases' test_component_failures_do_not_abandon_the_remaining_phases
 expect_success 'the checkout update is pre-authorized' test_the_checkout_update_is_pre_authorized
+expect_success 'the Agentbot phase sees tools Dotfiles just installed' test_agentbot_phase_sees_tools_dotfiles_just_installed
 
 test_harness_cleanup
 finish_tests

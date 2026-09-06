@@ -298,7 +298,7 @@ test_package_metadata_has_exact_66_with_descriptions() {
 		lshw mtr-tiny glances lsof wslu xdg-utils rsync unp poppler-utils
 		libreoffice pandoc docx2txt xlsx2csv tesseract-ocr zip unzip fontconfig
 		librsvg2-bin qpdf ghostscript inkscape magic-wormhole
-		strace dnsutils netcat-openbsd ffmpeg imagemagick libimage-exiftool-perl xmlstarlet
+		strace bind9-dnsutils netcat-openbsd ffmpeg imagemagick libimage-exiftool-perl xmlstarlet
 	)
 	local -A expected_counts=([core]=12 [python]=13 [cli]=12 [system]=29)
 	local -A actual_counts=()

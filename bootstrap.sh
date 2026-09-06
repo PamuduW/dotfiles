@@ -208,6 +208,26 @@ ensure_git() {
 
 # --- handoff -----------------------------------------------------------------
 
+# Make what Dotfiles just installed reachable in this shell.
+#
+# The Dotfiles run installs Node through nvm and puts several tools in
+# ~/.local/bin, but the shell running bootstrap started before any of that
+# existed -- which is exactly what "Open a new terminal, or run: source
+# ~/.bashrc" is about. Without this, the Agentbot phase refused to run because
+# `node` was not on PATH, moments after Dotfiles reported installing it.
+load_dotfiles_environment() {
+	[[ -d "$HOME/.local/bin" ]] && PATH="$HOME/.local/bin:$PATH"
+	export PATH
+	local nvm_script="${NVM_DIR:-$HOME/.nvm}/nvm.sh"
+	if [[ -s "$nvm_script" ]]; then
+		# nvm's script is not written for `set -eu`; it must not take the run down.
+		set +eu
+		# shellcheck disable=SC1090  # Runtime path, present only after install.
+		. "$nvm_script" >/dev/null 2>&1 || true
+		set -eu
+	fi
+}
+
 agentbot_prerequisites() {
 	# Agentbot's installer needs these, and Dotfiles is what provides them. Name
 	# the component rather than the binary so the fix is obvious.
@@ -219,7 +239,11 @@ agentbot_prerequisites() {
 	((${#missing[@]} == 0)) && return 0
 	err 'Agentbot cannot be installed yet; these are missing:'
 	printf '  - %s\n' "${missing[@]}" >&2
-	err 'Rerun and choose "Dotfiles and Agentbot" so Dotfiles installs them first.'
+	if ((WANT_DOTFILES == 1)); then
+		err "Open a new shell and run $AGENTBOT_DIR/install.sh install."
+	else
+		err 'Rerun and choose "Dotfiles and Agentbot" so Dotfiles installs them first.'
+	fi
 	return 1
 }
 
@@ -281,6 +305,7 @@ run_dotfiles() {
 
 run_agentbot() {
 	local rc=0
+	load_dotfiles_environment
 	agentbot_prerequisites || return 1
 	step 'Install Agentbot'
 	AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" install || rc=$?
