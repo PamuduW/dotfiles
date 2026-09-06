@@ -11,6 +11,20 @@ _dotfiles_approve_repo_update() {
 #
 # The selection is derived from probes, never from a stored answer: a full
 # update must not silently add a component the operator did not choose.
+# Components whose installer needs an answer only the operator can give. A full
+# update has nobody to ask: selecting git_identity crashed the run outright on
+# an unbound SETUP_GIT_NAME, and reinstalling ssh_key would either overwrite a
+# key or stop for a passphrase. Both are initial-setup work.
+FULL_UPDATE_NEVER_INSTALL=(git_identity ssh_key)
+
+_full_update_needs_operator_input() {
+	local key="$1" excluded
+	for excluded in "${FULL_UPDATE_NEVER_INSTALL[@]}"; do
+		[[ "$key" == "$excluded" ]] && return 0
+	done
+	return 1
+}
+
 full_update_select_applied_components() {
 	local -A probe_results=()
 	local key result
@@ -18,6 +32,10 @@ full_update_select_applied_components() {
 
 	collect_component_probe_results probe_results || return 1
 	for key in "${COMP_KEYS[@]}"; do
+		if _full_update_needs_operator_input "$key"; then
+			COMP_ON["$key"]=0
+			continue
+		fi
 		result="${probe_results[$key]:-missing}"
 		case "$result" in
 		installed | configured) COMP_ON["$key"]=1 ;;

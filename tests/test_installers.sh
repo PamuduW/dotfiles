@@ -13,6 +13,27 @@ test_harness_init
 test_harness_report_init
 source "$TEST_DIR/lib/dotfiles_env.sh"
 
+test_git_identity_without_a_name_reports_instead_of_crashing() (
+	# Break caught: apply_git_config read SETUP_GIT_NAME unguarded, so a caller
+	# that never collected it killed the entire run with "unbound variable"
+	# instead of reporting the one component it could not do.
+	local warnings="$TEST_HARNESS_ROOT/git-identity.warn" rc=0
+	: >"$warnings"
+	log_ok() { :; }
+	log_warn() { printf '%s\n' "$*" >>"$warnings"; }
+	git() { printf 'git-was-called\n' >>"$warnings"; }
+
+	(
+		set -u
+		unset SETUP_GIT_NAME SETUP_GIT_EMAIL
+		apply_git_config
+	) || rc=$?
+	[[ "$rc" -ne 0 ]] || return 1
+	grep -q 'needs a name and email' "$warnings" || return 1
+	# And it stopped before touching the operator's global git config.
+	! grep -q 'git-was-called' "$warnings"
+)
+
 test_backup_includes_existing_dotfiles_launcher() (
 	local fake_home="$TEST_HARNESS_ROOT/stow-home"
 	local fake_repo="$TEST_HARNESS_ROOT/stow-repo"
@@ -699,6 +720,7 @@ test_wsl_config_renderer_updates_only_the_requested_section() (
 	grep -Fqx 'systemd=true' "$rendered"
 )
 
+check 'git identity without a name reports instead of crashing' test_git_identity_without_a_name_reports_instead_of_crashing
 check 'Stow backup includes an existing dotfiles launcher' test_backup_includes_existing_dotfiles_launcher
 check 'Stow backup includes an existing codex-rc helper' test_backup_includes_existing_remote_control_helpers
 check 'Stow backup includes an existing Git wrapper' test_backup_includes_existing_git_wrapper

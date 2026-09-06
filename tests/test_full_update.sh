@@ -14,6 +14,33 @@ _err() { printf '%s\n' "$*" >&2; }
 C_BOLD='' C_ORANGE='' C_GREEN='' C_RESET=''
 [[ -f "$REPO_DIR/scripts/lib/full_update.sh" ]] && source "$REPO_DIR/scripts/lib/full_update.sh"
 
+test_operator_input_components_are_never_installed_by_full_update() (
+	# Break caught: full-update selected git_identity, whose installer needs a
+	# name and email that only the menu collects, and the run died on an unbound
+	# SETUP_GIT_NAME before installing anything. Reinstalling ssh_key would
+	# likewise either overwrite a key or stop for a passphrase. A full update has
+	# nobody to ask, so both are initial-setup work.
+	local installed="$TEST_HARNESS_ROOT/full-update-input.installed"
+	: >"$installed"
+	COMP_KEYS=(git_identity ssh_key docker)
+	declare -A COMP_ON=()
+	collect_component_probe_results() {
+		local -n out="$1"
+		# All three read as present; only the two needing input are excluded.
+		out=([git_identity]=configured [ssh_key]=installed [docker]=installed)
+	}
+	run_install() {
+		local key
+		for key in "${COMP_KEYS[@]}"; do
+			[[ "${COMP_ON[$key]}" -eq 1 ]] && printf '%s\n' "$key" >>"$installed"
+		done
+		return 0
+	}
+
+	full_update_install_applied_components >/dev/null || return 1
+	[[ "$(<"$installed")" == docker ]]
+)
+
 test_full_update_installs_only_components_that_probe_as_present() (
 	# Roadmap item 2: full-update is install + update, so install-time work
 	# stops drifting. The selection is derived from probes and must never add a
@@ -301,6 +328,7 @@ test_agentbot_doctor_warning_output_maps_to_warning_state() (
 	[[ "$rc" -eq 10 && "$output" == *'5 warning(s)'* ]]
 )
 
+expect_success 'operator-input components are never installed by full-update' test_operator_input_components_are_never_installed_by_full_update
 expect_success 'full-update installs only components that probe as present' test_full_update_installs_only_components_that_probe_as_present
 expect_success 'an unverifiable component is reinstalled and said so' test_an_unverifiable_component_is_reinstalled_and_said_so
 expect_success 'components needing attention do not stop the update' test_components_needing_attention_do_not_stop_the_update

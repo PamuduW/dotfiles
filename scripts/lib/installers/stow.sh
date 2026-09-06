@@ -2,6 +2,13 @@
 # Requires: DOTFILES_DIR
 
 apply_git_config() {
+	# Guarded, not assumed: these are collected by the installer menu, and a
+	# caller that reached here without them killed the whole run on an unbound
+	# variable rather than reporting one component it could not do.
+	if [[ -z "${SETUP_GIT_NAME:-}" || -z "${SETUP_GIT_EMAIL:-}" ]]; then
+		log_warn 'Git identity needs a name and email; set them with: dotfiles menu'
+		return 1
+	fi
 	git config --global user.name "$SETUP_GIT_NAME" || return $?
 	git config --global user.email "$SETUP_GIT_EMAIL" || return $?
 	log_ok "Git configured: $SETUP_GIT_NAME <$SETUP_GIT_EMAIL>"
