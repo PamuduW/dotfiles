@@ -149,7 +149,8 @@ test_a_missing_source_list_still_refreshes_everything() (
 	: >"$calls"
 	sudo() { printf '%s\n' "$*" >>"$calls"; }
 
-	apt_refresh_source_list "$TEST_HARNESS_ROOT/not-there.sources" || return 1
+	apt_refresh_source_list "$TEST_HARNESS_ROOT/not-there.sources" \
+		"$TEST_HARNESS_ROOT/also-not-there.list" || return 1
 	grep -q 'apt-get update' "$calls" || return 1
 	! grep -q 'Dir::Etc::sourcelist' "$calls"
 )

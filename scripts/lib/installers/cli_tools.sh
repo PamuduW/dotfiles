@@ -397,7 +397,9 @@ install_powershell() {
 	fi
 
 	# Only the feed just added: the preamble refreshed everything else.
-	apt_refresh_source_list /etc/apt/sources.list.d/microsoft-prod.list || return $?
+	apt_refresh_source_list \
+		/etc/apt/sources.list.d/microsoft-prod.list \
+		/etc/apt/sources.list.d/microsoft-prod.sources || return $?
 	# Microsoft's per-release feed lags new Ubuntu releases by months. The
 	# upstream .deb works on those releases well before the feed carries them,
 	# so fall back to it rather than leaving the component uninstalled.

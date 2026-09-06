@@ -14,8 +14,17 @@ fi
 # Falls back to a full refresh when the targeted form is unavailable, so a
 # component is never left installing against an index that does not list it.
 apt_refresh_source_list() {
-	local list="$1"
-	[[ -f "$list" ]] || {
+	# Vendors ship either the one-line `.list` form or deb822 `.sources`, and
+	# which one arrives changes between releases, so take candidates and use the
+	# first that exists.
+	local list=''
+	local candidate
+	for candidate in "$@"; do
+		[[ -f "$candidate" ]] || continue
+		list="$candidate"
+		break
+	done
+	[[ -n "$list" ]] || {
 		sudo apt-get update -qq
 		return $?
 	}

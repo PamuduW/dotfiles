@@ -155,7 +155,9 @@ DOCKEREOF
 		((sources_rc == 0)) || return "$sources_rc"
 
 		# Only the feed just added: the preamble refreshed everything else.
-		apt_refresh_source_list /etc/apt/sources.list.d/docker.sources || return $?
+		apt_refresh_source_list \
+			/etc/apt/sources.list.d/docker.sources \
+			/etc/apt/sources.list.d/docker.list || return $?
 		sudo apt-get -o Dpkg::Use-Pty=0 install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin || return $?
 		log_ok "Docker Engine installed"
 	fi
