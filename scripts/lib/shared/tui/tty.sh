@@ -112,6 +112,43 @@ read_tty_line() {
 	printf -v "$__var_name" '%s' "$value"
 }
 
+# A secret read that still shows the operator something is landing: one '*' per
+# character, backspace erases. Silent reads left them unable to tell a stalled
+# prompt from a typed one.
+read_tty_secret() {
+	local __var_name="$1"
+	local prompt="$2"
+	# Underscored on purpose: a plain `value` here would be the local this
+	# function assigns, not the caller's variable of the same name, and the
+	# secret would silently come back empty.
+	local __secret='' __char='' __rc=0
+
+	tty_available || return 1
+	tty_printf '%s' "$prompt"
+	while true; do
+		tty_read_key_char __char || {
+			__rc=$?
+			break
+		}
+		case "$__char" in
+		'') break ;;
+		$'\177' | $'\b')
+			if [[ -n "$__secret" ]]; then
+				__secret="${__secret%?}"
+				tty_printf '\b \b'
+			fi
+			;;
+		*)
+			__secret+="$__char"
+			tty_printf '*'
+			;;
+		esac
+	done
+	tty_printf '\n'
+	((__rc == 0)) || return "$__rc"
+	printf -v "$__var_name" '%s' "$__secret"
+}
+
 tty_read_key_char() {
 	local __var_name="$1"
 	shift

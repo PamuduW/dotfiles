@@ -131,8 +131,9 @@ confirm_loop() {
 	local need_git_prompt=true
 	local answer=""
 	while true; do
-		if is_on git_identity && [[ "$need_git_prompt" == "true" ]]; then
-			prompt_git_identity
+		if [[ "$need_git_prompt" == "true" ]]; then
+			is_on git_identity && prompt_git_identity
+			is_on ssh_key && prompt_ssh_passphrase
 			need_git_prompt=false
 		fi
 		show_plan

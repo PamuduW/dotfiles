@@ -19,20 +19,22 @@ generate_ssh_key() {
 	if [[ -z "$ssh_comment" ]]; then
 		ssh_comment="${USER:-user}@$(hostname 2>/dev/null || echo wsl)"
 	fi
-	# ssh-keygen falls back to ssh-askpass whenever stdin is not a terminal, and
-	# no askpass is installed here. Under a piped bootstrap that promised a
-	# passphrase prompt the operator never saw, then wrote the key unprotected.
-	local tty_input=''
-	tty_input_available && tty_input="$(tty_input_path)"
-	if [[ -n "$tty_input" ]]; then
-		echo "  You'll be prompted for a passphrase (press Enter to skip / use no passphrase)."
-		ssh-keygen -t ed25519 -C "$ssh_comment" -f "$HOME/.ssh/id_ed25519" <"$tty_input" || return $?
+	# -N always, so a running install never stops for input: the passphrase was
+	# collected with the Git identity, before the plan was confirmed. Left empty
+	# when nothing was collected -- ssh-keygen would otherwise reach for an
+	# ssh-askpass that is not installed and write the key unprotected anyway,
+	# after announcing a prompt the operator never saw.
+	ssh-keygen -t ed25519 -C "$ssh_comment" -f "$HOME/.ssh/id_ed25519" \
+		-N "${SETUP_SSH_PASSPHRASE:-}" -q || return $?
+	if [[ -n "${SETUP_SSH_PASSPHRASE:-}" ]]; then
+		echo '  Key protected by a passphrase. Add it to your agent with: ssh-add ~/.ssh/id_ed25519'
 	else
-		echo '  No terminal to ask on: generating the key without a passphrase.'
-		ssh-keygen -t ed25519 -C "$ssh_comment" -f "$HOME/.ssh/id_ed25519" -N '' -q || return $?
+		echo '  Key generated without a passphrase.'
+		# Only worth doing unprotected: ssh-add on a protected key would stop
+		# here asking for the passphrase again.
+		eval "$(ssh-agent -s)" >/dev/null || return $?
+		ssh-add "$HOME/.ssh/id_ed25519" 2>/dev/null || return $?
 	fi
-	eval "$(ssh-agent -s)" >/dev/null || return $?
-	ssh-add "$HOME/.ssh/id_ed25519" 2>/dev/null || return $?
 
 	local pub_key
 	pub_key="$(cat "$HOME/.ssh/id_ed25519.pub")"
