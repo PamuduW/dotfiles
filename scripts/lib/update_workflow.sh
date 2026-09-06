@@ -236,6 +236,10 @@ _update_apt_packages() {
 		upgrade_result_set updated
 		return 0
 	fi
+	# Says so rather than printing nothing: a heading with no lines under it
+	# reads as a step that died, and this one is silent precisely when it had
+	# the least to do.
+	_msg '  No packages to upgrade'
 	upgrade_result_set checked-no-change
 }
 

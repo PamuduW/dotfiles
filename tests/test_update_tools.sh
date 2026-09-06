@@ -581,7 +581,20 @@ test_every_upgrade_step_says_something() (
 
 	[[ -s "$output" ]] || return 1
 	grep -Fq 'already up to date (codex-cli 0.153.4)' "$output" || return 1
-	[[ "$result" == checked-no-change ]]
+	[[ "$result" == checked-no-change ]] || return 1
+
+	# The apt step is silent precisely when it has the least to do, which is
+	# when an empty section is most likely to read as a failure.
+	local apt_output="$machine/apt-output"
+	local apt_result
+	apt_result="$(
+		apt_upgradable_count() { printf '0\n'; }
+		sudo() { :; }
+		_update_apt_packages >"$apt_output" 2>&1
+		printf '%s' "$UPGRADE_STEP_ACTIVE_RESULT"
+	)" || return 1
+	[[ -s "$apt_output" ]] || return 1
+	[[ "$apt_result" == checked-no-change ]]
 )
 
 test_copilot_update_management_is_absent() {
