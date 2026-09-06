@@ -253,7 +253,11 @@ agentbot_prerequisites() {
 # reporting a failure the operator would have to interpret.
 restart_after_repository_update() {
 	local what="$1"
-	if [[ -n "${BOOTSTRAP_RESTARTED:-}" ]]; then
+	# Tracked per repository, not once for the run: Dotfiles and Agentbot can
+	# each legitimately be behind, and a single flag made the second one look
+	# like a loop and stopped the setup one step from finishing. Each may
+	# restart once, so the run is still bounded.
+	if [[ " ${BOOTSTRAP_RESTARTED:-} " == *" $what "* ]]; then
 		err "$what updated its checkout again after a restart; stopping to avoid a loop."
 		err "Rerun $DOTFILES_DIR/bootstrap.sh when ready."
 		return 1
@@ -266,7 +270,7 @@ restart_after_repository_update() {
 	fi
 	msg ''
 	msg "  $what updated its checkout. Restarting from the updated script."
-	BOOTSTRAP_RESTARTED=1 \
+	BOOTSTRAP_RESTARTED="${BOOTSTRAP_RESTARTED:-} $what" \
 		BOOTSTRAP_SELECTION="$SELECTION" \
 		exec "$DOTFILES_DIR/bootstrap.sh"
 }

@@ -70,10 +70,12 @@ if [[ "\${1:-}" == --help ]]; then
 fi
 printf '$repo_name-install %s\n' "\$*" >>"\$BOOTSTRAP_TEST_LOG"
 # Seam for the restart and failure tests: exit with the code in the file, then
-# reset it so the next invocation succeeds.
-if [[ -n "\${BOOTSTRAP_TEST_RC_FILE:-}" && -f "\${BOOTSTRAP_TEST_RC_FILE}" ]]; then
-	rc="\$(cat "\$BOOTSTRAP_TEST_RC_FILE")"
-	printf '0\n' >"\$BOOTSTRAP_TEST_RC_FILE"
+# reset it so the next invocation succeeds. Each repository may have its own
+# file, so a test can ask both of them for a restart independently.
+rc_file="\${BOOTSTRAP_TEST_RC_FILE_$repo_name:-\${BOOTSTRAP_TEST_RC_FILE:-}}"
+if [[ -n "\$rc_file" && -f "\$rc_file" ]]; then
+	rc="\$(cat "\$rc_file")"
+	printf '0\n' >"\$rc_file"
 	exit "\$rc"
 fi
 EOF
@@ -530,6 +532,54 @@ test_a_checkout_behind_the_remote_advances_itself() (
 	! grep -q 'legacy-install' "$BOOTSTRAP_TEST_LOG"
 )
 
+test_each_repository_may_restart_once() (
+	# Break caught: one flag covered both repositories, so a Dotfiles restart
+	# made a legitimate Agentbot restart look like a loop and stopped the setup
+	# one step from finishing.
+	setup_machine two-restarts
+	local dotfiles_rc="$MACHINE/dotfiles-rc" agentbot_rc="$MACHINE/agentbot-rc"
+	printf '2\n' >"$dotfiles_rc"
+	printf '2\n' >"$agentbot_rc"
+
+	# Each fake installer reads its own status file, so both ask for a restart.
+	local output
+	output="$(BOOTSTRAP_ANSWERS_OVERRIDE='' run_bootstrap 1 \
+		BOOTSTRAP_TEST_RC_FILE_dotfiles="$dotfiles_rc" \
+		BOOTSTRAP_TEST_RC_FILE_agentbot="$agentbot_rc" 2>&1)" || return 1
+
+	[[ "$output" != *'stopping to avoid a loop'* ]] || return 1
+	[[ "$(printf '%s\n' "$output" | grep -c 'Restarting from the updated script')" -eq 2 ]] || return 1
+	log_has 'dotfiles-cli update' || return 1
+	log_has 'agentbot-install install'
+)
+
+test_one_repository_restarting_twice_is_still_a_loop() (
+	setup_machine loop-guard
+	local rc_file="$MACHINE/always-2"
+	printf '2\n' >"$rc_file"
+	# Never resets: the checkout claims to move forward every single time.
+	local checkout="$MACHINE/home/dotfiles"
+	run_bootstrap 2 >/dev/null 2>&1 || true
+	cat >"$checkout/install.sh" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == --help ]]; then
+	printf 'Options:\n  --initial\n  --install\n  --update\n'
+	exit 0
+fi
+printf 'dotfiles-install %s\n' "$*" >>"$BOOTSTRAP_TEST_LOG"
+exit 2
+EOF
+	chmod +x -- "$checkout/install.sh"
+	"$REAL_GIT" -C "$checkout" add -A >/dev/null 2>&1
+	"$REAL_GIT" -C "$checkout" -c user.name=T -c user.email=t@e.invalid \
+		commit -qm 'always moving' >/dev/null 2>&1
+
+	local rc=0 output
+	output="$(run_bootstrap 2 2>&1)" || rc=$?
+	[[ "$rc" -ne 0 ]] || return 1
+	[[ "$output" == *'stopping to avoid a loop'* ]]
+)
+
 expect_success 'both clones, installs, updates, then runs Agentbot' test_both_clones_installs_updates_then_runs_agentbot
 expect_success 'Dotfiles only skips every Agentbot step' test_dotfiles_only_skips_every_agentbot_step
 expect_success 'Agentbot only skips Dotfiles and does not ask' test_agentbot_only_skips_dotfiles_and_does_not_ask
@@ -555,6 +605,8 @@ expect_success 'component failures do not abandon the remaining phases' test_com
 expect_success 'the checkout update is pre-authorized' test_the_checkout_update_is_pre_authorized
 expect_success 'an older checkout falls back to the mode it has' test_an_older_checkout_falls_back_to_the_mode_it_has
 expect_success 'a checkout behind the remote advances itself' test_a_checkout_behind_the_remote_advances_itself
+expect_success 'each repository may restart once' test_each_repository_may_restart_once
+expect_success 'one repository restarting twice is still a loop' test_one_repository_restarting_twice_is_still_a_loop
 expect_success 'the Agentbot phase sees tools Dotfiles just installed' test_agentbot_phase_sees_tools_dotfiles_just_installed
 expect_success 'the summary prints exactly once before the shell offer' test_the_summary_prints_exactly_once_before_the_shell_offer
 expect_success 'a non-interactive run does not exec a shell' test_a_non_interactive_run_does_not_exec_a_shell
