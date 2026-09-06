@@ -149,6 +149,9 @@ test_both_clones_installs_updates_then_runs_agentbot() (
 	[[ -d "$MACHINE/home/dotfiles/.git" && -d "$MACHINE/home/agentbot/.git" ]] || return 1
 	log_has 'dotfiles-install --install' || return 1
 	log_has 'dotfiles-cli update' || return 1
+	# Break caught: the update prompted, the piped run answered N for the
+	# operator, and every pending apt and npm upgrade was reported and skipped.
+	log_has 'dotfiles-cli update --yes' || return 1
 	log_has 'agentbot-install install' || return 1
 	log_has 'agentbot-install update' || return 1
 	# Dotfiles must be fully done before Agentbot starts.

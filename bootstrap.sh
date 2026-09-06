@@ -374,7 +374,10 @@ run_dotfiles() {
 	# `agentbot full`, so it fails on a Dotfiles-only machine and duplicates the
 	# Agentbot phase this script already sequences.
 	step 'Update Dotfiles'
-	"$DOTFILES_DIR/bin/bin/dotfiles" update || {
+	# --yes: the operator approved this run at the plan, and a bootstrap has no
+	# second prompt to spend. Without it the update reported the pending apt and
+	# npm upgrades and applied none of them.
+	"$DOTFILES_DIR/bin/bin/dotfiles" update --yes || {
 		record 'FAILED   dotfiles update'
 		return 1
 	}

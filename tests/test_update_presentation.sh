@@ -183,9 +183,16 @@ test_repository_update_preview_uses_semantic_colors() (
 	grep -Fq $'\033[33m2 commit(s) behind' <<<"$output" || return 1
 	grep -Fq $'\033[36mpull --ff-only' <<<"$output" || return 1
 
-	if prompt="$(printf 'n\n' | _dotfiles_confirm 'Pull 2 commit(s) with --ff-only?')"; then
+	# The prompt is written to the terminal, not stdout: stdout is teed into the
+	# action log, and under a piped bootstrap stdin is not the operator at all.
+	local tty_in="$TEST_HARNESS_ROOT/confirm-in" tty_out="$TEST_HARNESS_ROOT/confirm-out"
+	printf 'n\n' >"$tty_in"
+	: >"$tty_out"
+	if DOTFILES_TTY_INPUT="$tty_in" DOTFILES_TTY_OUTPUT="$tty_out" \
+		_dotfiles_confirm 'Pull 2 commit(s) with --ff-only?' </dev/null; then
 		return 1
 	fi
+	prompt="$(<"$tty_out")"
 	grep -Fq $'\033[33mPull 2 commit(s) with --ff-only?' <<<"$prompt"
 )
 

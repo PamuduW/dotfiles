@@ -33,6 +33,25 @@ test_interactivity_depends_on_the_terminal_not_stdin() (
 		rg -q 'if tty_available; then' "$REPO_DIR/scripts/lib/bootstrap.sh"
 )
 
+test_a_prompt_never_reads_stdin() (
+	# Break caught: the update confirmation read stdin, which under a piped
+	# bootstrap is the pipe. It hit EOF, answered its own question, and skipped
+	# every downstream upgrade -- prompt and "skipped" printed on one line with
+	# nobody having typed anything. The previous guard only looked for `-t 0`,
+	# so a bare read walked past it.
+	#
+	# Loop reads consume a stream on purpose; a standalone read must say where
+	# its input comes from, which for a prompt is the shared TTY adapter.
+	local hits
+	hits="$(rg -n '(^|[;&|]|\s)read\s+-' "$REPO_DIR/scripts" "$REPO_DIR/bin" \
+		--glob '!tests/**' | rg -v 'while |until ' | rg -v '<' || true)"
+	[[ -z "$hits" ]] || {
+		printf 'prompt reads stdin instead of the terminal:\n%s\n' "$hits" >&2
+		return 1
+	}
+	rg -q 'read_tty_line answer' "$REPO_DIR/scripts/lib/update_workflow.sh"
+)
+
 test_sibling_repository_is_named_agentbot() (
 	# The sibling repository and its checkout directory are `agentbot`, matching
 	# the CLI. The only surviving references to the old name are the legacy
@@ -139,6 +158,7 @@ test_installer_help_exits_before_log_initialization() (
 check 'repository update has no reload hook' test_repository_update_has_no_reload_hook
 check 'sibling repository is named agentbot' test_sibling_repository_is_named_agentbot
 check 'interactivity depends on the terminal, not stdin' test_interactivity_depends_on_the_terminal_not_stdin
+check 'a prompt never reads stdin' test_a_prompt_never_reads_stdin
 check 'all terminal device access goes through the shared TTY adapter' test_terminal_device_access_is_centralized
 check 'dotfiles CLI is a thin adapter over shared update modules' test_dotfiles_cli_is_a_thin_adapter_over_update_modules
 check 'full-update loader provides the Codex standalone sync dependency' test_full_update_loader_provides_codex_sync_dependency

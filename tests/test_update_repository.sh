@@ -161,6 +161,17 @@ test_cmd_update_executes_outcome_contract() (
 	cmd_update --all >/dev/null || return 1
 	[[ "$(sed -n '3p' "$events")" == confirm:* && "$(sed -n '4p' "$events")" == downstream && "$(sed -n '5p' "$events")" == summary ]] || return 1
 
+	# --yes carries the caller's approval: downstream runs and no question is
+	# asked. Bootstrap needs this -- its update had no terminal to ask on, so
+	# the prompt answered itself and skipped every pending upgrade.
+	: >"$events"
+	TEST_GATE_OUTCOME=current
+	replies=no
+	cmd_update --yes >/dev/null || return 1
+	! grep -q '^confirm:' "$events" || return 1
+	grep -Fqx downstream "$events" || return 1
+	grep -Fqx summary "$events" || return 1
+
 	: >"$events"
 	TEST_GATE_OUTCOME=repository_changed
 	replies=yes
@@ -223,14 +234,24 @@ test_declined_repository_pull_prints_one_report_and_one_pause_boundary() (
 	C_RED=$'\033[31m' C_RESET=$'\033[0m'
 	export C_RED C_RESET
 	export TEST_REPO_STATE
+	# The prompt is asked and answered on the terminal, not on stdin: under a
+	# piped bootstrap stdin is the pipe, and a stdin read answered itself.
+	local tty_in="$TEST_HARNESS_ROOT/decline-input" tty_out="$TEST_HARNESS_ROOT/decline-output"
+	printf 'n\n' >"$tty_in"
+	: >"$tty_out"
+	DOTFILES_TTY_INPUT="$tty_in" DOTFILES_TTY_OUTPUT="$tty_out"
+	export DOTFILES_TTY_INPUT DOTFILES_TTY_OUTPUT
 	set +e
-	output="$(printf 'n\n' | cmd_update 2>&1)"
+	output="$(cmd_update 2>&1 </dev/null)"
 	rc=$?
 	set -e
 	clean_output="$(sed -E $'s/\033\\[[0-9;]*m//g' <<<"$output")"
 	[[ "$rc" -eq 0 ]] || return 1
 	[[ "$(grep -c '^Repository update$' <<<"$clean_output")" -eq 1 ]] || return 1
-	[[ "$clean_output" == *'Pull 3 commit(s) with --ff-only? [y/N]: '*$'\n\n''Pull declined; update stopped.'* ]] || return 1
+	# The question goes to the terminal so the operator sees it live; the
+	# outcome goes to stdout so the action log keeps it.
+	[[ "$(sed -E $'s/\033\\[[0-9;]*m//g' "$tty_out")" == *'Pull 3 commit(s) with --ff-only? [y/N]: '* ]] || return 1
+	[[ "$clean_output" == *$'\n\n''Pull declined; update stopped.'* ]] || return 1
 	[[ "$output" == *$'\033[31mPull declined; update stopped.\033[0m'* ]] || return 1
 	[[ "$clean_output" != *'Repository pull and downstream updates stopped: behind.'* ]]
 )

@@ -19,8 +19,18 @@ generate_ssh_key() {
 	if [[ -z "$ssh_comment" ]]; then
 		ssh_comment="${USER:-user}@$(hostname 2>/dev/null || echo wsl)"
 	fi
-	echo "  You'll be prompted for a passphrase (press Enter to skip / use no passphrase)."
-	ssh-keygen -t ed25519 -C "$ssh_comment" -f "$HOME/.ssh/id_ed25519" || return $?
+	# ssh-keygen falls back to ssh-askpass whenever stdin is not a terminal, and
+	# no askpass is installed here. Under a piped bootstrap that promised a
+	# passphrase prompt the operator never saw, then wrote the key unprotected.
+	local tty_input=''
+	tty_input_available && tty_input="$(tty_input_path)"
+	if [[ -n "$tty_input" ]]; then
+		echo "  You'll be prompted for a passphrase (press Enter to skip / use no passphrase)."
+		ssh-keygen -t ed25519 -C "$ssh_comment" -f "$HOME/.ssh/id_ed25519" <"$tty_input" || return $?
+	else
+		echo '  No terminal to ask on: generating the key without a passphrase.'
+		ssh-keygen -t ed25519 -C "$ssh_comment" -f "$HOME/.ssh/id_ed25519" -N '' -q || return $?
+	fi
 	eval "$(ssh-agent -s)" >/dev/null || return $?
 	ssh-add "$HOME/.ssh/id_ed25519" 2>/dev/null || return $?
 

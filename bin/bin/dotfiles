@@ -46,6 +46,7 @@ _err() { printf '%s%s%s\n' "$C_RED" "$*" "$C_RESET" >&2; }
 _dotfiles_load_status_modules() {
 	local path
 	for path in \
+		"${DOTFILES_DIR}/scripts/lib/shared/tui/tty.sh" \
 		"${DOTFILES_DIR}/scripts/lib/parallel_probe.sh" \
 		"${DOTFILES_DIR}/scripts/lib/tool_resolve.sh" \
 		"${DOTFILES_DIR}/scripts/lib/managed_tool_state.sh" \

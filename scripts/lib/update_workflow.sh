@@ -194,12 +194,19 @@ print_upgrade_summary() {
 }
 
 # --- Subcommands ---
+# Through the shared TTY adapter rather than stdin. `dotfiles update` runs as a
+# child of a piped bootstrap, where a bare read hit EOF and answered its own
+# question: the prompt and "skipped" landed on one line and every downstream
+# upgrade was declined by something nobody typed.
 _dotfiles_confirm() {
 	local prompt="$1" answer=''
-	printf '%s%s%s [y/N]: ' "$C_YELLOW" "$prompt" "$C_RESET"
-	IFS= read -r answer || true
+	read_tty_line answer "$(printf '%s%s%s [y/N]: ' "$C_YELLOW" "$prompt" "$C_RESET")" || return 1
 	case "$answer" in y | Y | yes | YES) return 0 ;; *) return 1 ;; esac
 }
+
+# Used when the caller already carries the operator's approval, so no prompt is
+# reachable and none is printed.
+_dotfiles_approve() { return 0; }
 
 _dotfiles_confirm_repo_update() {
 	local _event="$1" prompt="$2"
@@ -296,11 +303,15 @@ _dotfiles_run_update() {
 }
 
 cmd_update() {
-	local arg dry_run=false
+	local arg dry_run=false unattended=false
 	for arg in "$@"; do
 		case "$arg" in
 		# Report what would change, then stop before any downstream work.
 		--dry-run) dry_run=true ;;
+		# Approval already given by the caller: apply every step without asking.
+		# Bootstrap uses this so a fresh machine finishes current instead of
+		# ending on a list of upgrades nobody applied.
+		--yes) unattended=true ;;
 		# Accepted for compatibility only: one approved update already runs every
 		# managed step, so --all selects nothing extra.
 		--all) ;;
@@ -310,10 +321,14 @@ cmd_update() {
 			;;
 		*)
 			_err "Unknown option: $arg"
-			_msg 'Usage: dotfiles update [--all] [--dry-run]'
+			_msg 'Usage: dotfiles update [--all] [--dry-run] [--yes]'
 			return 1
 			;;
 		esac
 	done
+	if [[ "$unattended" == true ]]; then
+		_dotfiles_run_update _dotfiles_approve true "$dry_run"
+		return $?
+	fi
 	_dotfiles_run_update _dotfiles_confirm_repo_update false "$dry_run"
 }
