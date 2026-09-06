@@ -276,26 +276,36 @@ test_scripted_answers_drive_the_selection_prompt() (
 	[[ ! -e "$MACHINE/home/agentbot" ]]
 )
 
-test_declining_the_plan_changes_nothing() (
-	setup_machine decline-plan
+test_the_plan_is_shown_not_asked() (
+	# The selection is the decision. A destination that cannot be used safely
+	# stops the run with a report, so a second confirmation would only stand
+	# between the operator and the setup they asked for.
+	setup_machine plan-not-asked
 	local output
-	output="$(BOOTSTRAP_ANSWERS_OVERRIDE=$'n' run_bootstrap 1 2>&1)" || return 1
-	[[ "$output" == *'Nothing was changed.'* ]] || return 1
-	[[ ! -e "$MACHINE/home/dotfiles" && ! -e "$MACHINE/home/agentbot" ]]
+	output="$(run_bootstrap 1 2>&1)" || return 1
+	[[ "$output" == *'Proceeding.'* ]] || return 1
+	[[ "$output" != *'Continue?'* ]] || return 1
+	log_has 'dotfiles-install --initial'
 )
 
-test_declining_agentbot_leaves_the_clone_and_reports_the_command() (
-	setup_machine decline-agentbot
+test_agentbot_runs_without_a_second_question() (
+	# Choosing "Dotfiles and Agentbot" is the answer; asking again after the
+	# Dotfiles phase was a prompt for a decision already made.
+	setup_machine agentbot-no-question
 	local output
-	# Plan yes, Agentbot no.
-	output="$(BOOTSTRAP_ANSWERS_OVERRIDE=$'Y\nn' run_bootstrap 1 2>&1)" || return 1
+	output="$(run_bootstrap 1 2>&1)" || return 1
+	[[ "$output" != *'Install and update Agentbot as well?'* ]] || return 1
+	log_has 'agentbot-install install' || return 1
+	log_has 'agentbot-install update'
+)
 
-	log_has 'dotfiles-cli update' || return 1
-	! grep -q 'agentbot-install' "$BOOTSTRAP_TEST_LOG" || return 1
-	# The clone stays, so accepting later costs only the install.
-	[[ -d "$MACHINE/home/agentbot/.git" ]] || return 1
-	[[ "$output" == *'skipped  agentbot install'* ]] || return 1
-	[[ "$output" == *"$MACHINE/home/agentbot/install.sh install"* ]]
+test_only_the_selection_is_asked() (
+	# One command, one question. Anything else is a prompt for something the
+	# operator has already answered.
+	setup_machine one-question
+	local output
+	output="$(run_bootstrap 1 2>&1)" || return 1
+	[[ "$(printf '%s\n' "$output" | grep -c '\[Y/n\]')" -eq 0 ]]
 )
 
 test_a_repository_update_restarts_instead_of_failing() (
@@ -385,8 +395,8 @@ test_agentbot_phase_sees_tools_dotfiles_just_installed() (
 )
 
 test_the_summary_prints_exactly_once_before_the_shell_offer() (
-	# offer_new_shell may exec, and exec does not run EXIT traps, so the summary
-	# is printed explicitly at the end of main. It must not also come from the
+	# start_new_shell execs, and exec does not run EXIT traps, so the summary is
+	# printed explicitly at the end of main. It must not also come from the
 	# trap, or a successful run reports itself twice.
 	setup_machine summary-once
 	local output count
@@ -396,12 +406,13 @@ test_the_summary_prints_exactly_once_before_the_shell_offer() (
 )
 
 test_a_non_interactive_run_does_not_exec_a_shell() (
-	# With no terminal the offer is skipped entirely; execing there would
+	# With no terminal the reload is skipped entirely; execing there would
 	# replace the run with a shell reading an exhausted pipe.
 	setup_machine no-shell-offer
 	local output
 	output="$(BOOTSTRAP_ANSWERS_OVERRIDE=$'Y\nY' run_bootstrap 1 2>&1)" || return 1
-	[[ "$output" != *'Starting a new login shell'* ]]
+	[[ "$output" != *'Reloading the shell'* ]] || return 1
+	[[ "$output" == *'exec bash -l'* ]]
 )
 
 expect_success 'both clones, installs, updates, then runs Agentbot' test_both_clones_installs_updates_then_runs_agentbot
@@ -420,8 +431,9 @@ expect_success 'an unknown selection is rejected before any write' test_an_unkno
 expect_success 'the published one-liner matches the script location' test_the_published_one_liner_matches_the_script_location
 expect_success 'a piped run still reads the prompts' test_a_piped_run_still_reads_the_prompts
 expect_success 'scripted answers drive the selection prompt' test_scripted_answers_drive_the_selection_prompt
-expect_success 'declining the plan changes nothing' test_declining_the_plan_changes_nothing
-expect_success 'declining Agentbot leaves the clone and reports the command' test_declining_agentbot_leaves_the_clone_and_reports_the_command
+expect_success 'the plan is shown, not asked' test_the_plan_is_shown_not_asked
+expect_success 'Agentbot runs without a second question' test_agentbot_runs_without_a_second_question
+expect_success 'only the selection is asked' test_only_the_selection_is_asked
 expect_success 'a repository update restarts instead of failing' test_a_repository_update_restarts_instead_of_failing
 expect_success 'a failed step still prints a summary' test_a_failed_step_still_prints_a_summary
 expect_success 'component failures do not abandon the remaining phases' test_component_failures_do_not_abandon_the_remaining_phases

@@ -336,6 +336,10 @@ destination_note() {
 	fi
 }
 
+# The plan is shown, not gated. The selection above is the decision, and
+# everything after it follows from it: a destination that cannot be used safely
+# stops the run with a report rather than a question, so a second confirmation
+# only stands between the operator and the setup they asked for.
 print_plan() {
 	step 'Plan'
 	if ((WANT_DOTFILES == 1)); then
@@ -349,24 +353,10 @@ print_plan() {
 		msg '  Then: component menu, install, update.'
 	fi
 	if ((WANT_AGENTBOT == 1)); then
-		if ((WANT_DOTFILES == 1)); then
-			msg '  Then: asks before installing Agentbot.'
-		else
-			msg '  Then: Agentbot install and update.'
-		fi
+		msg '  Then: Agentbot install and update.'
 	fi
-	if [[ -n "${BOOTSTRAP_RESTARTED:-}" ]]; then
-		msg '  (already confirmed before the checkout was updated)'
-		return 0
-	fi
-	ask '  Continue? [Y/n]: ' Y
-	case "$ANSWER" in
-	[Yy] | [Yy][Ee][Ss] | '') ;;
-	*)
-		msg 'Nothing was changed.'
-		exit 0
-		;;
-	esac
+	msg ''
+	msg '  Proceeding.'
 }
 
 print_summary() {
@@ -388,22 +378,18 @@ print_summary() {
 # .bashrc, ~/.local/bin, nvm, and the docker group are all invisible to it.
 # Offer a fresh login shell rather than leaving the operator to work out why
 # half the new commands are missing.
-offer_new_shell() {
+start_new_shell() {
 	((WANT_DOTFILES == 1)) || return 0
-	interactive || return 0
+	if ! interactive; then
+		msg '  Run "exec bash -l" in a terminal to pick up the new environment.'
+		return 0
+	fi
 	msg ''
-	ask '  Start a new shell so the new PATH, aliases, and groups apply? [Y/n]: ' Y
-	case "$ANSWER" in
-	[Yy] | [Yy][Ee][Ss] | '')
-		msg '  Starting a new login shell. Type "exit" to return to the old one.'
-		# stdin is the curl pipe under the documented one-liner, so the new
-		# shell reads the terminal directly or it would exit immediately.
-		exec bash -l </dev/tty
-		;;
-	*)
-		msg '  Run "exec bash -l" when ready, or open a new terminal.'
-		;;
-	esac
+	msg '  Reloading the shell so the new PATH, aliases, and groups apply.'
+	msg '  Type "exit" to return to the shell you started from.'
+	# stdin is the curl pipe under the documented one-liner, so the new shell
+	# reads the terminal directly or it would see EOF and exit immediately.
+	exec bash -l </dev/tty
 }
 
 main() {
@@ -427,20 +413,11 @@ main() {
 	fi
 
 	if ((WANT_AGENTBOT == 1)); then
-		ANSWER=Y
-		# Only ask when Dotfiles just ran. A single-repository selection already
-		# answered this question.
 		if ((WANT_DOTFILES == 1)); then
 			msg ''
 			msg 'Dotfiles setup is complete.'
-			ask 'Install and update Agentbot as well? [Y/n]: ' Y
 		fi
-		case "$ANSWER" in
-		[Yy] | [Yy][Ee][Ss] | '') run_agentbot ;;
-		*)
-			record "skipped  agentbot install (run $AGENTBOT_DIR/install.sh install when ready)"
-			;;
-		esac
+		run_agentbot
 	fi
 
 	# Print the summary here rather than leaving it to the trap: offer_new_shell
@@ -448,7 +425,7 @@ main() {
 	# path that fails before reaching this point.
 	print_summary
 	trap - EXIT
-	offer_new_shell
+	start_new_shell
 }
 
 if [[ "${BOOTSTRAP_SOURCE_ONLY:-0}" != 1 ]]; then
