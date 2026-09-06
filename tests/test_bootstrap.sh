@@ -17,11 +17,39 @@ export PATH
 test_harness_report_init
 
 BOOTSTRAP="$REPO_DIR/bootstrap.sh"
-REAL_GIT="$(command -v git)"
+# The stowed wrapper shadows git on a provisioned machine and guards `commit`,
+# so fixtures must talk to the real binary the way test_git_wrapper.sh does.
+REAL_GIT="${DOTFILES_REAL_GIT:-/usr/bin/git}"
 export GIT_CONFIG_NOSYSTEM=1
 GIT_CONFIG_GLOBAL="$TEST_HARNESS_ROOT/empty.gitconfig"
 : >"$GIT_CONFIG_GLOBAL"
 export GIT_CONFIG_GLOBAL
+
+# The two installer generations this script has to cope with: one that predates
+# --install and one that offers it.
+_write_installer() {
+	local path="$1" generation="$2"
+	if [[ "$generation" == legacy ]]; then
+		cat >"$path" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == --help ]]; then
+	printf 'Options:\n  --initial\n  --update\n'
+	exit 0
+fi
+printf 'legacy-install %s\n' "$*" >>"$BOOTSTRAP_TEST_LOG"
+EOF
+	else
+		cat >"$path" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == --help ]]; then
+	printf 'Options:\n  --initial\n  --install\n  --update\n'
+	exit 0
+fi
+printf 'dotfiles-install %s\n' "$*" >>"$BOOTSTRAP_TEST_LOG"
+EOF
+	fi
+	chmod +x -- "$path"
+}
 
 # A bare repository standing in for a GitHub remote. Its working tree carries
 # only the entry points bootstrap hands off to.
@@ -457,6 +485,51 @@ EOF
 	! grep -q -- '--install' "$BOOTSTRAP_TEST_LOG"
 )
 
+test_a_checkout_behind_the_remote_advances_itself() (
+	# Break caught: the legacy fallback handed --initial to an old checkout on
+	# the assumption its repository gate would pull. On a real terminal that
+	# gate sits behind a menu, so the run parked there instead of recovering.
+	setup_machine behind-remote
+	local work="$MACHINE/legacy-work" remote="$MACHINE/remotes/legacy.git"
+	local checkout="$MACHINE/home/dotfiles"
+	rm -rf -- "$checkout"
+
+	# First commit knows only --initial; the second adds --install.
+	mkdir -p -- "$work/bin/bin"
+	printf '#!/usr/bin/env bash\nprintf "dotfiles-cli %%s\\n" "$*" >>"$BOOTSTRAP_TEST_LOG"\n' \
+		>"$work/bin/bin/dotfiles"
+	_write_installer "$work/install.sh" legacy
+	# The checkout must carry this script: a restart execs the copy in it.
+	cp -- "$REPO_DIR/bootstrap.sh" "$work/bootstrap.sh"
+	chmod +x -- "$work/install.sh" "$work/bin/bin/dotfiles" "$work/bootstrap.sh"
+	{
+		"$REAL_GIT" init -q -b main "$work" &&
+			"$REAL_GIT" -C "$work" config user.name T &&
+			"$REAL_GIT" -C "$work" config user.email t@e.invalid &&
+			"$REAL_GIT" -C "$work" add -A &&
+			"$REAL_GIT" -C "$work" commit -qm 'legacy installer' &&
+			"$REAL_GIT" clone -q --bare "$work" "$remote" &&
+			"$REAL_GIT" clone -q "$remote" "$checkout"
+	} >/dev/null 2>&1 || return 1
+
+	_write_installer "$work/install.sh" modern
+	{
+		"$REAL_GIT" -C "$work" commit -qam 'modern installer' &&
+			"$REAL_GIT" -C "$work" push -q "$remote" main
+	} >/dev/null 2>&1 || return 1
+
+	: >"$BOOTSTRAP_TEST_LOG"
+	DOTFILES_REMOTE="$remote"
+	local output
+	output="$(run_bootstrap 2 2>&1)" || return 1
+
+	[[ "$output" == *'predates direct component selection'* ]] || return 1
+	[[ "$output" == *'Restarting'* ]] || return 1
+	# It recovered on its own and then used the mode the newer checkout has.
+	log_has 'dotfiles-install --install' || return 1
+	! grep -q 'legacy-install' "$BOOTSTRAP_TEST_LOG"
+)
+
 expect_success 'both clones, installs, updates, then runs Agentbot' test_both_clones_installs_updates_then_runs_agentbot
 expect_success 'Dotfiles only skips every Agentbot step' test_dotfiles_only_skips_every_agentbot_step
 expect_success 'Agentbot only skips Dotfiles and does not ask' test_agentbot_only_skips_dotfiles_and_does_not_ask
@@ -481,6 +554,7 @@ expect_success 'a failed step still prints a summary' test_a_failed_step_still_p
 expect_success 'component failures do not abandon the remaining phases' test_component_failures_do_not_abandon_the_remaining_phases
 expect_success 'the checkout update is pre-authorized' test_the_checkout_update_is_pre_authorized
 expect_success 'an older checkout falls back to the mode it has' test_an_older_checkout_falls_back_to_the_mode_it_has
+expect_success 'a checkout behind the remote advances itself' test_a_checkout_behind_the_remote_advances_itself
 expect_success 'the Agentbot phase sees tools Dotfiles just installed' test_agentbot_phase_sees_tools_dotfiles_just_installed
 expect_success 'the summary prints exactly once before the shell offer' test_the_summary_prints_exactly_once_before_the_shell_offer
 expect_success 'a non-interactive run does not exec a shell' test_a_non_interactive_run_does_not_exec_a_shell

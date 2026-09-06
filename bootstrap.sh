@@ -258,6 +258,12 @@ restart_after_repository_update() {
 		err "Rerun $DOTFILES_DIR/bootstrap.sh when ready."
 		return 1
 	fi
+	if [[ ! -x "$DOTFILES_DIR/bootstrap.sh" ]]; then
+		# A checkout old enough to predate this script cannot be restarted into.
+		err "$what updated its checkout, but $DOTFILES_DIR/bootstrap.sh is not there."
+		err 'Rerun the one-line install; the updated checkout now provides it.'
+		return 1
+	fi
 	msg ''
 	msg "  $what updated its checkout. Restarting from the updated script."
 	BOOTSTRAP_RESTARTED=1 \
@@ -284,13 +290,38 @@ dotfiles_install_mode() {
 	fi
 }
 
+# Fast-forward an adopted checkout. Returns 0 only when it actually moved.
+#
+# Adoption already established that this is a clean checkout of the expected
+# remote, so a fast-forward is the whole of the risk: it refuses anything that
+# is not a straight advance.
+fast_forward_checkout() {
+	local dir="$1" before after
+	before="$(git -C "$dir" rev-parse HEAD 2>/dev/null)" || return 1
+	GIT_TERMINAL_PROMPT=0 git -C "$dir" fetch --quiet origin 2>/dev/null || return 1
+	git -C "$dir" merge --ff-only --quiet FETCH_HEAD 2>/dev/null || return 1
+	after="$(git -C "$dir" rev-parse HEAD 2>/dev/null)" || return 1
+	[[ "$before" != "$after" ]]
+}
+
 run_dotfiles() {
 	local rc=0 mode
 	mode="$(dotfiles_install_mode)"
-	step 'Install Dotfiles'
 	if [[ "$mode" == '--initial' ]]; then
-		msg '  This checkout predates direct component selection; updating it first.'
-	else
+		# The checkout predates --install, and its own repository gate sits
+		# behind an interactive menu, so handing it --initial just parks the run
+		# on that menu. Advance the checkout here and restart into the script
+		# that matches it.
+		step 'Update Dotfiles checkout'
+		msg '  This checkout predates direct component selection.'
+		if fast_forward_checkout "$DOTFILES_DIR"; then
+			restart_after_repository_update Dotfiles
+			return 1
+		fi
+		msg '  Already current, so the setup menu is what this checkout offers.'
+	fi
+	step 'Install Dotfiles'
+	if [[ "$mode" == '--install' ]]; then
 		msg '  The component menu opens next. Nothing outside it is selected for you.'
 	fi
 	# Pre-authorize the checkout update: the plan was already confirmed, and a
