@@ -58,6 +58,14 @@ _main_menu_run_direct_action() {
 		if ((rc == 2)); then
 			DOTFILES_EXIT_AFTER_REPOSITORY_UPDATE=true
 			rc=0
+		elif ((rc == ${DOTFILES_INSTALL_PARTIAL_RC:-4})); then
+			# "Finished, but components need attention" is a reported outcome,
+			# not a failure. full_update.sh and bootstrap.sh already treat it
+			# that way; this was the one caller that did not, so the installer's
+			# own summary was followed by a line calling the same run a failure.
+			# Contradictory output trains the operator to ignore the line that
+			# matters when something is genuinely broken.
+			rc=0
 		else
 			printf '%sAction failed (exit %d).%s\n' "${C_RED:-}" "$rc" "${C_RESET:-}" >&2
 		fi

@@ -219,6 +219,49 @@ test_failed_action_pauses_once() {
 	[[ "$pauses" -eq 1 ]]
 }
 
+test_partial_install_is_reported_not_called_a_failure() {
+	# The installer's own summary says "N ok, M need attention". Printing
+	# "Action failed" straight after contradicted it, and full_update.sh and
+	# bootstrap.sh already treated this status as a completed run.
+	local pauses=0 rc output
+	# shellcheck disable=SC2317  # Test double invoked indirectly by menu dispatch.
+	run_install_action() {
+		printf 'Install finished — 19 ok, 1 need attention (see log above).\n'
+		return "${DOTFILES_INSTALL_PARTIAL_RC:-4}"
+	}
+	ui_clear() { :; }
+	ui_pause() { pauses=$((pauses + 1)); }
+	local captured
+	captured="$(mktemp)"
+	set +e
+	# Not $(...): the pause counter must survive, and a command substitution
+	# would increment it in a subshell.
+	_main_menu_dispatch install >"$captured" 2>&1
+	rc=$?
+	set -e
+	output="$(<"$captured")"
+	rm -f -- "$captured"
+	[[ "$rc" -eq 0 ]] || return 1
+	[[ "$output" != *'Action failed'* ]] || return 1
+	[[ "$output" == *'need attention'* ]] || return 1
+	[[ "$pauses" -eq 1 ]]
+}
+
+test_a_real_failure_is_still_reported_as_one() {
+	# The partial status must not become a blanket amnesty.
+	local rc output
+	# shellcheck disable=SC2317  # Test double invoked indirectly by menu dispatch.
+	run_install_action() { return 5; }
+	ui_clear() { :; }
+	ui_pause() { :; }
+	set +e
+	output="$(_main_menu_dispatch install 2>&1)"
+	rc=$?
+	set -e
+	[[ "$rc" -eq 5 ]] || return 1
+	[[ "$output" == *'Action failed (exit 5).'* ]]
+}
+
 test_changed_repository_skips_pause_and_marks_parent_to_quit() (
 	local pauses=0
 	run_update_flow() {
@@ -291,6 +334,8 @@ expect_success 'install returns the changed-repository exit after fast-forward' 
 expect_success 'status, picker, and plan breadcrumbs are exact' test_required_breadcrumb_literals
 expect_success 'root cancel redraws and explicit Quit returns cleanly' test_cancel_redraws_and_quit_returns
 expect_success 'failed direct action pauses exactly once and returns failure' test_failed_action_pauses_once
+expect_success 'a partial install is reported, not called a failure' test_partial_install_is_reported_not_called_a_failure
+expect_success 'a real failure is still reported as one' test_a_real_failure_is_still_reported_as_one
 expect_success 'changed-repository updates skip pause and mark the parent to quit' test_changed_repository_skips_pause_and_marks_parent_to_quit
 expect_success 'repository changes exit the Dotfiles menu without a redraw' test_changed_repository_exits_dotfiles_menu_without_redraw
 expect_success 'undefined deferred actions are unavailable and non-mutating' test_deferred_actions_are_safe_when_undefined
