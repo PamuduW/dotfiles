@@ -41,7 +41,9 @@ lazygit, lazydocker, Node.js, npm, Go, Monaspace fonts, and repository state.
 Ownership checks prevent Dotfiles from replacing tools it cannot prove it
 owns. Graphify updates only when `uv tool list` attributes it to `graphifyy`.
 Boost updates only when Dotfiles' ownership marker matches the installed
-binary. Codex updates only an active standalone installation. External or
+binary. That marker stays true because Boost's own background self-updater is
+off: Agentbot pins both `[update] auto_update` and the `boost-auto-update`
+feature flag to false, so nothing replaces the binary behind the marker. Codex updates only an active standalone installation. External or
 shadowed commands are preserved and reported.
 
 ## Full update
