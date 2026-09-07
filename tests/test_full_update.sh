@@ -411,9 +411,57 @@ expect_success 'Agentbot repository change stops with rerun guidance' test_agent
 expect_success 'Agentbot failure status propagates unchanged' test_agentbot_failure_propagates_its_status
 expect_success 'Agentbot capability failure status propagates unchanged' test_agentbot_capability_failure_propagates_its_status
 expect_success 'a missing agentbot is reported, not silently skipped' test_missing_agentbot_is_reported_not_ignored
+test_full_update_module_set_is_closed_over_its_own_references() {
+	# L3: the full-update loader is a hand-maintained list. It already missed
+	# PKG_FILE, run_docker and menu_tty_cols once, and the apt components then
+	# installed nothing while their probes still reported "installed".
+	#
+	# This does not hand-list the modules. It loads the real full-update set,
+	# asks Bash which files that actually pulled in, scans those files for
+	# functions this repository defines, and reports the ones nothing defines.
+	# Adding a module widens the scan automatically.
+	#
+	# The set is not empty and is not expected to be. full-update deliberately
+	# omits the menu, TUI and package-library layers, so loaded modules that
+	# also serve interactive paths reference functions that are absent here.
+	# Every one of those call sites must stay on a branch full-update never
+	# takes. Pinning the set means a ninth crossing fails this test instead of
+	# failing on a machine.
+	local expected actual
+	expected='menu_checkbox_run package_lib_render_components package_metadata_load toggle_component ui_clear ui_confirm_yes_no ui_print_header ui_print_plan_row'
+
+	actual="$(
+		set +u
+		DOTFILES_DIR="$REPO_DIR"
+		export DOTFILES_DIR
+		DOTFILES_SOURCE_ONLY=1 source "$REPO_DIR/bin/bin/dotfiles" >/dev/null 2>&1
+		dotfiles_load_command full-update >/dev/null 2>&1
+		shopt -s extdebug
+
+		defined="$(declare -F | awk '{print $3}')"
+		files="$(for fn in $defined; do declare -F "$fn"; done | awk '{print $3}' | sort -u)"
+		# Repository-defined function names, and the names the loaded files use.
+		# Full-line comments are stripped so prose cannot trip the check.
+		defs="$(grep -rhoE '^[A-Za-z_][A-Za-z0-9_]*\(\)' "$REPO_DIR/scripts" "$REPO_DIR/bin" 2>/dev/null | tr -d '()' | sort -u)"
+		refs="$(sed 's/^[[:space:]]*#.*$//' $files 2>/dev/null | grep -ohE '\b[A-Za-z_][A-Za-z0-9_]*\b' | sort -u)"
+
+		comm -12 <(printf '%s\n' "$defs") <(printf '%s\n' "$refs") | while read -r fn; do
+			declare -F "$fn" >/dev/null 2>&1 || printf '%s\n' "$fn"
+		done | sort -u | tr '\n' ' '
+	)"
+	actual="${actual% }"
+
+	if [[ "$actual" != "$expected" ]]; then
+		printf 'full-update module set references changed\n  expected: %s\n  actual:   %s\n' \
+			"$expected" "$actual" >&2
+		return 1
+	fi
+}
+
 expect_success 'full-update reports resolved launcher and checkout identity' test_full_update_reports_resolved_launcher_identity
 expect_success 'full-update refuses an unexpected Agentbot checkout' test_full_update_refuses_unexpected_agentbot_checkout
 expect_success 'postflight distinguishes healthy warning and error outcomes' test_postflight_distinguishes_warnings_errors_and_health
 expect_success 'Agentbot warning output maps to the postflight warning state' test_agentbot_doctor_warning_output_maps_to_warning_state
+expect_success 'the full-update module set is closed over its own references' test_full_update_module_set_is_closed_over_its_own_references
 
 finish_tests
