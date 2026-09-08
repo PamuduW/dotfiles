@@ -63,6 +63,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--title", default="")
     parser.add_argument("--breadcrumb", default="")
     parser.add_argument("--rollup", action="store_true")
+    # Callers that already know their counts pass them. Doctor does: its
+    # "nothing wrong" table holds one synthetic row whose result is `ok`, which
+    # the derivation below would score as needing attention.
+    parser.add_argument("--ok", type=int)
+    parser.add_argument("--check", type=int)
+    parser.add_argument("--miss", type=int)
     args = parser.parse_args(argv)
 
     color = args.color
@@ -109,6 +115,13 @@ def main(argv: list[str] | None = None) -> int:
         out.append(
             f"  {label:<{label_width}} | {detail_fit:<{detail_width}} | {painted}{padding}"
         )
+
+    if args.ok is not None:
+        ok = args.ok
+    if args.check is not None:
+        check = args.check
+    if args.miss is not None:
+        miss = args.miss
 
     if args.rollup:
         out.append("")
