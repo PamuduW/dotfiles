@@ -10,6 +10,12 @@ command, reads the environment, or touches the filesystem. That is what lets one
 process classify every probe in a run -- measured at ~18 ms against ~324 ms for
 a process per probe -- and what lets every state be tested without a machine in
 that state.
+
+Run as a script, this is that one process: `comp_classify` in probes.sh writes
+one request per line to stdin and reads one `result|detail` back per line, in
+order. Fields are separated by \x1f and a newline inside a field travels as
+\x1e, because the requests are collected through files that Bash reads a line
+at a time.
 """
 
 from __future__ import annotations
@@ -62,13 +68,22 @@ def missing_package_count(entries: list[str], installed: set[str]) -> int:
     return max(0, len(entries) - present)
 
 
-def apt_packages(*, package_count: int, missing: int, missing_label: str) -> str:
-    """Empty is skipped rather than clean: nothing was checked."""
+def apt_packages(
+    *, package_count: int, missing: int, missing_label: str, clean_detail: str
+) -> str:
+    """Empty is skipped rather than clean: nothing was checked.
+
+    `clean_detail` is the caller's wording for a complete set. It arrives as an
+    argument because the two callers word it differently and because the
+    alternative -- returning nothing and letting the caller decide -- is a
+    control-flow dependency on the classification, which cannot be deferred to
+    a batched call.
+    """
     if package_count == 0:
         return "skipped|no packages listed"
     if missing != 0:
         return f"missing|{missing} of {package_count} {missing_label} not installed"
-    return ""
+    return f"installed|{clean_detail}"
 
 
 def version(
@@ -153,3 +168,89 @@ def git_credential(
     if defaults_set:
         return "check|submodule defaults set; credential helper not configured"
     return "check|Git configuration incomplete"
+
+
+# --- Batch front end -------------------------------------------------------
+#
+# The wire format is deliberately dull: no JSON to quote and unquote on the Bash
+# side, and separators that cannot occur in a version string or a path.
+
+FIELD_SEP = "\x1f"
+NEWLINE_SUB = "\x1e"
+
+
+def classify(fields: list[str]) -> str:
+    """One request -> one `result|detail` line.
+
+    Arity is checked by unpacking: a request with the wrong number of fields
+    raises here rather than silently classifying something else.
+    """
+    name, args = fields[0], fields[1:]
+
+    if name == "version":
+        missing_label, timeout_label, binary, rc, raw, extract, prefix = args
+        return version(
+            missing_label=missing_label,
+            timeout_label=timeout_label,
+            binary=binary,
+            rc=int(rc or 0),
+            raw=raw,
+            extract=extract,
+            prefix=prefix,
+        )
+    if name == "go":
+        go_present, go_rc, go_raw, asdf_present, asdf_rc, asdf_raw = args
+        return go(
+            go_present=go_present == "1",
+            go_rc=int(go_rc or 0),
+            go_raw=go_raw,
+            asdf_present=asdf_present == "1",
+            asdf_rc=int(asdf_rc or 0),
+            asdf_raw=asdf_raw,
+        )
+    if name == "portainer":
+        docker_present, rc, container = args
+        return portainer(
+            docker_present=docker_present == "1", rc=int(rc or 0), name=container
+        )
+    if name == "codex_cli":
+        state, path, ver, rc = args
+        return codex_cli(state=state, path=path, version=ver, rc=int(rc or 0))
+    if name == "git_credential":
+        helper, recurse, fetch, push, summary = args
+        return git_credential(
+            helper=helper, recurse=recurse, fetch=fetch, push=push, summary=summary
+        )
+    if name == "apt":
+        # Variable arity: the package entries and the installed names are both
+        # lists, so the entry count separates them. Counting and reading are one
+        # request because the count is not a decision anyone else needs.
+        missing_label, clean_detail, entry_count = args[:3]
+        rest = args[3:]
+        count = int(entry_count or 0)
+        entries = [entry for entry in rest[:count] if entry]
+        installed = {name for name in rest[count:] if name}
+        return apt_packages(
+            package_count=len(entries),
+            missing=missing_package_count(entries, installed),
+            missing_label=missing_label,
+            clean_detail=clean_detail,
+        )
+
+    raise ValueError(f"unknown classification: {name}")
+
+
+def main(argv: list[str] | None = None) -> int:
+    import sys
+
+    for line in sys.stdin:
+        fields = [
+            field.replace(NEWLINE_SUB, "\n")
+            for field in line.rstrip("\n").split(FIELD_SEP)
+        ]
+        print(classify(fields))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

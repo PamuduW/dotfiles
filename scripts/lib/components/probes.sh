@@ -21,6 +21,106 @@ _comp_probe_capture() {
 	return "$rc"
 }
 
+# --- Classification: one Python process per run ----------------------------
+#
+# ADR-0001 stage two. The readings live in shared/python/probe_classify.py. The
+# `_comp_classify_*` functions below stay as the fallback for the paths that run
+# before Dotfiles has installed a runtime, exactly as the Bash renderer does,
+# and tests/test_probe_classify_parity.sh holds the two sides in agreement.
+#
+# While a collector is batching, a probe does not classify inline: comp_classify
+# emits the request and the collector answers every request in one call. Per
+# probe that spawn measured ~324 ms of a ~900 ms `dotfiles status`; batched, it
+# is ~18 ms.
+#
+# The wire format is a line per request, fields separated by \x1f, with any
+# newline inside a field carried as \x1e -- requests travel through files that
+# are read a line at a time, and neither byte occurs in a version string, a path
+# or a package name.
+_COMP_CLASSIFY_MARK=$'\x01'
+_COMP_CLASSIFY_FS=$'\x1f'
+_COMP_CLASSIFY_NL=$'\x1e'
+
+# comp_classify <name> <argument>...
+comp_classify() {
+	local out='' arg first=1
+
+	if [[ "${COMP_CLASSIFY_DEFER:-0}" != 1 ]]; then
+		"_comp_classify_$1" "${@:2}"
+		return 0
+	fi
+
+	for arg in "$@"; do
+		arg="${arg//$'\n'/$_COMP_CLASSIFY_NL}"
+		if ((first)); then
+			out="$arg"
+			first=0
+		else
+			out+="${_COMP_CLASSIFY_FS}${arg}"
+		fi
+	done
+	printf '%s%s\n' "$_COMP_CLASSIFY_MARK" "$out"
+}
+
+# _comp_classify_resolve <requests-array> <results-array> [interpreter]
+#
+# Answers in input order, one result per request. Bash answers the batch itself
+# when the interpreter is not on PATH yet or the call did not answer for every
+# request: first setup draws this table before the runtime exists, so the
+# fallback is permanent rather than migration scaffolding. The interpreter is an
+# argument so that path can be tested without hiding python3 from the harness.
+_comp_classify_resolve() {
+	local -n _requests="$1"
+	local -n _results="$2"
+	local interpreter="${3:-python3}"
+	local script request body field
+	local -a fields=()
+
+	_results=()
+	((${#_requests[@]} > 0)) || return 0
+
+	script="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/shared/python/probe_classify.py"
+	if command -v "$interpreter" >/dev/null 2>&1 && [[ -f "$script" ]]; then
+		mapfile -t _results < <(printf '%s\n' "${_requests[@]}" |
+			PYTHONDONTWRITEBYTECODE=1 "$interpreter" "$script" 2>/dev/null)
+		((${#_results[@]} == ${#_requests[@]})) && return 0
+	fi
+
+	_results=()
+	for request in "${_requests[@]}"; do
+		# Split by hand rather than with `read -a`: a request whose last field
+		# is empty is normal (an absent version prefix, an unset git value), and
+		# read drops it, which would shift every argument after it.
+		fields=()
+		body="${request}${_COMP_CLASSIFY_FS}"
+		while [[ -n "$body" ]]; do
+			field="${body%%"$_COMP_CLASSIFY_FS"*}"
+			fields+=("${field//$_COMP_CLASSIFY_NL/$'\n'}")
+			body="${body#*"$_COMP_CLASSIFY_FS"}"
+		done
+		_results+=("$("_comp_classify_${fields[0]}" "${fields[@]:1}")")
+	done
+}
+
+# The apt reading is counted and worded in one request: how many entries have no
+# installed alternative is not a decision any caller needs on its own, and a
+# value handed back mid-probe cannot be deferred to a batched call.
+_comp_classify_apt() {
+	local missing_label="$1" clean_detail="$2" entry_count="$3"
+	shift 3
+	local -a entries=("${@:1:entry_count}")
+	local -A installed=()
+	local name
+
+	for name in "${@:entry_count+1}"; do
+		[[ -n "$name" ]] && installed["$name"]=1
+	done
+
+	_comp_classify_apt_packages "${#entries[@]}" \
+		"$(_comp_missing_package_count entries installed)" \
+		"$missing_label" "$clean_detail"
+}
+
 _install_short_label() {
 	local label="$1"
 	label="${label%%(*}"
@@ -54,9 +154,13 @@ collect_component_probe_results() {
 _collect_component_status_rows_stream() (
 	local enabled_only="${1:-false}" emit="${2:-rows}"
 	local probe_dir i key label probe result detail pid
-	local -a pids=() indexes=()
+	local -a pids=() indexes=() classified=() requests=() request_rows=() results=()
 	probe_dir="$(mktemp -d)" || return 1
 	trap 'rm -r -- "$probe_dir"' EXIT
+
+	# Probes emit classification requests rather than readings; every request in
+	# this run is answered by one call below.
+	local COMP_CLASSIFY_DEFER=1
 
 	for i in "${!COMP_KEYS[@]}"; do
 		key="${COMP_KEYS[$i]}"
@@ -83,6 +187,20 @@ _collect_component_status_rows_stream() (
 
 	for i in "${indexes[@]}"; do
 		probe="$(<"$probe_dir/$i")"
+		if [[ "${probe:0:1}" == "$_COMP_CLASSIFY_MARK" ]]; then
+			requests+=("${probe:1}")
+			request_rows+=("$i")
+		fi
+		classified[i]="$probe"
+	done
+
+	_comp_classify_resolve requests results
+	for i in "${!request_rows[@]}"; do
+		classified[${request_rows[$i]}]="${results[$i]}"
+	done
+
+	for i in "${indexes[@]}"; do
+		probe="${classified[$i]}"
 		IFS='|' read -r result detail <<<"$probe"
 		if [[ "$emit" == keys ]]; then
 			printf '%s|%s\n' "${COMP_KEYS[$i]}" "$result"
@@ -148,7 +266,7 @@ _comp_probe_version() {
 		_comp_probe_capture raw "$timeout_seconds" "$binary" $version_args || rc=$?
 	fi
 
-	_comp_classify_version "$missing_label" "$timeout_label" "$binary" "$rc" "$raw" "$extract" "$prefix"
+	comp_classify version "$missing_label" "$timeout_label" "$binary" "$rc" "$raw" "$extract" "$prefix"
 }
 
 # Pure: how a version probe's result reads. Shared by every component in the
@@ -205,30 +323,29 @@ _comp_probe_git_identity() {
 	fi
 }
 
+# Interrogation for an apt-backed component. The count and the wording of a
+# complete set travel with the request: `clean_suffix` is what this component
+# adds after "<n> apt packages", and everything else is decided in the reading.
 _comp_probe_apt_packages_for_component() {
-	local component="$1" missing_label="$2" count_name="$3"
+	local component="$1" missing_label="$2" clean_suffix="${3:-}"
 	local pkg_file="${PKG_FILE:-${DOTFILES_DIR:-}/packages/packages.txt}"
-	local missing=0 package_count=0 tags
-	local -a packages=()
-	local -n output_count="$count_name"
-	output_count=0
+	local package_count=0 tags
+	local -a packages=() installed_names=()
 
 	if [[ ! -f "$pkg_file" ]]; then
 		printf 'missing|packages.txt not found\n'
-		return 1
+		return 0
 	fi
 
 	tags="$(comp_package_tags "$component")"
 	# shellcheck disable=SC2086 # Component package tags are an internal word list.
 	mapfile -t packages < <(PKG_FILE="$pkg_file" read_packages_by_tags $tags)
 	package_count="${#packages[@]}"
-	output_count="$package_count"
 
 	# One dpkg-query for the whole set instead of one process per package.
 	# Entries may be `preferred|fallback` package renames, so every alternative
-	# goes into the one query and an entry counts as present when any of its
-	# names is installed. Querying the raw entry counted a renamed package as
-	# missing even though it was installed under its current name.
+	# goes into the one query and the reading counts an entry as present when any
+	# of its names came back installed.
 	if ((package_count > 0)); then
 		local entry alt
 		local -a all_names=()
@@ -238,16 +355,15 @@ _comp_probe_apt_packages_for_component() {
 			done < <(printf '%s\n' "${entry//|/$'\n'}")
 		done
 
-		local -A installed_set=()
 		local name rest
 		while read -r name rest; do
-			[[ "$rest" == 'install ok installed' ]] && installed_set["$name"]=1
+			[[ "$rest" == 'install ok installed' ]] && installed_names+=("$name")
 		done < <(dpkg-query -W -f='${Package} ${Status}\n' "${all_names[@]}" 2>/dev/null)
-
-		missing="$(_comp_missing_package_count packages installed_set)"
 	fi
 
-	_comp_classify_apt_packages "$package_count" "$missing" "$missing_label"
+	comp_classify apt "$missing_label" "${package_count} apt packages${clean_suffix}" \
+		"$package_count" ${packages[@]+"${packages[@]}"} \
+		${installed_names[@]+"${installed_names[@]}"}
 }
 
 # Pure: how many entries have no installed alternative.
@@ -279,30 +395,29 @@ _comp_missing_package_count() {
 	printf '%s\n' "$missing"
 }
 
-# Pure: how the two counts read. Returns non-zero for anything but a clean set,
-# which is the contract the callers already rely on.
+# Pure: how the two counts read. An empty set is skipped rather than clean --
+# nothing was checked. The complete-set wording arrives as an argument because
+# the two callers word it differently, and because a caller that has to branch
+# on the reading to finish its own sentence cannot defer that reading.
 _comp_classify_apt_packages() {
-	local package_count="$1" missing="$2" missing_label="$3"
+	local package_count="$1" missing="$2" missing_label="$3" clean_detail="$4"
 
 	if [[ "$package_count" -eq 0 ]]; then
 		printf 'skipped|no packages listed\n'
-		return 1
+		return 0
 	fi
 	if [[ "$missing" -ne 0 ]]; then
 		printf 'missing|%d of %d %s not installed\n' "$missing" "$package_count" "$missing_label"
-		return 1
+		return 0
 	fi
-	return 0
+	printf 'installed|%s\n' "$clean_detail"
 }
 
 _comp_probe_system_packages() {
-	local checked=0
-	_comp_probe_apt_packages_for_component system_packages packages checked || return 0
-	printf 'installed|%d apt packages\n' "$checked"
+	_comp_probe_apt_packages_for_component system_packages packages
 }
 
 _comp_probe_python() {
-	local checked=0
 	command -v python3 >/dev/null 2>&1 || {
 		printf 'missing|python3 not on PATH\n'
 		return
@@ -315,8 +430,7 @@ _comp_probe_python() {
 		printf 'missing|python3-venv unavailable\n'
 		return
 	}
-	_comp_probe_apt_packages_for_component python 'Python packages' checked || return 0
-	printf 'installed|%d apt packages; python3 pip venv ready\n' "$checked"
+	_comp_probe_apt_packages_for_component python 'Python packages' '; python3 pip venv ready'
 }
 
 _comp_probe_graphify_cli() {
@@ -410,7 +524,7 @@ _comp_probe_codex_cli() {
 		codex_path="$(codex_active_command 2>/dev/null || true)"
 		;;
 	esac
-	_comp_classify_codex_cli "$state" "$codex_path" "$ver" "$rc"
+	comp_classify codex_cli "$state" "$codex_path" "$ver" "$rc"
 }
 
 # Classification for Go, which has two sources and a fallback between them.
@@ -468,7 +582,7 @@ _comp_probe_go() {
 		_comp_probe_capture asdf_raw "$timeout_seconds" asdf current golang || asdf_rc=$?
 	fi
 
-	_comp_classify_go "$go_present" "$go_rc" "$go_raw" \
+	comp_classify go "$go_present" "$go_rc" "$go_raw" \
 		"$asdf_present" "$asdf_rc" "$asdf_raw"
 }
 
@@ -508,12 +622,12 @@ _comp_classify_portainer() {
 _comp_probe_portainer() {
 	local name rc=0 timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
 	if ! command -v docker >/dev/null 2>&1; then
-		_comp_classify_portainer 0 0 ''
+		comp_classify portainer 0 0 ''
 		return 0
 	fi
 	_comp_probe_capture name "$timeout_seconds" docker ps -a \
 		--filter 'name=^/portainer$' --format '{{.Names}}' || rc=$?
-	_comp_classify_portainer 1 "$rc" "$name"
+	comp_classify portainer 1 "$rc" "$name"
 }
 
 _comp_probe_monaspace_fonts() {
@@ -599,7 +713,7 @@ _comp_probe_git_credential() {
 	fetch="$(git config --global --get fetch.recurseSubmodules 2>/dev/null || true)"
 	push="$(git config --global --get push.recurseSubmodules 2>/dev/null || true)"
 	summary="$(git config --global --get status.submoduleSummary 2>/dev/null || true)"
-	_comp_classify_git_credential "$helper" "$recurse" "$fetch" "$push" "$summary"
+	comp_classify git_credential "$helper" "$recurse" "$fetch" "$push" "$summary"
 }
 
 print_install_summary() {

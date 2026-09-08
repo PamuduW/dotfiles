@@ -273,10 +273,10 @@ EOF
 
 	comp_package_tags() { printf 'system
 '; }
-	local checked=0 output
+	local output
 	output="$(PATH="$fake_bin:$PATH" PKG_FILE="$pkg_file" \
-		_comp_probe_apt_packages_for_component system_packages packages checked && printf 'all-present\n')"
-	[[ "$output" == all-present ]]
+		_comp_probe_apt_packages_for_component system_packages packages)"
+	[[ "$output" == 'installed|2 apt packages' ]]
 )
 
 check 'package probe counts a renamed package as present' test_package_probe_counts_a_renamed_package_as_present
@@ -404,19 +404,19 @@ check 'package counting handles renames, absences and empty lists' test_package_
 
 test_apt_package_classification_reads_the_counts() (
 	# The reading, separated from the counting: an empty set is skipped rather
-	# than clean, and both non-clean states must return non-zero because the
-	# callers branch on it.
-	local got rc
+	# than clean, and the reading owns every line including the clean one -- a
+	# caller that had to branch on the result to finish its own sentence could
+	# not defer the reading to the batched call.
+	local got
 
-	got="$(_comp_classify_apt_packages 0 0 'apt packages')" && rc=0 || rc=$?
-	[[ "$got" == 'skipped|no packages listed' && "$rc" -ne 0 ]] || return 1
+	got="$(_comp_classify_apt_packages 0 0 'apt packages' '0 apt packages')"
+	[[ "$got" == 'skipped|no packages listed' ]] || return 1
 
-	got="$(_comp_classify_apt_packages 53 2 'apt packages')" && rc=0 || rc=$?
-	[[ "$got" == 'missing|2 of 53 apt packages not installed' && "$rc" -ne 0 ]] || return 1
+	got="$(_comp_classify_apt_packages 53 2 'apt packages' '53 apt packages')"
+	[[ "$got" == 'missing|2 of 53 apt packages not installed' ]] || return 1
 
-	# A clean set prints nothing and succeeds; the caller supplies the row.
-	got="$(_comp_classify_apt_packages 53 0 'apt packages')" && rc=0 || rc=$?
-	[[ -z "$got" && "$rc" -eq 0 ]]
+	got="$(_comp_classify_apt_packages 53 0 'Python packages' '53 apt packages; python3 pip venv ready')"
+	[[ "$got" == 'installed|53 apt packages; python3 pip venv ready' ]]
 )
 
 check 'apt package classification reads the counts' test_apt_package_classification_reads_the_counts

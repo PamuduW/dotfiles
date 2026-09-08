@@ -36,6 +36,27 @@ or mutate the machine. `dotfiles status` shows every component; `dotfiles
 doctor` shows only components needing attention and exits nonzero when any are
 missing or unhealthy.
 
+### Interrogation and classification
+
+A probe is two things, and they are kept apart on purpose. *Interrogation* asks
+the machine and needs one; *classification* reads the answer and is pure. Three
+of the five component defects found on clean machines were misreadings of an
+interrogation that was itself correct, so the reading is the half that must be
+testable without the state that produces it.
+
+A probe therefore ends by calling `comp_classify <name> <argument>...` rather
+than deciding anything itself. The readings live in
+`scripts/lib/shared/python/probe_classify.py`, and one `python3` answers every
+probe in a run: while the status collector is batching, `comp_classify` emits a
+request and the collector resolves them all in one call. Per-probe spawn cost
+roughly a third of `dotfiles status`.
+
+`scripts/lib/components/probes.sh` keeps a Bash `_comp_classify_<name>` for
+every reading. That is not leftover: first setup draws this table before it has
+installed a runtime, so the fallback is permanent, and
+`tests/test_probe_classify_parity.sh` holds the two sides in agreement. Adding
+or changing a reading means changing both and adding its states there.
+
 An installer success is not enough for the summary. The orchestration records
 the installer result and checks the component probe so an existing artifact
 cannot hide a failed installer.

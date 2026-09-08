@@ -115,8 +115,8 @@ test_apt_classification_parity() {
 	for counts in '0 0' '53 0' '53 2' '1 1'; do
 		# shellcheck disable=SC2086
 		set -- $counts
-		want="$(_comp_classify_apt_packages "$1" "$2" 'apt packages')"
-		got="$(py "pc.apt_packages(package_count=$1, missing=$2, missing_label='apt packages')")"
+		want="$(_comp_classify_apt_packages "$1" "$2" 'apt packages' "$1 apt packages")"
+		got="$(py "pc.apt_packages(package_count=$1, missing=$2, missing_label='apt packages', clean_detail='$1 apt packages')")"
 		compare "apt count=$1 missing=$2" "$want" "$got"
 	done
 	((failures == before))
@@ -184,6 +184,82 @@ test_git_credential_parity() {
 	((failures == before))
 }
 
+# Production reads through the batch front end, not through the functions above,
+# so the transport is compared too: one process, one line in, one line out, in
+# order. The cases include the two the encoding could lose -- a trailing empty
+# field, and a value carrying a newline.
+test_batch_transport_parity() {
+	local before=$failures
+	local fs=$'\x1f'
+	local -a requests=() wanted=()
+	local -a got=()
+	local i
+
+	requests+=("portainer${fs}1${fs}1${fs}")
+	wanted+=("$(_comp_classify_portainer 1 1 '')")
+
+	requests+=("version${fs}Go${fs}go${fs}/usr/bin/go${fs}0${fs}go version go1.23.4${fs}go[0-9.]+${fs}")
+	wanted+=("$(_comp_classify_version Go go /usr/bin/go 0 'go version go1.23.4' 'go[0-9.]+' '')")
+
+	requests+=("codex_cli${fs}standalone-not-on-path${fs}/x/codex${fs}${fs}0")
+	wanted+=("$(_comp_classify_codex_cli standalone-not-on-path /x/codex '' 0)")
+
+	# git config --get-all returns one line per helper; the encoding carries the
+	# newline rather than truncating the value.
+	requests+=("git_credential${fs}store"$'\x1e'"cache${fs}true${fs}on-demand${fs}check${fs}true")
+	wanted+=("$(_comp_classify_git_credential $'store\ncache' true on-demand check true)")
+
+	requests+=("apt${fs}apt packages${fs}2 apt packages${fs}2${fs}dnsutils|bind9-dnsutils${fs}curl${fs}bind9-dnsutils${fs}curl")
+	wanted+=('installed|2 apt packages')
+
+	requests+=("apt${fs}apt packages${fs}2 apt packages${fs}2${fs}dnsutils|bind9-dnsutils${fs}curl${fs}curl")
+	wanted+=('missing|1 of 2 apt packages not installed')
+
+	mapfile -t got < <(printf '%s\n' "${requests[@]}" |
+		PYTHONDONTWRITEBYTECODE=1 python3 "$PY_DIR/probe_classify.py")
+
+	if ((${#got[@]} != ${#wanted[@]})); then
+		printf '   batch returned %d lines for %d requests\n' "${#got[@]}" "${#wanted[@]}" >&2
+		failures=$((failures + 1))
+		return 1
+	fi
+	for i in "${!wanted[@]}"; do
+		compare "batch request $i" "${wanted[$i]}" "${got[$i]}"
+	done
+	((failures == before))
+}
+
+# The fallback path answers the same requests when python3 is not there yet.
+test_bash_fallback_matches_batch() {
+	local before=$failures
+	local fs=$'\x1f'
+	local -a requests=() python_results=() bash_results=()
+	local i
+
+	requests=(
+		"version${fs}Node${fs}node${fs}/usr/bin/node${fs}0${fs}v22.1.0${fs}${fs}node "
+		"version${fs}Go${fs}go${fs}${fs}0${fs}${fs}${fs}"
+		"go${fs}1${fs}0${fs}unexpected output${fs}1${fs}0${fs}golang 1.22.0"
+		"portainer${fs}0${fs}0${fs}"
+		"apt${fs}Python packages${fs}4 apt packages; python3 pip venv ready${fs}4${fs}python3${fs}python3-pip${fs}python3-venv${fs}python3-pil${fs}python3${fs}python3-pip${fs}python3-venv"
+	)
+
+	mapfile -t python_results < <(printf '%s\n' "${requests[@]}" |
+		PYTHONDONTWRITEBYTECODE=1 python3 "$PY_DIR/probe_classify.py")
+	_comp_classify_resolve requests bash_results python3-unavailable
+
+	if ((${#bash_results[@]} != ${#python_results[@]})); then
+		printf '   fallback returned %d lines for %d requests\n' \
+			"${#bash_results[@]}" "${#python_results[@]}" >&2
+		failures=$((failures + 1))
+		return 1
+	fi
+	for i in "${!python_results[@]}"; do
+		compare "fallback request $i" "${bash_results[$i]}" "${python_results[$i]}"
+	done
+	((failures == before))
+}
+
 check 'portainer classification agrees across 18 states' test_portainer_parity
 check 'codex classification agrees across every state and both statuses' test_codex_parity
 check 'package counting agrees on renames and absences' test_package_count_parity
@@ -191,6 +267,8 @@ check 'apt classification agrees on every count pair' test_apt_classification_pa
 check 'version classification agrees across its edges' test_version_parity
 check 'go classification agrees across both sources' test_go_parity
 check 'git credential classification agrees' test_git_credential_parity
+check 'the batched transport returns the same readings, in order' test_batch_transport_parity
+check 'the Bash fallback answers the same batch' test_bash_fallback_matches_batch
 
 test_harness_cleanup
 finish_tests
