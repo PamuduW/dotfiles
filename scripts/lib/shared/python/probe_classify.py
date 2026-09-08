@@ -170,6 +170,75 @@ def git_credential(
     return "check|Git configuration incomplete"
 
 
+def git_identity(*, name: str, email: str) -> str:
+    """Both halves or neither: an identity with only one of them configured is
+    not usable, and `git commit` says so at the worst possible moment."""
+    if name and email:
+        return f"configured|{name} <{email}>"
+    return "missing|not configured"
+
+
+def python_runtime(*, python3_present: bool, pip_ok: bool, venv_ok: bool) -> str:
+    """Three questions asked in order, because each one needs the answer before
+    it. The reading names the first that failed rather than the last."""
+    if not python3_present:
+        return "missing|python3 not on PATH"
+    if not pip_ok:
+        return "missing|python3-pip unavailable"
+    if not venv_ok:
+        return "missing|python3-venv unavailable"
+    return "installed|python3 pip venv ready"
+
+
+def owned_cli(
+    *,
+    missing_label: str,
+    timeout_label: str,
+    owned_suffix: str,
+    external_suffix: str,
+    found: bool,
+    rc: int,
+    version: str,
+    path: str,
+    owned: bool,
+) -> str:
+    """Graphify and Boost differ only in what they call themselves and in what
+    owning them means -- uv against nothing, Dotfiles-managed against external.
+    Same shape as `version` above, plus the ownership the two report."""
+    if not found:
+        return f"missing|{missing_label} not on PATH"
+    if rc == TIMEOUT_RC:
+        return f"check|{timeout_label} probe timed out"
+    suffix = owned_suffix if owned else external_suffix
+    return f"installed|{version or path}{suffix}"
+
+
+def monaspace_fonts(*, present: bool, count: str, version: str) -> str:
+    """A directory with no .otf in it is not an installation, so presence here
+    means the fonts, never the folder."""
+    if not present:
+        return "missing|fonts not in ~/.local/share/fonts/monaspace"
+    return f"installed|{version} ({count} fonts)"
+
+
+def ssh_key(*, present: bool) -> str:
+    return "installed|~/.ssh key present" if present else "missing|no default key found"
+
+
+def stow_targets(*, missing: int) -> str:
+    """A link pointing somewhere else is as missing as no link at all: the
+    count is of targets that do not resolve to this checkout."""
+    if missing == 0:
+        return "installed|stow bash bin readline"
+    return f"missing|{missing} managed stow target(s) missing or incorrect"
+
+
+def wsl_conf(*, present: bool, systemd: bool, append_windows_path: bool) -> str:
+    if present and systemd and append_windows_path:
+        return "configured|systemd + appendWindowsPath"
+    return "check|/etc/wsl.conf not as expected"
+
+
 # --- Batch front end -------------------------------------------------------
 #
 # The wire format is deliberately dull: no JSON to quote and unquote on the Bash
@@ -225,8 +294,10 @@ def classify(fields: list[str]) -> str:
         # Variable arity: the package entries and the installed names are both
         # lists, so the entry count separates them. Counting and reading are one
         # request because the count is not a decision anyone else needs.
-        missing_label, clean_detail, entry_count = args[:3]
-        rest = args[3:]
+        catalog, missing_label, clean_detail, entry_count = args[:4]
+        if catalog != "1":
+            return "missing|packages.txt not found"
+        rest = args[4:]
         count = int(entry_count or 0)
         entries = [entry for entry in rest[:count] if entry]
         installed = {name for name in rest[count:] if name}
@@ -235,6 +306,56 @@ def classify(fields: list[str]) -> str:
             missing=missing_package_count(entries, installed),
             missing_label=missing_label,
             clean_detail=clean_detail,
+        )
+
+    if name == "git_identity":
+        user, email = args
+        return git_identity(name=user, email=email)
+    if name == "python_runtime":
+        python3_present, pip_ok, venv_ok = args
+        return python_runtime(
+            python3_present=python3_present == "1",
+            pip_ok=pip_ok == "1",
+            venv_ok=venv_ok == "1",
+        )
+    if name == "owned_cli":
+        (
+            missing_label,
+            timeout_label,
+            owned_suffix,
+            external_suffix,
+            found,
+            rc,
+            ver,
+            path,
+            owned,
+        ) = args
+        return owned_cli(
+            missing_label=missing_label,
+            timeout_label=timeout_label,
+            owned_suffix=owned_suffix,
+            external_suffix=external_suffix,
+            found=found == "1",
+            rc=int(rc or 0),
+            version=ver,
+            path=path,
+            owned=owned == "1",
+        )
+    if name == "monaspace_fonts":
+        present, count, ver = args
+        return monaspace_fonts(present=present == "1", count=count, version=ver)
+    if name == "ssh_key":
+        (present,) = args
+        return ssh_key(present=present == "1")
+    if name == "stow_targets":
+        (missing,) = args
+        return stow_targets(missing=int(missing or 0))
+    if name == "wsl_conf":
+        present, systemd, append_windows_path = args
+        return wsl_conf(
+            present=present == "1",
+            systemd=systemd == "1",
+            append_windows_path=append_windows_path == "1",
         )
 
     raise ValueError(f"unknown classification: {name}")

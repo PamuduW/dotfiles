@@ -209,11 +209,16 @@ test_batch_transport_parity() {
 	requests+=("git_credential${fs}store"$'\x1e'"cache${fs}true${fs}on-demand${fs}check${fs}true")
 	wanted+=("$(_comp_classify_git_credential $'store\ncache' true on-demand check true)")
 
-	requests+=("apt${fs}apt packages${fs}2 apt packages${fs}2${fs}dnsutils|bind9-dnsutils${fs}curl${fs}bind9-dnsutils${fs}curl")
+	requests+=("apt${fs}1${fs}apt packages${fs}2 apt packages${fs}2${fs}dnsutils|bind9-dnsutils${fs}curl${fs}bind9-dnsutils${fs}curl")
 	wanted+=('installed|2 apt packages')
 
-	requests+=("apt${fs}apt packages${fs}2 apt packages${fs}2${fs}dnsutils|bind9-dnsutils${fs}curl${fs}curl")
+	requests+=("apt${fs}1${fs}apt packages${fs}2 apt packages${fs}2${fs}dnsutils|bind9-dnsutils${fs}curl${fs}curl")
 	wanted+=('missing|1 of 2 apt packages not installed')
+
+	# No catalog to read: the reading owns that line too, so the probe has one
+	# exit rather than an early printf beside a classification.
+	requests+=("apt${fs}0${fs}packages${fs}${fs}0")
+	wanted+=('missing|packages.txt not found')
 
 	mapfile -t got < <(printf '%s\n' "${requests[@]}" |
 		PYTHONDONTWRITEBYTECODE=1 python3 "$PY_DIR/probe_classify.py")
@@ -241,7 +246,8 @@ test_bash_fallback_matches_batch() {
 		"version${fs}Go${fs}go${fs}${fs}0${fs}${fs}${fs}"
 		"go${fs}1${fs}0${fs}unexpected output${fs}1${fs}0${fs}golang 1.22.0"
 		"portainer${fs}0${fs}0${fs}"
-		"apt${fs}Python packages${fs}4 apt packages; python3 pip venv ready${fs}4${fs}python3${fs}python3-pip${fs}python3-venv${fs}python3-pil${fs}python3${fs}python3-pip${fs}python3-venv"
+		"apt${fs}1${fs}Python packages${fs}4 apt packages; python3 pip venv ready${fs}4${fs}python3${fs}python3-pip${fs}python3-venv${fs}python3-pil${fs}python3${fs}python3-pip${fs}python3-venv"
+		"apt${fs}0${fs}packages${fs}${fs}0"
 	)
 
 	mapfile -t python_results < <(printf '%s\n' "${requests[@]}" |
@@ -260,6 +266,86 @@ test_bash_fallback_matches_batch() {
 	((failures == before))
 }
 
+test_remaining_readings_parity() {
+	local before=$failures want got row
+	local name email present count ver
+	local -a cases
+
+	# name|bash arguments (| separated); the Python call is built alongside it.
+	for row in \
+		'git_identity|Ada Lovelace|ada@example.com' \
+		'git_identity|Ada Lovelace|' \
+		'git_identity||ada@example.com' \
+		'git_identity||'; do
+		IFS='|' read -r _ name email <<<"$row"
+		want="$(_comp_classify_git_identity "$name" "$email")"
+		got="$(py "pc.git_identity(name='$name', email='$email')")"
+		compare "git_identity [$row]" "$want" "$got"
+	done
+
+	local p i v
+	for p in 0 1; do
+		for i in 0 1; do
+			for v in 0 1; do
+				want="$(_comp_classify_python_runtime "$p" "$i" "$v")"
+				got="$(py "pc.python_runtime(python3_present=bool($p), pip_ok=bool($i), venv_ok=bool($v))")"
+				compare "python_runtime $p$i$v" "$want" "$got"
+			done
+		done
+	done
+
+	local found rc owned
+	for found in 0 1; do
+		for rc in 0 1 124; do
+			for owned in 0 1; do
+				want="$(_comp_classify_owned_cli boost 'boost cli' ' (Dotfiles managed)' ' (external)' \
+					"$found" "$rc" 'boost v0.13.12' /x/boost "$owned")"
+				got="$(py "pc.owned_cli(missing_label='boost', timeout_label='boost cli', owned_suffix=' (Dotfiles managed)', external_suffix=' (external)', found=bool($found), rc=$rc, version='boost v0.13.12', path='/x/boost', owned=bool($owned))")"
+				compare "owned_cli boost found=$found rc=$rc owned=$owned" "$want" "$got"
+				# and with no version, so the path fallback is compared too
+				want="$(_comp_classify_owned_cli graphify 'graphify cli' ' (uv)' '' \
+					"$found" "$rc" '' /x/graphify "$owned")"
+				got="$(py "pc.owned_cli(missing_label='graphify', timeout_label='graphify cli', owned_suffix=' (uv)', external_suffix='', found=bool($found), rc=$rc, version='', path='/x/graphify', owned=bool($owned))")"
+				compare "owned_cli graphify found=$found rc=$rc owned=$owned no-version" "$want" "$got"
+			done
+		done
+	done
+
+	cases=('1|210|1.400' '1|0|installed' '0||')
+	for row in "${cases[@]}"; do
+		IFS='|' read -r present count ver <<<"$row"
+		want="$(_comp_classify_monaspace_fonts "$present" "$count" "$ver")"
+		got="$(py "pc.monaspace_fonts(present=bool($present), count='$count', version='$ver')")"
+		compare "monaspace [$row]" "$want" "$got"
+	done
+
+	for present in 0 1; do
+		want="$(_comp_classify_ssh_key "$present")"
+		got="$(py "pc.ssh_key(present=bool($present))")"
+		compare "ssh_key present=$present" "$want" "$got"
+	done
+
+	local missing
+	for missing in 0 1 8; do
+		want="$(_comp_classify_stow_targets "$missing")"
+		got="$(py "pc.stow_targets(missing=$missing)")"
+		compare "stow_targets missing=$missing" "$want" "$got"
+	done
+
+	local systemd append
+	for present in 0 1; do
+		for systemd in 0 1; do
+			for append in 0 1; do
+				want="$(_comp_classify_wsl_conf "$present" "$systemd" "$append")"
+				got="$(py "pc.wsl_conf(present=bool($present), systemd=bool($systemd), append_windows_path=bool($append))")"
+				compare "wsl_conf $present$systemd$append" "$want" "$got"
+			done
+		done
+	done
+
+	((failures == before))
+}
+
 check 'portainer classification agrees across 18 states' test_portainer_parity
 check 'codex classification agrees across every state and both statuses' test_codex_parity
 check 'package counting agrees on renames and absences' test_package_count_parity
@@ -267,6 +353,7 @@ check 'apt classification agrees on every count pair' test_apt_classification_pa
 check 'version classification agrees across its edges' test_version_parity
 check 'go classification agrees across both sources' test_go_parity
 check 'git credential classification agrees' test_git_credential_parity
+check 'every remaining reading agrees across its states' test_remaining_readings_parity
 check 'the batched transport returns the same readings, in order' test_batch_transport_parity
 check 'the Bash fallback answers the same batch' test_bash_fallback_matches_batch
 

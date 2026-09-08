@@ -106,8 +106,14 @@ _comp_classify_resolve() {
 # installed alternative is not a decision any caller needs on its own, and a
 # value handed back mid-probe cannot be deferred to a batched call.
 _comp_classify_apt() {
-	local missing_label="$1" clean_detail="$2" entry_count="$3"
-	shift 3
+	local catalog="$1" missing_label="$2" clean_detail="$3" entry_count="$4"
+	shift 4
+
+	if [[ "$catalog" != 1 ]]; then
+		printf 'missing|packages.txt not found\n'
+		return 0
+	fi
+
 	local -a entries=("${@:1:entry_count}")
 	local -A installed=()
 	local name
@@ -312,15 +318,23 @@ _comp_probe_register_version_probes() {
 }
 _comp_probe_register_version_probes
 
-_comp_probe_git_identity() {
-	local name email
-	name="$(git config --global user.name 2>/dev/null || true)"
-	email="$(git config --global user.email 2>/dev/null || true)"
+# Pure: both halves or neither. An identity with only one of them configured is
+# not usable, and `git commit` says so at the worst possible moment.
+_comp_classify_git_identity() {
+	local name="$1" email="$2"
+
 	if [[ -n "$name" && -n "$email" ]]; then
 		printf 'configured|%s <%s>\n' "$name" "$email"
 	else
 		printf 'missing|not configured\n'
 	fi
+}
+
+_comp_probe_git_identity() {
+	local name email
+	name="$(git config --global user.name 2>/dev/null || true)"
+	email="$(git config --global user.email 2>/dev/null || true)"
+	comp_classify git_identity "$name" "$email"
 }
 
 # Interrogation for an apt-backed component. The count and the wording of a
@@ -333,7 +347,7 @@ _comp_probe_apt_packages_for_component() {
 	local -a packages=() installed_names=()
 
 	if [[ ! -f "$pkg_file" ]]; then
-		printf 'missing|packages.txt not found\n'
+		comp_classify apt 0 "$missing_label" '' 0
 		return 0
 	fi
 
@@ -361,7 +375,7 @@ _comp_probe_apt_packages_for_component() {
 		done < <(dpkg-query -W -f='${Package} ${Status}\n' "${all_names[@]}" 2>/dev/null)
 	fi
 
-	comp_classify apt "$missing_label" "${package_count} apt packages${clean_suffix}" \
+	comp_classify apt 1 "$missing_label" "${package_count} apt packages${clean_suffix}" \
 		"$package_count" ${packages[@]+"${packages[@]}"} \
 		${installed_names[@]+"${installed_names[@]}"}
 }
@@ -417,56 +431,90 @@ _comp_probe_system_packages() {
 	_comp_probe_apt_packages_for_component system_packages packages
 }
 
-_comp_probe_python() {
-	command -v python3 >/dev/null 2>&1 || {
+# Pure: three questions asked in order, because each one needs the answer before
+# it. The reading names the first that failed rather than the last.
+_comp_classify_python_runtime() {
+	local python3_present="$1" pip_ok="$2" venv_ok="$3"
+
+	if [[ "$python3_present" != 1 ]]; then
 		printf 'missing|python3 not on PATH\n'
-		return
-	}
-	python3 -m pip --version >/dev/null 2>&1 || {
+	elif [[ "$pip_ok" != 1 ]]; then
 		printf 'missing|python3-pip unavailable\n'
-		return
-	}
-	python3 -m venv --help >/dev/null 2>&1 || {
+	elif [[ "$venv_ok" != 1 ]]; then
 		printf 'missing|python3-venv unavailable\n'
+	else
+		printf 'installed|python3 pip venv ready\n'
+	fi
+}
+
+# Interrogation. The branch below is on raw answers, not on a reading: a working
+# runtime is the precondition for asking about packages at all.
+_comp_probe_python() {
+	local python3_present=0 pip_ok=0 venv_ok=0
+
+	if command -v python3 >/dev/null 2>&1; then
+		python3_present=1
+		python3 -m pip --version >/dev/null 2>&1 && pip_ok=1
+		((pip_ok)) && python3 -m venv --help >/dev/null 2>&1 && venv_ok=1
+	fi
+
+	if ((python3_present && pip_ok && venv_ok)); then
+		_comp_probe_apt_packages_for_component python 'Python packages' '; python3 pip venv ready'
 		return
-	}
-	_comp_probe_apt_packages_for_component python 'Python packages' '; python3 pip venv ready'
+	fi
+	comp_classify python_runtime "$python3_present" "$pip_ok" "$venv_ok"
+}
+
+# Pure: Graphify and Boost differ only in what they call themselves and in what
+# owning them means -- uv against nothing, Dotfiles-managed against external.
+# The same shape as the version reading, plus the ownership the two report.
+_comp_classify_owned_cli() {
+	local missing_label="$1" timeout_label="$2" owned_suffix="$3" external_suffix="$4"
+	local found="$5" rc="$6" ver="$7" path="$8" owned="$9"
+
+	if [[ "$found" != 1 ]]; then
+		printf 'missing|%s not on PATH\n' "$missing_label"
+		return 0
+	fi
+	if [[ "$rc" -eq 124 ]]; then
+		printf 'check|%s probe timed out\n' "$timeout_label"
+		return 0
+	fi
+	if [[ "$owned" == 1 ]]; then
+		printf 'installed|%s%s\n' "${ver:-$path}" "$owned_suffix"
+	else
+		printf 'installed|%s%s\n' "${ver:-$path}" "$external_suffix"
+	fi
 }
 
 _comp_probe_graphify_cli() {
-	local graphify_path ver rc timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
+	local graphify_path='' ver='' rc=0 found=0 owned=0
+	local timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
+
 	if graphify_path="$(graphify_command 2>/dev/null)"; then
+		found=1
 		_comp_probe_capture ver "$timeout_seconds" "$graphify_path" --version || rc=$?
-		if [[ "${rc:-0}" -eq 124 ]]; then
-			printf 'check|graphify cli probe timed out\n'
-			return
-		fi
 		if declare -F graphify_cli_is_uv_owned >/dev/null 2>&1 && graphify_cli_is_uv_owned; then
-			printf 'installed|%s (uv)\n' "${ver:-$graphify_path}"
-		else
-			printf 'installed|%s\n' "${ver:-$graphify_path}"
+			owned=1
 		fi
-	else
-		printf 'missing|graphify not on PATH\n'
 	fi
+
+	comp_classify owned_cli graphify 'graphify cli' ' (uv)' '' \
+		"$found" "$rc" "$ver" "$graphify_path" "$owned"
 }
 
 _comp_probe_boost_cli() {
-	local boost_path ver rc timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
+	local boost_path='' ver='' rc=0 found=0 owned=0
+	local timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
+
 	if boost_path="$(boost_command 2>/dev/null)"; then
+		found=1
 		_comp_probe_capture ver "$timeout_seconds" "$boost_path" version || rc=$?
-		if [[ "${rc:-0}" -eq 124 ]]; then
-			printf 'check|boost cli probe timed out\n'
-			return
-		fi
-		if boost_cli_is_dotfiles_owned; then
-			printf 'installed|%s (Dotfiles managed)\n' "${ver:-$boost_path}"
-		else
-			printf 'installed|%s (external)\n' "${ver:-$boost_path}"
-		fi
-	else
-		printf 'missing|boost not on PATH\n'
+		boost_cli_is_dotfiles_owned && owned=1
 	fi
+
+	comp_classify owned_cli boost 'boost cli' ' (Dotfiles managed)' ' (external)' \
+		"$found" "$rc" "$ver" "$boost_path" "$owned"
 }
 
 # Classification for Codex. Defect 6 in the clean-machine history was a
@@ -630,24 +678,55 @@ _comp_probe_portainer() {
 	comp_classify portainer 1 "$rc" "$name"
 }
 
+# Pure: a directory with no .otf in it is not an installation, so presence here
+# means the fonts, never the folder.
+_comp_classify_monaspace_fonts() {
+	local present="$1" count="$2" ver="$3"
+
+	if [[ "$present" != 1 ]]; then
+		printf 'missing|fonts not in ~/.local/share/fonts/monaspace\n'
+	else
+		printf 'installed|%s (%s fonts)\n' "$ver" "$count"
+	fi
+}
+
 _comp_probe_monaspace_fonts() {
-	local font_dir count ver
+	local font_dir count='' ver='' present=0
 	font_dir="$HOME/.local/share/fonts/monaspace"
+
 	if [[ -d "$font_dir" ]] && compgen -G "${font_dir}/*.otf" >/dev/null 2>&1; then
+		present=1
 		count="$(find "$font_dir" -maxdepth 1 -name '*.otf' 2>/dev/null | wc -l | tr -d ' ')"
 		ver="installed"
 		[[ -f "${font_dir}/.version" ]] && ver="$(cat "${font_dir}/.version")"
-		printf 'installed|%s (%s fonts)\n' "$ver" "$count"
+	fi
+
+	comp_classify monaspace_fonts "$present" "$count" "$ver"
+}
+
+_comp_classify_ssh_key() {
+	if [[ "$1" == 1 ]]; then
+		printf 'installed|~/.ssh key present\n'
 	else
-		printf 'missing|fonts not in ~/.local/share/fonts/monaspace\n'
+		printf 'missing|no default key found\n'
 	fi
 }
 
 _comp_probe_ssh_key() {
-	if [[ -f "$HOME/.ssh/id_ed25519" || -f "$HOME/.ssh/id_rsa" ]]; then
-		printf 'installed|~/.ssh key present\n'
+	local present=0
+	[[ -f "$HOME/.ssh/id_ed25519" || -f "$HOME/.ssh/id_rsa" ]] && present=1
+	comp_classify ssh_key "$present"
+}
+
+# Pure: a link pointing somewhere else is as missing as no link at all, so the
+# count is of targets that do not resolve into this checkout.
+_comp_classify_stow_targets() {
+	local missing="$1"
+
+	if [[ "$missing" -eq 0 ]]; then
+		printf 'installed|stow bash bin readline\n'
 	else
-		printf 'missing|no default key found\n'
+		printf 'missing|%d managed stow target(s) missing or incorrect\n' "$missing"
 	fi
 }
 
@@ -668,22 +747,30 @@ $HOME/bin/codex-rc|$repo_dir/bin/bin/codex-rc
 $HOME/bin/git|$repo_dir/bin/bin/git
 $HOME/bin/dotfiles|$repo_dir/bin/bin/dotfiles
 EOF
-	if ((missing == 0)); then
-		printf 'installed|stow bash bin readline\n'
+	comp_classify stow_targets "$missing"
+}
+
+_comp_classify_wsl_conf() {
+	local present="$1" systemd="$2" append_windows_path="$3"
+
+	if [[ "$present" == 1 && "$systemd" == 1 && "$append_windows_path" == 1 ]]; then
+		printf 'configured|systemd + appendWindowsPath\n'
 	else
-		printf 'missing|%d managed stow target(s) missing or incorrect\n' "$missing"
+		printf 'check|/etc/wsl.conf not as expected\n'
 	fi
 }
 
 _comp_probe_wsl_conf() {
 	local conf="${DOTFILES_WSL_CONF:-/etc/wsl.conf}"
-	if [[ -f "$conf" ]] &&
-		wsl_conf_has_setting "$conf" boot systemd true &&
-		wsl_conf_has_setting "$conf" interop appendWindowsPath true; then
-		printf 'configured|systemd + appendWindowsPath\n'
-	else
-		printf 'check|/etc/wsl.conf not as expected\n'
+	local present=0 systemd=0 append_windows_path=0
+
+	if [[ -f "$conf" ]]; then
+		present=1
+		wsl_conf_has_setting "$conf" boot systemd true && systemd=1
+		wsl_conf_has_setting "$conf" interop appendWindowsPath true && append_windows_path=1
 	fi
+
+	comp_classify wsl_conf "$present" "$systemd" "$append_windows_path"
 }
 
 # Classification for the Git credential and submodule defaults. Five inputs,
