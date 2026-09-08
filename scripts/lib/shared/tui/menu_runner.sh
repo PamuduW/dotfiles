@@ -1,6 +1,13 @@
 # shellcheck shell=bash
 # Submenu loop: simple menu → dispatch → pause (unless Back).
 # Depends on: menu_simple.sh, ui.sh, tty.sh
+#
+# Which loop actually runs is the caller's: MENU_SIMPLE_RUNNER names a function
+# with menu_simple_run's contract -- report the choice in MENU_SIMPLE_RESULT,
+# return non-zero when cancelled -- and defaults to menu_simple_run itself.
+# Agentbot points it at a Python loop (ADR-0001); Dotfiles cannot, because these
+# menus draw before that machine has an interpreter, and the default is what
+# keeps this file honest about that.
 
 # shellcheck disable=SC2034  # MENU_SIMPLE_* consumed by menu_simple_run
 menu_submenu_loop() {
@@ -37,7 +44,7 @@ menu_submenu_loop() {
 			unset MENU_SIMPLE_DESC_FN
 		fi
 
-		if ! menu_simple_run; then
+		if ! "${MENU_SIMPLE_RUNNER:-menu_simple_run}"; then
 			return 0
 		fi
 		choice="${MENU_SIMPLE_RESULT:-}"
@@ -60,7 +67,7 @@ tui_submenu_loop() {
 	local setup_fn="$1" dispatch_fn="$2" choice rc
 	while true; do
 		"$setup_fn"
-		if ! menu_simple_run; then
+		if ! "${MENU_SIMPLE_RUNNER:-menu_simple_run}"; then
 			return 0
 		fi
 		choice="${MENU_SIMPLE_RESULT:-}"
