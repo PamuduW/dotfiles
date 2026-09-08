@@ -164,12 +164,33 @@ test_go_parity() {
 	((failures == before))
 }
 
+test_git_credential_parity() {
+	local before=$failures want got row
+	local -a cases=(
+		"store|true|on-demand|check|true"
+		"|true|on-demand|check|true"
+		"store|false|on-demand|check|true"
+		"store|true|always|check|true"
+		"store|true|on-demand||true"
+		"store|true|on-demand|check|false"
+		"|||||"
+	)
+	for row in "${cases[@]}"; do
+		IFS='|' read -r helper recurse fetch push summary <<<"$row"
+		want="$(_comp_classify_git_credential "$helper" "$recurse" "$fetch" "$push" "$summary")"
+		got="$(py "pc.git_credential(helper='$helper', recurse='$recurse', fetch='$fetch', push='$push', summary='$summary')")"
+		compare "git_credential [$row]" "$want" "$got"
+	done
+	((failures == before))
+}
+
 check 'portainer classification agrees across 18 states' test_portainer_parity
 check 'codex classification agrees across every state and both statuses' test_codex_parity
 check 'package counting agrees on renames and absences' test_package_count_parity
 check 'apt classification agrees on every count pair' test_apt_classification_parity
 check 'version classification agrees across its edges' test_version_parity
 check 'go classification agrees across both sources' test_go_parity
+check 'git credential classification agrees' test_git_credential_parity
 
 test_harness_cleanup
 finish_tests

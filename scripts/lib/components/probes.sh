@@ -572,6 +572,26 @@ _comp_probe_wsl_conf() {
 	fi
 }
 
+# Classification for the Git credential and submodule defaults. Five inputs,
+# three outcomes, and the middle one is easy to lose: submodule defaults all set
+# but no credential helper is a different message from a partial configuration,
+# and only one of the five values distinguishes them.
+_comp_classify_git_credential() {
+	local helper="$1" recurse="$2" fetch="$3" push="$4" summary="$5"
+	local defaults_set=0
+
+	[[ "$recurse" == true && "$fetch" == on-demand &&
+		"$push" == check && "$summary" == true ]] && defaults_set=1
+
+	if ((defaults_set)) && [[ -n "$helper" ]]; then
+		printf 'configured|credential helper + recursive submodule defaults\n'
+	elif ((defaults_set)); then
+		printf 'check|submodule defaults set; credential helper not configured\n'
+	else
+		printf 'check|Git configuration incomplete\n'
+	fi
+}
+
 _comp_probe_git_credential() {
 	local helper recurse fetch push summary
 	helper="$(git config --global --get-all credential.helper 2>/dev/null || true)"
@@ -579,15 +599,7 @@ _comp_probe_git_credential() {
 	fetch="$(git config --global --get fetch.recurseSubmodules 2>/dev/null || true)"
 	push="$(git config --global --get push.recurseSubmodules 2>/dev/null || true)"
 	summary="$(git config --global --get status.submoduleSummary 2>/dev/null || true)"
-	if [[ -n "$helper" && "$recurse" == true && "$fetch" == on-demand &&
-		"$push" == check && "$summary" == true ]]; then
-		printf 'configured|credential helper + recursive submodule defaults\n'
-	elif [[ -z "$helper" && "$recurse" == true && "$fetch" == on-demand &&
-		"$push" == check && "$summary" == true ]]; then
-		printf 'check|submodule defaults set; credential helper not configured\n'
-	else
-		printf 'check|Git configuration incomplete\n'
-	fi
+	_comp_classify_git_credential "$helper" "$recurse" "$fetch" "$push" "$summary"
 }
 
 print_install_summary() {

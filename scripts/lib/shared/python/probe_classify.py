@@ -134,3 +134,22 @@ def go(
         return "missing|asdf has no selected Go version"
 
     return "missing|working Go installation not found"
+
+
+def git_credential(
+    *, helper: str, recurse: str, fetch: str, push: str, summary: str
+) -> str:
+    """Five inputs, three outcomes. Every submodule default set but no
+    credential helper is a different message from a partial configuration, and
+    one value of five separates them."""
+    defaults_set = (
+        recurse == "true"
+        and fetch == "on-demand"
+        and push == "check"
+        and summary == "true"
+    )
+    if defaults_set and helper:
+        return "configured|credential helper + recursive submodule defaults"
+    if defaults_set:
+        return "check|submodule defaults set; credential helper not configured"
+    return "check|Git configuration incomplete"

@@ -499,6 +499,35 @@ test_go_classification_falls_back_through_both_sources() (
 )
 
 check 'go classification falls back through both sources' test_go_classification_falls_back_through_both_sources
+
+test_git_credential_classification_separates_partial_from_complete() (
+	# Five inputs, three outcomes. The middle outcome is the one worth pinning:
+	# every submodule default set but no credential helper is a different
+	# message from a partial configuration, and one value of five separates them.
+	local got
+
+	got="$(_comp_classify_git_credential 'store' true on-demand check true)"
+	[[ "$got" == 'configured|credential helper + recursive submodule defaults' ]] || return 1
+
+	got="$(_comp_classify_git_credential '' true on-demand check true)"
+	[[ "$got" == 'check|submodule defaults set; credential helper not configured' ]] || return 1
+
+	# Any single default wrong drops to incomplete, helper or not.
+	got="$(_comp_classify_git_credential 'store' false on-demand check true)"
+	[[ "$got" == 'check|Git configuration incomplete' ]] || return 1
+	got="$(_comp_classify_git_credential 'store' true always check true)"
+	[[ "$got" == 'check|Git configuration incomplete' ]] || return 1
+	got="$(_comp_classify_git_credential 'store' true on-demand '' true)"
+	[[ "$got" == 'check|Git configuration incomplete' ]] || return 1
+	got="$(_comp_classify_git_credential 'store' true on-demand check false)"
+	[[ "$got" == 'check|Git configuration incomplete' ]] || return 1
+
+	# Nothing configured at all.
+	got="$(_comp_classify_git_credential '' '' '' '' '')"
+	[[ "$got" == 'check|Git configuration incomplete' ]]
+)
+
+check 'git credential classification separates partial from complete' test_git_credential_classification_separates_partial_from_complete
 check 'update probes find Cursor and Claude in the vendor local bin directory' test_update_probes_find_vendor_local_bin_installations
 
 test_harness_cleanup
