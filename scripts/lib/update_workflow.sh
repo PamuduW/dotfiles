@@ -126,14 +126,33 @@ print_report_table() {
 	_rt_ensure_colors
 
 	printf '%s%s== Update report ==%s\n\n' "$C_BOLD" "$C_YELLOW" "$C_RESET"
-	_print_update_table_header action
+	# ADR-0001: the layout moved to Python. The title above and the summary
+	# sentences below stay here -- they are phrasing, not layout, and the seam
+	# holds if the caller keeps owning what it says while the renderer owns how
+	# the columns line up. Width and colour are passed in for the same reason.
+	local renderer="${DOTFILES_DIR}/scripts/lib/shared/python/render_report.py"
+	if command -v python3 >/dev/null 2>&1 && [[ -f "$renderer" ]]; then
+		local -a render_rows=()
+		for row in "${rows[@]}"; do
+			IFS='|' read -r component installed available state <<<"$row"
+			[[ -n "$component" ]] || continue
+			display="$(_check_state_display "$state")"
+			render_rows+=("${component}|${installed}|${available}|${display}")
+		done
+		local -a render_args=(--cols "$(rt_report_columns)" --four-column)
+		[[ -n "${C_RESET:-}" ]] && render_args+=(--color)
+		printf '%s\n' "${render_rows[@]}" |
+			PYTHONDONTWRITEBYTECODE=1 python3 "$renderer" "${render_args[@]}"
+	else
+		_print_update_table_header action
 
-	for row in "${rows[@]}"; do
-		IFS='|' read -r component installed available state <<<"$row"
-		[[ -n "$component" ]] || continue
-		display="$(_check_state_display "$state")"
-		_print_check_table_row "$component" "$installed" "$available" "$display" action
-	done
+		for row in "${rows[@]}"; do
+			IFS='|' read -r component installed available state <<<"$row"
+			[[ -n "$component" ]] || continue
+			display="$(_check_state_display "$state")"
+			_print_check_table_row "$component" "$installed" "$available" "$display" action
+		done
+	fi
 
 	printf '\n'
 	if [[ $upgrade_count -eq 0 && $remaining_count -eq 0 ]]; then

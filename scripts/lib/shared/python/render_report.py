@@ -52,6 +52,33 @@ def color_result(result: str, *, color: bool) -> str:
     return result
 
 
+# Mirrors status_color_action in ../tui/colors.sh. A separate vocabulary from
+# the result colours above: this column says what will happen, not what state
+# something is in, so "current" is green here and "check" is yellow.
+_ACTION_GREEN = {"up to date", "skip", "current", "verified current"}
+_ACTION_DIM = {"latest unchecked"}
+_ACTION_YELLOW = {"refresh", "continue", "check", "unchecked"}
+_ACTION_CYAN = {"verified"}
+_ACTION_YELLOW_PREFIX = ("upgrade", "replace")
+_ACTION_CYAN_PREFIX = ("pull",)
+
+
+def color_action(action: str, *, color: bool) -> str:
+    if not color:
+        return action
+    if action in _ACTION_GREEN:
+        return f"{GREEN}{action}{RESET}"
+    if action in _ACTION_DIM:
+        return f"{DIM}{action}{RESET}"
+    if action.startswith(_ACTION_YELLOW_PREFIX) or action in _ACTION_YELLOW:
+        return f"{YELLOW}{action}{RESET}"
+    if action.startswith(_ACTION_CYAN_PREFIX) or action in _ACTION_CYAN:
+        return f"{CYAN}{action}{RESET}"
+    if action == "blocked":
+        return f"{RED}{action}{RESET}"
+    return action
+
+
 def _paint(text: str, code: str, *, color: bool) -> str:
     return f"{code}{text}{RESET}" if color else text
 
@@ -69,11 +96,37 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--ok", type=int)
     parser.add_argument("--check", type=int)
     parser.add_argument("--miss", type=int)
+    # The update report is four columns wide and prints no title or rollup of
+    # its own: its caller owns the heading and the summary sentences, which are
+    # phrasing rather than layout.
+    parser.add_argument("--four-column", action="store_true")
+    parser.add_argument(
+        "--headers", default="component,installed,available,action"
+    )
     args = parser.parse_args(argv)
 
     color = args.color
-    widths = layout.three_column_widths(args.cols)
     home = os.path.expanduser("~")
+
+    if args.four_column:
+        widths4 = layout.four_column_widths(args.cols)
+        headers = tuple(args.headers.split(","))
+        columns, rule = layout.format_four_column_header(widths4, headers)  # type: ignore[arg-type]
+        lines = [_paint(columns, BOLD, color=color), _paint(rule, DIM, color=color)]
+        for line in sys.stdin:
+            line = line.rstrip("\n")
+            if not line:
+                continue
+            cells = tuple((line.split("|") + ["", "", "", ""])[:4])
+            rendered = layout.format_four_column_row(widths4, cells)  # type: ignore[arg-type]
+            action_fit = layout.fit_line(cells[3], widths4[3])
+            painted = color_action(action_fit, color=color)
+            head = rendered[: len(rendered) - widths4[3]]
+            lines.append(head + painted + " " * (widths4[3] - len(action_fit)))
+        print("\n".join(lines))
+        return 0
+
+    widths = layout.three_column_widths(args.cols)
 
     out: list[str] = []
     if args.title:
