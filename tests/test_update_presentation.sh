@@ -40,7 +40,10 @@ test_report_title_still_colours_when_colour_is_wanted() (
 	# The guard must settle the palette, not disable colour outright.
 	local output
 	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|current'; }
-	output="$(unset NO_COLOR; FORCE_COLOR=1 print_report_table)"
+	output="$(
+		unset NO_COLOR
+		FORCE_COLOR=1 print_report_table
+	)"
 	[[ "$output" == *$'\033'* ]]
 )
 
