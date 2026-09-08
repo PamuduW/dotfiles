@@ -3,6 +3,11 @@
 # Repository-first update orchestration and fixed-width update reports.
 # Depends on update_components.sh and repo_update.sh.
 
+if ! declare -F py_service_available >/dev/null 2>&1; then
+	# shellcheck source=scripts/lib/shared/py_service.sh
+	source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/shared/py_service.sh"
+fi
+
 _color_action() {
 	case "$1" in
 	refresh\ on\ apply) _colors_wrap "${C_YELLOW:-}" "$1" ;;
@@ -130,8 +135,7 @@ print_report_table() {
 	# sentences below stay here -- they are phrasing, not layout, and the seam
 	# holds if the caller keeps owning what it says while the renderer owns how
 	# the columns line up. Width and colour are passed in for the same reason.
-	local renderer="${DOTFILES_DIR}/scripts/lib/shared/python/render_report.py"
-	if command -v python3 >/dev/null 2>&1 && [[ -f "$renderer" ]]; then
+	if py_service_available; then
 		local -a render_rows=()
 		for row in "${rows[@]}"; do
 			IFS='|' read -r component installed available state <<<"$row"
@@ -141,8 +145,9 @@ print_report_table() {
 		done
 		local -a render_args=(--cols "$(rt_report_columns)" --four-column)
 		[[ -n "${C_RESET:-}" ]] && render_args+=(--color)
-		printf '%s\n' "${render_rows[@]}" |
-			PYTHONDONTWRITEBYTECODE=1 python3 "$renderer" "${render_args[@]}"
+		# Process substitution rather than a pipeline: bash closes coprocess
+		# descriptors in pipeline children. See scripts/lib/shared/py_service.sh.
+		py_service_call render "${render_args[@]}" < <(printf '%s\n' "${render_rows[@]}")
 	else
 		_print_update_table_header action
 

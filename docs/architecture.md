@@ -41,6 +41,30 @@ Install dispatch invokes one installer per selected component. Update modules
 own remote/version checks and upgrades. TUI modules render these services but
 do not own installation policy.
 
+## The Python side
+
+Readings, layout and the repository check are Python, under
+`scripts/lib/shared/python/`, vendored byte-identical into the Agentbot checkout
+by `scripts/sync-shared.sh` (ADR-0001 in the workspace repository records why).
+Bash gathers the raw facts and says what a report is for; Python decides what an
+answer means and how the columns line up.
+
+One command runs one interpreter. `scripts/lib/shared/py_service.sh` starts
+`python/service.py` as a coprocess the first time something needs it and sends
+it `classify`, `render` and `repo_status` requests, rather than spawning a
+script per phase. Two rules come with it, both pinned by
+`tests/test_py_service.sh`:
+
+- Start it from the parent shell. A coprocess belongs to the shell that started
+  it, and bash closes its descriptors in a `( )` subshell.
+- Never call `py_service_call` as a pipeline element — bash closes the
+  descriptors in pipeline children too. Feed payloads with `< <( ... )`.
+
+Every caller keeps a Bash path for the machine that has no runtime yet: first
+setup draws its tables before Python is installed. `DOTFILES_PY_SERVICE=0`
+takes those paths deliberately, which is how they are exercised without hiding
+`python3`.
+
 ## Stow boundary
 
 Only `bash`, `bin`, and `readline` are Stow packages. They deploy shell files,

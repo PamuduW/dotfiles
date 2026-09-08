@@ -252,7 +252,7 @@ test_bash_fallback_matches_batch() {
 
 	mapfile -t python_results < <(printf '%s\n' "${requests[@]}" |
 		PYTHONDONTWRITEBYTECODE=1 python3 "$PY_DIR/probe_classify.py")
-	_comp_classify_resolve requests bash_results python3-unavailable
+	_comp_classify_resolve requests bash_results 0
 
 	if ((${#bash_results[@]} != ${#python_results[@]})); then
 		printf '   fallback returned %d lines for %d requests\n' \

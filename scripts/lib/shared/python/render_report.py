@@ -83,7 +83,10 @@ def _paint(text: str, code: str, *, color: bool) -> str:
     return f"{code}{text}{RESET}" if color else text
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, rows: list[str] | None = None) -> int:
+    # `rows` is how the one-process-per-command service hands over a table it
+    # already has in memory; standalone callers still pipe them in on stdin.
+    source = rows if rows is not None else sys.stdin
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cols", type=int, default=80)
     parser.add_argument("--color", action="store_true")
@@ -113,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
         headers = tuple(args.headers.split(","))
         columns, rule = layout.format_four_column_header(widths4, headers)  # type: ignore[arg-type]
         lines = [_paint(columns, BOLD, color=color), _paint(rule, DIM, color=color)]
-        for line in sys.stdin:
+        for line in source:
             line = line.rstrip("\n")
             if not line:
                 continue
@@ -144,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
     out.append(rule)
 
     ok = check = miss = 0
-    for line in sys.stdin:
+    for line in source:
         line = line.rstrip("\n")
         if not line:
             continue

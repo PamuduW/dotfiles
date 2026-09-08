@@ -46,10 +46,11 @@ testable without the state that produces it.
 
 A probe therefore ends by calling `comp_classify <name> <argument>...` rather
 than deciding anything itself. The readings live in
-`scripts/lib/shared/python/probe_classify.py`, and one `python3` answers every
-probe in a run: while the status collector is batching, `comp_classify` emits a
-request and the collector resolves them all in one call. Per-probe spawn cost
-roughly a third of `dotfiles status`.
+`scripts/lib/shared/python/probe_classify.py`, and one interpreter answers every
+probe in a run: the probes run in parallel children and emit requests, and the
+collector resolves all of them in a single call to the Python service described
+in `docs/architecture.md`. Per-probe spawn would cost roughly a third of
+`dotfiles status`.
 
 `scripts/lib/components/probes.sh` keeps a Bash `_comp_classify_<name>` for
 every reading. That is not leftover: first setup draws this table before it has

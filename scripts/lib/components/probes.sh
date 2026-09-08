@@ -6,6 +6,10 @@ if ! declare -F codex_cli_install_state >/dev/null 2>&1; then
 	# shellcheck source=scripts/lib/managed_tool_state.sh
 	source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/managed_tool_state.sh"
 fi
+if ! declare -F py_service_available >/dev/null 2>&1; then
+	# shellcheck source=scripts/lib/shared/py_service.sh
+	source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/shared/py_service.sh"
+fi
 
 _comp_probe_capture() {
 	local output_name="$1" timeout_seconds="$2" captured='' rc
@@ -62,27 +66,29 @@ comp_classify() {
 	printf '%s%s\n' "$_COMP_CLASSIFY_MARK" "$out"
 }
 
-# _comp_classify_resolve <requests-array> <results-array> [interpreter]
+# _comp_classify_resolve <requests-array> <results-array> [use-service]
 #
-# Answers in input order, one result per request. Bash answers the batch itself
-# when the interpreter is not on PATH yet or the call did not answer for every
-# request: first setup draws this table before the runtime exists, so the
-# fallback is permanent rather than migration scaffolding. The interpreter is an
-# argument so that path can be tested without hiding python3 from the harness.
+# Answers in input order, one result per request, through the one Python process
+# this command runs. Bash answers the batch itself when there is no service --
+# first setup draws this table before the runtime exists, so the fallback is
+# permanent rather than migration scaffolding -- and when the service did not
+# answer for every request. Pass 0 as the third argument to take that path
+# deliberately, which is how it is tested without hiding python3 from the
+# harness.
 _comp_classify_resolve() {
 	local -n _requests="$1"
 	local -n _results="$2"
-	local interpreter="${3:-python3}"
-	local script request body field
+	local use_service="${3:-1}"
+	local request body field
 	local -a fields=()
 
 	_results=()
 	((${#_requests[@]} > 0)) || return 0
 
-	script="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/shared/python/probe_classify.py"
-	if command -v "$interpreter" >/dev/null 2>&1 && [[ -f "$script" ]]; then
-		mapfile -t _results < <(printf '%s\n' "${_requests[@]}" |
-			PYTHONDONTWRITEBYTECODE=1 "$interpreter" "$script" 2>/dev/null)
+	if [[ "$use_service" == 1 ]] && py_service_available; then
+		# Process substitution, not a pipeline: bash closes coprocess descriptors
+		# in pipeline children. See scripts/lib/shared/py_service.sh.
+		mapfile -t _results < <(py_service_call classify < <(printf '%s\n' "${_requests[@]}"))
 		((${#_results[@]} == ${#_requests[@]})) && return 0
 	fi
 
@@ -141,31 +147,79 @@ _install_short_label() {
 collect_component_status_rows() {
 	local output_name="$1" enabled_only="${2:-false}"
 	local -n output_rows="$output_name"
-	mapfile -t output_rows < <(_collect_component_status_rows_stream "$enabled_only")
+	local i result detail
+	local -a probes=()
+
+	_collect_component_probes probes "$enabled_only"
+	output_rows=()
+	for i in "${!probes[@]}"; do
+		IFS='|' read -r result detail <<<"${probes[$i]#*"$_COMP_CLASSIFY_FS"}"
+		output_rows+=("$(_install_short_label "${COMP_LABELS[${probes[$i]%%"$_COMP_CLASSIFY_FS"*}]}")|${detail}|${result}")
+	done
 }
 
 # collect_component_probe_results <assoc-array-name>
 # key -> probe result, from the same parallel probe the status table uses, so
 # full-update and status cannot disagree about what is installed.
 collect_component_probe_results() {
-	local output_name="$1" key result
+	local output_name="$1" entry index result
 	local -n output_map="$output_name"
+	local -a probes=()
+
+	_collect_component_probes probes false
 	output_map=()
-	while IFS='|' read -r key result; do
-		[[ -n "$key" ]] || continue
-		output_map["$key"]="$result"
-	done < <(_collect_component_status_rows_stream false keys)
+	for entry in "${probes[@]}"; do
+		index="${entry%%"$_COMP_CLASSIFY_FS"*}"
+		result="${entry#*"$_COMP_CLASSIFY_FS"}"
+		output_map["${COMP_KEYS[$index]}"]="${result%%|*}"
+	done
 }
 
-_collect_component_status_rows_stream() (
-	local enabled_only="${1:-false}" emit="${2:-rows}"
-	local probe_dir i key label probe result detail pid
-	local -a pids=() indexes=() classified=() requests=() request_rows=() results=()
+# _collect_component_probes <array-name> <enabled-only>
+#
+# `index<FS>result|detail` per probed component, in registry order.
+#
+# Interrogation happens in a subshell, one child per component; classification
+# happens here, in the caller's shell, in one call. That split is not only the
+# ADR's -- a coprocess belongs to the shell that started it, and bash closes its
+# descriptors in a `( )` subshell, so a reading resolved down there would spawn
+# its own interpreter or fall back to Bash on every run.
+_collect_component_probes() {
+	local output_name="$1" enabled_only="${2:-false}"
+	local -n _probes="$output_name"
+	local entry index probe
+	local -a requests=() request_rows=() results=()
+
+	py_service_available || true
+	mapfile -t _probes < <(_component_probe_stream "$enabled_only")
+
+	for index in "${!_probes[@]}"; do
+		probe="${_probes[$index]#*"$_COMP_CLASSIFY_FS"}"
+		if [[ "${probe:0:1}" == "$_COMP_CLASSIFY_MARK" ]]; then
+			requests+=("${probe:1}")
+			request_rows+=("$index")
+		fi
+	done
+
+	((${#requests[@]} > 0)) || return 0
+	_comp_classify_resolve requests results
+	for index in "${!request_rows[@]}"; do
+		entry="${_probes[${request_rows[$index]}]}"
+		_probes[${request_rows[$index]}]="${entry%%"$_COMP_CLASSIFY_FS"*}${_COMP_CLASSIFY_FS}${results[$index]}"
+	done
+}
+
+# Interrogation only: every probe runs in its own child and nothing here decides
+# what an answer means.
+_component_probe_stream() (
+	local enabled_only="${1:-false}"
+	local probe_dir i key probe pid
+	local -a pids=() indexes=()
 	probe_dir="$(mktemp -d)" || return 1
 	trap 'rm -r -- "$probe_dir"' EXIT
 
-	# Probes emit classification requests rather than readings; every request in
-	# this run is answered by one call below.
+	# Probes emit classification requests rather than readings; the caller
+	# answers every request in this run in one call.
 	local COMP_CLASSIFY_DEFER=1
 
 	for i in "${!COMP_KEYS[@]}"; do
@@ -192,28 +246,7 @@ _collect_component_status_rows_stream() (
 	done
 
 	for i in "${indexes[@]}"; do
-		probe="$(<"$probe_dir/$i")"
-		if [[ "${probe:0:1}" == "$_COMP_CLASSIFY_MARK" ]]; then
-			requests+=("${probe:1}")
-			request_rows+=("$i")
-		fi
-		classified[i]="$probe"
-	done
-
-	_comp_classify_resolve requests results
-	for i in "${!request_rows[@]}"; do
-		classified[${request_rows[$i]}]="${results[$i]}"
-	done
-
-	for i in "${indexes[@]}"; do
-		probe="${classified[$i]}"
-		IFS='|' read -r result detail <<<"$probe"
-		if [[ "$emit" == keys ]]; then
-			printf '%s|%s\n' "${COMP_KEYS[$i]}" "$result"
-			continue
-		fi
-		label="$(_install_short_label "${COMP_LABELS[$i]}")"
-		printf '%s|%s|%s\n' "$label" "$detail" "$result"
+		printf '%s%s%s\n' "$i" "$_COMP_CLASSIFY_FS" "$(<"$probe_dir/$i")"
 	done
 )
 

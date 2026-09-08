@@ -18,6 +18,7 @@ _dotfiles_source_module() {
 	_DOTFILES_LOADED_MODULES["$path"]=1
 }
 
+_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/shared/py_service.sh"
 _dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/shared/tui/report_table.sh"
 _dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/command_metadata.sh"
 
@@ -122,7 +123,6 @@ dotfiles_load_command() {
 _dotfiles_render_report() {
 	local title="$1" breadcrumb="$2" rows_name="$3"
 	local -n _rows_ref="$rows_name"
-	local renderer="${DOTFILES_DIR}/scripts/lib/shared/python/render_report.py"
 	local row component detail result
 	local ok_count=0 check_count=0 miss_count=0
 
@@ -130,7 +130,7 @@ _dotfiles_render_report() {
 	# Doctor does, and let the renderer derive them otherwise.
 	local want_ok="${4:-}" want_check="${5:-}" want_miss="${6:-}"
 
-	if command -v python3 >/dev/null 2>&1 && [[ -f "$renderer" ]]; then
+	if py_service_available; then
 		local -a args=(--cols "$(rt_report_columns)" --rollup)
 		[[ -n "$title" ]] && args+=(--title "$title")
 		[[ -n "$breadcrumb" ]] && args+=(--breadcrumb "$breadcrumb")
@@ -139,13 +139,11 @@ _dotfiles_render_report() {
 		[[ -n "$want_miss" ]] && args+=(--miss "$want_miss")
 		_rt_ensure_colors
 		[[ -n "${C_RESET:-}" ]] && args+=(--color)
-		# No bytecode: the shared tree is vendored code held byte-identical with
-		# the sibling repository, and a stale __pycache__ there masks an edit --
-		# it did exactly that while this renderer was being written. One short
-		# process per table has nothing to gain from the cache anyway.
-		printf '%s\n' "${_rows_ref[@]}" |
-			PYTHONDONTWRITEBYTECODE=1 python3 "$renderer" "${args[@]}"
-		return $?
+		# Process substitution rather than a pipeline: bash closes coprocess
+		# descriptors in pipeline children. See scripts/lib/shared/py_service.sh.
+		if py_service_call render "${args[@]}" < <(printf '%s\n' "${_rows_ref[@]}"); then
+			return 0
+		fi
 	fi
 
 	[[ -n "$title" ]] && rt_print_header "$title" "$breadcrumb"
@@ -167,15 +165,16 @@ _dotfiles_render_report() {
 _dotfiles_append_repo_row() {
 	local rows_name="$1"
 	local -n _rows="$rows_name"
-	local checker="${DOTFILES_DIR}/scripts/lib/shared/python/repo_status.py"
 	local row=''
 
-	if command -v python3 >/dev/null 2>&1 && [[ -f "$checker" ]]; then
+	# Started before the substitution below, not inside it: a coprocess belongs
+	# to the shell that starts it.
+	if py_service_available; then
 		# `|| true`: a row that cannot be produced must never fail the whole
 		# status. Without it the assignment's non-zero exit propagated under
 		# `set -e` and a reporting command started exiting non-zero.
-		row="$(PYTHONDONTWRITEBYTECODE=1 python3 "$checker" "$DOTFILES_DIR" \
-			--label 'Dotfiles repo' --timeout "${DOTFILES_REPO_CHECK_TIMEOUT:-5}" 2>/dev/null || true)"
+		row="$(py_service_call repo_status "$DOTFILES_DIR" 'Dotfiles repo' \
+			"${DOTFILES_REPO_CHECK_TIMEOUT:-5}" </dev/null || true)"
 	fi
 	# No python3 yet is a normal state during first setup, not an error.
 	[[ -n "$row" ]] || row='Dotfiles repo|unchecked (python3 unavailable)|skipped'
