@@ -358,6 +358,105 @@ test_codex_classification_covers_every_install_state() (
 )
 
 check 'codex classification covers every install state' test_codex_classification_covers_every_install_state
+
+test_package_counting_handles_renames_and_absences() (
+	# Defect 9: `dnsutils` was renamed, not absent, and querying the raw entry
+	# counted a renamed package as missing even though it was installed under
+	# its current name. The rename support then miscounted it a second way.
+	#
+	# Counting is a pure function of the wanted list and the installed set, so
+	# every combination is one call and no dpkg is involved.
+	local -a wanted
+	local -A installed
+
+	# A rename where the fallback is what is actually installed.
+	wanted=('dnsutils|bind9-dnsutils' 'curl')
+	installed=(["bind9-dnsutils"]=1 [curl]=1)
+	[[ "$(_comp_missing_package_count wanted installed)" == 0 ]] || return 1
+
+	# The same entry where the preferred name is installed instead.
+	installed=([dnsutils]=1 [curl]=1)
+	[[ "$(_comp_missing_package_count wanted installed)" == 0 ]] || return 1
+
+	# Neither alternative present counts the entry once, not once per name.
+	installed=([curl]=1)
+	[[ "$(_comp_missing_package_count wanted installed)" == 1 ]] || return 1
+
+	# Both alternatives installed still counts the entry once.
+	installed=([dnsutils]=1 ["bind9-dnsutils"]=1 [curl]=1)
+	[[ "$(_comp_missing_package_count wanted installed)" == 0 ]] || return 1
+
+	# Nothing installed at all.
+	installed=()
+	[[ "$(_comp_missing_package_count wanted installed)" == 2 ]] || return 1
+
+	# An empty wanted list is not negative-missing.
+	wanted=()
+	[[ "$(_comp_missing_package_count wanted installed)" == 0 ]] || return 1
+
+	# A three-way rename chain.
+	wanted=('a|b|c')
+	installed=([c]=1)
+	[[ "$(_comp_missing_package_count wanted installed)" == 0 ]]
+)
+
+check 'package counting handles renames, absences and empty lists' test_package_counting_handles_renames_and_absences
+
+test_apt_package_classification_reads_the_counts() (
+	# The reading, separated from the counting: an empty set is skipped rather
+	# than clean, and both non-clean states must return non-zero because the
+	# callers branch on it.
+	local got rc
+
+	got="$(_comp_classify_apt_packages 0 0 'apt packages')" && rc=0 || rc=$?
+	[[ "$got" == 'skipped|no packages listed' && "$rc" -ne 0 ]] || return 1
+
+	got="$(_comp_classify_apt_packages 53 2 'apt packages')" && rc=0 || rc=$?
+	[[ "$got" == 'missing|2 of 53 apt packages not installed' && "$rc" -ne 0 ]] || return 1
+
+	# A clean set prints nothing and succeeds; the caller supplies the row.
+	got="$(_comp_classify_apt_packages 53 0 'apt packages')" && rc=0 || rc=$?
+	[[ -z "$got" && "$rc" -eq 0 ]]
+)
+
+check 'apt package classification reads the counts' test_apt_package_classification_reads_the_counts
+
+test_version_classification_is_shared_by_every_version_probe() (
+	# One reading behind roughly ten probes, so it is worth testing directly
+	# rather than through whichever component happens to be installed here.
+	local got
+
+	# Not on PATH at all.
+	got="$(_comp_classify_version 'PowerShell' 'pwsh' '' 0 '' '' '')"
+	[[ "$got" == 'missing|PowerShell not on PATH' ]] || return 1
+
+	# Resolved but timed out: a check, never a version.
+	got="$(_comp_classify_version 'PowerShell' 'pwsh' /usr/bin/pwsh 124 '' '' '')"
+	[[ "$got" == 'check|pwsh probe timed out' ]] || return 1
+
+	# Plain version output, no extraction pattern.
+	got="$(_comp_classify_version 'Go' 'go' /usr/bin/go 0 'go1.23.4' '' '')"
+	[[ "$got" == 'installed|go1.23.4' ]] || return 1
+
+	# An extraction pattern picks the first match out of noisier output.
+	got="$(_comp_classify_version 'Go' 'go' /usr/bin/go 0 'go version go1.23.4 linux/amd64' 'go[0-9.]+' '')"
+	[[ "$got" == 'installed|go1.23.4' ]] || return 1
+
+	# A prefix is prepended to whatever the extraction found.
+	got="$(_comp_classify_version 'Node' 'node' /usr/bin/node 0 'v22.1.0' '' 'node ')"
+	[[ "$got" == 'installed|node v22.1.0' ]] || return 1
+
+	# Resolved, answered, but nothing matched the pattern: still installed,
+	# labelled rather than blank, and never reported missing.
+	got="$(_comp_classify_version 'Go' 'go' /usr/bin/go 0 'unexpected output' 'go[0-9.]+' '')"
+	[[ "$got" == 'installed|go' ]] || return 1
+
+	# A non-zero status that is not a timeout is still an answer.
+	got="$(_comp_classify_version 'Go' 'go' /usr/bin/go 1 'go1.23.4' '' '')"
+	[[ "$got" == 'installed|go1.23.4' ]]
+)
+
+check 'version classification is shared by every version probe' test_version_classification_is_shared_by_every_version_probe
 check 'update probes find Cursor and Claude in the vendor local bin directory' test_update_probes_find_vendor_local_bin_installations
 
 test_harness_cleanup

@@ -142,13 +142,31 @@ _comp_probe_version() {
 		[[ -s "${nvm_dir}/nvm.sh" ]] && . "${nvm_dir}/nvm.sh"
 	fi
 
-	binary="$(tool_resolve "$names")" || {
+	binary="$(tool_resolve "$names")" || binary=''
+	if [[ -n "$binary" ]]; then
+		# shellcheck disable=SC2086  # version_args is an internal word list.
+		_comp_probe_capture raw "$timeout_seconds" "$binary" $version_args || rc=$?
+	fi
+
+	_comp_classify_version "$missing_label" "$timeout_label" "$binary" "$rc" "$raw" "$extract" "$prefix"
+}
+
+# Pure: how a version probe's result reads. Shared by every component in the
+# version-probe table, so a change here reaches roughly ten probes at once --
+# which is the argument for testing it directly rather than through any one of
+# them.
+#
+# `grep` appears here but transforms text and touches no system state; the
+# extraction pattern is part of the reading, not the asking.
+_comp_classify_version() {
+	local missing_label="$1" timeout_label="$2" binary="$3" rc="$4"
+	local raw="$5" extract="$6" prefix="$7"
+	local version
+
+	if [[ -z "$binary" ]]; then
 		printf 'missing|%s not on PATH\n' "$missing_label"
 		return 0
-	}
-
-	# shellcheck disable=SC2086  # version_args is an internal word list.
-	_comp_probe_capture raw "$timeout_seconds" "$binary" $version_args || rc=$?
+	fi
 	if [[ "$rc" -eq 124 ]]; then
 		printf 'check|%s probe timed out\n' "$timeout_label"
 		return 0
@@ -158,6 +176,8 @@ _comp_probe_version() {
 	if [[ -n "$extract" ]]; then
 		version="$(grep -oE "$extract" <<<"$raw" | head -n1 || true)"
 	fi
+	# An empty version still reports installed: the binary resolved and
+	# answered, so falling back to its label beats claiming it is missing.
 	printf 'installed|%s%s\n' "$prefix" "${version:-$timeout_label}"
 }
 
@@ -210,7 +230,7 @@ _comp_probe_apt_packages_for_component() {
 	# names is installed. Querying the raw entry counted a renamed package as
 	# missing even though it was installed under its current name.
 	if ((package_count > 0)); then
-		local entry alt installed_count=0
+		local entry alt
 		local -a all_names=()
 		for entry in "${packages[@]}"; do
 			while IFS= read -r alt; do
@@ -224,17 +244,45 @@ _comp_probe_apt_packages_for_component() {
 			[[ "$rest" == 'install ok installed' ]] && installed_set["$name"]=1
 		done < <(dpkg-query -W -f='${Package} ${Status}\n' "${all_names[@]}" 2>/dev/null)
 
-		for entry in "${packages[@]}"; do
-			while IFS= read -r alt; do
-				if [[ -n "$alt" && -n "${installed_set[$alt]+x}" ]]; then
-					installed_count=$((installed_count + 1))
-					break
-				fi
-			done < <(printf '%s\n' "${entry//|/$'\n'}")
-		done
-		missing=$((package_count - installed_count))
-		((missing < 0)) && missing=0
+		missing="$(_comp_missing_package_count packages installed_set)"
 	fi
+
+	_comp_classify_apt_packages "$package_count" "$missing" "$missing_label"
+}
+
+# Pure: how many entries have no installed alternative.
+#
+# Defect 9 lived here. Entries may be `preferred|fallback` renames, and querying
+# the raw entry counted a renamed package as missing even though it was
+# installed under its current name. An entry counts as present when *any* of its
+# alternatives is installed.
+#
+# Takes the package list and the installed set by name, so it can be tested
+# against any combination without a dpkg to produce one.
+_comp_missing_package_count() {
+	local packages_name="$1" installed_name="$2"
+	local -n _pkg_entries="$packages_name"
+	local -n _installed="$installed_name"
+	local entry alt installed_count=0 missing
+
+	for entry in "${_pkg_entries[@]}"; do
+		while IFS= read -r alt; do
+			if [[ -n "$alt" && -n "${_installed[$alt]+x}" ]]; then
+				installed_count=$((installed_count + 1))
+				break
+			fi
+		done < <(printf '%s\n' "${entry//|/$'\n'}")
+	done
+
+	missing=$((${#_pkg_entries[@]} - installed_count))
+	((missing < 0)) && missing=0
+	printf '%s\n' "$missing"
+}
+
+# Pure: how the two counts read. Returns non-zero for anything but a clean set,
+# which is the contract the callers already rely on.
+_comp_classify_apt_packages() {
+	local package_count="$1" missing="$2" missing_label="$3"
 
 	if [[ "$package_count" -eq 0 ]]; then
 		printf 'skipped|no packages listed\n'
