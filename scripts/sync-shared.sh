@@ -109,14 +109,16 @@ for rel in "${SHARED_RELS[@]}"; do
 			diverged=1
 			continue
 		fi
-		diff -ru "$canonical_dir" "$sibling_dir" || diverged=1
+		# Bytecode is generated, not shared: a stale __pycache__ in one checkout
+		# would report drift in code that is byte-identical.
+		diff -ru -x '__pycache__' "$canonical_dir" "$sibling_dir" || diverged=1
 		continue
 	fi
 
 	# Sync is one-way and confined to the shared tree, so it can never touch
 	# anything else in the sibling repository.
 	mkdir -p -- "$sibling_dir"
-	rsync --archive --delete "$canonical_dir/" "$sibling_dir/" 2>/dev/null ||
+	rsync --archive --delete --exclude='__pycache__' "$canonical_dir/" "$sibling_dir/" 2>/dev/null ||
 		{
 			rm -rf -- "${sibling_dir:?}/"
 			mkdir -p -- "$sibling_dir"
