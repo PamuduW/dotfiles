@@ -20,6 +20,30 @@ test_update_report_uses_clear_title_spacing_and_aligned_action_rule() (
 	awk 'NR == 4 { expected=$0; next } NR == 5 { exit(length($0) == length(expected) ? 0 : 1) }' "$output_file"
 )
 
+test_report_title_honours_no_color_even_with_a_palette_loaded() (
+	# Every rt_* helper settles the palette before drawing, but the report title
+	# printed before the first one ran, so it read $C_BOLD/$C_YELLOW directly.
+	#
+	# The other tests in this file cannot catch that: none of them loads a
+	# palette, so the tokens are empty and NO_COLOR appears to work. Colour
+	# leaked only when a caller had installed a palette -- and then just the
+	# title was coloured while the table underneath came out plain.
+	local output
+	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|current'; }
+	colors_set_palette
+	output="$(NO_COLOR=1 print_report_table)"
+	[[ "$output" != *$'\033'* ]] || return 1
+	[[ "$output" == *'== Update report =='* ]]
+)
+
+test_report_title_still_colours_when_colour_is_wanted() (
+	# The guard must settle the palette, not disable colour outright.
+	local output
+	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|current'; }
+	output="$(unset NO_COLOR; FORCE_COLOR=1 print_report_table)"
+	[[ "$output" == *$'\033'* ]]
+)
+
 test_update_and_upgrade_rows_keep_the_last_column_width() (
 	local output line_lengths cols
 	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|current'; }
@@ -473,6 +497,8 @@ expect_success 'CLI and TUI status use the same component-state collector' test_
 expect_success 'status update and restow retain removed command capabilities' test_retained_capability_coverage
 expect_success 'summary upgrade and self fail with migration guidance' test_removed_commands_have_guidance
 expect_success 'metadata help Command Lib and dispatch share ten keys' test_exact_command_set_parity
+expect_success 'report title honours NO_COLOR with a palette loaded' test_report_title_honours_no_color_even_with_a_palette_loaded
+expect_success 'report title still colours when colour is wanted' test_report_title_still_colours_when_colour_is_wanted
 expect_success 'harness fakes prevent real repo network apt home and stow mutation' test_harness_safety_and_no_real_mutation
 
 finish_tests

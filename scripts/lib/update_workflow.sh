@@ -120,6 +120,11 @@ print_report_table() {
 		esac
 	done
 
+	# Every rt_* helper settles the palette first, but this header prints before
+	# the first one runs, so it emitted raw escapes under NO_COLOR while the
+	# table underneath came out plain. Same predicate, same place in the order.
+	_rt_ensure_colors
+
 	printf '%s%s== Update report ==%s\n\n' "$C_BOLD" "$C_YELLOW" "$C_RESET"
 	_print_update_table_header action
 
