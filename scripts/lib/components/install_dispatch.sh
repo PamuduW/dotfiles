@@ -151,6 +151,13 @@ run_install() {
 	_log_legend_line
 	echo ""
 
+	# One masked prompt here rather than sudo's silent one at whichever
+	# component happens to need root first. The rest of the run uses sudo's
+	# credential cache and never prompts again.
+	if declare -F sudo_prime >/dev/null 2>&1; then
+		sudo_prime || true
+	fi
+
 	_run_install_preamble || return $?
 
 	# Per-component wall-clock, so where a long install actually spends its time

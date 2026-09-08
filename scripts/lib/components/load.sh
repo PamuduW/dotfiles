@@ -8,6 +8,8 @@ source "$_COMPONENTS_LIB_DIR/registry.sh"
 source "$_COMPONENTS_LIB_DIR/plan.sh"
 # shellcheck source=scripts/lib/components/probes.sh
 source "$_COMPONENTS_LIB_DIR/probes.sh"
+# shellcheck source=scripts/lib/shared/sudo_prime.sh
+source "$_COMPONENTS_LIB_DIR/../shared/sudo_prime.sh"
 # shellcheck source=scripts/lib/components/install_dispatch.sh
 source "$_COMPONENTS_LIB_DIR/install_dispatch.sh"
 # shellcheck source=scripts/lib/components/menu.sh
