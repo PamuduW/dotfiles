@@ -112,14 +112,32 @@ dotfiles_load_command() {
 	esac
 }
 
-cmd_status() {
+# ADR-0001: the report layout lives in Python now
+# (scripts/lib/shared/python/). Width and colour stay here, because the Bash
+# side already owns those predicates and duplicating them is the divergence the
+# consolidation exists to remove -- they are passed as arguments instead.
+#
+# Falls back to the Bash renderer when python3 is unavailable, so a checkout
+# that has not installed the runtime yet still prints its own status.
+_dotfiles_render_report() {
+	local title="$1" breadcrumb="$2" rows_name="$3"
+	local -n _rows_ref="$rows_name"
+	local renderer="${DOTFILES_DIR}/scripts/lib/shared/python/render_report.py"
 	local row component detail result
-	local -a rows=()
 	local ok_count=0 check_count=0 miss_count=0
-	collect_component_status_rows rows
-	rt_print_header "Check Status" "Dotfiles › Check Status"
+
+	if command -v python3 >/dev/null 2>&1 && [[ -f "$renderer" ]]; then
+		local -a args=(--cols "$(rt_report_columns)" --title "$title" --rollup)
+		[[ -n "$breadcrumb" ]] && args+=(--breadcrumb "$breadcrumb")
+		_rt_ensure_colors
+		[[ -n "${C_RESET:-}" ]] && args+=(--color)
+		printf '%s\n' "${_rows_ref[@]}" | python3 "$renderer" "${args[@]}"
+		return $?
+	fi
+
+	rt_print_header "$title" "$breadcrumb"
 	rt_print_table_columns
-	for row in "${rows[@]}"; do
+	for row in "${_rows_ref[@]}"; do
 		IFS='|' read -r component detail result <<<"$row"
 		case "$result" in
 		installed | configured) ((++ok_count)) ;;
@@ -129,6 +147,14 @@ cmd_status() {
 		rt_print_table_row "$component" "$detail" "$result"
 	done
 	rt_print_rollup "$ok_count" "$check_count" "$miss_count"
+}
+
+cmd_status() {
+	local row component detail result
+	local -a rows=()
+	local ok_count=0 check_count=0 miss_count=0
+	collect_component_status_rows rows
+	_dotfiles_render_report 'Check Status' 'Dotfiles › Check Status' rows
 
 	printf '\n'
 	rt_print_section "Repository"
