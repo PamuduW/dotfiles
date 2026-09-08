@@ -389,7 +389,17 @@ run_agentbot() {
 	load_dotfiles_environment
 	agentbot_prerequisites || return 1
 	step 'Install Agentbot'
-	AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" install || rc=$?
+	# Roadmap 4.1 gave Agentbot a component selector, so an operator who is
+	# watching gets the same choice Dotfiles offers rather than an
+	# all-or-nothing install. Feature-detected, because this script is always
+	# fetched fresh and may be driving a checkout that predates the selector --
+	# the same position it already takes for `--install` and `agentbot full`.
+	if interactive && "$AGENTBOT_DIR/install.sh" --help 2>/dev/null |
+		grep -Fq -- '--components'; then
+		AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/bin/agentbot" || rc=$?
+	else
+		AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" install || rc=$?
+	fi
 	if ((rc == 2)); then
 		restart_after_repository_update Agentbot
 		return 1
