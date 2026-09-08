@@ -21,9 +21,19 @@ _github_token_menu_line() {
 
 _github_token_menu_secret() {
 	local out_var="$1" prompt="$2" value=''
-	printf '%s' "$prompt" >&"$GITHUB_TOKEN_MENU_OUT_FD"
-	IFS= read -rs value <&"$GITHUB_TOKEN_MENU_IN_FD" || value='q'
-	printf '\n' >&"$GITHUB_TOKEN_MENU_OUT_FD"
+	# `read -rs` shows nothing at all, so a mistyped token gives no feedback that
+	# anything was typed. read_tty_secret masks with * and supports backspace;
+	# the SSH passphrase prompt has used it since it was written.
+	#
+	# It reads through the DOTFILES_TTY_* seam rather than this menu's own
+	# descriptors, so point the seam at them for the duration of the call. These
+	# are `local`, which in Bash is dynamic scope: the helper and everything it
+	# calls see them, and the parent's values come back untouched afterwards.
+	# shellcheck disable=SC2034  # Read by read_tty_secret through dynamic scope.
+	local DOTFILES_TTY_IN_FD="$GITHUB_TOKEN_MENU_IN_FD"
+	# shellcheck disable=SC2034  # Read by read_tty_secret through dynamic scope.
+	local DOTFILES_TTY_OUT_FD="$GITHUB_TOKEN_MENU_OUT_FD"
+	read_tty_secret value "$prompt" || value='q'
 	printf -v "$out_var" '%s' "$value"
 }
 
