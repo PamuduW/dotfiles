@@ -150,9 +150,13 @@ def main(argv: list[str] | None = None) -> int:
             continue
         component, _, rest = line.partition("|")
         detail, _, result = rest.partition("|")
-        if result in {"installed", "configured"}:
+        # The same set the colour mapping calls green, rather than a second
+        # shorter list. A row reading "ok" was being counted as needing
+        # attention, because only "installed" and "configured" were recognised
+        # here while the colour beside it was already green.
+        if result in _GREEN:
             ok += 1
-        elif result == "missing":
+        elif result in _RED:
             miss += 1
         else:
             check += 1

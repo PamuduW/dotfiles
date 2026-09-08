@@ -374,7 +374,10 @@ test_status_is_strictly_local() {
 	local output="$TEST_HARNESS_ROOT/status.out"
 	test_harness_reset_logs
 	TEST_REPO_STATE=current "$REPO_DIR/bin/bin/dotfiles" status >"$output"
-	grep -Fqi unchecked "$output" || return 1
+	# Status reports the repository's position now, and still qualifies it: the
+	# counts are as fresh as the last fetch and it says so. What must not change
+	# is the line below -- no fetch, no pull, no ls-remote, no network.
+	grep -Eqi 'as of last fetch|unchecked' "$output" || return 1
 	! grep -Eq $'git\t.*\t(fetch|pull|ls-remote)(\t|$)|^(curl|npx|sudo|stow|apt-get)\t' "$TEST_COMMAND_LOG"
 }
 

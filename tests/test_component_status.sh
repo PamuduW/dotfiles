@@ -234,8 +234,14 @@ test_status_is_local_read_only() {
 	test_harness_configure_fake git 0 $'## feat/test\n'
 	test_harness_reset_logs
 	"$REPO_DIR/bin/bin/dotfiles" status >"$output" || return 1
-	grep -Fqi 'freshness' "$output" || return 1
-	grep -Fqi 'unchecked' "$output" || return 1
+	# Status now reports the repository's position against its upstream, and
+	# must still say the counts are only as fresh as the last fetch. The point
+	# of this assertion is unchanged: status never claims knowledge it has not
+	# got. The network assertions below are the contract itself.
+	# Either wording is honest about the same thing: the counts are only as
+	# fresh as the last fetch, or the check could not run at all. What must
+	# never happen is status claiming a freshness it has not got.
+	grep -Eqi 'as of last fetch|unchecked' "$output" || return 1
 	if grep -Eq "$forbidden" "$TEST_COMMAND_LOG"; then
 		return 1
 	fi

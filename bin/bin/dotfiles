@@ -162,21 +162,44 @@ _dotfiles_render_report() {
 	rt_print_rollup "${want_ok:-$ok_count}" "${want_check:-$check_count}" "${want_miss:-$miss_count}"
 }
 
+# Whether this checkout has updates waiting. Bounded, and degrades to
+# "unchecked" rather than hanging a status on a slow or absent network.
+_dotfiles_append_repo_row() {
+	local rows_name="$1"
+	local -n _rows="$rows_name"
+	local checker="${DOTFILES_DIR}/scripts/lib/shared/python/repo_status.py"
+	local row=''
+
+	if command -v python3 >/dev/null 2>&1 && [[ -f "$checker" ]]; then
+		# `|| true`: a row that cannot be produced must never fail the whole
+		# status. Without it the assignment's non-zero exit propagated under
+		# `set -e` and a reporting command started exiting non-zero.
+		row="$(PYTHONDONTWRITEBYTECODE=1 python3 "$checker" "$DOTFILES_DIR" \
+			--label 'Dotfiles repo' --timeout "${DOTFILES_REPO_CHECK_TIMEOUT:-5}" 2>/dev/null || true)"
+	fi
+	# No python3 yet is a normal state during first setup, not an error.
+	[[ -n "$row" ]] || row='Dotfiles repo|unchecked (python3 unavailable)|skipped'
+	_rows+=("$row")
+}
+
 cmd_status() {
 	local row component detail result
 	local -a rows=()
 	local ok_count=0 check_count=0 miss_count=0
 	collect_component_status_rows rows
+	# The repository is a component of this machine's setup too, and its state
+	# belongs in the table rather than in a raw `git status -sb` underneath it.
+	_dotfiles_append_repo_row rows
 	_dotfiles_render_report 'Check Status' 'Dotfiles › Check Status' rows
 
+	# Local changes only. Remote freshness is answered by the Dotfiles repo row
+	# in the table above, so repeating "unchecked" here would now contradict it.
 	printf '\n'
-	rt_print_section "Repository"
+	rt_print_section "Local changes"
 	if command -v git >/dev/null 2>&1; then
 		git -C "$DOTFILES_DIR" status -sb
-		_msg "Remote freshness: unchecked (run dotfiles update)"
 	else
 		_msg "git $NOT_INSTALLED"
-		_msg "Remote freshness: unchecked"
 	fi
 }
 
