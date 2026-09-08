@@ -375,14 +375,23 @@ _comp_probe_go() {
 	fi
 }
 
-_comp_probe_portainer() {
-	local name rc=0 timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
-	if ! command -v docker >/dev/null 2>&1; then
+# Classification, separated from interrogation on purpose.
+#
+# ADR-0001's second amendment: four of the five component defects in
+# docs/history/bootstrap-clean-machine-testing.md were misreadings of an
+# interrogation that was itself correct, and defect 5 was this probe reading a
+# refused `docker ps` as "container not found". The reading is where the bugs
+# are, and a reading that takes its inputs as arguments can be tested against
+# every state without a docker to produce them.
+#
+# Pure: no commands, no filesystem, no environment.
+_comp_classify_portainer() {
+	local docker_present="$1" rc="$2" name="$3"
+
+	if [[ "$docker_present" != 1 ]]; then
 		printf 'missing|docker is not installed\n'
 		return 0
 	fi
-	_comp_probe_capture name "$timeout_seconds" docker ps -a \
-		--filter 'name=^/portainer$' --format '{{.Names}}' || rc=$?
 	if [[ "$rc" -eq 124 ]]; then
 		printf 'check|portainer probe timed out\n'
 	elif [[ "$name" == portainer ]]; then
@@ -396,6 +405,18 @@ _comp_probe_portainer() {
 	else
 		printf 'missing|portainer container not found\n'
 	fi
+}
+
+# Interrogation. Everything here needs a real machine; nothing here decides.
+_comp_probe_portainer() {
+	local name rc=0 timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
+	if ! command -v docker >/dev/null 2>&1; then
+		_comp_classify_portainer 0 0 ''
+		return 0
+	fi
+	_comp_probe_capture name "$timeout_seconds" docker ps -a \
+		--filter 'name=^/portainer$' --format '{{.Names}}' || rc=$?
+	_comp_classify_portainer 1 "$rc" "$name"
 }
 
 _comp_probe_monaspace_fonts() {

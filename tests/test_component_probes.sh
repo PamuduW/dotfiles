@@ -133,6 +133,47 @@ test_update_probes_find_vendor_local_bin_installations() (
 	[[ "$output" == claude-local ]]
 )
 
+test_portainer_classification_covers_every_state() (
+	# ADR-0001's second amendment: a classification must be reachable without
+	# its interrogation. The integration test below builds a fake docker binary
+	# per state, which is why two states have never been covered -- producing a
+	# timeout means having a docker that times out.
+	#
+	# Split out, the reading is a pure function and every state is one call.
+	# Defect 5 in docs/history/bootstrap-clean-machine-testing.md lived here.
+	local got
+
+	# docker absent entirely: not a judgement about the container.
+	got="$(_comp_classify_portainer 0 0 '')"
+	[[ "$got" == 'missing|docker is not installed' ]] || return 1
+
+	# Timed out: says nothing either way. Never covered before this test.
+	got="$(_comp_classify_portainer 1 124 '')"
+	[[ "$got" == 'check|portainer probe timed out' ]] || return 1
+
+	# The daemon refused the query -- the defect-5 case. "check", never
+	# "missing": the docker group is granted during the same run and is not
+	# active until the next session.
+	got="$(_comp_classify_portainer 1 1 '')"
+	[[ "$got" == check\|*'new docker group'* ]] || return 1
+
+	# Found, and found despite a non-zero status, which a daemon can return
+	# alongside usable output.
+	got="$(_comp_classify_portainer 1 0 portainer)"
+	[[ "$got" == 'installed|container exists (stopped by default)' ]] || return 1
+	got="$(_comp_classify_portainer 1 1 portainer)"
+	[[ "$got" == 'installed|container exists (stopped by default)' ]] || return 1
+
+	# Reachable, answered, and the container genuinely is not there.
+	got="$(_comp_classify_portainer 1 0 '')"
+	[[ "$got" == 'missing|portainer container not found' ]] || return 1
+
+	# A timeout outranks a name that arrived anyway: partial output from a
+	# timed-out query is not evidence.
+	got="$(_comp_classify_portainer 1 124 portainer)"
+	[[ "$got" == 'check|portainer probe timed out' ]]
+)
+
 test_portainer_probe_separates_an_unreachable_daemon_from_a_missing_container() (
 	# Break caught: the probe ran `docker ps -a` as the current user and read any
 	# failure as "container not found". The docker group is granted during the
@@ -273,6 +314,7 @@ check 'WSL probe verifies both required settings' test_wsl_probe_requires_both_s
 check 'absent optional components remain visible in status rollups' test_absent_optional_components_are_counted_as_missing
 check 'system package status checks only the packages owned by that component' test_system_package_probe_uses_system_package_tags_only
 check 'Python package status checks every apt package owned by the component' test_python_probe_checks_every_owned_apt_package
+check 'portainer classification covers every state without a docker' test_portainer_classification_covers_every_state
 check 'update probes find Cursor and Claude in the vendor local bin directory' test_update_probes_find_vendor_local_bin_installations
 
 test_harness_cleanup
