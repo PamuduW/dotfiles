@@ -95,3 +95,42 @@ def version(
         match = re.search(extract, raw)
         shown = match.group(0) if match else ""
     return f"installed|{prefix}{shown or timeout_label}"
+
+
+def go(
+    *,
+    go_present: bool,
+    go_rc: int,
+    go_raw: str,
+    asdf_present: bool,
+    asdf_rc: int,
+    asdf_raw: str,
+) -> str:
+    """Two sources with a fallback between them.
+
+    The subtle path: `go` resolves but its output does not parse, so this falls
+    through to asdf rather than reporting a version it does not have.
+    """
+    import re
+
+    if go_present:
+        if go_rc == TIMEOUT_RC:
+            return "check|go probe timed out"
+        match = re.search(r"go[0-9.]+", go_raw)
+        if match:
+            return f"installed|{match.group(0)}"
+
+    if asdf_present:
+        if asdf_rc == TIMEOUT_RC:
+            return "check|go probe timed out"
+        selected = ""
+        for line in asdf_raw.splitlines():
+            fields = line.split()
+            if fields and fields[0] == "golang":
+                selected = fields[1] if len(fields) > 1 else ""
+                break
+        if selected and selected != "system":
+            return f"installed|go{selected} (asdf)"
+        return "missing|asdf has no selected Go version"
+
+    return "missing|working Go installation not found"

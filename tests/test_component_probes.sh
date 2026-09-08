@@ -457,6 +457,48 @@ test_version_classification_is_shared_by_every_version_probe() (
 )
 
 check 'version classification is shared by every version probe' test_version_classification_is_shared_by_every_version_probe
+
+test_go_classification_falls_back_through_both_sources() (
+	# Go has two sources and a fallback between them. The subtle path is `go`
+	# resolving but its output not parsing: the reading must fall through to
+	# asdf rather than report a version it does not have. That state is
+	# unreachable through a real toolchain.
+	local got
+
+	# go on PATH, parseable.
+	got="$(_comp_classify_go 1 0 'go version go1.23.4 linux/amd64' 0 0 '')"
+	[[ "$got" == 'installed|go1.23.4' ]] || return 1
+
+	# go on PATH but timed out: a check, and asdf is not consulted.
+	got="$(_comp_classify_go 1 124 '' 1 0 'golang 1.22.0')"
+	[[ "$got" == 'check|go probe timed out' ]] || return 1
+
+	# go present, output unparseable, asdf has a version: fall through.
+	got="$(_comp_classify_go 1 0 'unexpected output' 1 0 'golang 1.22.0')"
+	[[ "$got" == 'installed|go1.22.0 (asdf)' ]] || return 1
+
+	# go present, unparseable, and no asdf at all.
+	got="$(_comp_classify_go 1 0 'unexpected output' 0 0 '')"
+	[[ "$got" == 'missing|working Go installation not found' ]] || return 1
+
+	# asdf selecting "system" is not a Go installation.
+	got="$(_comp_classify_go 0 0 '' 1 0 'golang system')"
+	[[ "$got" == 'missing|asdf has no selected Go version' ]] || return 1
+
+	# asdf present with nothing selected.
+	got="$(_comp_classify_go 0 0 '' 1 0 '')"
+	[[ "$got" == 'missing|asdf has no selected Go version' ]] || return 1
+
+	# asdf itself timed out.
+	got="$(_comp_classify_go 0 0 '' 1 124 '')"
+	[[ "$got" == 'check|go probe timed out' ]] || return 1
+
+	# Neither source present.
+	got="$(_comp_classify_go 0 0 '' 0 0 '')"
+	[[ "$got" == 'missing|working Go installation not found' ]]
+)
+
+check 'go classification falls back through both sources' test_go_classification_falls_back_through_both_sources
 check 'update probes find Cursor and Claude in the vendor local bin directory' test_update_probes_find_vendor_local_bin_installations
 
 test_harness_cleanup

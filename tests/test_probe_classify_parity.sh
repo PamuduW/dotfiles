@@ -143,11 +143,33 @@ test_version_parity() {
 	((failures == before))
 }
 
+test_go_parity() {
+	local before=$failures want got row
+	local -a cases=(
+		"1|0|go version go1.23.4 linux/amd64|0|0|"
+		"1|124||1|0|golang 1.22.0"
+		"1|0|unexpected output|1|0|golang 1.22.0"
+		"1|0|unexpected output|0|0|"
+		"0|0||1|0|golang system"
+		"0|0||1|0|"
+		"0|0||1|124|"
+		"0|0||0|0|"
+	)
+	for row in "${cases[@]}"; do
+		IFS='|' read -r gp grc graw ap arc araw <<<"$row"
+		want="$(_comp_classify_go "$gp" "$grc" "$graw" "$ap" "$arc" "$araw")"
+		got="$(py "pc.go(go_present=bool($gp), go_rc=$grc, go_raw='$graw', asdf_present=bool($ap), asdf_rc=$arc, asdf_raw='$araw')")"
+		compare "go [$row]" "$want" "$got"
+	done
+	((failures == before))
+}
+
 check 'portainer classification agrees across 18 states' test_portainer_parity
 check 'codex classification agrees across every state and both statuses' test_codex_parity
 check 'package counting agrees on renames and absences' test_package_count_parity
 check 'apt classification agrees on every count pair' test_apt_classification_parity
 check 'version classification agrees across its edges' test_version_parity
+check 'go classification agrees across both sources' test_go_parity
 
 test_harness_cleanup
 finish_tests

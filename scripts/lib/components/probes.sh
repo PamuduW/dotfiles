@@ -413,41 +413,68 @@ _comp_probe_codex_cli() {
 	_comp_classify_codex_cli "$state" "$codex_path" "$ver" "$rc"
 }
 
-_comp_probe_go() {
-	local raw ver rc timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
-	if command -v go >/dev/null 2>&1; then
-		_comp_probe_capture raw "$timeout_seconds" go version || rc=$?
-		if [[ "${rc:-0}" -eq 124 ]]; then
+# Classification for Go, which has two sources and a fallback between them.
+#
+# The subtle path: `go` resolves but its output does not parse, so the reading
+# falls through to asdf rather than reporting a version it does not have. That
+# case is unreachable through a real toolchain and is exactly what a pure
+# reading makes testable.
+_comp_classify_go() {
+	local go_present="$1" go_rc="$2" go_raw="$3"
+	local asdf_present="$4" asdf_rc="$5" asdf_raw="$6"
+	local ver
+
+	if [[ "$go_present" == 1 ]]; then
+		if [[ "$go_rc" -eq 124 ]]; then
 			printf 'check|go probe timed out\n'
-			return
+			return 0
 		fi
-		ver="$(grep -oE 'go[0-9.]+' <<<"$raw" | head -n1 || true)"
+		ver="$(grep -oE 'go[0-9.]+' <<<"$go_raw" | head -n1 || true)"
 		if [[ -n "$ver" ]]; then
 			printf 'installed|%s\n' "$ver"
-			return
+			return 0
 		fi
 	fi
-	if command -v asdf >/dev/null 2>&1; then
-		rc=0
-		_comp_probe_capture raw "$timeout_seconds" asdf current golang || rc=$?
-		if [[ "$rc" -eq 124 ]]; then
+
+	if [[ "$asdf_present" == 1 ]]; then
+		if [[ "$asdf_rc" -eq 124 ]]; then
 			printf 'check|go probe timed out\n'
-			return
+			return 0
 		fi
-		ver="$(awk '$1=="golang" {print $2; exit}' <<<"$raw")"
+		ver="$(awk '$1=="golang" {print $2; exit}' <<<"$asdf_raw")"
 		if [[ -n "$ver" && "$ver" != system ]]; then
 			printf 'installed|go%s (asdf)\n' "$ver"
 		else
 			printf 'missing|asdf has no selected Go version\n'
 		fi
-	else
-		printf 'missing|working Go installation not found\n'
+		return 0
 	fi
+
+	printf 'missing|working Go installation not found\n'
+}
+
+# Interrogation. Asks both sources; decides between them nowhere.
+_comp_probe_go() {
+	local timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
+	local go_present=0 go_rc=0 go_raw=''
+	local asdf_present=0 asdf_rc=0 asdf_raw=''
+
+	if command -v go >/dev/null 2>&1; then
+		go_present=1
+		_comp_probe_capture go_raw "$timeout_seconds" go version || go_rc=$?
+	fi
+	if command -v asdf >/dev/null 2>&1; then
+		asdf_present=1
+		_comp_probe_capture asdf_raw "$timeout_seconds" asdf current golang || asdf_rc=$?
+	fi
+
+	_comp_classify_go "$go_present" "$go_rc" "$go_raw" \
+		"$asdf_present" "$asdf_rc" "$asdf_raw"
 }
 
 # Classification, separated from interrogation on purpose.
 #
-# ADR-0001's second amendment: four of the five component defects in
+# ADR-0001's second amendment: three of the five component defects in
 # docs/history/bootstrap-clean-machine-testing.md were misreadings of an
 # interrogation that was itself correct, and defect 5 was this probe reading a
 # refused `docker ps` as "container not found". The reading is where the bugs
