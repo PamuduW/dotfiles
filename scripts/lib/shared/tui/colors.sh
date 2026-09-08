@@ -50,19 +50,23 @@ _colors_wrap() {
 status_color_result() {
 	local result="$1"
 	case "$result" in
-	ok | installed | configured | linked | up\ to\ date | current)
+	# The sibling repository renders the same table in Python and reports a few
+	# states this case list had never seen, so they fell through uncoloured
+	# there. One design, one mapping: agentbot/tests/test_renderer_parity.sh
+	# compares both renderers across every state listed here.
+	ok | installed | configured | linked | up\ to\ date | current | applied | read-only)
 		_colors_wrap "${C_GREEN:-}" "$result"
 		;;
-	missing | failed | error)
+	missing | failed | error | conflict)
 		_colors_wrap "${C_RED:-}" "$result"
 		;;
-	check | drift | extra | warn | warning | partial)
+	check | drift | extra | warn | warning | partial | mutating | applied-with-local-changes)
 		_colors_wrap "${C_YELLOW:-}" "$result"
 		;;
 	skipped*)
 		_colors_wrap "${C_DIM:-}" "$result"
 		;;
-	info | dry-run)
+	info | dry-run | preview)
 		_colors_wrap "${C_CYAN:-}" "$result"
 		;;
 	*)
