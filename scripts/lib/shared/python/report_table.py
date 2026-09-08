@@ -88,3 +88,36 @@ def format_row(widths: TableWidths, component: str, detail: str, result: str, ho
     detail_fit = fit_detail(detail, detail_width, home)
     result_fit = fit_line(result, result_width)
     return f"  {label:<{label_width}} | {detail_fit:<{detail_width}} | {result_fit:<{result_width}}"
+
+
+FourWidths = tuple[int, int, int, int]
+
+
+def four_column_widths(columns: int) -> FourWidths:
+    """Widths for the update report. Mirrors rt_four_column_widths.
+
+    The action column is pinned at 18 once there is room for it, because its
+    vocabulary is fixed -- "up to date", "upgrade", "refresh-required" -- and a
+    column that only ever holds known strings should not shrink and grow as the
+    other three change.
+    """
+    available = columns - 9
+    w4 = 18 if available >= 55 else available * 25 // 100
+    w1 = (available - w4) * 25 // 100
+    w2 = (available - w4) * 42 // 100
+    w3 = available - w1 - w2 - w4
+    return w1, w2, w3, w4
+
+
+def format_four_column_header(
+    widths: FourWidths, headers: tuple[str, str, str, str]
+) -> tuple[str, str]:
+    """Column line and rule. No leading indent: the update report starts at
+    column zero, unlike the three-column table."""
+    cells = " | ".join(f"{fit_line(h, w):<{w}}" for h, w in zip(headers, widths))
+    rule = "-+-".join("-" * w for w in widths)
+    return cells, rule
+
+
+def format_four_column_row(widths: FourWidths, cells: tuple[str, str, str, str]) -> str:
+    return " | ".join(f"{fit_line(c, w):<{w}}" for c, w in zip(cells, widths))

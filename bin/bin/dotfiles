@@ -139,7 +139,12 @@ _dotfiles_render_report() {
 		[[ -n "$want_miss" ]] && args+=(--miss "$want_miss")
 		_rt_ensure_colors
 		[[ -n "${C_RESET:-}" ]] && args+=(--color)
-		printf '%s\n' "${_rows_ref[@]}" | python3 "$renderer" "${args[@]}"
+		# No bytecode: the shared tree is vendored code held byte-identical with
+		# the sibling repository, and a stale __pycache__ there masks an edit --
+		# it did exactly that while this renderer was being written. One short
+		# process per table has nothing to gain from the cache anyway.
+		printf '%s\n' "${_rows_ref[@]}" |
+			PYTHONDONTWRITEBYTECODE=1 python3 "$renderer" "${args[@]}"
 		return $?
 	fi
 
