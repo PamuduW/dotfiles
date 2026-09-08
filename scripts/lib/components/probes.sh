@@ -307,16 +307,20 @@ _comp_probe_boost_cli() {
 	fi
 }
 
-_comp_probe_codex_cli() {
-	local state codex_path ver='' rc=0 timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
-	state="$(codex_cli_install_state)" || state=absent
+# Classification for Codex. Defect 6 in the clean-machine history was a
+# standalone install not yet on PATH being read as shadowed, which routed the
+# run into a migration with nothing to migrate. The state names carry that
+# distinction; this maps them to what the operator is told.
+#
+# Pure: no commands, no PATH lookups.
+_comp_classify_codex_cli() {
+	local state="$1" codex_path="$2" ver="$3" rc="$4"
+
 	case "$state" in
 	standalone | standalone-not-on-path)
-		codex_path="$(codex_visible_install_path)"
-		_comp_probe_capture ver "$timeout_seconds" "$codex_path" --version || rc=$?
 		if [[ "$rc" -eq 124 ]]; then
 			printf 'check|codex cli probe timed out\n'
-			return
+			return 0
 		fi
 		if [[ "$state" == standalone-not-on-path ]]; then
 			printf 'installed|%s (standalone, not on PATH in this session)\n' "${ver:-$codex_path}"
@@ -325,22 +329,40 @@ _comp_probe_codex_cli() {
 		fi
 		;;
 	external)
-		codex_path="$(codex_active_command 2>/dev/null || true)"
-		_comp_probe_capture ver "$timeout_seconds" "$codex_path" --version || rc=$?
 		if [[ "$rc" -eq 124 ]]; then
 			printf 'check|codex cli probe timed out\n'
-			return
+			return 0
 		fi
 		printf 'check|%s (external; migration required)\n' "${ver:-$codex_path}"
 		;;
 	standalone-shadowed)
-		codex_path="$(codex_active_command 2>/dev/null || true)"
 		printf 'check|standalone Codex is shadowed by %s\n' "${codex_path:-unknown}"
 		;;
 	*)
 		printf 'missing|codex not on PATH\n'
 		;;
 	esac
+}
+
+# Interrogation. Which questions get asked depends on the install state, but no
+# answer is decided here.
+_comp_probe_codex_cli() {
+	local state codex_path='' ver='' rc=0 timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
+	state="$(codex_cli_install_state)" || state=absent
+	case "$state" in
+	standalone | standalone-not-on-path)
+		codex_path="$(codex_visible_install_path)"
+		_comp_probe_capture ver "$timeout_seconds" "$codex_path" --version || rc=$?
+		;;
+	external)
+		codex_path="$(codex_active_command 2>/dev/null || true)"
+		_comp_probe_capture ver "$timeout_seconds" "$codex_path" --version || rc=$?
+		;;
+	standalone-shadowed)
+		codex_path="$(codex_active_command 2>/dev/null || true)"
+		;;
+	esac
+	_comp_classify_codex_cli "$state" "$codex_path" "$ver" "$rc"
 }
 
 _comp_probe_go() {

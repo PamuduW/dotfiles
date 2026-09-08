@@ -315,6 +315,49 @@ check 'absent optional components remain visible in status rollups' test_absent_
 check 'system package status checks only the packages owned by that component' test_system_package_probe_uses_system_package_tags_only
 check 'Python package status checks every apt package owned by the component' test_python_probe_checks_every_owned_apt_package
 check 'portainer classification covers every state without a docker' test_portainer_classification_covers_every_state
+
+test_codex_classification_covers_every_install_state() (
+	# Defect 6: a standalone Codex not yet on PATH was read as shadowed, which
+	# routed the run into a migration with nothing to migrate. The two states
+	# differ by one word in the output and by everything in what happens next.
+	local got
+
+	got="$(_comp_classify_codex_cli standalone /home/x/.local/bin/codex 'codex-cli 0.153.4' 0)"
+	[[ "$got" == 'installed|codex-cli 0.153.4 (standalone)' ]] || return 1
+
+	got="$(_comp_classify_codex_cli standalone-not-on-path /home/x/.local/bin/codex 'codex-cli 0.153.4' 0)"
+	[[ "$got" == 'installed|codex-cli 0.153.4 (standalone, not on PATH in this session)' ]] || return 1
+
+	# Installed but the version query failed: fall back to the path rather than
+	# reporting nothing.
+	got="$(_comp_classify_codex_cli standalone /home/x/.local/bin/codex '' 0)"
+	[[ "$got" == 'installed|/home/x/.local/bin/codex (standalone)' ]] || return 1
+
+	# A timeout is not a verdict, in either standalone state or external.
+	got="$(_comp_classify_codex_cli standalone /home/x/.local/bin/codex '' 124)"
+	[[ "$got" == 'check|codex cli probe timed out' ]] || return 1
+	got="$(_comp_classify_codex_cli external /usr/bin/codex '' 124)"
+	[[ "$got" == 'check|codex cli probe timed out' ]] || return 1
+
+	got="$(_comp_classify_codex_cli external /usr/bin/codex 'codex 1.0' 0)"
+	[[ "$got" == 'check|codex 1.0 (external; migration required)' ]] || return 1
+
+	got="$(_comp_classify_codex_cli standalone-shadowed /usr/bin/codex '' 0)"
+	[[ "$got" == 'check|standalone Codex is shadowed by /usr/bin/codex' ]] || return 1
+
+	# Shadowed by something the probe could not name still reports shadowed.
+	got="$(_comp_classify_codex_cli standalone-shadowed '' '' 0)"
+	[[ "$got" == 'check|standalone Codex is shadowed by unknown' ]] || return 1
+
+	got="$(_comp_classify_codex_cli absent '' '' 0)"
+	[[ "$got" == 'missing|codex not on PATH' ]] || return 1
+
+	# An unrecognised state reports missing rather than nothing at all.
+	got="$(_comp_classify_codex_cli some-future-state '' '' 0)"
+	[[ "$got" == 'missing|codex not on PATH' ]]
+)
+
+check 'codex classification covers every install state' test_codex_classification_covers_every_install_state
 check 'update probes find Cursor and Claude in the vendor local bin directory' test_update_probes_find_vendor_local_bin_installations
 
 test_harness_cleanup
