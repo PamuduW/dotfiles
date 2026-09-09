@@ -373,15 +373,22 @@ test_install_summary_uses_report_table_alignment() (
 	grep -Fq 'Git identity' "$output" || return 1
 	grep -Fq 'Pamudu Wijesingha' "$output" || return 1
 	grep -Fq 'System packages' "$output" || return 1
-	awk '
-	/^[[:space:]]+(component|Git identity|System packages)/ {
-		if (!width) width=length($0)
-		if (length($0) != width) exit 1
-		if (gsub(/\|/, "&") != 2) exit 1
-		seen++
-	}
-	END { exit(seen == 3 ? 0 : 1) }
-	' "$output"
+	# Measured in bash, not awk: a truncated cell ends in a one-column ellipsis
+	# that is three bytes, and mawk -- `awk` on a stock Ubuntu and on the CI
+	# runner -- would call that row three columns wider than its neighbours.
+	local line width='' pipes seen=0 index
+	while IFS= read -r line; do
+		[[ "$line" =~ ^[[:space:]]+(component|Git\ identity|System\ packages) ]] || continue
+		[[ -n "$width" ]] || width="${#line}"
+		((${#line} == width)) || return 1
+		pipes=0
+		for ((index = 0; index < ${#line}; index++)); do
+			[[ "${line:index:1}" == '|' ]] && pipes=$((pipes + 1))
+		done
+		((pipes == 2)) || return 1
+		seen=$((seen + 1))
+	done <"$output"
+	((seen == 3))
 )
 
 test_narrow_reports_remain_bounded() {

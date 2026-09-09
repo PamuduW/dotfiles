@@ -47,14 +47,30 @@ test_report_title_still_colours_when_colour_is_wanted() (
 	[[ "$output" == *$'\033'* ]]
 )
 
+# The display width of every table row and rule, one per line.
+_report_row_widths() {
+	local line
+	while IFS= read -r line; do
+		[[ "$line" == *'|'* || "$line" == -* ]] || continue
+		printf '%s\n' "${#line}"
+	done
+}
+
 test_update_and_upgrade_rows_keep_the_last_column_width() (
 	local output line_lengths cols
 	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|current'; }
+	# Measured in bash, not awk: these rows carry an em-dash, and mawk -- which
+	# is `awk` on a stock Ubuntu, including the CI runner -- counts its three
+	# bytes as three columns. bash counts characters in a UTF-8 locale, which
+	# tests/lib/harness.sh settles.
+	local -a widths=()
 	for cols in 48 80 120; do
-		line_lengths="$(DOTFILES_REPORT_COLS="$cols" NO_COLOR=1 print_report_table | awk '/\||^-/ { print length($0) }')"
-		[[ "$line_lengths" == "$cols"$'\n'"$cols"$'\n'"$cols" ]] || return 1
-		line_lengths="$(DOTFILES_REPORT_COLS="$cols" NO_COLOR=1 print_upgrade_summary | awk '/\||^-/ { print length($0) }')"
-		[[ "$line_lengths" == "$cols"$'\n'"$cols"$'\n'"$cols" ]] || return 1
+		mapfile -t widths < <(DOTFILES_REPORT_COLS="$cols" NO_COLOR=1 print_report_table |
+			_report_row_widths)
+		[[ "${widths[*]}" == "$cols $cols $cols" ]] || return 1
+		mapfile -t widths < <(DOTFILES_REPORT_COLS="$cols" NO_COLOR=1 print_upgrade_summary |
+			_report_row_widths)
+		[[ "${widths[*]}" == "$cols $cols $cols" ]] || return 1
 	done
 )
 
@@ -179,18 +195,22 @@ test_upgrade_summary_ignores_empty_probe_rows() (
 )
 
 test_update_rows_align_unicode_available_cells() (
-	local output
+	local output line index pipes found=false
 	_collect_check_rows() { printf '%s\n' 'Cursor CLI|2026.07.09-a3815c0|—|up to date'; }
 	output="$(NO_COLOR=1 print_report_table)"
-	awk '
-	/^Cursor CLI/ {
-		pipes=""
-		for (i = 1; i <= length($0); i++) if (substr($0, i, 1) == "|") pipes = pipes i ","
-		if (length($0) != 80 || pipes != "15,40,61,") exit 1
-		found=1
-	}
-	END { exit(found ? 0 : 1) }
-	' <<<"$output"
+	# The em-dash occupies one column and three bytes, which is the whole point
+	# of this case: measured in bash under a UTF-8 locale, never in awk.
+	while IFS= read -r line; do
+		[[ "$line" == 'Cursor CLI'* ]] || continue
+		((${#line} == 80)) || return 1
+		pipes=''
+		for ((index = 0; index < ${#line}; index++)); do
+			[[ "${line:index:1}" == '|' ]] && pipes+="$((index + 1)),"
+		done
+		[[ "$pipes" == '15,40,61,' ]] || return 1
+		found=true
+	done <<<"$output"
+	[[ "$found" == true ]]
 )
 
 test_repository_update_preview_uses_semantic_colors() (
