@@ -97,7 +97,9 @@ test_report_path_shortening_preserves_exact_width() {
 	local value output
 	value='/mnt/c/Program Files/Microsoft/Windows/Credential Manager/git-credential-manager.exe'
 	output="$(_rt_shorten_path "$value" 40)"
-	[[ "${#output}" -eq 40 ]] || return 1
+	# Forty columns, not forty bytes: the ellipsis this adds is one column and
+	# three bytes, so a byte count reads 42 and says the shortening is broken.
+	[[ "$(display_width "$output")" -eq 40 ]] || return 1
 	[[ "$output" == *'…'* ]]
 }
 
@@ -379,8 +381,9 @@ test_install_summary_uses_report_table_alignment() (
 	local line width='' pipes seen=0 index
 	while IFS= read -r line; do
 		[[ "$line" =~ ^[[:space:]]+(component|Git\ identity|System\ packages) ]] || continue
-		[[ -n "$width" ]] || width="${#line}"
-		((${#line} == width)) || return 1
+		[[ -n "$width" ]] || width="$(display_width "$line")"
+		(($(display_width "$line") == width)) || return 1
+		line="${line//…/.}"
 		pipes=0
 		for ((index = 0; index < ${#line}; index++)); do
 			[[ "${line:index:1}" == '|' ]] && pipes=$((pipes + 1))

@@ -52,7 +52,8 @@ _report_row_widths() {
 	local line
 	while IFS= read -r line; do
 		[[ "$line" == *'|'* || "$line" == -* ]] || continue
-		printf '%s\n' "${#line}"
+		display_width "$line"
+		printf '\n'
 	done
 }
 
@@ -197,12 +198,17 @@ test_upgrade_summary_ignores_empty_probe_rows() (
 test_update_rows_align_unicode_available_cells() (
 	local output line index pipes found=false
 	_collect_check_rows() { printf '%s\n' 'Cursor CLI|2026.07.09-a3815c0|—|up to date'; }
-	output="$(NO_COLOR=1 print_report_table)"
+	# The width is pinned, because the expectations below are absolute. Without
+	# this the table takes its width from the environment's COLUMNS, which is
+	# unset in a local shell and set on a CI runner -- the whole reason this
+	# suite passed here and failed there for months.
+	output="$(DOTFILES_REPORT_COLS=80 NO_COLOR=1 print_report_table)"
 	# The em-dash occupies one column and three bytes, which is the whole point
 	# of this case: measured in bash under a UTF-8 locale, never in awk.
 	while IFS= read -r line; do
 		[[ "$line" == 'Cursor CLI'* ]] || continue
-		((${#line} == 80)) || return 1
+		(($(display_width "$line") == 80)) || return 1
+		line="${line//—/-}"
 		pipes=''
 		for ((index = 0; index < ${#line}; index++)); do
 			[[ "${line:index:1}" == '|' ]] && pipes+="$((index + 1)),"

@@ -9,9 +9,12 @@
 # months on exactly that: the runner's locale is not UTF-8 and this repository
 # renders for a terminal that is. Set once, here, rather than in each assertion.
 if [[ -z "${DOTFILES_TEST_LOCALE_SET:-}" ]]; then
+	# Checked by counting, not by asking: `locale` exits 0 for a locale that is
+	# named but not generated, so the question is whether bash actually counts
+	# an em-dash as one character under it.
 	for _dotfiles_test_locale in C.UTF-8 en_US.UTF-8 ''; do
 		[[ -n "$_dotfiles_test_locale" ]] || break
-		if LC_ALL="$_dotfiles_test_locale" locale >/dev/null 2>&1; then
+		if [[ "$(LC_ALL="$_dotfiles_test_locale" bash -c 'text=—; printf %s "${#text}"')" == 1 ]]; then
 			export LC_ALL="$_dotfiles_test_locale" LANG="$_dotfiles_test_locale"
 			break
 		fi

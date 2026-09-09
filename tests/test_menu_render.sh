@@ -158,7 +158,9 @@ test_report_rows_fit_long_cells_at_supported_widths() (
 			'/home/pamudu/a/very/long/path/to/a/configuration/file' \
 			'refresh-required')"
 		line="${output//$'\033'/}"
-		((${#line} == cols)) || return 1
+		# Columns, not bytes: the ellipsis a truncated cell ends in is one of
+		# each, and the count has to be of what the operator sees.
+		(($(display_width "$line") == cols)) || return 1
 		[[ "$(grep -o '|' <<<"$line" | wc -l)" -eq 2 ]] || return 1
 		[[ "$line" == *'…'* && "$line" != *'...'* ]] || return 1
 	done

@@ -67,3 +67,16 @@ finish_tests() {
 	printf '%d test(s) passed; %d failed\n' "$passed" "$failed"
 	((failed == 0))
 }
+
+# display_width <text>
+#
+# How many columns a rendered row occupies, without depending on the locale or
+# on which awk this machine calls `awk`. The renderer's own non-ASCII output is
+# a one-column em-dash and a one-column ellipsis; folding them to one byte each
+# makes the count exact wherever it runs, which mawk and a C locale both
+# otherwise get wrong in the same direction.
+display_width() {
+	local text="${1//—/-}"
+	text="${text//…/.}"
+	printf '%s' "${#text}"
+}
