@@ -297,6 +297,15 @@ comp_registry_validate() {
 			return 1
 		fi
 	done
+	# The same promise the probe check makes: a component that cannot be
+	# installed would be selectable, run, and fail with a bare non-zero from
+	# comp_call_fn and nothing to say why.
+	for key in "${COMP_KEYS[@]}"; do
+		declare -F "_comp_install_${key}" >/dev/null 2>&1 || {
+			printf 'component without an installer: %s\n' "$key" >&2
+			return 1
+		}
+	done
 	for key in "${!COMP_DEPENDS_ON[@]}"; do
 		dependency="${COMP_DEPENDS_ON[$key]}"
 		[[ -n "${known[$key]+x}" && -n "${known[$dependency]+x}" ]] || {
@@ -378,6 +387,36 @@ apply_dotfiles_components_env() {
 		else
 			printf 'warn: unknown DOTFILES_COMPONENTS key: %s\n' "$part" >&2
 		fi
+	done
+
+	comp_enable_dependencies
+}
+
+# Turn a selection into one that can actually install.
+#
+# The menu has always done this -- toggling Portainer on enables Docker, and
+# toggling Docker off takes Portainer with it -- but the environment variable
+# set COMP_ON directly and skipped it. `DOTFILES_COMPONENTS=dotfiles` therefore
+# asked to stow without `system_packages`, which is where `stow` comes from, and
+# the component failed for a reason nothing on screen explained.
+#
+# Enabling rather than refusing, because that is what the menu does with the
+# same input, and it is said out loud so the run is not quietly wider than what
+# was asked for. Loops until stable: a dependency may have one of its own.
+comp_enable_dependencies() {
+	local key dependency changed=1
+
+	while ((changed)); do
+		changed=0
+		for key in "${COMP_KEYS[@]}"; do
+			[[ "${COMP_ON[$key]:-0}" -eq 1 ]] || continue
+			dependency="${COMP_DEPENDS_ON[$key]:-}"
+			[[ -n "$dependency" ]] || continue
+			[[ "${COMP_ON[$dependency]:-0}" -eq 0 ]] || continue
+			COMP_ON["$dependency"]=1
+			changed=1
+			printf 'note: %s needs %s, which has been enabled too\n' "$key" "$dependency" >&2
+		done
 	done
 }
 

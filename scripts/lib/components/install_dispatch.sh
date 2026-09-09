@@ -104,8 +104,6 @@ _comp_install_dotfiles() {
 }
 
 _run_install_preamble() {
-	git config --global init.defaultBranch main
-
 	if is_on system_packages || is_on python || is_on powershell; then
 		log_step "Refresh apt indexes"
 		if _run_quiet_command "apt indexes refresh" sudo apt-get update -qq; then

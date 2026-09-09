@@ -139,6 +139,11 @@ configure_git_submodule_defaults() {
 
 configure_git_settings() {
 	local gcm_path=''
+	# Moved here from the install preamble, which set it on every run whatever
+	# was selected -- an operator who turned every Git component off still had
+	# their global config written to, silently. This component is the one that
+	# says it configures Git.
+	git config --global init.defaultBranch main || return 1
 	configure_git_submodule_defaults || return 1
 	if gcm_path="$(find_windows_git_credential_manager)"; then
 		git config --global credential.helper "$gcm_path" || return 1

@@ -91,8 +91,10 @@ selection:
 DOTFILES_COMPONENTS=docker,portainer,lazygit ./install.sh --install
 ```
 
-The installer applies dependency closure. Unknown keys are warned about and
-are not silently converted into components.
+A selection is closed over its dependencies, the same way the menu closes it:
+naming `portainer` enables `docker` too, and each addition is reported on
+standard error. Listing a dependency yourself is fine and changes nothing.
+Unknown keys are warned about and are not silently converted into components.
 
 ## Install versus update
 

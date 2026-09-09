@@ -119,7 +119,54 @@ test_install_summary_preserves_failed_installer_with_probeable_artifact() (
 	grep -Fq '0 ok, 1 need attention' <<<"$output"
 )
 
+test_env_selection_enables_what_it_depends_on() (
+	# The menu has always closed a selection over its dependencies -- toggling
+	# Portainer on enables Docker. DOTFILES_COMPONENTS set COMP_ON directly and
+	# skipped that, so `DOTFILES_COMPONENTS=dotfiles` asked to stow without
+	# system_packages, which is where stow comes from, and the component failed
+	# for a reason nothing on screen explained.
+	local note
+	for pair in 'portainer docker' 'lazydocker docker' 'dotfiles system_packages' 'graphify_cli python'; do
+		set -- $pair
+		# Redirected to a file rather than captured: a command substitution runs
+		# it in a subshell, where everything it sets about the selection is lost.
+		DOTFILES_COMPONENTS="$1" apply_dotfiles_components_env 2>"$TEST_HARNESS_ROOT/dep.note" >/dev/null
+		note="$(<"$TEST_HARNESS_ROOT/dep.note")"
+		[[ "${COMP_ON[$1]}" -eq 1 ]] || return 1
+		[[ "${COMP_ON[$2]}" -eq 1 ]] || {
+			printf 'selecting %s left %s off\n' "$1" "$2" >&2
+			return 1
+		}
+		# Said out loud: the run is wider than what was asked for.
+		[[ "$note" == *"$1 needs $2"* ]] || return 1
+	done
+
+	# And nothing else is dragged in.
+	DOTFILES_COMPONENTS=portainer apply_dotfiles_components_env 2>/dev/null || true
+	local enabled=0 key
+	for key in "${COMP_KEYS[@]}"; do
+		[[ "${COMP_ON[$key]}" -eq 1 ]] && enabled=$((enabled + 1))
+	done
+	((enabled == 2))
+)
+
+test_every_component_has_an_installer() (
+	# The registry already refuses a component with no probe. Without the same
+	# check on the installer, a new component is selectable, runs, and fails
+	# with a bare non-zero from comp_call_fn and nothing to say why.
+	local key
+	for key in "${COMP_KEYS[@]}"; do
+		declare -F "_comp_install_${key}" >/dev/null 2>&1 || {
+			printf 'no installer for %s\n' "$key" >&2
+			return 1
+		}
+	done
+	comp_registry_validate
+)
+
 check 'component registry validates dependencies and installation order' test_component_registry_validates_dependencies_and_install_order
+check 'environment selection enables what it depends on' test_env_selection_enables_what_it_depends_on
+check 'every component has an installer' test_every_component_has_an_installer
 check 'non-interactive install runs the repository gate before setup' test_noninteractive_install_runs_repository_gate_first
 check 'non-interactive install propagates component installation failure' test_noninteractive_install_propagates_install_failure
 check 'selected component installer failures propagate to the orchestrator' test_selected_component_install_failures_propagate
