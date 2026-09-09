@@ -127,7 +127,7 @@ test_command_lib_documents_full_help_catalog() {
 		'Node.js, npm, Go, and Monaspace' \
 		'DOTFILES_COMPONENTS' \
 		'GITHUB_TOKEN' \
-		'install.sh --initial' \
+		'install.sh --install' \
 		'stow'; do
 		[[ "$output" == *"$needle"* ]] || {
 			printf 'missing Dotfiles Command Lib detail: %s\n' "$needle" >&2

@@ -142,26 +142,28 @@ test_repository_update_can_be_pre_authorized() (
 )
 
 test_install_mode_goes_straight_to_component_selection() (
-	# Break caught: bootstrap used --initial, which lands on the submenu
+	# Break caught: bootstrap used --initial, which landed on a submenu
 	# offering "Check status / Run setup / Back". A caller that has already
-	# said "install Dotfiles" wants the component selection itself.
+	# said "install Dotfiles" wants the component selection itself. That mode
+	# is gone now, and what remains is the behaviour it was wrong about: with a
+	# terminal, component selection; without one, the whole flow.
 	local calls="$TEST_HARNESS_ROOT/install-mode.calls"
 	: >"$calls"
-	initial_setup_menu() { printf 'submenu\n' >>"$calls"; }
-	run_install_action() { printf 'install-action\n' >>"$calls"; }
-	run_initial_setup_flow() { printf 'flow\n' >>"$calls"; }
 
 	DOTFILES_SOURCE_ONLY=1 source "$REPO_DIR/scripts/install.sh"
-	# Redefine after sourcing: install.sh pulls in the real implementations.
-	initial_setup_menu() { printf 'submenu\n' >>"$calls"; }
+	# Redefined after sourcing: install.sh pulls in the real implementations.
 	run_install_action() { printf 'install-action\n' >>"$calls"; }
 	run_initial_setup_flow() { printf 'flow\n' >>"$calls"; }
 
 	DOTFILES_INTERACTIVE_TTY=true _dotfiles_dispatch_mode install
-	DOTFILES_INTERACTIVE_TTY=true _dotfiles_dispatch_mode initial
 	DOTFILES_INTERACTIVE_TTY=false _dotfiles_dispatch_mode install
 
-	[[ "$(<"$calls")" == $'install-action\nsubmenu\nflow' ]]
+	[[ "$(<"$calls")" == $'install-action\nflow' ]] || return 1
+
+	# And the retired flag says where it went rather than reading as a typo.
+	local retired
+	retired="$(bash "$REPO_DIR/scripts/install.sh" --initial 2>&1)" && return 1
+	[[ "$retired" == *'--initial has been removed'* && "$retired" == *'--install'* ]]
 )
 
 check 'install mode goes straight to component selection' test_install_mode_goes_straight_to_component_selection

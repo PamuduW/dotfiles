@@ -10,7 +10,7 @@ external states.
 Install explicitly with:
 
 ```bash
-DOTFILES_COMPONENTS=codex_cli ./install.sh --initial
+DOTFILES_COMPONENTS=codex_cli ./install.sh --install
 ```
 
 The component uses OpenAI's standalone installer and has no Node.js dependency.
@@ -26,7 +26,7 @@ dedicated migration confirmation. Non-interactive migration requires:
 ```bash
 DOTFILES_COMPONENTS=codex_cli \
 DOTFILES_MIGRATE_NPM_CODEX=1 \
-./install.sh --initial
+./install.sh --install
 ```
 
 Migration fails closed for unrelated commands, unverifiable package paths,

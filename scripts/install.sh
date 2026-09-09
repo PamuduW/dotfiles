@@ -21,7 +21,6 @@ print_usage() {
 Usage: $(basename "$0") [OPTIONS]
 
 Options:
-  --initial     Open initial setup submenu (or run setup non-interactively)
   --install     Go straight to component selection and install
   --update      Open update workflow
   --help        Show this help and exit
@@ -144,16 +143,6 @@ toggle_component() {
 # terminal.
 _dotfiles_dispatch_mode() {
 	case "$1" in
-	initial)
-		if [[ "$DOTFILES_INTERACTIVE_TTY" == true ]]; then
-			initial_setup_menu
-		else
-			run_initial_setup_flow
-		fi
-		;;
-	# The submenu above is the right landing place for someone browsing. A
-	# caller that has already said "install Dotfiles" -- bootstrap.sh -- wants
-	# the component selection itself, not a menu offering it.
 	install)
 		if [[ "$DOTFILES_INTERACTIVE_TTY" == true ]]; then
 			run_install_action
@@ -182,8 +171,14 @@ main() {
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
 		--initial)
-			mode="initial"
-			shift
+			# Retired on 2026-09-09. It opened a two-entry submenu -- check
+			# status, run setup -- that the main menu already offers, and
+			# non-interactively it did exactly what --install does. Named
+			# explicitly rather than falling into "unknown option", because an
+			# operator who learned this flag deserves to be told where it went.
+			echo "--initial has been removed; use --install for component selection," >&2
+			echo "or run ./install.sh with no options for the menu." >&2
+			exit 1
 			;;
 		--install)
 			mode="install"

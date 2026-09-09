@@ -308,8 +308,10 @@ DOTFILES_INSTALL_PARTIAL_RC=4
 
 # This script is always fetched fresh, but it drives a checkout of any age, so
 # a flag it knows about may be one the checkout has never heard of. Ask before
-# using it. An older checkout takes --initial, whose repository gate pulls the
-# newer code and restarts this script, and the second pass gets --install.
+# using it. An older checkout takes --initial -- a flag current Dotfiles no
+# longer has, which is exactly why it is only ever offered to a checkout whose
+# own --help still advertises it. Its repository gate pulls the newer code and
+# restarts this script, and the second pass gets --install.
 # Dotfiles takes the same position for `agentbot full` in full_update.sh.
 dotfiles_install_mode() {
 	if "$DOTFILES_DIR/install.sh" --help 2>/dev/null | grep -Fq -- '--install'; then

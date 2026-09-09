@@ -88,7 +88,7 @@ Set `DOTFILES_COMPONENTS` to comma-separated stable keys for non-interactive
 selection:
 
 ```bash
-DOTFILES_COMPONENTS=docker,portainer,lazygit ./install.sh --initial
+DOTFILES_COMPONENTS=docker,portainer,lazygit ./install.sh --install
 ```
 
 The installer applies dependency closure. Unknown keys are warned about and

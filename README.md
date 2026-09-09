@@ -134,7 +134,7 @@ For non-interactive installation, select stable component keys explicitly:
 
 ```bash
 DOTFILES_COMPONENTS=system_packages,docker,portainer,dotfiles \
-  ./install.sh --initial
+  ./install.sh --install
 ```
 
 ## Component summary

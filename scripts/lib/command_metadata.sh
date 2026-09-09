@@ -99,7 +99,7 @@ dotfiles_command_define 'menu' \
 	--handler 'cmd_menu' \
 	--class 'mutating' \
 	--description 'Open interactive install and update workflows.' \
-	--options $'--initial|Run the initial setup flow through install.sh --initial.|menu default\n--update|Open the update workflow through install.sh --update.|menu default\n--help|Show installer menu help and exit.|off' \
+	--options $'--install|Select components and install them through install.sh --install.|menu default\n--update|Open the update workflow through install.sh --update.|menu default\n--help|Show installer menu help and exit.|off' \
 	--defaults 'No flags opens the interactive installer menu.' \
 	--effects 'Delegates to scripts/install.sh; selected workflows may install, update, or configure components.' \
 	--example 'dotfiles menu' \

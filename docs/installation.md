@@ -26,7 +26,7 @@ Without a TTY on standard input, `./install.sh` defaults to initial setup and
 does not open the menu. Limit the selection with stable component keys:
 
 ```bash
-DOTFILES_COMPONENTS=system_packages,dotfiles ./install.sh --initial
+DOTFILES_COMPONENTS=system_packages,dotfiles ./install.sh --install
 ```
 
 Existing global Git identity values are used when identity is enabled without

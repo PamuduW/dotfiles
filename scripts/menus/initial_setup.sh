@@ -1,38 +1,8 @@
 # shellcheck shell=bash
 
-_initial_labels=(
-	"Check status"
-	"Run setup"
-	"Back"
-)
-_initial_keys=(status run back)
-
-_initial_desc_fn() {
-	case "$1" in
-	0)
-		echo "Show install status for every setup component (installed / missing / check)."
-		echo "Read-only summary table with rollup counts."
-		;;
-	1)
-		echo "Open the component picker, confirm plan, then run the install."
-		echo "Prompts for git identity when that component is enabled."
-		;;
-	2)
-		echo "Return to the main Dotfiles menu."
-		;;
-	esac
-}
-
-_initial_dispatch() {
-	case "$1" in
-	status)
-		run_status_action
-		;;
-	run)
-		run_install_action
-		;;
-	esac
-}
+# The "Initial setup" submenu was removed on 2026-09-09 along with the --initial
+# mode that was its only way in. It offered "Check status" and "Run setup", both
+# of which the main menu already has, and nothing else reached it.
 
 run_status_action() {
 	print_status_summary_all
@@ -86,11 +56,6 @@ run_install_action() {
 }
 
 # shellcheck disable=SC2034  # Consumed by menu_submenu_loop.
-initial_setup_menu() {
-	MENU_SUBMENU_DESC_FN=_initial_desc_fn
-	menu_submenu_loop "Initial setup" "Dotfiles › Initial setup" \
-		_initial_labels _initial_keys _initial_dispatch
-}
 
 _apply_noninteractive_git_defaults() {
 	if ! is_on git_identity; then
