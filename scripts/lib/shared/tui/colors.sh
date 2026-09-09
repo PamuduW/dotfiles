@@ -47,6 +47,31 @@ _colors_wrap() {
 }
 
 # The "result" column: what state is this component in?
+# Which rollup column a result belongs in: ok, miss, or check.
+#
+# The same vocabulary status_color_result paints with, because a row drawn green
+# and counted as needing attention is a report arguing with itself. The Python
+# counter was taught the whole list once; these Bash counters were not, and knew
+# `installed` and `configured` alone -- so six states were painted green and
+# counted as problems in the same table. Latent, because only five states reach
+# a counter today, which is exactly what makes a sixth safe to add.
+#
+# Kept beside the colour mapping so the two are edited together, and pinned
+# against the Python counter by tests/test_update_presentation.sh.
+status_result_class() {
+	case "$1" in
+	ok | installed | configured | linked | up\ to\ date | current | applied | read-only)
+		printf 'ok\n'
+		;;
+	missing | failed | error | conflict)
+		printf 'miss\n'
+		;;
+	*)
+		printf 'check\n'
+		;;
+	esac
+}
+
 status_color_result() {
 	local result="$1"
 	case "$result" in

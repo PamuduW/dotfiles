@@ -524,7 +524,44 @@ expect_success 'TUI propagates the changed-repository exit from the update child
 expect_success 'stopped paths perform no apt tool network or stow work' test_stopped_paths_have_no_downstream
 expect_success 'dotfiles status is strictly local and labels freshness unchecked' test_status_is_strictly_local
 expect_success 'root TUI status omits unchecked apt and repository freshness locally' test_root_tui_status_omits_unchecked_freshness_without_network
+test_bash_and_python_rollups_count_alike() (
+	# A row drawn green and counted as needing attention is a report arguing
+	# with itself. The Python counter was taught the whole result vocabulary
+	# once; the Bash counters were not, and knew `installed` and `configured`
+	# alone -- so `ok`, `linked`, `up to date`, `current`, `applied` and
+	# `read-only` all counted as problems while being painted green beside it.
+	#
+	# Latent rather than live: only five states reach a counter today. This is
+	# what makes a sixth safe to introduce.
+	command -v python3 >/dev/null 2>&1 || return 0
+
+	local rows="$TEST_HARNESS_ROOT/rollup-parity.rows" ok=0 miss=0 check=0 row result
+	printf '%s\n' \
+		'Alpha|x|ok' 'Bravo|x|installed' 'Charlie|x|configured' 'Delta|x|linked' \
+		'Echo|x|up to date' 'Foxtrot|x|current' 'Golf|x|applied' 'Hotel|x|read-only' \
+		'India|x|missing' 'Juliet|x|failed' 'Kilo|x|check' 'Lima|x|skipped' >"$rows"
+
+	while IFS='|' read -r _ _ result; do
+		case "$(status_result_class "$result")" in
+		ok) ((++ok)) ;;
+		miss) ((++miss)) ;;
+		*) ((++check)) ;;
+		esac
+	done <"$rows"
+
+	local from_bash from_python
+	from_bash="$(NO_COLOR=1 rt_print_rollup "$ok" "$check" "$miss" | tail -1)"
+	from_python="$(NO_COLOR=1 PYTHONDONTWRITEBYTECODE=1 python3 \
+		"$REPO_DIR/scripts/lib/shared/python/render_report.py" --cols 80 --rollup <"$rows" | tail -1)"
+	[[ "$from_bash" == "$from_python" ]] || {
+		printf 'rollup counts differ:\n  bash:   %s\n  python: %s\n' \
+			"$from_bash" "$from_python" >&2
+		return 1
+	}
+)
+
 expect_success 'root status rollup has exactly one blank line before the summary' test_root_status_rollup_has_one_blank_line
+expect_success 'Bash and Python rollups count every state alike' test_bash_and_python_rollups_count_alike
 expect_success 'CLI and TUI status use the same component-state collector' test_cli_and_tui_status_share_component_collector
 expect_success 'status update and restow retain removed command capabilities' test_retained_capability_coverage
 expect_success 'summary upgrade and self fail with migration guidance' test_removed_commands_have_guidance

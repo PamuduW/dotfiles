@@ -150,9 +150,12 @@ _dotfiles_render_report() {
 	rt_print_table_columns
 	for row in "${_rows_ref[@]}"; do
 		IFS='|' read -r component detail result <<<"$row"
-		case "$result" in
-		installed | configured) ((++ok_count)) ;;
-		missing) ((++miss_count)) ;;
+		# The shared vocabulary, not a second list: this counter knew only
+		# `installed` and `configured`, so the repository row's `ok` was drawn
+		# green and counted as needing attention in the same table.
+		case "$(status_result_class "$result")" in
+		ok) ((++ok_count)) ;;
+		miss) ((++miss_count)) ;;
 		*) ((++check_count)) ;;
 		esac
 		rt_print_table_row "$component" "$detail" "$result"
@@ -211,9 +214,11 @@ cmd_doctor() {
 	collect_component_status_rows rows
 	for row in "${rows[@]}"; do
 		IFS='|' read -r component detail result <<<"$row"
+		# Green is fine and a skip is a deliberate non-event; everything else
+		# is what Doctor exists to list.
 		case "$result" in
-		installed | configured | skipped) ;;
-		*) problems+=("$row") ;;
+		skipped*) ;;
+		*) [[ "$(status_result_class "$result")" == ok ]] || problems+=("$row") ;;
 		esac
 	done
 

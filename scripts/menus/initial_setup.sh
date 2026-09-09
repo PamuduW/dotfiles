@@ -150,9 +150,10 @@ print_status_summary_all() {
 
 		for row in "${rows[@]}"; do
 			IFS='|' read -r short_label detail result <<<"$row"
-			case "$result" in
-			installed | configured) ((++ok_count)) ;;
-			missing) ((++miss_count)) ;;
+			# The shared vocabulary; see status_result_class.
+			case "$(status_result_class "$result")" in
+			ok) ((++ok_count)) ;;
+			miss) ((++miss_count)) ;;
 			*) ((++check_count)) ;;
 			esac
 			rt_print_table_row "$short_label" "$detail" "$result"
