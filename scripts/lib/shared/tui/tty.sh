@@ -15,11 +15,9 @@ _DOTFILES_TTY_LOADED=1
 # several values from one file-backed stream (the token menu, and the tests
 # that drive it) must share one read position, which only a descriptor can do.
 # When descriptors are set they win. Input and output are independent: a
-# caller may use an already-open input stream with a path-backed transcript.
-
-tty_use_fds() {
-	[[ -n "${DOTFILES_TTY_IN_FD:-}" && -n "${DOTFILES_TTY_OUT_FD:-}" ]]
-}
+# caller may use an already-open input stream with a path-backed transcript,
+# which is why each direction has its own predicate and the pair never needed
+# one.
 
 tty_use_input_fd() {
 	[[ -n "${DOTFILES_TTY_IN_FD:-}" ]]
