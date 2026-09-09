@@ -228,7 +228,7 @@ menu_checkbox_run() {
 	tty_out="$(tty_output_path)"
 
 	{
-		menu_cursor_hide
+		menu_input_begin
 		ui_clear
 		page="$(_menu_cb_page_for_cursor "$cursor" "$page_size")"
 		menu_lines="$(_menu_cb_render_lines "$count" "$page_size" "$page")"
@@ -293,7 +293,7 @@ menu_checkbox_run() {
 				break
 				;;
 			cancel)
-				menu_cursor_show
+				menu_input_end
 				return 1
 				;;
 			left | right | ignore)
@@ -321,7 +321,7 @@ menu_checkbox_run() {
 			_menu_cb_draw "$cursor" "$page_size" "$status_msg" "$cols"
 		done
 
-		menu_cursor_show
+		menu_input_end
 	} >"$tty_out"
 
 	return 0

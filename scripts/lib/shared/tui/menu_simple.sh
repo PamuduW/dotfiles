@@ -123,7 +123,7 @@ menu_simple_run() {
 	tty_out="$(tty_output_path)"
 
 	{
-		menu_cursor_hide
+		menu_input_begin
 		ui_clear
 		_menu_simple_draw "$cursor" "$cols"
 
@@ -144,7 +144,7 @@ menu_simple_run() {
 				continue
 				;;
 			cancel)
-				menu_cursor_show
+				menu_input_end
 				MENU_SIMPLE_RESULT=''
 				return 1
 				;;
@@ -164,7 +164,7 @@ menu_simple_run() {
 			_menu_simple_draw "$cursor" "$cols"
 		done
 
-		menu_cursor_show
+		menu_input_end
 	} >"$tty_out"
 
 	# The choice is returned in MENU_SIMPLE_RESULT only. It used to also go to

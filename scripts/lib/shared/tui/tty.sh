@@ -73,6 +73,44 @@ tty_available() {
 	tty_input_available && tty_output_available
 }
 
+# Terminal echo, off for as long as a menu is on screen.
+#
+# `read -s` silences echo only while it is reading. A key pressed while the menu
+# is drawing -- and a full page takes tens of milliseconds -- is echoed by the
+# terminal driver instead, which is where a stray ^[[A on screen comes from.
+# Held down, it is a column of them.
+#
+# Saved and restored rather than assumed: a caller may already have the terminal
+# in a state of its own, and off a terminal there is nothing to do at all.
+_TTY_ECHO_SAVED=''
+
+tty_echo_off() {
+	_TTY_ECHO_SAVED=''
+	if tty_use_input_fd; then
+		[[ -t "$DOTFILES_TTY_IN_FD" ]] || return 0
+		_TTY_ECHO_SAVED="$(stty -g <&"$DOTFILES_TTY_IN_FD" 2>/dev/null)" || return 0
+		stty -echo <&"$DOTFILES_TTY_IN_FD" 2>/dev/null || true
+		return 0
+	fi
+	local input_path
+	input_path="$(tty_input_path)"
+	[[ -c "$input_path" ]] || return 0
+	_TTY_ECHO_SAVED="$(stty -g <"$input_path" 2>/dev/null)" || return 0
+	stty -echo <"$input_path" 2>/dev/null || true
+}
+
+tty_echo_restore() {
+	local input_path
+	[[ -n "$_TTY_ECHO_SAVED" ]] || return 0
+	if tty_use_input_fd; then
+		stty "$_TTY_ECHO_SAVED" <&"$DOTFILES_TTY_IN_FD" 2>/dev/null || true
+	else
+		input_path="$(tty_input_path)"
+		stty "$_TTY_ECHO_SAVED" <"$input_path" 2>/dev/null || true
+	fi
+	_TTY_ECHO_SAVED=''
+}
+
 tty_printf() {
 	local output_path
 	if tty_use_output_fd; then

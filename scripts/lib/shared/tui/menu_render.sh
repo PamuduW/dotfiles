@@ -104,6 +104,29 @@ menu_cursor_show() {
 	tty_printf '%s' "$sequence"
 }
 
+# What a menu turns off while it is on screen, and puts back afterwards.
+#
+# Ctrl-C is why this is a pair rather than two calls at the ends: with the
+# terminal's own signal handling left alone, an interrupt kills the script
+# between them, and a shell left with echo off is a shell that looks broken.
+# The trap restores, removes itself, and re-raises so the interrupt still means
+# what it meant.
+menu_input_begin() {
+	tty_echo_off
+	menu_cursor_hide
+	# Restore and leave. Re-raising the signal instead would be tidier in
+	# principle and deadlocks in practice: the read this interrupts runs in a
+	# command substitution, whose own INT disposition is already back to
+	# default, so the parent has nothing left to hand the signal to.
+	trap 'menu_input_end; exit 130' INT
+}
+
+menu_input_end() {
+	menu_cursor_show
+	tty_echo_restore
+	trap - INT
+}
+
 menu_redraw_up() {
 	local lines="$1"
 	tty_printf '\e[%dA' "$lines"

@@ -304,7 +304,42 @@ test_terminal_geometry_is_cached_and_invalidatable() (
 )
 
 expect_success 'component menu adapter preserves dependency-aware toggles' test_component_menu_adapter_preserves_dependency_toggles
+test_menu_input_holds_echo_off_and_puts_it_back() (
+	# `read -s` silences echo only while it is reading, so a key pressed during
+	# a redraw was echoed by the terminal driver -- a stray ^[[A on screen, and
+	# a column of them under a held arrow. A menu holds echo off for its whole
+	# life instead.
+	#
+	# What is asserted here is the wiring and the off-terminal behaviour, which
+	# is all this suite can hold: `script` inside the runner's pipeline captures
+	# the runner's own stream, not its child's. The terminal behaviour itself --
+	# echo off while the menu is up, on again after Ctrl-C, exit 130 -- was
+	# verified against a pty, and menu_input_end is what an interrupt runs.
+	local calls=''
+	tty_echo_off() { calls+='off '; }
+	tty_echo_restore() { calls+='restore '; }
+	menu_cursor_hide() { :; }
+	menu_cursor_show() { :; }
+
+	menu_input_begin
+	[[ "$calls" == 'off ' ]] || return 1
+	# An interrupt has something to run, and it puts the terminal back.
+	[[ "$(trap -p INT)" == *menu_input_end* ]] || return 1
+	menu_input_end
+	[[ "$calls" == 'off restore ' ]] || return 1
+	[[ -z "$(trap -p INT)" ]] || return 1
+
+	# Off a terminal there is nothing to suppress, so the seam stays untouched.
+	unset -f tty_echo_off tty_echo_restore
+	source "$ROOT/scripts/lib/shared/tui/tty.sh"
+	local scratch="$TEST_TMP/echo-seam"
+	: >"$scratch"
+	DOTFILES_TTY_INPUT="$scratch" tty_echo_off
+	[[ -z "$_TTY_ECHO_SAVED" ]]
+)
+
 expect_success 'report rows fit long cells at 48, 80, and 120 columns' test_report_rows_fit_long_cells_at_supported_widths
+expect_success 'a menu holds echo off and puts it back' test_menu_input_holds_echo_off_and_puts_it_back
 expect_success 'NO_COLOR clears a preloaded report palette' test_no_color_clears_a_preloaded_report_palette
 test_screen_clearing_survives_a_piped_stdin() (
 	# Break caught: ui_clear tested `-t 0`, which is false whenever the caller
