@@ -110,6 +110,39 @@ test_package_count_parity() {
 	((failures == before))
 }
 
+test_package_gap_parity() {
+	local before=$failures want got
+	local -a wanted
+	local -A installed available
+
+	# wslu on a release that dropped it: absent from dpkg and with no candidate,
+	# so it is unavailable rather than missing.
+	#
+	# Subscripts are quoted because shfmt reads an unquoted one as arithmetic:
+	# [bind9-dnsutils] comes back as [bind9 - dnsutils], which evaluates to 0
+	# and silently keys the entry on the wrong thing.
+	wanted=('wslu' 'curl' 'dnsutils|bind9-dnsutils')
+	installed=([curl]=1)
+	available=([curl]=1 ["bind9-dnsutils"]=1)
+	want="$(_comp_package_gaps wanted installed available)"
+	got="$(py "' '.join(str(value) for value in pc.package_gaps(['wslu','curl','dnsutils|bind9-dnsutils'], {'curl'}, {'curl','bind9-dnsutils'}))")"
+	compare 'gaps rename-available and one dropped' "$want" "$got"
+
+	# Nothing known to be available at all: every gap reads unavailable.
+	available=()
+	want="$(_comp_package_gaps wanted installed available)"
+	got="$(py "' '.join(str(value) for value in pc.package_gaps(['wslu','curl','dnsutils|bind9-dnsutils'], {'curl'}, set()))")"
+	compare 'gaps with nothing available' "$want" "$got"
+
+	# An entry whose fallback is installed is neither.
+	installed=([curl]=1 ["bind9-dnsutils"]=1 [wslu]=1)
+	available=([curl]=1)
+	want="$(_comp_package_gaps wanted installed available)"
+	got="$(py "' '.join(str(value) for value in pc.package_gaps(['wslu','curl','dnsutils|bind9-dnsutils'], {'curl','bind9-dnsutils','wslu'}, {'curl'}))")"
+	compare 'gaps with everything present' "$want" "$got"
+	((failures == before))
+}
+
 test_apt_classification_parity() {
 	local before=$failures counts want got
 	for counts in '0 0' '53 0' '53 2' '1 1'; do
@@ -117,6 +150,11 @@ test_apt_classification_parity() {
 		set -- $counts
 		want="$(_comp_classify_apt_packages "$1" "$2" 'apt packages' "$1 apt packages")"
 		got="$(py "pc.apt_packages(package_count=$1, missing=$2, missing_label='apt packages', clean_detail='$1 apt packages')")"
+		compare "apt count=$1 missing=$2" "$want" "$got"
+		# and with a package this release does not carry, which is not the
+		# operator's problem and must not be counted as one
+		want="$(_comp_classify_apt_packages "$1" "$2" 'apt packages' "$1 apt packages" 1)"
+		got="$(py "pc.apt_packages(package_count=$1, missing=$2, missing_label='apt packages', clean_detail='$1 apt packages', unavailable=1)")"
 		compare "apt count=$1 missing=$2" "$want" "$got"
 	done
 	((failures == before))
@@ -209,15 +247,15 @@ test_batch_transport_parity() {
 	requests+=("git_credential${fs}store"$'\x1e'"cache${fs}true${fs}on-demand${fs}check${fs}true")
 	wanted+=("$(_comp_classify_git_credential $'store\ncache' true on-demand check true)")
 
-	requests+=("apt${fs}1${fs}apt packages${fs}2 apt packages${fs}2${fs}dnsutils|bind9-dnsutils${fs}curl${fs}bind9-dnsutils${fs}curl")
+	requests+=("apt${fs}1${fs}apt packages${fs}2 apt packages${fs}2${fs}2${fs}dnsutils|bind9-dnsutils${fs}curl${fs}bind9-dnsutils${fs}curl")
 	wanted+=('installed|2 apt packages')
 
-	requests+=("apt${fs}1${fs}apt packages${fs}2 apt packages${fs}2${fs}dnsutils|bind9-dnsutils${fs}curl${fs}curl")
+	requests+=("apt${fs}1${fs}apt packages${fs}2 apt packages${fs}2${fs}1${fs}dnsutils|bind9-dnsutils${fs}curl${fs}curl${fs}bind9-dnsutils")
 	wanted+=('missing|1 of 2 apt packages not installed')
 
 	# No catalog to read: the reading owns that line too, so the probe has one
 	# exit rather than an early printf beside a classification.
-	requests+=("apt${fs}0${fs}packages${fs}${fs}0")
+	requests+=("apt${fs}0${fs}packages${fs}${fs}0${fs}0")
 	wanted+=('missing|packages.txt not found')
 
 	mapfile -t got < <(printf '%s\n' "${requests[@]}" |
@@ -246,8 +284,8 @@ test_bash_fallback_matches_batch() {
 		"version${fs}Go${fs}go${fs}${fs}0${fs}${fs}${fs}"
 		"go${fs}1${fs}0${fs}unexpected output${fs}1${fs}0${fs}golang 1.22.0"
 		"portainer${fs}0${fs}0${fs}"
-		"apt${fs}1${fs}Python packages${fs}4 apt packages; python3 pip venv ready${fs}4${fs}python3${fs}python3-pip${fs}python3-venv${fs}python3-pil${fs}python3${fs}python3-pip${fs}python3-venv"
-		"apt${fs}0${fs}packages${fs}${fs}0"
+		"apt${fs}1${fs}Python packages${fs}4 apt packages; python3 pip venv ready${fs}4${fs}3${fs}python3${fs}python3-pip${fs}python3-venv${fs}python3-pil${fs}python3${fs}python3-pip${fs}python3-venv${fs}python3-pil"
+		"apt${fs}0${fs}packages${fs}${fs}0${fs}0"
 	)
 
 	mapfile -t python_results < <(printf '%s\n' "${requests[@]}" |
@@ -350,6 +388,7 @@ check 'portainer classification agrees across 18 states' test_portainer_parity
 check 'codex classification agrees across every state and both statuses' test_codex_parity
 check 'package counting agrees on renames and absences' test_package_count_parity
 check 'apt classification agrees on every count pair' test_apt_classification_parity
+check 'package gaps agree on dropped, renamed and present packages' test_package_gap_parity
 check 'version classification agrees across its edges' test_version_parity
 check 'go classification agrees across both sources' test_go_parity
 check 'git credential classification agrees' test_git_credential_parity

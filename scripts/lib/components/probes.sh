@@ -112,8 +112,8 @@ _comp_classify_resolve() {
 # installed alternative is not a decision any caller needs on its own, and a
 # value handed back mid-probe cannot be deferred to a batched call.
 _comp_classify_apt() {
-	local catalog="$1" missing_label="$2" clean_detail="$3" entry_count="$4"
-	shift 4
+	local catalog="$1" missing_label="$2" clean_detail="$3" entry_count="$4" installed_count="$5"
+	shift 5
 
 	if [[ "$catalog" != 1 ]]; then
 		printf 'missing|packages.txt not found\n'
@@ -121,16 +121,20 @@ _comp_classify_apt() {
 	fi
 
 	local -a entries=("${@:1:entry_count}")
-	local -A installed=()
+	local -A installed=() available=()
 	local name
 
-	for name in "${@:entry_count+1}"; do
+	for name in "${@:entry_count+1:installed_count}"; do
 		[[ -n "$name" ]] && installed["$name"]=1
 	done
+	for name in "${@:entry_count+installed_count+1}"; do
+		[[ -n "$name" ]] && available["$name"]=1
+	done
 
-	_comp_classify_apt_packages "${#entries[@]}" \
-		"$(_comp_missing_package_count entries installed)" \
-		"$missing_label" "$clean_detail"
+	local missing unavailable
+	read -r missing unavailable < <(_comp_package_gaps entries installed available)
+	_comp_classify_apt_packages "${#entries[@]}" "$missing" \
+		"$missing_label" "$clean_detail" "$unavailable"
 }
 
 _install_short_label() {
@@ -432,6 +436,26 @@ _comp_probe_git_identity() {
 	comp_classify git_identity "$name" "$email"
 }
 
+# Which of these names this release can still install.
+#
+# One `apt-cache policy` for the whole set rather than one per name, and the
+# same reading apt_install_packages uses: a name with no candidate, or none at
+# all, is not something a machine can be told to install.
+_comp_apt_available() {
+	local line name=''
+	while IFS= read -r line; do
+		case "$line" in
+		'  Candidate: '*)
+			[[ -n "$name" && "${line#'  Candidate: '}" != '(none)' ]] && printf '%s\n' "$name"
+			name=''
+			;;
+		[![:space:]]*:)
+			name="${line%:}"
+			;;
+		esac
+	done < <(apt-cache policy -- "$@" 2>/dev/null)
+}
+
 # Interrogation for an apt-backed component. The count and the wording of a
 # complete set travel with the request: `clean_suffix` is what this component
 # adds after "<n> apt packages", and everything else is decided in the reading.
@@ -439,7 +463,7 @@ _comp_probe_apt_packages_for_component() {
 	local component="$1" missing_label="$2" clean_suffix="${3:-}"
 	local pkg_file="${PKG_FILE:-${DOTFILES_DIR:-}/packages/packages.txt}"
 	local package_count=0 tags
-	local -a packages=() installed_names=()
+	local -a packages=() installed_names=() available_names=()
 
 	if [[ ! -f "$pkg_file" ]]; then
 		comp_classify apt 0 "$missing_label" '' 0
@@ -456,23 +480,85 @@ _comp_probe_apt_packages_for_component() {
 	# goes into the one query and the reading counts an entry as present when any
 	# of its names came back installed.
 	if ((package_count > 0)); then
-		local entry alt
-		local -a all_names=()
+		local entry alt satisfied
+		local -a all_names=() alternatives=()
 		for entry in "${packages[@]}"; do
-			while IFS= read -r alt; do
+			# Split with read, not a process substitution per entry: this runs
+			# once per package in a table of fifty-odd, twice, and the forks
+			# cost more than everything else the probe does.
+			IFS='|' read -r -a alternatives <<<"$entry"
+			for alt in "${alternatives[@]}"; do
 				[[ -n "$alt" ]] && all_names+=("$alt")
-			done < <(printf '%s\n' "${entry//|/$'\n'}")
+			done
 		done
 
 		local name rest
+		local -A installed_set=()
 		while read -r name rest; do
-			[[ "$rest" == 'install ok installed' ]] && installed_names+=("$name")
+			if [[ "$rest" == 'install ok installed' ]]; then
+				installed_names+=("$name")
+				installed_set["$name"]=1
+			fi
 		done < <(dpkg-query -W -f='${Package} ${Status}\n' "${all_names[@]}" 2>/dev/null)
+
+		# Asked only about entries nothing satisfies, and only when there are
+		# any: `apt-cache policy` over the whole catalogue costs ~318 ms against
+		# a ~700 ms status, while an unsatisfied entry is usually none at all.
+		# What comes back separates a package this release dropped from one the
+		# operator can still install.
+		local -a absent=()
+		for entry in "${packages[@]}"; do
+			IFS='|' read -r -a alternatives <<<"$entry"
+			satisfied=false
+			for alt in "${alternatives[@]}"; do
+				[[ -n "$alt" && -n "${installed_set[$alt]+x}" ]] && satisfied=true && break
+			done
+			[[ "$satisfied" == true ]] && continue
+			for alt in "${alternatives[@]}"; do
+				[[ -n "$alt" ]] && absent+=("$alt")
+			done
+		done
+		((${#absent[@]} > 0)) && mapfile -t available_names < <(_comp_apt_available "${absent[@]}")
 	fi
 
 	comp_classify apt 1 "$missing_label" "${package_count} apt packages${clean_suffix}" \
-		"$package_count" ${packages[@]+"${packages[@]}"} \
-		${installed_names[@]+"${installed_names[@]}"}
+		"$package_count" "${#installed_names[@]}" \
+		${packages[@]+"${packages[@]}"} \
+		${installed_names[@]+"${installed_names[@]}"} \
+		${available_names[@]+"${available_names[@]}"}
+}
+
+# Pure: how the entries with no installed alternative divide.
+#
+# A package this release does not carry cannot be installed by anyone, so
+# counting it as missing leaves a row permanently red with nothing to do about
+# it. The installer already draws this line -- apt_install_packages skips what
+# `apt-cache policy` has no candidate for and says how many it skipped -- and
+# the reading did not, so the two disagreed about the same machine.
+_comp_package_gaps() {
+	local entries_name="$1" installed_name="$2" available_name="$3"
+	local -n _entries="$entries_name"
+	local -n _installed="$installed_name"
+	local -n _available="$available_name"
+	local entry alt missing=0 unavailable=0 state
+
+	for entry in "${_entries[@]}"; do
+		state=unavailable
+		while IFS= read -r alt; do
+			[[ -n "$alt" ]] || continue
+			if [[ -n "${_installed[$alt]+x}" ]]; then
+				state=installed
+				break
+			fi
+			[[ -n "${_available[$alt]+x}" ]] && state=missing
+		done < <(printf '%s\n' "${entry//|/$'\n'}")
+		case "$state" in
+		missing) missing=$((missing + 1)) ;;
+		unavailable) unavailable=$((unavailable + 1)) ;;
+		esac
+	done
+
+	printf '%s %s\n' "$missing" "$unavailable"
 }
 
 # Pure: how many entries have no installed alternative.
@@ -510,16 +596,20 @@ _comp_missing_package_count() {
 # on the reading to finish its own sentence cannot defer that reading.
 _comp_classify_apt_packages() {
 	local package_count="$1" missing="$2" missing_label="$3" clean_detail="$4"
+	local unavailable="${5:-0}" aside=''
+
+	((unavailable > 0)) && printf -v aside ' (%d unavailable on this release)' "$unavailable"
 
 	if [[ "$package_count" -eq 0 ]]; then
 		printf 'skipped|no packages listed\n'
 		return 0
 	fi
 	if [[ "$missing" -ne 0 ]]; then
-		printf 'missing|%d of %d %s not installed\n' "$missing" "$package_count" "$missing_label"
+		printf 'missing|%d of %d %s not installed%s\n' \
+			"$missing" "$package_count" "$missing_label" "$aside"
 		return 0
 	fi
-	printf 'installed|%s\n' "$clean_detail"
+	printf 'installed|%s%s\n' "$clean_detail" "$aside"
 }
 
 _comp_probe_system_packages() {

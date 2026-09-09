@@ -68,8 +68,36 @@ def missing_package_count(entries: list[str], installed: set[str]) -> int:
     return max(0, len(entries) - present)
 
 
+def package_gaps(
+    entries: list[str], installed: set[str], available: set[str]
+) -> tuple[int, int]:
+    """(missing, unavailable) for entries with no installed alternative.
+
+    The two are different problems and only one of them is the operator's. A
+    package this release does not carry -- `wslu` on Ubuntu 26.04 -- cannot be
+    installed by anyone, and counting it as missing leaves a row permanently red
+    with nothing to do about it. The installer already draws this line; the
+    reading did not, so the two disagreed about the same machine.
+    """
+    missing = unavailable = 0
+    for entry in entries:
+        alternatives = [alt for alt in entry.split("|") if alt]
+        if any(alt in installed for alt in alternatives):
+            continue
+        if any(alt in available for alt in alternatives):
+            missing += 1
+        else:
+            unavailable += 1
+    return missing, unavailable
+
+
 def apt_packages(
-    *, package_count: int, missing: int, missing_label: str, clean_detail: str
+    *,
+    package_count: int,
+    missing: int,
+    missing_label: str,
+    clean_detail: str,
+    unavailable: int = 0,
 ) -> str:
     """Empty is skipped rather than clean: nothing was checked.
 
@@ -79,11 +107,12 @@ def apt_packages(
     control-flow dependency on the classification, which cannot be deferred to
     a batched call.
     """
+    aside = f" ({unavailable} unavailable on this release)" if unavailable else ""
     if package_count == 0:
         return "skipped|no packages listed"
     if missing != 0:
-        return f"missing|{missing} of {package_count} {missing_label} not installed"
-    return f"installed|{clean_detail}"
+        return f"missing|{missing} of {package_count} {missing_label} not installed{aside}"
+    return f"installed|{clean_detail}{aside}"
 
 
 def version(
@@ -294,16 +323,23 @@ def classify(fields: list[str]) -> str:
         # Variable arity: the package entries and the installed names are both
         # lists, so the entry count separates them. Counting and reading are one
         # request because the count is not a decision anyone else needs.
-        catalog, missing_label, clean_detail, entry_count = args[:4]
+        catalog, missing_label, clean_detail, entry_count, installed_count = args[:5]
         if catalog != "1":
             return "missing|packages.txt not found"
-        rest = args[4:]
-        count = int(entry_count or 0)
+        rest = args[5:]
+        count, installed_end = int(entry_count or 0), int(entry_count or 0) + int(
+            installed_count or 0
+        )
         entries = [entry for entry in rest[:count] if entry]
-        installed = {name for name in rest[count:] if name}
+        installed = {name for name in rest[count:installed_end] if name}
+        # What this release could still install, asked only about the names dpkg
+        # said were absent -- see the probe.
+        available = {name for name in rest[installed_end:] if name}
+        missing, unavailable = package_gaps(entries, installed, available)
         return apt_packages(
             package_count=len(entries),
-            missing=missing_package_count(entries, installed),
+            missing=missing,
+            unavailable=unavailable,
             missing_label=missing_label,
             clean_detail=clean_detail,
         )

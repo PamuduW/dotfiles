@@ -279,7 +279,63 @@ EOF
 	[[ "$output" == 'installed|2 apt packages' ]]
 )
 
+test_package_probe_separates_a_dropped_package_from_a_missing_one() (
+	# The gap item 1 left for 4.1: `wslu` is absent from Ubuntu 26.04 under any
+	# name, so the row read `missing` forever with nothing an operator could do.
+	# The installer already skips what this release has no candidate for and
+	# says how many it skipped; the probe now reads it the same way.
+	local pkg_file="$TEST_HARNESS_ROOT/dropped-packages.txt"
+	printf '%s\n' '# @system' 'curl' 'wslu' 'glances' >"$pkg_file"
+
+	local fake_bin="$TEST_HARNESS_ROOT/dropped-bin"
+	mkdir -p -- "$fake_bin"
+	cat >"$fake_bin/dpkg-query" <<'EOF'
+#!/usr/bin/env bash
+for arg in "$@"; do
+	case "$arg" in
+	curl) printf '%s install ok installed\n' "$arg" ;;
+	esac
+done
+EOF
+	# wslu is not in this imaginary release at all; glances is, and is simply
+	# not installed yet.
+	cat >"$fake_bin/apt-cache" <<'EOF'
+#!/usr/bin/env bash
+for arg in "$@"; do
+	case "$arg" in
+	glances) printf '%s:\n  Installed: (none)\n  Candidate: 3.4.0\n' "$arg" ;;
+	wslu) printf '%s:\n  Installed: (none)\n  Candidate: (none)\n' "$arg" ;;
+	esac
+done
+EOF
+	chmod +x -- "$fake_bin/dpkg-query" "$fake_bin/apt-cache"
+	comp_package_tags() { printf 'system\n'; }
+
+	local output
+	output="$(PATH="$fake_bin:$PATH" PKG_FILE="$pkg_file" \
+		_comp_probe_apt_packages_for_component system_packages packages)"
+	# One actionable gap, not two, and the dropped package is accounted for
+	# rather than hidden.
+	[[ "$output" == 'missing|1 of 3 packages not installed (1 unavailable on this release)' ]] || return 1
+
+	# With the actionable one installed too, the component is as complete as
+	# this release allows and reads that way.
+	cat >"$fake_bin/dpkg-query" <<'EOF'
+#!/usr/bin/env bash
+for arg in "$@"; do
+	case "$arg" in
+	curl | glances) printf '%s install ok installed\n' "$arg" ;;
+	esac
+done
+EOF
+	chmod +x -- "$fake_bin/dpkg-query"
+	output="$(PATH="$fake_bin:$PATH" PKG_FILE="$pkg_file" \
+		_comp_probe_apt_packages_for_component system_packages packages)"
+	[[ "$output" == 'installed|3 apt packages (1 unavailable on this release)' ]]
+)
+
 check 'package probe counts a renamed package as present' test_package_probe_counts_a_renamed_package_as_present
+check 'package probe separates a dropped package from a missing one' test_package_probe_separates_a_dropped_package_from_a_missing_one
 test_tool_resolution_ignores_windows_binaries_reached_through_interop() (
 	# Break caught: appendWindowsPath puts the Windows PATH on ours, so
 	# `command -v cursor` returned the Windows editor. The installer skipped as
