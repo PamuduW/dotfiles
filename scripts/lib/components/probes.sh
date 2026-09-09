@@ -175,6 +175,30 @@ collect_component_probe_results() {
 	done
 }
 
+# The probes whose interrogation is Python (shared/python/probes.py). They read
+# the filesystem and Git configuration, so one process answers all of them and
+# there is nothing to overlap; the ones that run a version command stay below,
+# where Bash already runs them in parallel. Without the service every one of
+# these falls through to its Bash probe, which is why both still exist --
+# `python3` belongs to the optional `python` component, so a first setup that
+# deselects it prints its install summary with no interpreter.
+_COMP_PYTHON_PROBES=(ssh_key monaspace_fonts dotfiles wsl_conf git_identity git_credential)
+# What the stream writes where such a probe's result will go.
+_COMP_PROBE_PENDING=$'\x02'
+
+# comp_probe is the documented seam: a caller that replaces it -- every suite
+# that drives a report without touching the machine does -- expects every probe
+# to go through its version. Answering some of them in another process before
+# that function is ever called would step around it silently, so the shortcut
+# above applies only while the seam is the one the registry defined.
+# Captured here, while this file loads, and never later: a definition recorded
+# on first use would record whatever a caller had already put there.
+_COMP_PROBE_STOCK_DEFINITION="$(declare -f comp_probe 2>/dev/null || true)"
+_comp_probe_is_stock() {
+	[[ -n "$_COMP_PROBE_STOCK_DEFINITION" ]] || return 1
+	[[ "$(declare -f comp_probe 2>/dev/null || true)" == "$_COMP_PROBE_STOCK_DEFINITION" ]]
+}
+
 # _collect_component_probes <array-name> <enabled-only>
 #
 # `index<FS>result|detail` per probed component, in registry order.
@@ -190,8 +214,36 @@ _collect_component_probes() {
 	local entry index probe
 	local -a requests=() request_rows=() results=()
 
-	py_service_available || true
-	mapfile -t _probes < <(_component_probe_stream "$enabled_only")
+	# Asked for first and read for last, with the parallel Bash probes in
+	# between: these are quick, but running them before the slow ones start
+	# added their time to the command rather than hiding it, which is the whole
+	# reason the Bash side probes in parallel at all.
+	local -A answered=()
+	local pending=false
+	if _comp_probe_is_stock && py_service_send probe "${DOTFILES_DIR:-$PWD}" \
+		< <(printf '%s\n' "${_COMP_PYTHON_PROBES[@]}"); then
+		pending=true
+	fi
+
+	mapfile -t _probes < <(_component_probe_stream "$enabled_only" "$pending")
+
+	if [[ "$pending" == true ]]; then
+		local key result
+		while IFS=$'\x1f' read -r key result; do
+			[[ -n "$key" ]] || continue
+			answered["$key"]="$result"
+		done < <(py_service_receive)
+	fi
+
+	# The stream left a placeholder for every key answered over there.
+	local index entry
+	for index in "${!_probes[@]}"; do
+		entry="${_probes[$index]}"
+		key="${entry#*"$_COMP_CLASSIFY_FS"}"
+		[[ "$key" == "$_COMP_PROBE_PENDING"* ]] || continue
+		key="${key#"$_COMP_PROBE_PENDING"}"
+		_probes[index]="${entry%%"$_COMP_CLASSIFY_FS"*}${_COMP_CLASSIFY_FS}${answered[$key]:-check|probe failed}"
+	done
 
 	for index in "${!_probes[@]}"; do
 		probe="${_probes[$index]#*"$_COMP_CLASSIFY_FS"}"
@@ -212,9 +264,15 @@ _collect_component_probes() {
 # Interrogation only: every probe runs in its own child and nothing here decides
 # what an answer means.
 _component_probe_stream() (
-	local enabled_only="${1:-false}"
+	local enabled_only="${1:-false}" python_pending="${2:-false}"
 	local probe_dir i key probe pid
 	local -a pids=() indexes=()
+	# Keys being answered elsewhere: this leaves a marker rather than probing
+	# them, and the caller fills it in when the answer arrives.
+	local -A elsewhere=()
+	if [[ "$python_pending" == true ]]; then
+		for key in "${_COMP_PYTHON_PROBES[@]}"; do elsewhere["$key"]=1; done
+	fi
 	probe_dir="$(mktemp -d)" || return 1
 	trap 'rm -r -- "$probe_dir"' EXIT
 
@@ -226,6 +284,10 @@ _component_probe_stream() (
 		key="${COMP_KEYS[$i]}"
 		[[ "$enabled_only" == true ]] && { is_on "$key" || continue; }
 		indexes+=("$i")
+		if [[ -n "${elsewhere[$key]+x}" ]]; then
+			printf '%s%s\n' "$_COMP_PROBE_PENDING" "$key" >"$probe_dir/$i"
+			continue
+		fi
 		(
 			# Note the deliberate difference from run_probes_parallel: a
 			# component probe's nonzero exit means the probe failed, whereas an

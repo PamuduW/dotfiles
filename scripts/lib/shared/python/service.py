@@ -28,6 +28,7 @@ import sys
 from pathlib import Path
 
 import probe_classify
+import probes
 import render_report
 import repo_status
 
@@ -61,6 +62,20 @@ def _classify(payload: list[str]) -> None:
         print(probe_classify.classify(fields))
 
 
+def _probe(args: list[str], payload: list[str]) -> None:
+    """Component probes that ask the filesystem, answered in this process.
+
+    One call for all of them rather than a subshell each: they are cheap
+    individually and there is nothing to overlap. The ones that run a version
+    command stay in Bash, where they are already run in parallel.
+    """
+    repo = Path(args[0]) if args else Path.cwd()
+    for key in payload:
+        if not key:
+            continue
+        print(f"{key}{FS}{probes.probe(key, repo)}")
+
+
 def _repo_status(args: list[str]) -> None:
     repo, label, timeout = args[0], args[1], float(args[2] or repo_status.DEFAULT_TIMEOUT_SECONDS)
     print(f"{label}|{repo_status.check(Path(repo), timeout=timeout)}")
@@ -81,6 +96,8 @@ def serve() -> int:
                 _classify(payload)
             elif verb == "render":
                 render_report.main(args, rows=payload)
+            elif verb == "probe":
+                _probe(args, payload)
             elif verb == "repo_status":
                 _repo_status(args)
             elif verb == "ping":

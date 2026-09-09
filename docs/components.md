@@ -52,8 +52,21 @@ collector resolves all of them in a single call to the Python service described
 in `docs/architecture.md`. Per-probe spawn would cost roughly a third of
 `dotfiles status`.
 
+Six probes interrogate in Python as well: the ones that read the filesystem and
+Git configuration (`scripts/lib/shared/python/probes.py`), where a temporary
+HOME reproduces every state exactly. They are answered by one service call that
+is sent before the parallel Bash probes start and read after they finish, so
+they cost no wall-clock. Probes that run a version command or query a package
+manager stay in Bash, which already runs them in parallel and has no better
+oracle than "it agreed on this machine today".
+
+That shortcut applies only while `comp_probe` is the function the registry
+defined. It is the documented seam, and a suite that replaces it to drive a
+report without touching the machine expects every probe to go through its
+version.
+
 `scripts/lib/components/probes.sh` keeps a Bash `_comp_classify_<name>` for
-every reading. That is not leftover: first setup draws this table before it has
+every reading, and a Bash probe for every component. That is not leftover: first setup draws this table before it has
 installed a runtime, so the fallback is permanent, and
 `tests/test_probe_classify_parity.sh` holds the two sides in agreement. Adding
 or changing a reading means changing both and adding its states there.

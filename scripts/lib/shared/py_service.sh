@@ -64,7 +64,17 @@ py_service_available() {
 # Payload on stdin, response on stdout. Callers with no payload redirect from
 # /dev/null rather than leaving the read to find a terminal.
 py_service_call() {
-	local verb="$1" arg line
+	py_service_send "$@" || return 1
+	py_service_receive
+}
+
+# The two halves, for a caller with work to do while the answer is being
+# prepared: send, do the work, receive. Nothing else may use the service in
+# between -- one request is outstanding at a time -- and the response has to be
+# small enough not to fill the pipe before it is read, which every request that
+# uses this is.
+py_service_send() {
+	local verb="$1" arg
 	shift
 
 	py_service_available || return 1
@@ -81,6 +91,12 @@ py_service_call() {
 		_PY_SERVICE_STATE=unavailable
 		return 1
 	}
+}
+
+py_service_receive() {
+	local line
+
+	py_service_available || return 1
 
 	while IFS= read -r -t "${DOTFILES_PY_SERVICE_TIMEOUT:-30}" line <&"${PY_SERVICE[0]}"; do
 		if [[ "$line" == "$_PY_SERVICE_END" ]]; then
