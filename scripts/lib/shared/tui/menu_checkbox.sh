@@ -54,12 +54,17 @@ _menu_cb_render_lines() {
 _menu_cb_status_context() {
 	local status="$1"
 
+	# The negative reading comes first: "not backed up" contains "backed up",
+	# so with the other order a missing backup was drawn in green. No caller
+	# produces either status today -- every checkbox in both repositories sets
+	# an empty status or a prune reason -- so this is a trap removed rather
+	# than a display corrected.
 	case "$status" in
-	*backed\ up* | *installed* | *configured* | *up\ to\ date* | ok | OK)
-		printf '%s\n' 'ok'
-		;;
 	*not\ backed* | *upgrade* | *delta* | *warn*)
 		printf '%s\n' 'warn'
+		;;
+	*backed\ up* | *installed* | *configured* | *up\ to\ date* | ok | OK)
+		printf '%s\n' 'ok'
 		;;
 	*missing* | *failed* | *error* | *drift* | *extra*)
 		printf '%s\n' 'err'
