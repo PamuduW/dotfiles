@@ -23,6 +23,7 @@ Usage: $(basename "$0") [OPTIONS]
 Options:
   --install     Go straight to component selection and install
   --update      Open update workflow
+  --force       Reinstall components that are already present
   --help        Show this help and exit
 
 Without options on an interactive terminal, shows the main menu (loops until Quit).
@@ -168,6 +169,11 @@ main() {
 
 	local mode=""
 
+	# Reset, then set from the flag alone. An exported DOTFILES_FORCE_REINSTALL
+	# would otherwise force every non-interactive run silently -- the hazard
+	# cmd_full_update already refuses, and the same one applies here.
+	export DOTFILES_FORCE_REINSTALL=0
+
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
 		--initial)
@@ -186,6 +192,12 @@ main() {
 			;;
 		--update)
 			mode="update"
+			shift
+			;;
+		# The unattended equivalent of the execution plan's `x`. On an
+		# interactive run the plan screen still asks, and the answer wins.
+		--force)
+			DOTFILES_FORCE_REINSTALL=1
 			shift
 			;;
 		--help | -h)

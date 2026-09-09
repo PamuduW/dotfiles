@@ -165,7 +165,31 @@ test_every_component_has_an_installer() (
 )
 
 check 'component registry validates dependencies and installation order' test_component_registry_validates_dependencies_and_install_order
+test_force_reinstall_is_a_flag_not_an_ambient_variable() (
+	# cmd_full_update resets DOTFILES_FORCE_REINSTALL before reading its own
+	# --force, because an exported variable would otherwise force every run
+	# silently. The installer inherited it, so the same shell variable changed
+	# what a non-interactive install did with nothing on the command line
+	# saying so.
+	local probe="$TEST_HARNESS_ROOT/force-probe.sh"
+	cat >"$probe" <<'PROBE'
+DOTFILES_SOURCE_ONLY=1 source "$1/scripts/install.sh"
+# The dispatch is where a real run would begin; report the decision instead.
+_dotfiles_dispatch_mode() { printf 'force=%s
+' "${DOTFILES_FORCE_REINSTALL:-unset}"; }
+main "${@:2}"
+PROBE
+
+	# An ambient value is not a decision.
+	[[ "$(DOTFILES_FORCE_REINSTALL=1 bash "$probe" "$REPO_DIR" --install)" == 'force=0' ]] || return 1
+	# The flag is.
+	[[ "$(DOTFILES_FORCE_REINSTALL=0 bash "$probe" "$REPO_DIR" --install --force)" == 'force=1' ]] || return 1
+	# And it is advertised.
+	bash "$REPO_DIR/scripts/install.sh" --help 2>&1 | grep -Fq -- '--force'
+)
+
 check 'environment selection enables what it depends on' test_env_selection_enables_what_it_depends_on
+check 'forced reinstall is a flag, not an ambient variable' test_force_reinstall_is_a_flag_not_an_ambient_variable
 check 'every component has an installer' test_every_component_has_an_installer
 check 'non-interactive install runs the repository gate before setup' test_noninteractive_install_runs_repository_gate_first
 check 'non-interactive install propagates component installation failure' test_noninteractive_install_propagates_install_failure

@@ -29,6 +29,15 @@ does not open the menu. Limit the selection with stable component keys:
 DOTFILES_COMPONENTS=system_packages,dotfiles ./install.sh --install
 ```
 
+Add `--force` to reinstall components that are already present. It is a flag
+rather than an environment variable on purpose: an exported
+`DOTFILES_FORCE_REINSTALL` would force every run with nothing on the command
+line saying so.
+
+```bash
+./install.sh --install --force
+```
+
 Existing global Git identity values are used when identity is enabled without
 an interactive prompt. Verified npm-to-standalone Codex migration requires the
 separate `DOTFILES_MIGRATE_NPM_CODEX=1` authorization; component selection alone
