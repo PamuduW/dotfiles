@@ -126,15 +126,21 @@ _install_now_seconds() {
 
 # The slowest handful and the total. Enough to tell a network-bound component
 # from a slow one without turning the summary into a profile.
+# Minutes and seconds, the way the total above the list is written. A column of
+# raw seconds made the reader convert every row to compare it with the heading.
+_install_format_duration() {
+	printf '%dm %02ds' "$(($1 / 60))" "$(($1 % 60))"
+}
+
 print_install_timing() {
 	local total="$1" key seconds
 	((${#INSTALL_COMPONENT_SECONDS[@]} > 0)) || return 0
 	echo ""
-	printf '%sInstall took %dm %02ds. Slowest components:%s\n' \
-		"${C_ORANGE:-}" "$((total / 60))" "$((total % 60))" "${C_RESET:-}"
+	printf '%sInstall took %s. Slowest components:%s\n' \
+		"${C_ORANGE:-}" "$(_install_format_duration "$total")" "${C_RESET:-}"
 	while read -r seconds key; do
 		((seconds > 0)) || continue
-		printf '  %4ds  %s\n' "$seconds" "$key"
+		printf '  %7s  %s\n' "$(_install_format_duration "$seconds")" "$key"
 	done < <(
 		for key in "${!INSTALL_COMPONENT_SECONDS[@]}"; do
 			printf '%s %s\n' "${INSTALL_COMPONENT_SECONDS[$key]}" "$key"
@@ -147,7 +153,7 @@ run_install() {
 	declare -gA INSTALL_COMPONENT_RESULT=()
 
 	echo ""
-	printf '%s=== Installing ===%s\n' "${C_ORANGE:-}" "${C_RESET:-}"
+	printf '%s=== Installing ===%s\n\n' "${C_ORANGE:-}" "${C_RESET:-}"
 	_log_legend_line
 	echo ""
 
@@ -184,6 +190,7 @@ run_install() {
 
 	echo ""
 	echo "Done. Log saved to: $LOG_FILE"
+	echo ""
 	echo "Open a new terminal, or run: exec bash -l"
 	# A distinct status for "the run completed, but N components need
 	# attention". A caller sequencing further work -- bootstrap.sh -- can then

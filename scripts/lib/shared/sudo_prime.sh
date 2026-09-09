@@ -26,7 +26,13 @@ sudo_prime() {
 	sudo -n true 2>/dev/null && return 0
 
 	if [[ -x "$helper" ]] && declare -F tty_available >/dev/null 2>&1 && tty_available; then
-		SUDO_ASKPASS="$helper" sudo -A -v && return 0
+		if SUDO_ASKPASS="$helper" sudo -A -v; then
+			# The masked prompt ends its own line; this is the gap between it
+			# and the install output, printed only when a prompt was shown --
+			# an already-authenticated run returned above and adds nothing.
+			tty_printf '\n'
+			return 0
+		fi
 		# A wrong password or a declined prompt is the operator's answer, not a
 		# reason to ask again through a different mechanism.
 		return 1

@@ -117,7 +117,7 @@ confirm_loop() {
 		# the other would replace a private key you have registered elsewhere.
 		x | X)
 			DOTFILES_FORCE_REINSTALL=1
-			tty_printf '%s\n' "    Forced reinstall: already-installed components will be reinstalled."
+			tty_printf '\n%s\n' "    Forced reinstall: already-installed components will be reinstalled."
 			return 0
 			;;
 		e | E)

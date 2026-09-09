@@ -10,8 +10,9 @@ show_plan() {
 
 	{
 		ui_clear
+		# ui_print_header already ends with a blank line; a second one made this
+		# the only screen with a two-line gap under its breadcrumb.
 		ui_print_header "Execution Plan" "Dotfiles › Install Dotfiles › Execution Plan" "$cols"
-		printf '\n'
 
 		for i in "${!COMP_KEYS[@]}"; do
 			key="${COMP_KEYS[$i]}"
