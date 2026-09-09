@@ -164,7 +164,21 @@ _menu_cb_draw_row() {
 	printf '\e[K\n'
 }
 
+# One frame, one write.
+#
+# The body below emits a header, a hint, a paging line and then every visible
+# row cell by cell -- 176 write syscalls for a full page, spread over the ~37 ms
+# it takes to build. A terminal renders each as it arrives, so a redraw is
+# watched being painted rather than seen, and holding an arrow key means never
+# seeing a settled frame at all. Built into one string and written once, a
+# redraw either has happened or has not.
 _menu_cb_draw() {
+	local frame
+	frame="$(_menu_cb_draw_body "$@")"
+	printf '%s\n' "$frame"
+}
+
+_menu_cb_draw_body() {
 	local cur="$1"
 	local page_size="$2"
 	local status_msg="$3"
@@ -202,7 +216,7 @@ menu_checkbox_run() {
 	local cursor=0
 	local status_msg=''
 	local rows cols page_size page menu_lines action tty_out
-	local i prev_page=-1 prev_lines=0
+	local i prev_page=-1 prev_lines=0 coalesced=0
 
 	if ((count == 0)); then
 		return 1
@@ -286,6 +300,18 @@ menu_checkbox_run() {
 				continue
 				;;
 			esac
+
+			# A held arrow arrives faster than a frame can be drawn -- about
+			# thirty keys a second against ~37 ms for a full page -- so drawing
+			# one frame per queued key leaves the list torn for as long as the
+			# key is down. Apply what is already waiting first, then draw once.
+			# prev_page and prev_lines are only advanced when a frame is
+			# actually drawn, since they describe what is on the screen.
+			if ((coalesced < MENU_KEY_COALESCE_LIMIT)) && menu_key_pending; then
+				coalesced=$((coalesced + 1))
+				continue
+			fi
+			coalesced=0
 
 			prev_page="$page"
 			prev_lines="$menu_lines"

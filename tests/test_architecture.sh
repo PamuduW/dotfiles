@@ -42,9 +42,13 @@ test_a_prompt_never_reads_stdin() (
 	#
 	# Loop reads consume a stream on purpose; a standalone read must say where
 	# its input comes from, which for a prompt is the shared TTY adapter.
+	#
+	# `-u <fd>` says it as plainly as `<` does, and is the only way to read from
+	# a descriptor the caller already owns -- which is what a keystroke-pending
+	# check on an open terminal needs. A bare `read -r` still fails here.
 	local hits
 	hits="$(rg -n '(^|[;&|]|\s)read\s+-' "$REPO_DIR/scripts" "$REPO_DIR/bin" \
-		--glob '!tests/**' | rg -v 'while |until ' | rg -v '<' || true)"
+		--glob '!tests/**' | rg -v 'while |until ' | rg -v '<' | rg -v '\s-u\s' || true)"
 	[[ -z "$hits" ]] || {
 		printf 'prompt reads stdin instead of the terminal:\n%s\n' "$hits" >&2
 		return 1

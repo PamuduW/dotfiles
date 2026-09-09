@@ -58,7 +58,15 @@ _menu_simple_menu_lines() {
 	printf '%s\n' "$lines"
 }
 
+# One frame, one write -- see the note in menu_checkbox.sh. The simple menu is
+# smaller but redraws on every arrow key just the same.
 _menu_simple_draw() {
+	local frame
+	frame="$(_menu_simple_draw_body "$@")"
+	printf '%s\n' "$frame"
+}
+
+_menu_simple_draw_body() {
 	local cur="$1"
 	local cols="$2"
 	local count="${#MENU_SIMPLE_LABELS[@]}"
@@ -98,7 +106,7 @@ _menu_simple_draw() {
 
 menu_simple_run() {
 	local count="${#MENU_SIMPLE_LABELS[@]}"
-	local cursor cols menu_lines action tty_out
+	local cursor cols menu_lines action tty_out coalesced=0
 
 	if ((count == 0)); then
 		MENU_SIMPLE_RESULT=''
@@ -141,6 +149,16 @@ menu_simple_run() {
 				return 1
 				;;
 			esac
+
+			# A held arrow arrives faster than a frame can be drawn, so one
+			# frame per key leaves the list torn for as long as the key is
+			# down. Apply what is already waiting first and draw once; the
+			# bound keeps a long hold showing progress rather than freezing.
+			if ((coalesced < MENU_KEY_COALESCE_LIMIT)) && menu_key_pending; then
+				coalesced=$((coalesced + 1))
+				continue
+			fi
+			coalesced=0
 
 			menu_redraw_up "$menu_lines"
 			_menu_simple_draw "$cursor" "$cols"
