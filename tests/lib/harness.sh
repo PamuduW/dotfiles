@@ -2,6 +2,24 @@
 # shellcheck shell=bash
 
 # shellcheck source=tests/lib/shared/assert.sh
+
+# Width assertions measure display columns, and `awk`'s length() counts bytes
+# under a non-UTF-8 locale -- so a row holding an em-dash reads as 82 columns
+# where the renderer laid out 80. The suite passed locally and failed in CI for
+# months on exactly that: the runner's locale is not UTF-8 and this repository
+# renders for a terminal that is. Set once, here, rather than in each assertion.
+if [[ -z "${DOTFILES_TEST_LOCALE_SET:-}" ]]; then
+	for _dotfiles_test_locale in C.UTF-8 en_US.UTF-8 ''; do
+		[[ -n "$_dotfiles_test_locale" ]] || break
+		if LC_ALL="$_dotfiles_test_locale" locale >/dev/null 2>&1; then
+			export LC_ALL="$_dotfiles_test_locale" LANG="$_dotfiles_test_locale"
+			break
+		fi
+	done
+	unset _dotfiles_test_locale
+	export DOTFILES_TEST_LOCALE_SET=1
+fi
+
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/shared/assert.sh"
 
 test_harness_cleanup() {
