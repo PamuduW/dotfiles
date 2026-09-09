@@ -158,12 +158,8 @@ print_status_summary_all() {
 			rt_print_table_row "$short_label" "$detail" "$result"
 		done
 
-		if [[ $miss_count -eq 0 && $check_count -eq 0 ]]; then
-			rt_print_rollup "$ok_count" 0 0
-		elif [[ $miss_count -eq 0 ]]; then
-			rt_print_rollup "$ok_count" "$check_count" 0
-		else
-			rt_print_rollup "$ok_count" "$check_count" "$miss_count"
-		fi
+		# One call: each branch passed a zero the variable already held, so all
+		# three were the same call written three ways.
+		rt_print_rollup "$ok_count" "$check_count" "$miss_count"
 	} >"$status_output"
 }
