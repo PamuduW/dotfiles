@@ -139,7 +139,10 @@ print_status_summary_all() {
 	local ok_count=0 check_count=0 miss_count=0
 	local cols status_output="${DOTFILES_STATUS_OUTPUT:-$(tty_output_path)}"
 
-	cols="$(menu_tty_cols)"
+	# The same width the rows use: rt_print_table_row settles its own through
+	# rt_report_columns, which honours DOTFILES_REPORT_COLS, and measuring the
+	# header a second way made one screen mean two widths.
+	cols="$(rt_report_columns)"
 	collect_component_status_rows rows
 
 	{

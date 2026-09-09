@@ -140,10 +140,11 @@ _github_token_menu_remove() {
 		return 0
 	fi
 	if _github_token_menu_confirm "  Remove the saved token?"; then
+		GITHUB_TOKEN_REMOVE_REASON=''
 		if github_token_remove; then
 			_github_token_menu_say "${C_GREEN:-}Saved token removed.${C_RESET:-}"
 		else
-			_github_token_menu_say "${C_RED:-}Saved token could not be removed safely.${C_RESET:-}"
+			_github_token_menu_say "${C_RED:-}Not removed: ${GITHUB_TOKEN_REMOVE_REASON:-the saved token could not be removed safely}.${C_RESET:-}"
 		fi
 	fi
 }

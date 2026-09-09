@@ -148,8 +148,14 @@ github_token_remove() {
 	file="$(github_token_file)"
 	dir="$(dirname -- "$file")"
 	[[ -e "$file" || -L "$file" ]] || return 0
+	# A symlink, or a file in a directory anyone else can write, is not ours to
+	# delete: following it would remove whatever it points at. Refuse, and say
+	# what to look at -- the caller shows this to an operator who otherwise has
+	# a dead end where the reason should be.
 	if ! _github_token_private_dir "$dir" || [[ ! -f "$file" || -L "$file" ]]; then
 		_github_token_warn "token destination is unsafe to remove" "$file"
+		# shellcheck disable=SC2034  # Read by the caller that reports the refusal.
+		GITHUB_TOKEN_REMOVE_REASON="$file is a symlink or sits in a directory that is not private; remove it yourself"
 		return 1
 	fi
 	rm -f -- "$file"
