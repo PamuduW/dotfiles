@@ -124,16 +124,27 @@ PY
 }
 
 restart_docker_service() {
+	# The result is checked. This used to `return 0` whichever way the restart
+	# went, so a Docker that failed to come back reported success and the step
+	# was the only one in the run with no line saying how it ended.
 	if command -v systemctl >/dev/null 2>&1 && sudo systemctl status docker >/dev/null 2>&1; then
 		log_step "Restart Docker service (systemctl)"
-		sudo systemctl restart docker
-		return 0
+		if _run_quiet_command "docker restart" sudo systemctl restart docker; then
+			log_ok "Docker service restarted"
+			return 0
+		fi
+		log_warn "Docker service restart failed"
+		return 1
 	fi
 
 	if command -v service >/dev/null 2>&1; then
 		log_step "Restart Docker service (service)"
-		sudo service docker restart
-		return 0
+		if _run_quiet_command "docker restart" sudo service docker restart; then
+			log_ok "Docker service restarted"
+			return 0
+		fi
+		log_warn "Docker service restart failed"
+		return 1
 	fi
 
 	log_warn "Could not determine how to restart Docker service"
@@ -215,10 +226,10 @@ _portainer_recover_interrupted() {
 	_portainer_name_exists "$backup" || return 0
 	if _portainer_name_exists portainer; then
 		if _portainer_has_managed_layout; then
-			run_docker rm -f "$backup" || return $?
+			_run_quiet_command "remove $backup" run_docker rm -f "$backup" || return $?
 			return 0
 		fi
-		run_docker rm -f portainer || return $?
+		_run_quiet_command "remove portainer" run_docker rm -f portainer || return $?
 	fi
 	run_docker rename "$backup" portainer || return $?
 }
@@ -228,7 +239,7 @@ _portainer_restore_from_backup() {
 	local backup
 	backup="$(_portainer_backup_name)"
 	if _portainer_name_exists portainer; then
-		run_docker rm -f portainer || return $?
+		_run_quiet_command "remove portainer" run_docker rm -f portainer || return $?
 	fi
 	run_docker rename "$backup" portainer || return $?
 	if [[ "$was_running" == 1 ]]; then
@@ -273,7 +284,7 @@ _replace_managed_portainer() {
 			return "$create_status"
 		fi
 	fi
-	run_docker rm -f "$backup" || return $?
+	_run_quiet_command "remove $backup" run_docker rm -f "$backup" || return $?
 	if [[ "$was_running" == 1 ]]; then
 		log_ok "Portainer updated with portainer_data preserved"
 	else
@@ -318,7 +329,7 @@ install_portainer() {
 	log_step "Refresh Portainer CE image"
 	# -q: the per-layer pull progress was twenty-five lines of a run that
 	# reports its own result on the next line anyway.
-	run_docker pull -q "$portainer_image" || return $?
+	_run_quiet_command "pull $portainer_image" run_docker pull -q "$portainer_image" || return $?
 	target_image_id="$(run_docker image inspect --format '{{.Id}}' "$portainer_image")" || return $?
 	[[ -n "$target_image_id" ]] || return 1
 

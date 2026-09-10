@@ -66,7 +66,46 @@ test_shortcut_hint_keeps_labels_undimmed() {
 	[[ "$output" == "${C_CYAN}s${C_RESET} Save or replace   ${C_CYAN}r${C_RESET} Reveal once   ${C_CYAN}d${C_RESET} Remove   ${C_CYAN}q${C_RESET} Back${C_RESET}" ]]
 }
 
+test_progress_animation_stays_out_of_the_log() (
+	# Install output goes through tee, so anything written to stdout lands in
+	# the log as well as on screen. The animation is written to the terminal
+	# instead: a log full of spinner frames would be worse than no spinner.
+	local out="$TEST_HARNESS_ROOT/spinner.tty" logged="$TEST_HARNESS_ROOT/spinner.log"
+	: >"$out"
+
+	DOTFILES_TTY_OUTPUT="$out" bash -c '
+		source "'"$REPO_DIR"'/scripts/lib/shared/tui/colors.sh"
+		source "'"$REPO_DIR"'/scripts/lib/shared/tui/tty.sh"
+		source "'"$REPO_DIR"'/scripts/lib/installers/logging.sh"
+		colors_clear_palette
+		log_step "Install something slow"
+		sleep 0.4
+		log_ok "installed"
+	' >"$logged" 2>&1
+
+	# The log reads as it always did.
+	[[ "$(grep -c "^\[STEP\] Install something slow$" "$logged")" -eq 1 ]] || return 1
+	[[ "$(grep -c "^\[OK\] installed$" "$logged")" -eq 1 ]] || return 1
+	grep -q '⠋\|⠙\|⠹\|⠸\|⠼\|⠴\|⠦\|⠧\|⠇\|⠏' "$logged" && {
+		printf 'animation frames reached the log\n' >&2
+		return 1
+	}
+
+	# A run with no terminal has no animation and no complaint about it.
+	local quiet="$TEST_HARNESS_ROOT/spinner-quiet.log"
+	DOTFILES_TTY_OUTPUT=/dev/null DOTFILES_NO_PROGRESS_ANIMATION=1 bash -c '
+		source "'"$REPO_DIR"'/scripts/lib/shared/tui/colors.sh"
+		source "'"$REPO_DIR"'/scripts/lib/shared/tui/tty.sh"
+		source "'"$REPO_DIR"'/scripts/lib/installers/logging.sh"
+		colors_clear_palette
+		log_step "Install something"
+		log_ok "installed"
+	' >"$quiet" 2>&1
+	[[ "$(wc -l <"$quiet")" -eq 2 ]]
+)
+
 expect_success 'install legend uses semantic status colors' test_install_legend_uses_status_colors
+expect_success 'progress animation stays out of the log' test_progress_animation_stays_out_of_the_log
 expect_success 'install status markers use semantic colors' test_install_status_markers_use_semantic_colors
 expect_success 'confirmation hint colors its action keys' test_confirm_hint_uses_colored_action_keys
 expect_success 'install confirmation prompt colors full action text' test_install_confirm_prompt_colors_full_action_text

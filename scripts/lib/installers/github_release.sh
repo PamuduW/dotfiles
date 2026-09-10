@@ -37,7 +37,11 @@ install_lazygit_from_github() {
 		echo "  lazygit checksum manifest does not contain $tarball." >&2
 		return 1
 	}
-	if ! (cd "$tmp" && sha256sum --check --ignore-missing checksums.txt); then
+	# The per-file "OK" is the checksum tool talking to itself; the run says
+	# what it installed in its own words. A failure still prints everything.
+	# shellcheck disable=SC2016  # $1 is the inner shell's argument, not ours.
+	if ! _run_quiet_command "checksum verification" \
+		bash -c 'cd "$1" && sha256sum --check --ignore-missing checksums.txt' _ "$tmp"; then
 		echo "  lazygit checksum verification failed." >&2
 		return 1
 	fi
@@ -79,7 +83,11 @@ install_lazydocker_from_github() {
 		echo "  lazydocker checksum manifest does not contain $tarball." >&2
 		return 1
 	}
-	if ! (cd "$tmp" && sha256sum --check --ignore-missing checksums.txt); then
+	# The per-file "OK" is the checksum tool talking to itself; the run says
+	# what it installed in its own words. A failure still prints everything.
+	# shellcheck disable=SC2016  # $1 is the inner shell's argument, not ours.
+	if ! _run_quiet_command "checksum verification" \
+		bash -c 'cd "$1" && sha256sum --check --ignore-missing checksums.txt' _ "$tmp"; then
 		echo "  lazydocker checksum verification failed." >&2
 		return 1
 	fi

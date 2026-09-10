@@ -183,6 +183,10 @@ run_install() {
 		INSTALL_COMPONENT_SECONDS["$key"]=$(($(_install_now_seconds) - started))
 	done
 
+	# Nothing is running any more; the last step's animation must not outlive
+	# the loop that owned it.
+	declare -F _step_spinner_stop >/dev/null 2>&1 && _step_spinner_stop
+
 	print_install_summary
 	print_install_timing "$((($(_install_now_seconds)) - run_started))"
 
