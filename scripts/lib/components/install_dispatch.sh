@@ -161,13 +161,18 @@ run_install() {
 		sudo_prime || true
 	fi
 
-	_run_install_preamble || return $?
-
 	# Per-component wall-clock, so where a long install actually spends its time
 	# is a measurement rather than a guess.
+	#
+	# Started before the preamble and after the prompt: the apt index refresh is
+	# the run's own work and belongs in "Install took", which was under-reporting
+	# by however long it took. How long the operator spent typing a password is
+	# not the run's time and stays out of it.
 	declare -gA INSTALL_COMPONENT_SECONDS=()
 	local run_started started
 	run_started="$(_install_now_seconds)"
+
+	_run_install_preamble || return $?
 
 	local first_component=true
 	for key in "${COMP_INSTALL_ORDER[@]}"; do

@@ -43,7 +43,6 @@ NOT_INSTALLED='not installed'
 # Two spaces, the same left edge the headers, tables and step lines use, so one
 # screen reads as one document.
 _msg() { printf '  %s\n' "$*"; }
-_warn() { printf '  %s%s%s\n' "$C_YELLOW" "$*" "$C_RESET" >&2; }
 _err() { printf '  %s%s%s\n' "$C_RED" "$*" "$C_RESET" >&2; }
 
 _dotfiles_load_status_modules() {

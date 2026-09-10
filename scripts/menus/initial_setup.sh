@@ -55,8 +55,6 @@ run_install_action() {
 	run_initial_setup_flow
 }
 
-# shellcheck disable=SC2034  # Consumed by menu_submenu_loop.
-
 _apply_noninteractive_git_defaults() {
 	if ! is_on git_identity; then
 		return 0
