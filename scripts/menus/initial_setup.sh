@@ -95,6 +95,7 @@ run_initial_setup_flow() {
 confirm_loop() {
 	local need_git_prompt=true
 	local answer=""
+	_CONFIRM_NOTICE=''
 	DOTFILES_FORCE_REINSTALL=0
 	export DOTFILES_FORCE_REINSTALL
 	while true; do
@@ -103,6 +104,10 @@ confirm_loop() {
 			need_git_prompt=false
 		fi
 		show_plan
+		if [[ -n "${_CONFIRM_NOTICE:-}" ]]; then
+			tty_printf '%s\n\n' "$_CONFIRM_NOTICE"
+			_CONFIRM_NOTICE=''
+		fi
 		read_tty_line answer "$(ui_install_confirm_prompt)"
 		tty_printf '%s' "${C_RESET:-}"
 		case "$answer" in
@@ -111,9 +116,8 @@ confirm_loop() {
 			return 0
 			;;
 		# Forced: reinstall what is already present, so a corrupted install can
-		# be repaired without deleting things by hand. Git identity and the SSH
-		# key are unaffected -- one needs answers this screen already has, and
-		# the other would replace a private key you have registered elsewhere.
+		# be repaired without deleting things by hand. Git identity is
+		# unaffected -- it needs answers this screen already has.
 		x | X)
 			DOTFILES_FORCE_REINSTALL=1
 			tty_printf '\n%s\n' "    Forced reinstall: already-installed components will be reinstalled."
@@ -124,10 +128,12 @@ confirm_loop() {
 			need_git_prompt=true
 			;;
 		q | Q)
-			tty_printf '%s\n' "Returning to Dotfiles menu."
+			tty_printf '\n%s\n' "Returning to Dotfiles menu."
 			return 1
 			;;
-		*) tty_printf '%s\n' "    Invalid choice." ;;
+		# Carried, not printed: the loop redraws the plan next, and ui_clear
+		# would take this with it before it could be read.
+		*) _CONFIRM_NOTICE="    Invalid choice." ;;
 		esac
 	done
 }
