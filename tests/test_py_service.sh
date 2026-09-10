@@ -42,7 +42,7 @@ expect 'the service answers a ping' ok "$(py_service_call ping </dev/null)"
 
 # Classification through the service must equal classification by the script it
 # replaced. Same requests, same order, same bytes.
-requests=$'ssh_key\x1f1\nstow_targets\x1f3\nportainer\x1f1\x1f1\x1f'
+requests=$'stow_targets\x1f0\nstow_targets\x1f3\nportainer\x1f1\x1f1\x1f'
 expect 'classify matches the standalone script' \
 	"$(printf '%s\n' "$requests" | python3 "$PY_DIR/probe_classify.py")" \
 	"$(py_service_call classify < <(printf '%s\n' "$requests"))"
@@ -61,7 +61,7 @@ expect 'repo status matches the standalone checker' \
 # fail rather than half-answer: every caller has a Bash path, and a partial
 # table is the one outcome that would not reach it. This is why the client says
 # to feed payloads with a process substitution.
-pipeline_out="$(printf 'ssh_key\x1f1\n' | py_service_call classify 2>/dev/null)"
+pipeline_out="$(printf 'stow_targets\x1f0\n' | py_service_call classify 2>/dev/null)"
 pipeline_rc=$?
 expect 'a call used as a pipeline element fails' 1 "$pipeline_rc"
 expect 'and answers nothing at all' '' "$pipeline_out"
@@ -71,8 +71,8 @@ expect 'and answers nothing at all' '' "$pipeline_out"
 # next call must still be answered rather than the whole command dropping to
 # Bash because one caller used the wrong form.
 expect 'a failed pipeline call leaves the service usable' \
-	'installed|~/.ssh key present' \
-	"$(py_service_call classify < <(printf 'ssh_key\x1f1\n'))"
+	'installed|stow bash bin readline' \
+	"$(py_service_call classify < <(printf 'stow_targets\x1f0\n'))"
 
 py_service_stop
 

@@ -62,24 +62,6 @@ compare() {
 	failures=$((failures + 1))
 }
 
-test_ssh_key_states() {
-	local before=$failures home case_name
-	for case_name in none ed25519 rsa both; do
-		home="$work/ssh-$case_name"
-		mkdir -p "$home/.ssh"
-		case "$case_name" in
-		ed25519 | both) : >"$home/.ssh/id_ed25519" ;;
-		esac
-		case "$case_name" in
-		rsa | both) : >"$home/.ssh/id_rsa" ;;
-		esac
-		compare "ssh_key $case_name" \
-			"$(HOME="$home" _comp_probe_ssh_key)" \
-			"$(HOME="$home" py_probe ssh_key)"
-	done
-	((failures == before))
-}
-
 test_monaspace_states() {
 	local before=$failures home fonts case_name
 	for case_name in absent empty fonts-no-version fonts-with-version; do
@@ -206,7 +188,7 @@ test_git_states() {
 # not in, which is what every case above is for.
 test_this_machine() {
 	local before=$failures key
-	for key in ssh_key monaspace_fonts wsl_conf; do
+	for key in monaspace_fonts wsl_conf; do
 		compare "live $key" "$("_comp_probe_$key")" "$(py_probe "$key")"
 	done
 	for key in git_identity git_credential; do
@@ -218,7 +200,6 @@ test_this_machine() {
 	((failures == before))
 }
 
-check 'the SSH key probe agrees on every key combination' test_ssh_key_states
 check 'the fonts probe agrees on absent, empty, and versioned installs' test_monaspace_states
 check 'the stow probe agrees on missing, wrong, and dangling links' test_stow_states
 check 'the wsl.conf probe agrees on every shape of that file' test_wsl_conf_states

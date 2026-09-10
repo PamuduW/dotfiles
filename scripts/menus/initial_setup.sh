@@ -100,7 +100,6 @@ confirm_loop() {
 	while true; do
 		if [[ "$need_git_prompt" == "true" ]]; then
 			is_on git_identity && prompt_git_identity
-			is_on ssh_key && prompt_ssh_passphrase
 			need_git_prompt=false
 		fi
 		show_plan

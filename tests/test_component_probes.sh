@@ -67,7 +67,6 @@ test_absent_optional_components_are_counted_as_missing() (
 	mkdir -p "$fake_home"
 	: >"$git_config"
 	[[ "$(HOME="$fake_home" GIT_CONFIG_GLOBAL="$git_config" GIT_CONFIG_NOSYSTEM=1 _comp_probe_git_identity)" == missing\|* ]]
-	[[ "$(HOME="$fake_home" _comp_probe_ssh_key)" == missing\|* ]]
 )
 
 test_system_package_probe_uses_system_package_tags_only() (

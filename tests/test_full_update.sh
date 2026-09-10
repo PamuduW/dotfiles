@@ -85,17 +85,16 @@ test_full_update_loads_everything_its_install_phase_needs() (
 test_operator_input_components_are_never_installed_by_full_update() (
 	# Break caught: full-update selected git_identity, whose installer needs a
 	# name and email that only the menu collects, and the run died on an unbound
-	# SETUP_GIT_NAME before installing anything. Reinstalling ssh_key would
-	# likewise either overwrite a key or stop for a passphrase. A full update has
-	# nobody to ask, so both are initial-setup work.
+	# SETUP_GIT_NAME before installing anything. A full update has nobody to
+	# ask, so that is initial-setup work.
 	local installed="$TEST_HARNESS_ROOT/full-update-input.installed"
 	: >"$installed"
-	COMP_KEYS=(git_identity ssh_key docker)
+	COMP_KEYS=(git_identity docker)
 	declare -A COMP_ON=()
 	collect_component_probe_results() {
 		local -n out="$1"
-		# All three read as present; only the two needing input are excluded.
-		out=([git_identity]=configured [ssh_key]=installed [docker]=installed)
+		# Both read as present; only the one needing input is excluded.
+		out=([git_identity]=configured [docker]=installed)
 	}
 	run_install() {
 		local key

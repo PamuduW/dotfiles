@@ -43,12 +43,6 @@ def _home() -> Path:
     return Path(os.environ.get("HOME", "~")).expanduser()
 
 
-def ssh_key() -> str:
-    home = _home()
-    present = (home / ".ssh/id_ed25519").is_file() or (home / ".ssh/id_rsa").is_file()
-    return probe_classify.ssh_key(present=present)
-
-
 def monaspace_fonts() -> str:
     """A directory is not an installation; the .otf files are.
 
@@ -152,7 +146,6 @@ def git_credential() -> str:
 
 
 PROBES = {
-    "ssh_key": lambda repo: ssh_key(),
     "monaspace_fonts": lambda repo: monaspace_fonts(),
     "dotfiles": stow_targets,
     "wsl_conf": lambda repo: wsl_conf(),

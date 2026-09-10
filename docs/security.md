@@ -21,9 +21,7 @@ The optional shared GitHub token is stored under
 and Package Lib never render its value. Invalid or unsafe saved state falls back
 to anonymous access with a warning.
 
-Generated SSH keys prompt for a passphrase. Only the public key and setup notes
-belong in `~/.ssh/github-setup.txt`. Codex pairing values are terminal-only
-secrets.
+Codex pairing values are terminal-only secrets.
 
 ## Privilege boundary
 

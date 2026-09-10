@@ -362,12 +362,6 @@ test_remaining_readings_parity() {
 		compare "monaspace [$row]" "$want" "$got"
 	done
 
-	for present in 0 1; do
-		want="$(_comp_classify_ssh_key "$present")"
-		got="$(py "pc.ssh_key(present=bool($present))")"
-		compare "ssh_key present=$present" "$want" "$got"
-	done
-
 	local missing
 	for missing in 0 1 8; do
 		want="$(_comp_classify_stow_targets "$missing")"

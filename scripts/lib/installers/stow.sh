@@ -14,61 +14,6 @@ apply_git_config() {
 	log_ok "Git configured: $SETUP_GIT_NAME <$SETUP_GIT_EMAIL>"
 }
 
-generate_ssh_key() {
-	if [[ -f "$HOME/.ssh/id_ed25519" ]]; then
-		log_skip "SSH key ~/.ssh/id_ed25519 already exists"
-		return 0
-	fi
-
-	log_step "Generate SSH key (ed25519)"
-	mkdir -p "$HOME/.ssh"
-	local ssh_comment="${SETUP_GIT_EMAIL:-}"
-	if [[ -z "$ssh_comment" ]]; then
-		ssh_comment="${USER:-user}@$(hostname 2>/dev/null || echo wsl)"
-	fi
-	# -N always, so a running install never stops for input: the passphrase was
-	# collected with the Git identity, before the plan was confirmed. Left empty
-	# when nothing was collected -- ssh-keygen would otherwise reach for an
-	# ssh-askpass that is not installed and write the key unprotected anyway,
-	# after announcing a prompt the operator never saw.
-	ssh-keygen -t ed25519 -C "$ssh_comment" -f "$HOME/.ssh/id_ed25519" \
-		-N "${SETUP_SSH_PASSPHRASE:-}" -q || return $?
-	# Held, not printed here: a detail line belongs under the result it
-	# describes, and the result is logged once the key file is written.
-	local key_note=''
-	if [[ -n "${SETUP_SSH_PASSPHRASE:-}" ]]; then
-		key_note='  Key protected by a passphrase. Add it to your agent with: ssh-add ~/.ssh/id_ed25519'
-	else
-		key_note='  Key generated without a passphrase.'
-		# Only worth doing unprotected: ssh-add on a protected key would stop
-		# here asking for the passphrase again.
-		eval "$(ssh-agent -s)" >/dev/null || return $?
-		ssh-add "$HOME/.ssh/id_ed25519" 2>/dev/null || return $?
-	fi
-
-	local pub_key
-	pub_key="$(cat "$HOME/.ssh/id_ed25519.pub")"
-
-	cat >"$HOME/.ssh/github-setup.txt" <<EOF
-SSH Key Setup Notes
-Generated: $(date '+%Y-%m-%d %H:%M:%S')
-
-Public key:
-  ${pub_key}
-
-Next steps:
-  1. Copy the public key above
-  2. Go to https://github.com/settings/keys
-  3. Click "New SSH key"
-  4. Paste the key, give it a title (e.g. "WSL - $(hostname)")
-  5. Test with: ssh -T git@github.com
-EOF
-
-	log_ok "SSH key generated"
-	[[ -z "$key_note" ]] || printf '%s\n' "$key_note"
-	log_ok "Details saved to ~/.ssh/github-setup.txt"
-}
-
 configure_wsl() {
 	local conf="${DOTFILES_WSL_CONF:-/etc/wsl.conf}" rendered backup_file
 

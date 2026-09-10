@@ -99,10 +99,8 @@ The same behaviour is available unattended as `dotfiles full-update --force`,
 which reinstalls the components it finds already present. It carries the flag
 across the restart a repository update triggers, so a forced run stays forced.
 
-Two components ignore `x` entirely. Git identity reads answers the plan screen
-has already collected, and regenerating the SSH key would replace the private
-key registered with GitHub and every server that trusts it. To replace a key,
-delete it and install again.
+Git identity ignores `x` entirely: it reads answers the plan screen has already
+collected.
 
 After installation, open a new terminal or run:
 
@@ -148,7 +146,7 @@ The registry contains 21 components:
 | Containers | Docker Engine, Portainer CE LTS, lazydocker |
 | Developer tools | Graphify CLI, Boost CLI, lazygit, Monaspace fonts |
 | Agent CLIs | Cursor, standalone Codex, Claude |
-| Shell and Git | Stow packages, Git identity, Git credentials/submodule defaults, SSH key |
+| Shell and Git | Stow packages, Git identity, Git credentials/submodule defaults |
 
 The exact keys, dependencies, defaults, and descriptions are available through
 `dotfiles packages` and documented in [Component lifecycle](docs/components.md).

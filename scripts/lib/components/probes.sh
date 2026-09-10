@@ -212,7 +212,7 @@ collect_component_probe_results() {
 # these falls through to its Bash probe, which is why both still exist --
 # `python3` belongs to the optional `python` component, so a first setup that
 # deselects it prints its install summary with no interpreter.
-_COMP_PYTHON_PROBES=(ssh_key monaspace_fonts dotfiles wsl_conf git_identity git_credential)
+_COMP_PYTHON_PROBES=(monaspace_fonts dotfiles wsl_conf git_identity git_credential)
 # What the stream writes where such a probe's result will go.
 _COMP_PROBE_PENDING=$'\x02'
 
@@ -929,20 +929,6 @@ _comp_probe_monaspace_fonts() {
 	fi
 
 	comp_classify monaspace_fonts "$present" "$count" "$ver"
-}
-
-_comp_classify_ssh_key() {
-	if [[ "$1" == 1 ]]; then
-		printf 'installed|~/.ssh key present\n'
-	else
-		printf 'missing|no default key found\n'
-	fi
-}
-
-_comp_probe_ssh_key() {
-	local present=0
-	[[ -f "$HOME/.ssh/id_ed25519" || -f "$HOME/.ssh/id_rsa" ]] && present=1
-	comp_classify ssh_key "$present"
 }
 
 # Pure: a link pointing somewhere else is as missing as no link at all, so the

@@ -217,12 +217,6 @@ comp_define monaspace_fonts \
 	--order 17 \
 	--desc $'Downloads GitHub Monaspace Nerd Fonts to ~/.local/share/fonts/.\nIncludes all five variants with Powerline glyphs and development icons.'
 
-comp_define ssh_key \
-	--label 'Generate SSH key' \
-	--plan 'SSH key' \
-	--order 18 \
-	--desc $'Generates an Ed25519 SSH key and adds it to ssh-agent.\nSaves the public key and GitHub setup steps to ~/.ssh/github-setup.txt.'
-
 comp_define dotfiles \
 	--label 'Apply dotfiles (stow)' \
 	--plan 'Dotfiles' \
@@ -359,10 +353,9 @@ comp_registry_init() {
 		COMP_ON["$_key"]=1
 	done
 
-	# Identity and key generation remain explicit user decisions. All other
-	# setup components start selected.
+	# Identity remains an explicit user decision. All other setup components
+	# start selected.
 	COMP_ON[git_identity]=0
-	COMP_ON[ssh_key]=0
 }
 
 # Non-interactive: honor DOTFILES_COMPONENTS (comma-separated COMP_KEYS);
@@ -457,13 +450,6 @@ comp_plan_row() {
 		# shellcheck disable=SC2086 # Component package tags are an internal word list.
 		count="$(read_packages_by_tags $tags | wc -l)"
 		detail="${count} packages (@${tags// / @})"
-		;;
-	ssh_key)
-		if [[ -f "$HOME/.ssh/id_ed25519" ]]; then
-			detail='already exists, will skip'
-		else
-			detail='generate ed25519 -> ~/.ssh/github-setup.txt'
-		fi
 		;;
 	*) detail="${COMP_PLAN_DETAILS[$key]:-}" ;;
 	esac

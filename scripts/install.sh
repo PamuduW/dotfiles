@@ -78,7 +78,6 @@ source "$DOTFILES_DIR/scripts/menus/libraries.sh"
 
 SETUP_GIT_NAME=""
 SETUP_GIT_EMAIL=""
-SETUP_SSH_PASSPHRASE=""
 TOGGLE_MSG=""
 
 prompt_git_identity() {
@@ -93,25 +92,6 @@ prompt_git_identity() {
 
 	read_tty_line SETUP_GIT_EMAIL "  Email [${current_email:-}]: "
 	SETUP_GIT_EMAIL="${SETUP_GIT_EMAIL:-$current_email}"
-}
-
-# Asked here rather than at generation time: ssh-keygen would otherwise stop a
-# running install to wait for a passphrase, which is the one thing the plan
-# confirmation promises it will not do.
-prompt_ssh_passphrase() {
-	local first='' second=''
-	SETUP_SSH_PASSPHRASE=""
-	[[ -f "$HOME/.ssh/id_ed25519" ]] && return 0
-
-	echo ""
-	echo "SSH key passphrase (press Enter for none):"
-	while true; do
-		read_tty_secret first '  Passphrase: ' || return 0
-		read_tty_secret second '  Confirm:    ' || return 0
-		[[ "$first" == "$second" ]] && break
-		echo "  Passphrases did not match. Try again."
-	done
-	SETUP_SSH_PASSPHRASE="$first"
 }
 
 toggle_component() {

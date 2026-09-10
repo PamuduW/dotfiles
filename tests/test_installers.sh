@@ -69,29 +69,6 @@ test_force_reinstalls_what_is_already_present() (
 	! grep -q '^skipped:' "$calls"
 )
 
-test_force_never_touches_the_ssh_key() (
-	# A forced reinstall must not regenerate an existing key: that replaces the
-	# private key registered with GitHub and every server that trusts it, and it
-	# is not the kind of breakage `x` exists to repair.
-	local machine="$TEST_HARNESS_ROOT/force-ssh"
-	mkdir -p -- "$machine/home/.ssh"
-	: >"$machine/home/.ssh/id_ed25519"
-	local skipped="$machine/skipped"
-	: >"$skipped"
-
-	(
-		export HOME="$machine/home" DOTFILES_FORCE_REINSTALL=1
-		log_skip() { printf '%s\n' "$1" >>"$skipped"; }
-		log_step() { printf 'GENERATED\n' >>"$skipped"; }
-		log_ok() { :; }
-		ssh-keygen() { printf 'KEYGEN-RAN\n' >>"$skipped"; }
-		generate_ssh_key
-	) || return 1
-
-	grep -q 'already exists' "$skipped" || return 1
-	! grep -q 'KEYGEN-RAN' "$skipped"
-)
-
 test_docker_daemon_config_is_written_one_way_only() (
 	# Break caught: a fresh install emitted its own JSON literal while an
 	# existing file went through the Python merge, and the two disagreed on key
@@ -837,7 +814,6 @@ test_wsl_config_renderer_updates_only_the_requested_section() (
 
 check 'an unreachable docker does not accuse the container' test_an_unreachable_docker_does_not_accuse_the_container
 check 'force reinstalls what is already present' test_force_reinstalls_what_is_already_present
-check 'force never touches the ssh key' test_force_never_touches_the_ssh_key
 check 'docker daemon config is written one way only' test_docker_daemon_config_is_written_one_way_only
 check 'git identity without a name reports instead of crashing' test_git_identity_without_a_name_reports_instead_of_crashing
 check 'Stow backup includes an existing dotfiles launcher' test_backup_includes_existing_dotfiles_launcher

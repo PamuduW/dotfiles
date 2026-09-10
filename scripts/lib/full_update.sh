@@ -13,9 +13,8 @@ _dotfiles_approve_repo_update() {
 # update must not silently add a component the operator did not choose.
 # Components whose installer needs an answer only the operator can give. A full
 # update has nobody to ask: selecting git_identity crashed the run outright on
-# an unbound SETUP_GIT_NAME, and reinstalling ssh_key would either overwrite a
-# key or stop for a passphrase. Both are initial-setup work.
-FULL_UPDATE_NEVER_INSTALL=(git_identity ssh_key)
+# an unbound SETUP_GIT_NAME. That is initial-setup work.
+FULL_UPDATE_NEVER_INSTALL=(git_identity)
 
 _full_update_needs_operator_input() {
 	local key="$1" excluded
@@ -188,8 +187,8 @@ cmd_full_update() {
 		case "$arg" in
 		--resume-after-dotfiles-repo) resumed=true ;;
 		# Reinstall components that are already present, the unattended
-		# equivalent of the execution plan's `x`. Git identity and the SSH key
-		# are unaffected, and full-update never installs them anyway.
+		# equivalent of the execution plan's `x`. Git identity is unaffected,
+		# and full-update never installs it anyway.
 		--force) DOTFILES_FORCE_REINSTALL=1 ;;
 		*)
 			_err "Unknown full-update option: $arg"

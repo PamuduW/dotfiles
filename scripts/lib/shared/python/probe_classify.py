@@ -250,10 +250,6 @@ def monaspace_fonts(*, present: bool, count: str, version: str) -> str:
     return f"installed|{version} ({count} fonts)"
 
 
-def ssh_key(*, present: bool) -> str:
-    return "installed|~/.ssh key present" if present else "missing|no default key found"
-
-
 def stow_targets(*, missing: int) -> str:
     """A link pointing somewhere else is as missing as no link at all: the
     count is of targets that do not resolve to this checkout."""
@@ -385,9 +381,6 @@ def classify(fields: list[str]) -> str:
     if name == "monaspace_fonts":
         present, count, ver = args
         return monaspace_fonts(present=present == "1", count=count, version=ver)
-    if name == "ssh_key":
-        (present,) = args
-        return ssh_key(present=present == "1")
     if name == "stow_targets":
         (missing,) = args
         return stow_targets(missing=int(missing or 0))

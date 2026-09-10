@@ -2,7 +2,7 @@
 
 ## Registry
 
-`scripts/lib/components/registry.sh` defines the 21 stable component keys,
+`scripts/lib/components/registry.sh` defines the 20 stable component keys,
 labels, plan details, descriptions, package tags, dependencies, and installation
 order. Keep those records synchronized with probes, install dispatch, update
 logic, Command Lib, Package Lib, and user documentation.
@@ -14,9 +14,9 @@ logic, Command Lib, Package Lib, and user documentation.
 | Containers | `docker`, `portainer`, `lazydocker` |
 | Development tools | `graphify_cli`, `boost_cli`, `lazygit` |
 | Agent CLIs | `cursor_cli`, `codex_cli`, `claude_cli` |
-| Desktop and shell | `monaspace_fonts`, `ssh_key`, `dotfiles`, `wsl_conf` |
+| Desktop and shell | `monaspace_fonts`, `dotfiles`, `wsl_conf` |
 
-Git identity and SSH-key generation are disabled by default. Other components
+Git identity is disabled by default. Other components
 start selected. Dependencies are enforced by the registry; Portainer and
 lazydocker depend on Docker, and Stow deployment depends on system packages.
 

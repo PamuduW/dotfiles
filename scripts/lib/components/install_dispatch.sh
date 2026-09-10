@@ -93,10 +93,6 @@ _comp_install_monaspace_fonts() {
 	install_monaspace_fonts
 }
 
-_comp_install_ssh_key() {
-	generate_ssh_key
-}
-
 _comp_install_dotfiles() {
 	backup_existing_dotfiles || return $?
 	stow_dotfiles || return $?
