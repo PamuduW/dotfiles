@@ -32,8 +32,10 @@ if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
 fi
 
 msg() { printf '%s\n' "$*"; }
-step() { printf '\n%s==> %s%s\n' "$_bold" "$*" "$_reset"; }
-err() { printf 'Error: %s\n' "$*" >&2; }
+# Two spaces, the edge the installer, the update run and this script's own
+# summary rows all print at.
+step() { printf '\n  %s==> %s%s\n' "$_bold" "$*" "$_reset"; }
+err() { printf '  Error: %s\n' "$*" >&2; }
 
 # Recorded for the closing summary so the operator sees one honest list.
 SUMMARY=()
@@ -496,7 +498,7 @@ main() {
 	# summary leaves the operator guessing which steps ran.
 	trap print_summary EXIT
 	msg ''
-	msg "Started at $(clock_time "$RUN_STARTED_EPOCH")."
+	msg "  Started at $(clock_time "$RUN_STARTED_EPOCH")."
 	preflight
 	choose_targets
 	print_plan
@@ -516,7 +518,7 @@ main() {
 	if ((WANT_AGENTBOT == 1)); then
 		if ((WANT_DOTFILES == 1)); then
 			msg ''
-			msg 'Dotfiles setup is complete.'
+			msg '  Dotfiles setup is complete.'
 		fi
 		run_agentbot
 	fi

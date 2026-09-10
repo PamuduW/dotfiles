@@ -598,7 +598,7 @@ test_the_run_reports_a_duration_per_phase_and_a_total() (
 	printf '%s\n' "$output" | grep -Eq '^ +Total +[0-9]+m [0-9]{2}s\.$' || return 1
 	# End to end: the clock is announced before the first question and closed
 	# in the summary, so the wall time needs no log arithmetic afterwards.
-	printf '%s\n' "$output" | grep -Eq '^Started at [0-9]{2}:[0-9]{2}:[0-9]{2}\.$' || return 1
+	printf '%s\n' "$output" | grep -Eq '^ +Started at [0-9]{2}:[0-9]{2}:[0-9]{2}\.$' || return 1
 	printf '%s\n' "$output" | grep -Eq '^ +Started +[0-9]{2}:[0-9]{2}:[0-9]{2}$' || return 1
 	printf '%s\n' "$output" | grep -Eq '^ +Finished +[0-9]{2}:[0-9]{2}:[0-9]{2}$'
 )
@@ -619,7 +619,7 @@ test_the_start_clock_survives_a_restart() (
 
 	[[ "$output" == *'updated its checkout. Restarting'* ]] || return 1
 	local -a announced
-	mapfile -t announced < <(printf '%s\n' "$output" | sed -n 's/^Started at \(.*\)\.$/\1/p')
+	mapfile -t announced < <(printf '%s\n' "$output" | sed -n 's/^ *Started at \(.*\)\.$/\1/p')
 	[[ "${#announced[@]}" -eq 2 ]] || return 1
 	[[ "${announced[0]}" == "${announced[1]}" ]] || return 1
 	# The summary closes against that same start, not against the restart.

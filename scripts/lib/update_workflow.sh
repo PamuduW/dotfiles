@@ -159,18 +159,26 @@ print_report_table() {
 		done
 	fi
 
+	# "1 checks or refreshes remain" read as a typo on every single-item run.
+	local remaining_phrase
+	if ((remaining_count == 1)); then
+		remaining_phrase='1 check or refresh remains'
+	else
+		remaining_phrase="${remaining_count} checks or refreshes remain"
+	fi
+
 	printf '\n  '
 	if [[ $upgrade_count -eq 0 && $remaining_count -eq 0 ]]; then
 		printf '%s0 verified upgrades%s — everything verified current.\n' "$C_GREEN" "$C_RESET"
 	elif [[ $upgrade_count -eq 0 ]]; then
-		printf '%s0 verified upgrades; %d checks or refreshes remain.%s\n' \
-			"$C_YELLOW" "$remaining_count" "$C_RESET"
+		printf '%s0 verified upgrades; %s.%s\n' \
+			"$C_YELLOW" "$remaining_phrase" "$C_RESET"
 	else
 		# shellcheck disable=SC2016  # Backticks are literal documentation formatting.
 		printf '%s%d verified upgrade%s available' \
 			"$C_YELLOW" "$upgrade_count" "$([[ $upgrade_count -eq 1 ]] && echo '' || echo 's')"
 		if [[ $remaining_count -gt 0 ]]; then
-			printf '; %d checks or refreshes remain' "$remaining_count"
+			printf '; %s' "$remaining_phrase"
 		fi
 		# shellcheck disable=SC2016  # Backticks are literal documentation formatting.
 		printf '%s — run `%sdotfiles update%s` to apply.\n' \
@@ -367,6 +375,10 @@ _dotfiles_run_update() {
 		_msg 'Dry run: nothing was changed downstream.'
 		return 0
 	fi
+	# The gap the report used to carry. It belongs to the prompt, not the
+	# report: the unattended path has no prompt and follows the report with a
+	# header that opens with a blank line of its own.
+	[[ "$unattended" == true ]] || printf '\n'
 	if [[ "$unattended" != true ]] && ! _dotfiles_confirm "Proceed with apt refresh and downstream updates?"; then
 		_msg 'Downstream updates skipped.'
 		return 0

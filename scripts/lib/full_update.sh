@@ -205,7 +205,10 @@ cmd_full_update() {
 	# unattended failure leaves something to read.
 	declare -F start_action_log >/dev/null 2>&1 && start_action_log
 
-	rt_print_header 'Dotfiles full update' 'Dotfiles › Full Update'
+	# No header of its own. It announced a section with no body -- the install
+	# phase prints "=== Installing ===" as its very next line -- and repeated
+	# the menu's own "Dotfiles › Full Update" breadcrumb verbatim two lines
+	# after it. The three section headers this run does print say where it is.
 	# repo update -> component install -> downstream updates, the order
 	# bootstrap uses, so the first run and every run after it converge.
 	_dotfiles_run_update _dotfiles_approve_repo_update true false \
