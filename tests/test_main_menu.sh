@@ -41,12 +41,15 @@ test_exact_root_contract() {
 		"Install Dotfiles"
 		"Update"
 		"Full Update (Dotfiles + Agentbot)"
+		"Doctor"
+		"Logs"
+		"Restow"
 		"GitHub Token Config"
 		"Libraries"
 		"Quit"
 	)
 	# shellcheck disable=SC2034  # Read through a nameref in assert_array_equals.
-	local expected_keys=(status install update full_update github_token libraries quit)
+	local expected_keys=(status install update full_update doctor logs restow github_token libraries quit)
 	assert_array_equals _main_menu_labels expected_labels || return 1
 	assert_array_equals _main_menu_keys expected_keys || return 1
 	local i description
@@ -324,7 +327,36 @@ test_libraries_menu_contains_command_and_package_libs() {
 	[[ "$(<"$capture")" == $'Libraries|Dotfiles › Libraries|Command Lib Package Lib|command_lib package_lib\nUp/Down navigate   Enter confirm   q back' ]]
 }
 
+# Every command in the public catalog is reachable without the command line.
+# doctor, logs and restow were CLI-only: a menu operator could not see what
+# needed attention, read a run's log, or repair a clobbered link.
+test_every_public_command_is_reachable_from_the_menu() (
+	source "$REPO_DIR/scripts/lib/command_metadata.sh"
+	# menu is the TUI itself; commands, packages and help are the Libraries
+	# child menu, which the root reaches through the libraries key.
+	# Subscripts quoted: bash evaluates an unquoted one as arithmetic, and
+	# shfmt duly reformats [full-update] into [full - update].
+	local -A reached=(
+		[menu]=1 [commands]=1 [packages]=1 [help]=1
+		[status]=1 [update]=1 ['full-update']=1
+		[doctor]=1 [logs]=1 [restow]=1
+	)
+	local key missing=()
+	for key in "${DOTFILES_COMMAND_KEYS[@]}"; do
+		[[ -n "${reached[$key]:-}" ]] || missing+=("$key")
+	done
+	((${#missing[@]} == 0)) || {
+		printf 'commands with no way in from the menu: %s\n' "${missing[*]}" >&2
+		return 1
+	}
+	# And the three that were added really are wired to the root menu.
+	for key in doctor logs restow; do
+		[[ " ${_main_menu_keys[*]} " == *" $key "* ]] || return 1
+	done
+)
+
 expect_success 'root labels and keys match the standalone contract' test_exact_root_contract
+expect_success 'every public command is reachable from the menu' test_every_public_command_is_reachable_from_the_menu
 expect_success 'root title, breadcrumb, and hint are normalized' test_root_breadcrumb_is_dotfiles
 expect_success 'status, install, and update dispatch directly' test_direct_status_install_update_dispatch
 expect_success 'install gates the repository before opening setup' test_install_dispatch_gates_repository_before_menu

@@ -129,6 +129,12 @@ ui_format_shortcuts() {
 	done
 }
 
+# The full-update screen's keys. Same c/x pair as the execution plan, minus the
+# edit it has no component list to offer.
+ui_full_update_confirm_prompt() {
+	printf '  %s : %s' "$(ui_format_shortcuts c confirm x confirm_forced q back_to_menu)" "${C_RESET:-}"
+}
+
 ui_install_confirm_prompt() {
 	printf '  %s : %s' "$(ui_format_shortcuts c confirm x confirm_forced e edit q back_to_menu)" "${C_RESET:-}"
 }

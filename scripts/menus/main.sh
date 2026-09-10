@@ -19,6 +19,18 @@ _main_menu_desc_fn() {
 		echo "Update Dotfiles, then install and update Agentbot, without prompts."
 		echo "Auto-approves application prompts and may replace replaceable local Git state."
 		;;
+	doctor)
+		echo "Show only the components that need attention."
+		echo "Read-only; the same check the full update runs at the end."
+		;;
+	logs)
+		echo "List the retained action logs, newest first."
+		echo "Read-only; one key prints the newest in full."
+		;;
+	restow)
+		echo "Re-apply the bash, bin, and readline stow links."
+		echo "Replaces the matching links in your home directory; installs nothing."
+		;;
 	github_token)
 		echo "Configure the optional shared GitHub API token."
 		echo "Missing or malformed state falls back to anonymous access."
@@ -33,16 +45,22 @@ _main_menu_desc_fn() {
 	esac
 }
 
+# Every public Dotfiles command reaches the menu. doctor, logs and restow were
+# CLI-only, so a menu operator had no way to check what needs attention, read
+# a run's log, or repair a clobbered link without the command line.
 _main_menu_labels=(
 	"Check Status"
 	"Install Dotfiles"
 	"Update"
 	"Full Update (Dotfiles + Agentbot)"
+	"Doctor"
+	"Logs"
+	"Restow"
 	"GitHub Token Config"
 	"Libraries"
 	"Quit"
 )
-_main_menu_keys=(status install update full_update github_token libraries quit)
+_main_menu_keys=(status install update full_update doctor logs restow github_token libraries quit)
 
 _main_menu_unavailable() {
 	local message="$1"
@@ -109,6 +127,15 @@ _main_menu_dispatch() {
 		;;
 	full_update)
 		_main_menu_run_direct_action run_full_update_flow
+		;;
+	doctor)
+		_main_menu_run_direct_action run_doctor_flow
+		;;
+	logs)
+		_main_menu_run_direct_action run_logs_flow
+		;;
+	restow)
+		_main_menu_run_direct_action run_restow_flow
 		;;
 	github_token)
 		_main_menu_dispatch_optional github_token_menu \

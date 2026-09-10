@@ -108,7 +108,14 @@ confirm_loop() {
 			tty_printf '%s\n\n' "$_CONFIRM_NOTICE"
 			_CONFIRM_NOTICE=''
 		fi
-		read_tty_line answer "$(ui_install_confirm_prompt)"
+		# A failed read is EOF or a closed terminal, not an answer. Treated as
+		# `q`, both because the loop would otherwise redraw and ask again
+		# forever, and because nobody typed the answer that would start a
+		# mutating install.
+		if ! read_tty_line answer "$(ui_install_confirm_prompt)"; then
+			tty_printf '\n%s\n' "  Returning to Dotfiles menu."
+			return 1
+		fi
 		tty_printf '%s' "${C_RESET:-}"
 		case "$answer" in
 		c | C)
