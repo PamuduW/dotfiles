@@ -46,6 +46,8 @@ _github_token_menu_confirm() {
 _github_token_menu_pause() {
 	# shellcheck disable=SC2034  # Filled indirectly by _github_token_menu_line.
 	local ignored=''
+	# The leading blank ui_pause prints, for the same reason.
+	printf '\n' >&"$GITHUB_TOKEN_MENU_OUT_FD"
 	_github_token_menu_line ignored "  ${C_DIM:-}Press Enter to continue:${C_RESET:-} "
 }
 
@@ -107,7 +109,7 @@ _github_token_menu_save() {
 		_github_token_menu_say "${C_RED:-}Invalid token; nothing was saved.${C_RESET:-}"
 		return 0
 	fi
-	printf '  %sProposed:%s %s%s%s\n' \
+	printf '\n  %sProposed:%s %s%s%s\n\n' \
 		"${C_DIM:-}" "${C_RESET:-}" "${C_CYAN:-}" \
 		"$(github_token_fingerprint "$token")" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
 	if _github_token_menu_confirm "  Save this token?"; then
@@ -126,10 +128,12 @@ _github_token_menu_reveal() {
 		_github_token_menu_say "${C_YELLOW:-}No valid saved token is available to reveal.${C_RESET:-}"
 		return 0
 	fi
-	printf '  %sWARNING: the full token will be printed once on this terminal.%s\n' \
+	printf '  %sWARNING: the full token will be printed once on this terminal.%s\n\n' \
 		"${C_RED:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
 	if _github_token_menu_confirm "  Reveal the full token once?"; then
-		printf '  %s\n' "$token" >&"$GITHUB_TOKEN_MENU_OUT_FD"
+		# The secret gets space around it: it is the one line on this screen
+		# the operator has to read off the terminal and type somewhere else.
+		printf '\n  %s\n' "$token" >&"$GITHUB_TOKEN_MENU_OUT_FD"
 		_github_token_menu_pause
 	fi
 }
@@ -160,6 +164,10 @@ github_token_menu() {
 		# Shown once: it describes what just happened, not what is true.
 		_GITHUB_TOKEN_MENU_STATUS=''
 		_github_token_menu_line action "  ${C_BOLD:-}Select action:${C_RESET:-} "
+		# One blank below the answer, so an action's output starts on its own
+		# rather than running straight on from the line it was asked on. Here
+		# rather than in each action: every one of them wants it.
+		printf '\n' >&"$GITHUB_TOKEN_MENU_OUT_FD"
 		case "$action" in
 		s | S) _github_token_menu_save ;;
 		r | R) _github_token_menu_reveal ;;
