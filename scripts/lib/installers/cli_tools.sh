@@ -28,6 +28,7 @@ install_node_via_nvm() {
 			return 1
 		fi
 		rm -f "$nvm_tmp"
+		log_ok "nvm installed"
 	fi
 
 	export NVM_DIR
@@ -71,7 +72,7 @@ ensure_asdf_installed() {
 			;;
 		esac
 
-		echo "Installing asdf..."
+		log_step "Install asdf"
 		local tag tmp tarball_url tarball_name expected_sha256 actual_sha256 extracted
 		tag="$(github_latest_release_version asdf-vm/asdf)" || {
 			echo "  Could not determine latest asdf release." >&2
@@ -134,7 +135,8 @@ install_go_via_asdf() {
 
 	if ! asdf plugin list 2>/dev/null | grep -qx 'golang'; then
 		log_step "Add asdf golang plugin"
-		asdf plugin add golang || return $?
+		_run_quiet_command 'asdf golang plugin' asdf plugin add golang || return $?
+		log_ok "asdf golang plugin added"
 	fi
 
 	log_step "Install Go latest via asdf"
@@ -240,10 +242,13 @@ codex_migrate_nvm_installations() {
 	for command_path in "${commands[@]}"; do
 		tree="${command_path%/bin/codex}"
 		log_step "Remove npm Codex from $(basename "$tree")"
-		PATH="$tree/bin:$PATH" "$tree/bin/npm" --prefix "$tree" uninstall -g @openai/codex || {
+		# npm narrates the removal; the line below says what happened.
+		_run_quiet_command "npm Codex removal from $(basename "$tree")" \
+			env PATH="$tree/bin:$PATH" "$tree/bin/npm" --prefix "$tree" uninstall -g @openai/codex || {
 			printf '  Failed to remove npm Codex from %s; standalone was not installed.\n' "$tree" >&2
 			return 1
 		}
+		log_ok "npm Codex removed from $(basename "$tree")"
 	done
 	hash -r
 	codex_collect_nvm_commands leftover_commands
@@ -402,7 +407,8 @@ install_powershell() {
 		local deb_file
 		deb_file="$(mktemp /tmp/packages-microsoft-prod.XXXXXX.deb)"
 		wget -q "https://packages.microsoft.com/config/${distro}/${version_id}/packages-microsoft-prod.deb" -O "$deb_file" || return $?
-		sudo dpkg -i "$deb_file" || return $?
+		_run_quiet_command 'Microsoft repository package' \
+			sudo dpkg -i "$deb_file" || return $?
 		rm -f "$deb_file"
 		log_ok "Added Microsoft apt repository"
 	else

@@ -109,7 +109,8 @@ PY
 	# merged configuration before changing the live daemon file when dockerd is
 	# available; older/minimal environments simply retain the safe merge above.
 	if command -v dockerd >/dev/null 2>&1; then
-		if ! sudo dockerd --validate --config-file "$tmp_file"; then
+		if ! _run_quiet_command 'daemon config validation' \
+			sudo dockerd --validate --config-file "$tmp_file"; then
 			log_warn "Docker rejected the proposed daemon configuration; leaving $daemon_json unchanged"
 			sudo rm -f "$tmp_file"
 			return 1
@@ -335,12 +336,14 @@ install_portainer() {
 	_run_quiet_command "pull $portainer_image" run_docker pull -q "$portainer_image" || return $?
 	target_image_id="$(run_docker image inspect --format '{{.Id}}' "$portainer_image")" || return $?
 	[[ -n "$target_image_id" ]] || return 1
+	log_ok "Portainer CE image up to date"
 
 	_portainer_recover_interrupted || return $?
 
 	if ! _portainer_name_exists portainer; then
 		log_step "Install Portainer CE"
-		run_docker volume create portainer_data || return $?
+		_run_quiet_command 'create portainer_data volume' \
+			run_docker volume create portainer_data || return $?
 		_create_stopped_portainer "$portainer_image" || return $?
 		log_ok "Portainer installed (stopped — use 'dpot' to start, 'dpotstop' to stop)"
 		return 0
