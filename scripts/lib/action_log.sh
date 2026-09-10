@@ -114,6 +114,31 @@ _allocate_action_log_paths() {
 	return 1
 }
 
+# tee sees EOF only once every writer has closed the log pipe, and a child that
+# outlived the run still holds one: a probe left blocked on the docker socket
+# the operator is not yet in the group for, or a daemon a package just started.
+# An unbounded wait here hung the whole run after its last line was printed --
+# every phase done, nothing left to say, and no prompt back.
+#
+# tee -a has written the capture as it went, so there is nothing left to flush;
+# the wait exists to reap tee politely, and past this bound that is not worth
+# the run. A run with no such child leaves on the first pass.
+_ACTION_LOG_TEE_CLOSE_SECONDS="${DOTFILES_ACTION_LOG_TEE_CLOSE_SECONDS:-5}"
+
+_action_log_close_tee() {
+	local pid="$1" waited=0 limit
+	limit=$((_ACTION_LOG_TEE_CLOSE_SECONDS * 10))
+	while kill -0 "$pid" 2>/dev/null; do
+		if ((waited >= limit)); then
+			kill "$pid" 2>/dev/null || true
+			break
+		fi
+		sleep 0.1
+		waited=$((waited + 1))
+	done
+	wait "$pid" 2>/dev/null || true
+}
+
 finalize_log_file() {
 	local tmp
 	[[ "$DOTFILES_LOG_ACTIVE" == true ]] || return 0
@@ -127,7 +152,7 @@ finalize_log_file() {
 		_ACTION_LOG_SAVED_ERR=''
 	fi
 	if [[ -n "${_ACTION_LOG_TEE_PID:-}" ]]; then
-		wait "$_ACTION_LOG_TEE_PID" 2>/dev/null || true
+		_action_log_close_tee "$_ACTION_LOG_TEE_PID"
 		_ACTION_LOG_TEE_PID=''
 	fi
 	if [[ -n "$RAW_LOG_FILE" && -f "$RAW_LOG_FILE" ]]; then

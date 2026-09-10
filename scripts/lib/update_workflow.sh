@@ -176,7 +176,8 @@ print_report_table() {
 		printf '%s — run `%sdotfiles update%s` to apply.\n' \
 			"$C_RESET" "$C_BOLD" "$C_RESET"
 	fi
-	printf '\n'
+	# No trailing blank: rt_print_header opens with one, and the two together
+	# left a two-line gap above "=== Upgrade ===".
 }
 
 print_upgrade_summary() {

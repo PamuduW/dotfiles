@@ -199,10 +199,48 @@ test_a_starting_peers_raw_capture_is_not_pruned() (
 	[[ ! -e "$peer" ]]
 )
 
+test_a_surviving_child_does_not_hang_the_finalizer() (
+	# Break caught: a bootstrap run printed every line of its install and then
+	# stopped dead. tee sees EOF only once every writer has closed the log pipe,
+	# and a child that outlived the run -- a probe left blocked on the docker
+	# socket the operator was not yet in the group for -- still held one. The
+	# finalizer waited for it forever, after the run had nothing left to say.
+	local probe_dir="$TEST_HARNESS_ROOT/action-log-orphan"
+	local go="$probe_dir/go"
+	mkdir -p "$probe_dir/log"
+	cat >"$go" <<'EOF'
+#!/usr/bin/env bash
+set -uo pipefail
+DOTFILES_DIR="$1"
+source "$2/scripts/lib/action_log.sh"
+start_action_log
+printf 'the last line of the run\n'
+# Holds the write end of the log pipe past the end of the run.
+sleep 120 &
+EOF
+	chmod 700 "$go"
+
+	local started elapsed status=0
+	started="$SECONDS"
+	DOTFILES_ACTION_LOG_TEE_CLOSE_SECONDS=1 timeout 30 "$go" "$probe_dir" "$REPO_DIR" \
+		>/dev/null 2>&1 || status=$?
+	elapsed=$((SECONDS - started))
+
+	# 124 is timeout's: the finalizer never returned.
+	[[ "$status" -ne 124 ]] || return 1
+	((elapsed < 15)) || return 1
+	# And the capture it was finalizing is still a readable log.
+	local written
+	written="$(finished_logs "$probe_dir")"
+	[[ -n "$written" ]] || return 1
+	grep -Fqx 'the last line of the run' $written
+)
+
 expect_success 'a starting peer raw capture is not pruned' test_a_starting_peers_raw_capture_is_not_pruned
 expect_success 'overlapping action logs keep separate complete output' test_overlapping_action_logs_keep_separate_complete_output
 expect_success 'prune does not delete a live peer raw capture' test_prune_does_not_delete_a_live_peer_raw_capture
 expect_success 'killed writer raw is pruned without harming a peer' test_killed_writer_raw_is_pruned_without_harming_a_peer
+expect_success 'a surviving child does not hang the log finalizer' test_a_surviving_child_does_not_hang_the_finalizer
 
 test_harness_cleanup
 finish_tests
