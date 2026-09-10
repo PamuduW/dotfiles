@@ -112,11 +112,18 @@ _comp_classify_resolve() {
 # installed alternative is not a decision any caller needs on its own, and a
 # value handed back mid-probe cannot be deferred to a batched call.
 _comp_classify_apt() {
-	local catalog="$1" missing_label="$2" clean_detail="$3" entry_count="$4" installed_count="$5"
-	shift 5
+	local queried="$1" catalog="$2" missing_label="$3" clean_detail="$4"
+	local entry_count="$5" installed_count="$6"
+	shift 6
 
 	if [[ "$catalog" != 1 ]]; then
 		printf 'missing|packages.txt not found\n'
+		return 0
+	fi
+	# A query that never answered says nothing about what is installed. Reading
+	# its silence as "none of them" would report a healthy machine as empty.
+	if [[ "$queried" != 1 ]]; then
+		printf 'check|package state unknown (dpkg-query timed out)\n'
 		return 0
 	fi
 
@@ -135,6 +142,25 @@ _comp_classify_apt() {
 	read -r missing unavailable < <(_comp_package_gaps entries installed available)
 	_comp_classify_apt_packages "${#entries[@]}" "$missing" \
 		"$missing_label" "$clean_detail" "$unavailable"
+}
+
+# Every external command a probe runs is bounded, not only the ones whose output
+# _comp_probe_capture collects. The collector waits on every probe child, so one
+# command that never returns is a `dotfiles status` that never returns either --
+# no table, no rollup, nothing to interrupt but the terminal.
+#
+# Package queries get a longer bound than version probes: measured at 36 ms for
+# dpkg-query and 318 ms for apt-cache over the whole catalogue, so ten seconds is
+# thirty times the headroom, and a machine slow enough to exceed it has a real
+# problem worth reporting rather than guessing about.
+_comp_probe_bounded() {
+	local seconds="$1"
+	shift
+	timeout --kill-after=0.2 "$seconds" "$@"
+}
+
+_comp_package_probe_timeout() {
+	printf '%s\n' "${COMP_PACKAGE_PROBE_TIMEOUT_SECONDS:-10}"
 }
 
 _install_short_label() {
@@ -453,7 +479,7 @@ _comp_apt_available() {
 			name="${line%:}"
 			;;
 		esac
-	done < <(apt-cache policy -- "$@" 2>/dev/null)
+	done < <(_comp_probe_bounded "$(_comp_package_probe_timeout)" apt-cache policy -- "$@" 2>/dev/null)
 }
 
 # Interrogation for an apt-backed component. The count and the wording of a
@@ -462,11 +488,11 @@ _comp_apt_available() {
 _comp_probe_apt_packages_for_component() {
 	local component="$1" missing_label="$2" clean_suffix="${3:-}"
 	local pkg_file="${PKG_FILE:-${DOTFILES_DIR:-}/packages/packages.txt}"
-	local package_count=0 tags
+	local package_count=0 tags queried=0
 	local -a packages=() installed_names=() available_names=()
 
 	if [[ ! -f "$pkg_file" ]]; then
-		comp_classify apt 0 "$missing_label" '' 0
+		comp_classify apt 1 0 "$missing_label" '' 0
 		return 0
 	fi
 
@@ -494,12 +520,23 @@ _comp_probe_apt_packages_for_component() {
 
 		local name rest
 		local -A installed_set=()
+		local query_file
+		query_file="$(mktemp)" || return 1
+		# shellcheck disable=SC2016  # dpkg-query's own format language, not ours.
+		if _comp_probe_bounded "$(_comp_package_probe_timeout)" \
+			dpkg-query -W -f='${Package} ${Status}\n' "${all_names[@]}" >"$query_file" 2>/dev/null ||
+			[[ -s "$query_file" ]]; then
+			# dpkg-query exits non-zero when any name is unknown, which is the
+			# normal case for a rename; output is what says it answered.
+			queried=1
+		fi
 		while read -r name rest; do
 			if [[ "$rest" == 'install ok installed' ]]; then
 				installed_names+=("$name")
 				installed_set["$name"]=1
 			fi
-		done < <(dpkg-query -W -f='${Package} ${Status}\n' "${all_names[@]}" 2>/dev/null)
+		done <"$query_file"
+		rm -f -- "$query_file"
 
 		# Asked only about entries nothing satisfies, and only when there are
 		# any: `apt-cache policy` over the whole catalogue costs ~318 ms against
@@ -521,7 +558,10 @@ _comp_probe_apt_packages_for_component() {
 		((${#absent[@]} > 0)) && mapfile -t available_names < <(_comp_apt_available "${absent[@]}")
 	fi
 
-	comp_classify apt 1 "$missing_label" "${package_count} apt packages${clean_suffix}" \
+	# Nothing to query is a complete answer, so an empty catalogue counts as
+	# queried; the reading below decides what an empty list means.
+	((package_count > 0)) || queried=1
+	comp_classify apt "$queried" 1 "$missing_label" "${package_count} apt packages${clean_suffix}" \
 		"$package_count" "${#installed_names[@]}" \
 		${packages[@]+"${packages[@]}"} \
 		${installed_names[@]+"${installed_names[@]}"} \
@@ -637,10 +677,12 @@ _comp_classify_python_runtime() {
 _comp_probe_python() {
 	local python3_present=0 pip_ok=0 venv_ok=0
 
+	local timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
 	if command -v python3 >/dev/null 2>&1; then
 		python3_present=1
-		python3 -m pip --version >/dev/null 2>&1 && pip_ok=1
-		((pip_ok)) && python3 -m venv --help >/dev/null 2>&1 && venv_ok=1
+		_comp_probe_bounded "$timeout_seconds" python3 -m pip --version >/dev/null 2>&1 && pip_ok=1
+		((pip_ok)) &&
+			_comp_probe_bounded "$timeout_seconds" python3 -m venv --help >/dev/null 2>&1 && venv_ok=1
 	fi
 
 	if ((python3_present && pip_ok && venv_ok)); then

@@ -79,22 +79,27 @@ test_system_package_probe_uses_system_package_tags_only() (
 		'# @system' 'system-package' >"$pkg_file"
 	local queried="$TEST_HARNESS_ROOT/scoped-packages.queried"
 	: >"$queried"
+	# A fake binary, not a shell function: the probe runs its queries through
+	# `timeout` so one that never answers cannot hang a status, and `timeout`
+	# execs a real command.
+	#
 	# The probe asks dpkg-query about every owned package in one call and reads
-	# one status line per package, so the stub answers in batch.
-	dpkg-query() {
-		local arg
-		for arg in "$@"; do
-			[[ "$arg" == -* ]] && continue
-			printf '%s\n' "$arg" >>"$queried"
-			# The probe asks for `${Package} ${Status}` so it can match an
-			# installed name back to the entry that offered it.
-			case "$arg" in
-			core-package | cli-package | system-package) printf '%s install ok installed\n' "$arg" ;;
-			*) printf '%s unknown ok not-installed\n' "$arg" ;;
-			esac
-		done
-	}
-	output="$(PKG_FILE="$pkg_file" _comp_probe_system_packages)"
+	# one status line per package, so the fake answers in batch.
+	local fake_bin="$TEST_HARNESS_ROOT/system-tags-bin"
+	mkdir -p -- "$fake_bin"
+	cat >"$fake_bin/dpkg-query" <<EOF
+#!/usr/bin/env bash
+for arg in "\$@"; do
+	[[ "\$arg" == -* ]] && continue
+	printf '%s\n' "\$arg" >>"$queried"
+	case "\$arg" in
+	core-package | cli-package | system-package) printf '%s install ok installed\n' "\$arg" ;;
+	*) printf '%s unknown ok not-installed\n' "\$arg" ;;
+	esac
+done
+EOF
+	chmod +x -- "$fake_bin/dpkg-query"
+	output="$(PATH="$fake_bin:$PATH" PKG_FILE="$pkg_file" _comp_probe_system_packages)"
 	[[ "$output" == 'installed|3 apt packages' ]] || return 1
 	# python-package belongs to the python component and must not be queried.
 	[[ "$(sort "$queried" | tr '\n' ' ')" == 'cli-package core-package system-package ' ]] || return 1
@@ -106,18 +111,22 @@ test_python_probe_checks_every_owned_apt_package() (
 	local pkg_file="$TEST_HARNESS_ROOT/python-packages.txt" output
 	printf '%s\n' \
 		'# @python' python3 python3-pip python3-venv python3-pil >"$pkg_file"
-	dpkg-query() {
-		local arg
-		for arg in "$@"; do
-			[[ "$arg" == -* ]] && continue
-			case "$arg" in
-			python3-pil) printf '%s unknown ok not-installed\n' "$arg" ;;
-			*) printf '%s install ok installed\n' "$arg" ;;
-			esac
-		done
-	}
-	python3() { return 0; }
-	output="$(PKG_FILE="$pkg_file" _comp_probe_python)"
+	# Fake binaries rather than shell functions; see the note above.
+	local fake_bin="$TEST_HARNESS_ROOT/python-owned-bin"
+	mkdir -p -- "$fake_bin"
+	cat >"$fake_bin/dpkg-query" <<'EOF'
+#!/usr/bin/env bash
+for arg in "$@"; do
+	[[ "$arg" == -* ]] && continue
+	case "$arg" in
+	python3-pil) printf '%s unknown ok not-installed\n' "$arg" ;;
+	*) printf '%s install ok installed\n' "$arg" ;;
+	esac
+done
+EOF
+	printf '#!/usr/bin/env bash\nexit 0\n' >"$fake_bin/python3"
+	chmod +x -- "$fake_bin/dpkg-query" "$fake_bin/python3"
+	output="$(PATH="$fake_bin:$PATH" PKG_FILE="$pkg_file" _comp_probe_python)"
 	[[ "$output" == 'missing|1 of 4 Python packages not installed' ]]
 )
 
@@ -335,7 +344,39 @@ EOF
 )
 
 check 'package probe counts a renamed package as present' test_package_probe_counts_a_renamed_package_as_present
+test_a_wedged_package_query_is_bounded_and_honest() (
+	# The collector waits on every probe child, so a command that never returns
+	# is a `dotfiles status` that never returns: no table, no rollup, nothing
+	# but a terminal to interrupt. Reproduced before the bound existed.
+	#
+	# And the bound must not trade a hang for a wrong answer: silence from
+	# dpkg-query says nothing about what is installed, so reading it as "none of
+	# them" would report a healthy machine as empty.
+	local pkg_file="$TEST_HARNESS_ROOT/wedged-packages.txt"
+	printf '%s\n' '# @system' 'curl' 'git' >"$pkg_file"
+
+	local fake_bin="$TEST_HARNESS_ROOT/wedged-bin"
+	mkdir -p -- "$fake_bin"
+	printf '#!/usr/bin/env bash\nsleep 60\n' >"$fake_bin/dpkg-query"
+	chmod +x -- "$fake_bin/dpkg-query"
+	comp_package_tags() { printf 'system\n'; }
+
+	local output started elapsed
+	started="$(date +%s)"
+	output="$(PATH="$fake_bin:$PATH" PKG_FILE="$pkg_file" COMP_PACKAGE_PROBE_TIMEOUT_SECONDS=2 \
+		_comp_probe_apt_packages_for_component system_packages packages)"
+	elapsed=$(($(date +%s) - started))
+
+	[[ "$output" == 'check|package state unknown (dpkg-query timed out)' ]] || {
+		printf 'wedged query read as: %s\n' "$output" >&2
+		return 1
+	}
+	# Bounded, not merely eventually finished.
+	((elapsed < 30))
+)
+
 check 'package probe separates a dropped package from a missing one' test_package_probe_separates_a_dropped_package_from_a_missing_one
+check 'a wedged package query is bounded and says so' test_a_wedged_package_query_is_bounded_and_honest
 test_tool_resolution_ignores_windows_binaries_reached_through_interop() (
 	# Break caught: appendWindowsPath puts the Windows PATH on ours, so
 	# `command -v cursor` returned the Windows editor. The installer skipped as

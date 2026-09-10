@@ -247,16 +247,21 @@ test_batch_transport_parity() {
 	requests+=("git_credential${fs}store"$'\x1e'"cache${fs}true${fs}on-demand${fs}check${fs}true")
 	wanted+=("$(_comp_classify_git_credential $'store\ncache' true on-demand check true)")
 
-	requests+=("apt${fs}1${fs}apt packages${fs}2 apt packages${fs}2${fs}2${fs}dnsutils|bind9-dnsutils${fs}curl${fs}bind9-dnsutils${fs}curl")
+	requests+=("apt${fs}1${fs}1${fs}apt packages${fs}2 apt packages${fs}2${fs}2${fs}dnsutils|bind9-dnsutils${fs}curl${fs}bind9-dnsutils${fs}curl")
 	wanted+=('installed|2 apt packages')
 
-	requests+=("apt${fs}1${fs}apt packages${fs}2 apt packages${fs}2${fs}1${fs}dnsutils|bind9-dnsutils${fs}curl${fs}curl${fs}bind9-dnsutils")
+	requests+=("apt${fs}1${fs}1${fs}apt packages${fs}2 apt packages${fs}2${fs}1${fs}dnsutils|bind9-dnsutils${fs}curl${fs}curl${fs}bind9-dnsutils")
 	wanted+=('missing|1 of 2 apt packages not installed')
 
 	# No catalog to read: the reading owns that line too, so the probe has one
 	# exit rather than an early printf beside a classification.
-	requests+=("apt${fs}0${fs}packages${fs}${fs}0${fs}0")
+	requests+=("apt${fs}1${fs}0${fs}packages${fs}${fs}0${fs}0")
 	wanted+=('missing|packages.txt not found')
+
+	# A query that never answered: neither side may read that as "nothing is
+	# installed", which would report a healthy machine as empty.
+	requests+=("apt${fs}0${fs}1${fs}apt packages${fs}2 apt packages${fs}2${fs}0${fs}curl${fs}git")
+	wanted+=('check|package state unknown (dpkg-query timed out)')
 
 	mapfile -t got < <(printf '%s\n' "${requests[@]}" |
 		PYTHONDONTWRITEBYTECODE=1 python3 "$PY_DIR/probe_classify.py")
@@ -284,8 +289,8 @@ test_bash_fallback_matches_batch() {
 		"version${fs}Go${fs}go${fs}${fs}0${fs}${fs}${fs}"
 		"go${fs}1${fs}0${fs}unexpected output${fs}1${fs}0${fs}golang 1.22.0"
 		"portainer${fs}0${fs}0${fs}"
-		"apt${fs}1${fs}Python packages${fs}4 apt packages; python3 pip venv ready${fs}4${fs}3${fs}python3${fs}python3-pip${fs}python3-venv${fs}python3-pil${fs}python3${fs}python3-pip${fs}python3-venv${fs}python3-pil"
-		"apt${fs}0${fs}packages${fs}${fs}0${fs}0"
+		"apt${fs}1${fs}1${fs}Python packages${fs}4 apt packages; python3 pip venv ready${fs}4${fs}3${fs}python3${fs}python3-pip${fs}python3-venv${fs}python3-pil${fs}python3${fs}python3-pip${fs}python3-venv${fs}python3-pil"
+		"apt${fs}1${fs}0${fs}packages${fs}${fs}0${fs}0"
 	)
 
 	mapfile -t python_results < <(printf '%s\n' "${requests[@]}" |

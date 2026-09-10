@@ -323,10 +323,15 @@ def classify(fields: list[str]) -> str:
         # Variable arity: the package entries and the installed names are both
         # lists, so the entry count separates them. Counting and reading are one
         # request because the count is not a decision anyone else needs.
-        catalog, missing_label, clean_detail, entry_count, installed_count = args[:5]
+        queried, catalog, missing_label, clean_detail, entry_count, installed_count = args[:6]
         if catalog != "1":
             return "missing|packages.txt not found"
-        rest = args[5:]
+        # A query that never answered says nothing about what is installed;
+        # reading its silence as "none of them" would report a healthy machine
+        # as empty, which is worse than saying the state is unknown.
+        if queried != "1":
+            return "check|package state unknown (dpkg-query timed out)"
+        rest = args[6:]
         count, installed_end = int(entry_count or 0), int(entry_count or 0) + int(
             installed_count or 0
         )
