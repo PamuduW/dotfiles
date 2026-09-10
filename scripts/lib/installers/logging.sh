@@ -66,6 +66,9 @@ log_component_rule() {
 	if declare -F _rt_ensure_colors >/dev/null 2>&1; then
 		_rt_ensure_colors
 	fi
+	# A boundary ends the step before it, so no animation is left running
+	# underneath the next component's output.
+	_step_spinner_stop
 	printf '%s%s%s\n' "${C_DIM:-}" '----------------------------------------' "${C_RESET:-}"
 }
 
@@ -78,6 +81,11 @@ _step_spinner_stop() {
 	declare -F tty_printf >/dev/null 2>&1 && tty_printf '\r\033[K'
 	return 0
 }
+
+# How many prefixed lines the run has printed. The update step runner reads it
+# across one step to tell a step that reported its own outcome from one that
+# recorded a result silently, without every updater having to say which it is.
+_LOG_LINE_COUNT=0
 
 _log_prefix() {
 	local level="$1"
@@ -98,6 +106,7 @@ _log_prefix() {
 	# animation must not still be claiming otherwise underneath it.
 	_step_spinner_stop
 	printf '%s[%s]%s %s\n' "$color" "$level" "$C_RESET" "$message"
+	_LOG_LINE_COUNT=$((_LOG_LINE_COUNT + 1))
 	[[ "$level" == STEP ]] && _step_spinner_start "$message"
 	return 0
 }

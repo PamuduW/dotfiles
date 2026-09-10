@@ -33,7 +33,11 @@ run_vendor_shell_installer() {
 		return 1
 	fi
 
-	env "$@" bash "$installer" || rc=$?
+	# Through the quiet wrapper like every other install step: a vendor
+	# installer's banner and progress bars are its own narration, and the run
+	# already says what it is doing on either side of this call. A failure still
+	# prints the whole output.
+	_run_quiet_command "the $label installer" env "$@" bash "$installer" || rc=$?
 	rm -rf -- "$tmp_dir"
 	return "$rc"
 }

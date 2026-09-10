@@ -244,7 +244,7 @@ _dotfiles_confirm_repo_update() {
 
 _update_apt_packages() {
 	command -v apt-get >/dev/null 2>&1 || {
-		_warn '  apt-get not found, skipping'
+		log_skip 'apt-get not found'
 		upgrade_result_set skipped
 		return 0
 	}
@@ -254,11 +254,11 @@ _update_apt_packages() {
 	# prints several hundred lines of dpkg unpacking, which buried every other
 	# phase of the run. A failure still prints its whole output.
 	if ((pending > 0)); then
-		_msg "  Upgrading ${pending} package(s)..."
+		log_step "Apply ${pending} package upgrade(s)"
 	fi
 	_run_quiet_command 'apt upgrade' sudo apt-get -qq -o Dpkg::Use-Pty=0 upgrade -y || return $?
 	if ((pending > 0)); then
-		_msg "  Upgraded ${pending} package(s)"
+		log_ok "Upgraded ${pending} package(s)"
 		# Not checked-no-change: the summary reported "no change" for a run that
 		# had just replaced 140 packages, and hiding the dpkg output would have
 		# left that line as the only thing the operator saw.
@@ -268,7 +268,7 @@ _update_apt_packages() {
 	# Says so rather than printing nothing: a heading with no lines under it
 	# reads as a step that died, and this one is silent precisely when it had
 	# the least to do.
-	_msg '  No packages to upgrade'
+	log_skip 'No apt packages to upgrade'
 	upgrade_result_set checked-no-change
 }
 
@@ -286,6 +286,20 @@ _apply_repository_update_step() {
 	upgrade_result_set checked-no-change
 }
 
+# The apt index refresh, before any component step. It is shared work rather
+# than one component's, so it gets its own rule and step lines.
+_run_apt_index_refresh() {
+	local rc=0
+	log_component_rule
+	log_step 'Refresh apt package index'
+	_run_quiet_command 'apt-get update' sudo apt-get update -qq || rc=$?
+	if ((rc != 0)); then
+		_report_command_failure "$rc" 'sudo apt-get update'
+		return "$rc"
+	fi
+	log_ok 'apt package index refreshed'
+}
+
 # One approved update runs every managed step, including the runtimes and fonts
 # that `--all` used to gate. See cmd_update for the compatibility note.
 _run_update_downstream() {
@@ -296,10 +310,10 @@ _run_update_downstream() {
 		return 1
 	}
 	if command -v apt-get >/dev/null 2>&1; then
-		sudo apt-get update -qq || apt_refresh_rc=$?
+		_run_apt_index_refresh || apt_refresh_rc=$?
 		if [[ $apt_refresh_rc -ne 0 ]]; then
-			_report_command_failure "$apt_refresh_rc" 'sudo apt-get update'
 			UPGRADE_STEP_RESULT["${UPDATE_STEP_LABEL[apt]}"]="$UPGRADE_RESULT_FAILED"
+			log_component_rule
 			return "$apt_refresh_rc"
 		fi
 	fi
@@ -316,6 +330,8 @@ _run_update_downstream() {
 		fi
 		_run_upgrade_step "$label" "$retry" "$apply"
 	done
+	# Closes the last component, so the summary does not start hard against it.
+	log_component_rule
 
 	local result failures=0
 	for result in "${UPGRADE_STEP_RESULT[@]}"; do [[ "$result" == "$UPGRADE_RESULT_FAILED" ]] && failures=$((failures + 1)); done
@@ -353,7 +369,14 @@ _dotfiles_run_update() {
 		_msg 'Downstream updates skipped.'
 		return 0
 	fi
-	printf '\n%s%s=== Upgrade ===%s\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
+	printf '\n%s%s=== Upgrade ===%s\n\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
+	_log_legend_line
+	# One prompt these tools own and can place, rather than sudo's own arriving
+	# from inside whichever step needs root first. Same call, same reason, as
+	# the install run.
+	if declare -F sudo_prime >/dev/null 2>&1; then
+		sudo_prime || true
+	fi
 	local downstream_rc=0
 	_run_update_downstream || downstream_rc=$?
 	print_upgrade_summary repo_result observation_rows

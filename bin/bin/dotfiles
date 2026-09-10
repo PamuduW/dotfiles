@@ -63,6 +63,7 @@ _dotfiles_load_update_modules() {
 	local path
 	_dotfiles_load_status_modules || return 1
 	for path in \
+		"${DOTFILES_DIR}/scripts/lib/shared/sudo_prime.sh" \
 		"${DOTFILES_DIR}/scripts/lib/arch.sh" \
 		"${DOTFILES_DIR}/scripts/lib/repo_update.sh" \
 		"${DOTFILES_DIR}/scripts/lib/github_token.sh" \

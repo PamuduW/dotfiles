@@ -151,9 +151,13 @@ read_tty_line() {
 # A secret read that still shows the operator something is landing: one '*' per
 # character, backspace erases. Silent reads left them unable to tell a stalled
 # prompt from a typed one.
+# mask_char is what each keystroke echoes. Passing an empty string echoes
+# nothing, which is what the sudo prompt wants: sudo's own prompt is silent, and
+# a masked one that is not tells a shoulder-surfer the length of the password.
 read_tty_secret() {
 	local __var_name="$1"
 	local prompt="$2"
+	local __mask="${3-*}"
 	# Underscored on purpose: a plain `value` here would be the local this
 	# function assigns, not the caller's variable of the same name, and the
 	# secret would silently come back empty.
@@ -171,12 +175,12 @@ read_tty_secret() {
 		$'\177' | $'\b')
 			if [[ -n "$__secret" ]]; then
 				__secret="${__secret%?}"
-				tty_printf '\b \b'
+				if [[ -n "$__mask" ]]; then tty_printf '\b \b'; fi
 			fi
 			;;
 		*)
 			__secret+="$__char"
-			tty_printf '*'
+			if [[ -n "$__mask" ]]; then tty_printf '%s' "$__mask"; fi
 			;;
 		esac
 	done

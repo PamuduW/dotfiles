@@ -34,14 +34,35 @@ upgrade_result_set() {
 
 _report_command_failure() {
 	local exit_status="$1" retry_command="$2"
+	# Any line ends the running step, and a failure notice most of all: the
+	# animation would otherwise still be claiming the step was in progress.
+	declare -F _step_spinner_stop >/dev/null 2>&1 && _step_spinner_stop
 	printf '%s>> FAILED (exit %s) — retry manually: %s <<%s\n' \
 		"$C_RED" "$exit_status" "$retry_command" "$C_RESET" >&2
+}
+
+# Every step ends on one outcome line, in the install screen's vocabulary.
+# A step that recorded a result without printing anything used to leave a
+# heading with nothing under it, which reads as a step that died; and a step
+# that returns while its animation is still running leaves the animation to be
+# overwritten by the next component's rule.
+_upgrade_step_close() {
+	local label="$1" result="$2"
+	case "$result" in
+	updated) log_ok "$label updated" ;;
+	already-current) log_skip "$label already current" ;;
+	recovered) log_ok "$label recovered" ;;
+	skipped) log_skip "$label skipped" ;;
+	*) log_ok "$label checked" ;;
+	esac
 }
 
 _run_upgrade_step() {
 	local label="$1" retry_command="$2"
 	shift 2
-	printf '\n%s%s== %s ==%s\n' "$C_BOLD" "$C_YELLOW" "$label" "$C_RESET"
+	local lines_before="$_LOG_LINE_COUNT"
+	log_component_rule
+	log_step "$label"
 	UPGRADE_STEP_ACTIVE_RESULT="$UPGRADE_RESULT_CHECKED_NO_CHANGE"
 	set +e
 	"$@"
@@ -50,9 +71,14 @@ _run_upgrade_step() {
 	if [[ $rc -ne 0 ]]; then
 		_report_command_failure "$rc" "$retry_command"
 		UPGRADE_STEP_RESULT["$label"]="$UPGRADE_RESULT_FAILED"
-	else
-		UPGRADE_STEP_RESULT["$label"]="$UPGRADE_STEP_ACTIVE_RESULT"
+		return 0
 	fi
+	UPGRADE_STEP_RESULT["$label"]="$UPGRADE_STEP_ACTIVE_RESULT"
+	# One line printed since entry is the [STEP] line and nothing else: the step
+	# recorded a result without saying anything, so give it a closing line
+	# rather than leaving a heading with nothing under it.
+	((_LOG_LINE_COUNT > lines_before + 1)) ||
+		_upgrade_step_close "$label" "$UPGRADE_STEP_ACTIVE_RESULT"
 }
 
 _github_latest_version() {

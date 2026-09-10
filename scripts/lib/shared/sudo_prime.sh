@@ -3,8 +3,8 @@
 #
 # sudo caches a successful authentication for the rest of the run, so priming it
 # once up front means the 47 later `sudo` calls never prompt at all -- and the
-# single prompt the operator does see masks with `*` like every other prompt
-# these tools own.
+# single prompt the operator does see is one these tools own and can place, so
+# it does not surface halfway through a step's output.
 #
 # SUDO_ASKPASS is the supported way to replace that prompt; ssh-askpass and
 # ksshaskpass use the same mechanism. Falls back to sudo's own prompt whenever
@@ -27,7 +27,7 @@ sudo_prime() {
 
 	if [[ -x "$helper" ]] && declare -F tty_available >/dev/null 2>&1 && tty_available; then
 		if SUDO_ASKPASS="$helper" sudo -A -v; then
-			# The masked prompt ends its own line; this is the gap between it
+			# The prompt ends its own line; this is the gap between it
 			# and the install output, printed only when a prompt was shown --
 			# an already-authenticated run returned above and adds nothing.
 			tty_printf '\n'

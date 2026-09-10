@@ -17,17 +17,9 @@ install_node_via_nvm() {
 		log_step "Install nvm"
 		local wsl_clean_path
 		wsl_clean_path="$(echo "$PATH" | tr ':' '\n' | grep -v '^/mnt/' | tr '\n' ':' | sed 's/:$//')"
-		local nvm_tmp
-		nvm_tmp="$(mktemp)"
-		if ! run_vendor_shell_installer \
+		run_vendor_shell_installer \
 			'https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh' 'nvm' \
-			"PROFILE=/dev/null" "PATH=$wsl_clean_path" >"$nvm_tmp" 2>&1; then
-			echo "  Error during nvm install:" >&2
-			cat "$nvm_tmp" >&2
-			rm -f "$nvm_tmp"
-			return 1
-		fi
-		rm -f "$nvm_tmp"
+			"PROFILE=/dev/null" "PATH=$wsl_clean_path" || return $?
 		log_ok "nvm installed"
 	fi
 
@@ -160,15 +152,7 @@ install_cursor_cli() {
 		fi
 	fi
 	log_step "Install Cursor CLI"
-	local cursor_tmp
-	cursor_tmp="$(mktemp)"
-	if ! run_vendor_shell_installer 'https://cursor.com/install' 'Cursor CLI' >"$cursor_tmp" 2>&1; then
-		echo "  Error during Cursor CLI install:" >&2
-		cat "$cursor_tmp" >&2
-		rm -f "$cursor_tmp"
-		return 1
-	fi
-	rm -f "$cursor_tmp"
+	run_vendor_shell_installer 'https://cursor.com/install' 'Cursor CLI' || return $?
 	if [[ -x "$HOME/.local/bin/agent" ]]; then
 		mkdir -p "$HOME/bin"
 		ln -sf "$HOME/.local/bin/agent" "$HOME/bin/agent"
@@ -182,10 +166,9 @@ codex_sync_standalone() {
 	mkdir -p "$bin_dir" || return 1
 
 	# Keep the installer's PATH setup from editing the Stow-managed .bashrc.
-	# Captured like the Cursor and Claude installers already are: the vendor
-	# script narrates its own progress, and the step reports its own result.
-	PATH="$bin_dir:$PATH" _run_quiet_command 'Codex CLI install' \
-		run_vendor_shell_installer \
+	# The download boundary captures the vendor script's own narration; the step
+	# reports its own result.
+	PATH="$bin_dir:$PATH" run_vendor_shell_installer \
 		'https://chatgpt.com/codex/install.sh' \
 		'Codex CLI' \
 		'CODEX_NON_INTERACTIVE=1' || return $?
@@ -354,15 +337,7 @@ install_claude_cli() {
 		return 0
 	fi
 	log_step "Install Claude CLI"
-	local claude_tmp
-	claude_tmp="$(mktemp)"
-	if ! run_vendor_shell_installer 'https://claude.ai/install.sh' 'Claude CLI' >"$claude_tmp" 2>&1; then
-		echo "  Error during Claude CLI install:" >&2
-		cat "$claude_tmp" >&2
-		rm -f "$claude_tmp"
-		return 1
-	fi
-	rm -f "$claude_tmp"
+	run_vendor_shell_installer 'https://claude.ai/install.sh' 'Claude CLI' || return $?
 	log_ok "Claude CLI installed"
 }
 
@@ -448,16 +423,8 @@ install_direnv() {
 
 	log_step "Install/update direnv"
 	mkdir -p "$HOME/.local/bin"
-	local direnv_tmp
-	direnv_tmp="$(mktemp)"
-	if ! run_vendor_shell_installer 'https://direnv.net/install.sh' 'direnv' \
-		"bin_path=$HOME/.local/bin" >"$direnv_tmp" 2>&1; then
-		echo "  Error during direnv install:" >&2
-		cat "$direnv_tmp" >&2
-		rm -f "$direnv_tmp"
-		return 1
-	fi
-	rm -f "$direnv_tmp"
+	run_vendor_shell_installer 'https://direnv.net/install.sh' 'direnv' \
+		"bin_path=$HOME/.local/bin" || return $?
 
 	if [[ -x "$HOME/.local/bin/direnv" ]]; then
 		mkdir -p "$HOME/bin"

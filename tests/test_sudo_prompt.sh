@@ -2,10 +2,10 @@
 # shellcheck shell=bash
 set -uo pipefail
 
-# Every prompt these tools own masks with `*`. sudo's own prompt echoes nothing,
-# and it is the one the operator sees most often, so it was the odd one out.
-# SUDO_ASKPASS replaces it; sudo's credential cache means one prompt covers the
-# whole run.
+# The sudo prompt echoes nothing: a `*` per keystroke publishes the length of
+# the password, and this is the prompt the operator answers most often and in
+# the least private places. SUDO_ASKPASS replaces sudo's own prompt so the run
+# can place it; sudo's credential cache means one prompt covers the whole run.
 
 TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
@@ -24,7 +24,7 @@ check() {
 	fi
 }
 
-test_askpass_masks_and_prints_the_password() {
+test_askpass_echoes_nothing_and_prints_the_password() {
 	local out="$TEST_DIR/.askpass.out" seen got
 	printf 'hunter2\n' >"$TEST_DIR/.askpass.in"
 	got="$(
@@ -36,10 +36,11 @@ test_askpass_masks_and_prints_the_password() {
 	seen="$(cat "$out")"
 	rm -f "$TEST_DIR/.askpass.in" "$out"
 
-	# sudo reads the password from stdout; the operator sees only asterisks, one
-	# per character, and never the password itself.
+	# sudo reads the password from stdout; the terminal gets the prompt and
+	# nothing else -- no echo, no mask, and never the password itself.
 	[[ "$got" == 'hunter2' ]] || return 1
-	[[ "$seen" == *'*******'* ]] || return 1
+	[[ "$seen" == *'[sudo] password:'* ]] || return 1
+	[[ "$seen" != *'*'* ]] || return 1
 	[[ "$seen" != *hunter2* ]]
 }
 
@@ -50,7 +51,7 @@ _load_prime() {
 	source "$REPO_DIR/scripts/lib/shared/sudo_prime.sh"
 }
 
-test_prime_uses_the_masked_helper_when_a_terminal_exists() (
+test_prime_uses_the_owned_helper_when_a_terminal_exists() (
 	_load_prime
 	local calls=''
 	sudo() {
@@ -109,8 +110,8 @@ test_prime_is_silent_where_sudo_is_absent() (
 	sudo_prime
 )
 
-check 'askpass masks the input and gives sudo the password' test_askpass_masks_and_prints_the_password
-check 'priming uses the masked helper when a terminal exists' test_prime_uses_the_masked_helper_when_a_terminal_exists
+check 'askpass echoes nothing and gives sudo the password' test_askpass_echoes_nothing_and_prints_the_password
+check 'priming uses the owned helper when a terminal exists' test_prime_uses_the_owned_helper_when_a_terminal_exists
 check 'priming falls back to sudo without a terminal' test_prime_falls_back_to_sudo_without_a_terminal
 check 'priming does not prompt when already authenticated' test_prime_does_not_prompt_when_already_authenticated
 check 'priming is silent on a machine without sudo' test_prime_is_silent_where_sudo_is_absent

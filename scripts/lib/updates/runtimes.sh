@@ -45,12 +45,13 @@ check_node() {
 upgrade_node() {
 	_load_nvm
 	if ! command -v nvm >/dev/null 2>&1; then
-		_msg "  nvm not installed, skipping Node.js upgrade"
+		log_skip "nvm is not installed; skipping the Node.js upgrade"
 		upgrade_result_set skipped
 		return 0
 	fi
-	nvm install --lts || return $?
-	nvm alias --no-colors default 'lts/*' || return $?
+	_run_quiet_command 'nvm install --lts' nvm install --lts || return $?
+	_run_quiet_command 'nvm alias default' nvm alias --no-colors default 'lts/*' || return $?
+	log_ok "Node.js on the LTS default ($(node_installed_version))"
 	upgrade_result_set checked-no-change
 }
 
@@ -106,42 +107,44 @@ upgrade_npm() {
 	local target="${1:-}" nvm_rc=0 fallback_rc=0
 	_load_nvm
 	if ! command -v nvm >/dev/null 2>&1; then
-		_msg "  nvm not installed, skipping npm upgrade"
+		log_skip "nvm is not installed; skipping the npm upgrade"
 		upgrade_result_set skipped
 		return 0
 	fi
 	if [[ "$(npm_installed_version)" == "$NOT_INSTALLED" ]]; then
-		_msg "  npm not installed for the active Node version, skipping"
+		log_skip "npm is not installed for the active Node version"
 		upgrade_result_set skipped
 		return 0
 	fi
 	if ! npm_version_token_is_safe "$target"; then
-		_warn "  npm target is unavailable or invalid; refusing an unpinned upgrade"
+		log_warn "npm target is unavailable or invalid; refusing an unpinned upgrade"
 		return 1
 	fi
 	if npm_version_reached "$target"; then
-		_msg "  npm is already at the target version $target"
+		log_skip "npm is already at the target version $target"
 		upgrade_result_set already-current
 		return 0
 	fi
 
-	nvm install-latest-npm || nvm_rc=$?
+	_run_quiet_command 'nvm install-latest-npm' nvm install-latest-npm || nvm_rc=$?
 	hash -r
 	if npm_version_reached "$target"; then
-		_msg "  npm verified at $(npm_installed_version)"
+		log_ok "npm verified at $(npm_installed_version)"
 		upgrade_result_set updated
 		return 0
 	fi
 
-	_warn "  nvm did not reach npm $target (exit $nvm_rc); trying the pinned fallback"
-	npm install -g "npm@$target" --engine-strict --allow-remote=all || fallback_rc=$?
+	log_warn "nvm did not reach npm $target (exit $nvm_rc); trying the pinned fallback"
+	log_step "Install npm@$target directly"
+	_run_quiet_command "npm install -g npm@$target" \
+		npm install -g "npm@$target" --engine-strict --allow-remote=all || fallback_rc=$?
 	hash -r
 	if [[ $fallback_rc -ne 0 ]] || ! npm_version_reached "$target"; then
-		_warn "  npm remains at $(npm_installed_version); expected at least $target"
+		log_warn "npm remains at $(npm_installed_version); expected at least $target"
 		[[ $fallback_rc -ne 0 ]] && return "$fallback_rc"
 		return 1
 	fi
-	_msg "  npm verified at $(npm_installed_version)"
+	log_ok "npm verified at $(npm_installed_version)"
 	upgrade_result_set recovered
 }
 
@@ -188,12 +191,13 @@ check_go() {
 
 upgrade_go() {
 	if ! command -v asdf >/dev/null 2>&1; then
-		_msg "  asdf not installed, skipping Go upgrade"
+		log_skip "asdf is not installed; skipping the Go upgrade"
 		upgrade_result_set skipped
 		return 0
 	fi
-	asdf install golang latest || return $?
-	asdf set -u golang latest || return $?
-	asdf reshim golang || return $?
+	_run_quiet_command 'asdf install golang latest' asdf install golang latest || return $?
+	_run_quiet_command 'asdf set golang latest' asdf set -u golang latest || return $?
+	_run_quiet_command 'asdf reshim golang' asdf reshim golang || return $?
+	log_ok "Go on the latest asdf release ($(go_installed_version))"
 	upgrade_result_set checked-no-change
 }

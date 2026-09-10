@@ -46,18 +46,21 @@ upgrade_cursor_cli() {
 	# instead of updating the CLI.
 	executable="$(tool_resolve 'agent cursor-agent')" || executable=''
 	if [[ -z "$executable" ]]; then
-		_msg "  Cursor CLI not installed, skipping"
+		log_skip "Cursor CLI not installed"
 		upgrade_result_set skipped
 		return 0
 	fi
-	"$executable" update || update_rc=$?
+	_run_quiet_command 'cursor-agent update' "$executable" update || update_rc=$?
 	if [[ $update_rc -eq 0 ]]; then
+		log_ok "Cursor CLI checked ($(cursor_installed_version))"
 		upgrade_result_set checked-no-change
 		return 0
 	fi
-	_warn "  Cursor primary update failed (exit $update_rc); retrying with the official installer."
+	log_warn "Cursor CLI self-update failed (exit $update_rc); retrying with the official installer"
+	log_step 'Reinstall Cursor CLI from the official installer'
 	run_vendor_shell_installer 'https://cursor.com/install' 'Cursor CLI' || fallback_rc=$?
 	[[ $fallback_rc -eq 0 ]] || return "$fallback_rc"
+	log_ok "Cursor CLI reinstalled ($(cursor_installed_version))"
 	upgrade_result_set recovered
 }
 
@@ -254,25 +257,24 @@ upgrade_codex_cli() {
 		# say what happened or it prints a section heading and nothing under it,
 		# which reads as a step that died.
 		if [[ "$before" != "$after" ]]; then
-			_msg "  Codex CLI updated to ${after:-unknown}"
+			log_ok "Codex CLI updated to ${after:-unknown}"
 			upgrade_result_set updated
 		else
-			_msg "  Codex CLI already up to date (${after:-unknown})"
+			log_skip "Codex CLI already up to date (${after:-unknown})"
 			upgrade_result_set checked-no-change
 		fi
 		;;
 	absent)
-		_msg "  Codex CLI standalone is not installed, skipping"
+		log_skip "Codex CLI standalone is not installed"
 		upgrade_result_set skipped
 		;;
 	external | standalone-shadowed)
 		active="$(codex_active_command 2>/dev/null || true)"
-		_msg "  Codex CLI is externally managed or shadowed: ${active:-unknown}"
-		_msg "  See README.md#codex-cli-migration."
+		log_skip "Codex CLI is externally managed or shadowed: ${active:-unknown} (see README.md#codex-cli-migration)"
 		upgrade_result_set skipped
 		;;
 	*)
-		_msg "  Unknown Codex installation state, skipping"
+		log_skip "Codex CLI installation state is unknown"
 		upgrade_result_set skipped
 		;;
 	esac
@@ -312,11 +314,12 @@ upgrade_claude_cli() {
 	# instead of the Linux one, or launched.
 	executable="$(tool_resolve 'claude')" || executable=''
 	if [[ -z "$executable" ]]; then
-		_msg "  Claude CLI not installed, skipping"
+		log_skip "Claude CLI not installed"
 		upgrade_result_set skipped
 		return 0
 	fi
-	"$executable" update || return $?
+	_run_quiet_command 'claude update' "$executable" update || return $?
+	log_ok "Claude CLI checked ($(claude_installed_version))"
 	upgrade_result_set checked-no-change
 }
 
@@ -357,7 +360,7 @@ check_lazygit() {
 
 upgrade_lazygit() {
 	if ! command -v lazygit >/dev/null 2>&1; then
-		_msg "  lazygit not installed, skipping"
+		log_skip "lazygit not installed"
 		upgrade_result_set skipped
 		return 0
 	fi
@@ -368,7 +371,7 @@ upgrade_lazygit() {
 		install_lazygit_from_github || return $?
 		upgrade_result_set updated
 	else
-		_msg "  lazygit already up to date (${installed})"
+		log_skip "lazygit already up to date (${installed})"
 		upgrade_result_set already-current
 	fi
 }
@@ -410,7 +413,7 @@ check_lazydocker() {
 
 upgrade_lazydocker() {
 	if ! command -v lazydocker >/dev/null 2>&1; then
-		_msg "  lazydocker not installed, skipping"
+		log_skip "lazydocker not installed"
 		upgrade_result_set skipped
 		return 0
 	fi
@@ -421,7 +424,7 @@ upgrade_lazydocker() {
 		install_lazydocker_from_github || return $?
 		upgrade_result_set updated
 	else
-		_msg "  lazydocker already up to date (${installed})"
+		log_skip "lazydocker already up to date (${installed})"
 		upgrade_result_set already-current
 	fi
 }
@@ -471,12 +474,12 @@ upgrade_monaspace() {
 	fi
 	latest="$(monaspace_latest_version 2>/dev/null || true)"
 	if [[ -z "$latest" ]]; then
-		_warn "  Could not check Monaspace release (GitHub API); keeping ${installed}"
+		log_warn "Could not check the Monaspace release (GitHub API); keeping ${installed}"
 		upgrade_result_set checked-no-change
 		return 0
 	fi
 	if [[ "$installed" == "$latest" ]]; then
-		_msg "  Monaspace fonts already up to date (${installed})"
+		log_skip "Monaspace fonts already up to date (${installed})"
 		upgrade_result_set already-current
 		return 0
 	fi

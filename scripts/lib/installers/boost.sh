@@ -172,12 +172,12 @@ boost_sync_latest_release() {
 
 upgrade_boost_cli() {
 	if ! boost_command >/dev/null 2>&1; then
-		printf '%s\n' '  Boost CLI not installed, skipping'
+		log_skip 'Boost CLI not installed'
 		if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set skipped; fi
 		return 0
 	fi
 	if ! boost_cli_is_dotfiles_owned; then
-		printf '%s\n' '  Boost CLI is externally managed, preserving it'
+		log_skip 'Boost CLI is externally managed; preserving it'
 		if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set skipped; fi
 		return 0
 	fi

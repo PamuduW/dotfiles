@@ -257,9 +257,15 @@ test_update_topics_use_submenu_yellow() (
 	output="$(print_report_table)" 2>/dev/null || true
 	grep -Fq $'\033[33m== Update report ==' <<<"$output" || return 1
 
+	# A component step is the install screen's rule plus a cyan [STEP] line, not
+	# a yellow heading of its own; a probe that says nothing still gets a
+	# closing outcome line rather than a heading with nothing under it.
 	_upgrade_topic_probe() { :; }
-	output="$(_run_upgrade_step lazygit 'dotfiles update' _upgrade_topic_probe)"
-	grep -Fq $'\033[33m== lazygit ==' <<<"$output" || return 1
+	output="$(DOTFILES_NO_PROGRESS_ANIMATION=1 _run_upgrade_step lazygit 'dotfiles update' _upgrade_topic_probe)"
+	# -e, because the rule starts with a dash and grep would read it as options.
+	grep -Fq -e '----------------------------------------' <<<"$output" || return 1
+	grep -Fq $'\033[36m[STEP]\033[0m lazygit' <<<"$output" || return 1
+	grep -Fq 'lazygit checked' <<<"$output" || return 1
 
 	repo_update_run() {
 		local -n result_ref="$4"
@@ -269,6 +275,7 @@ test_update_topics_use_submenu_yellow() (
 	_dotfiles_confirm() { return 0; }
 	_run_update_downstream() { :; }
 	print_upgrade_summary() { :; }
+	sudo_prime() { :; }
 	output="$(cmd_update)"
 	grep -Fq $'\033[38;5;208m=== Upgrade ===' <<<"$output"
 )
@@ -299,11 +306,12 @@ test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan() (
 	}
 	print_report_table() { :; }
 	_dotfiles_confirm() { return 0; }
-	_run_update_downstream() { printf '%s\n' '== apt packages =='; }
+	_run_update_downstream() { printf '%s\n' '[STEP] apt packages'; }
 	print_upgrade_summary() { :; }
+	sudo_prime() { :; }
 	output="$(cmd_update)"
 	grep -Fq '=== Upgrade ===' <<<"$output" || return 1
-	grep -Fq '== apt packages ==' <<<"$output" || return 1
+	grep -Fq '[STEP] apt packages' <<<"$output" || return 1
 	! grep -Fq 'Opt-in plan:' <<<"$output"
 )
 
@@ -512,7 +520,7 @@ expect_success 'update report ignores empty probe rows' test_update_report_ignor
 expect_success 'upgrade summary ignores empty probe rows' test_upgrade_summary_ignores_empty_probe_rows
 expect_success 'update rows align a Unicode em-dash available cell' test_update_rows_align_unicode_available_cells
 expect_success 'repository update preview uses semantic colors' test_repository_update_preview_uses_semantic_colors
-expect_success 'update subtopics use the report yellow palette' test_update_topics_use_submenu_yellow
+expect_success 'update headings and step lines use their own palettes' test_update_topics_use_submenu_yellow
 expect_success 'repository fetch notices use cyan' test_repository_fetch_notice_uses_cyan
 expect_success 'repository fetch notices color each line independently' test_repository_fetch_notice_colors_each_line
 expect_success 'update apply uses a high-level Upgrade heading without opt-in plan noise' test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan

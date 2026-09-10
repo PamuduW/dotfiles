@@ -360,8 +360,8 @@ test_graphify_upgrade_uses_uv_tool_upgrade() (
 	output="$(upgrade_graphify_cli)" || return 1
 	grep -Fqx 'uv:tool upgrade graphifyy' "$calls" || return 1
 	! grep -Fq 'agentbot:' "$calls" || return 1
-	grep -Fq "If Agentbot's Graphify integration is enabled, run agentbot graphify setup" <<<"$output" || return 1
-	grep -Fq 'or agentbot update to refresh the installed skill.' <<<"$output"
+	grep -Fq '[OK]' <<<"$output" || return 1
+	grep -Fq "run 'agentbot update' to refresh its skill" <<<"$output"
 )
 
 test_graphify_upgrade_retries_with_system_certs_after_failure() (
@@ -381,7 +381,7 @@ test_graphify_upgrade_retries_with_system_certs_after_failure() (
 	[[ "$(sed -n '2p' "$calls")" == 'uv:tool upgrade graphifyy' ]] || return 1
 	[[ "$(sed -n '3p' "$calls")" == 'uv:tool upgrade graphifyy --system-certs' ]] || return 1
 	[[ "$(wc -l <"$calls")" -eq 3 ]] || return 1
-	grep -Fq "If Agentbot's Graphify integration is enabled, run agentbot graphify setup" <<<"$output"
+	grep -Fq "run 'agentbot update' to refresh its skill" <<<"$output"
 )
 
 test_graphify_upgrade_failure_has_copyable_retry_command() (
@@ -472,15 +472,19 @@ test_cursor_update_falls_back_to_official_installer() (
 		printf '%s\n' 'printf "official-installer\n"' >"$output_file"
 	}
 
+	export DOTFILES_NO_PROGRESS_ANIMATION=1
 	if ! _run_upgrade_step 'Cursor CLI' 'dotfiles update' upgrade_cursor_cli >"$output" 2>&1; then
 		return 1
 	fi
 	grep -Fqx 'agent:update' "$calls" || return 1
 	grep -Fq 'curl:-fsSL --proto =https --tlsv1.2 -o ' "$calls" || return 1
 	grep -Fq ' https://cursor.com/install' "$calls" || return 1
-	grep -Fqx 'official-installer' "$output" || return 1
+	# The vendor installer's own narration is captured like every other install
+	# step's; the run says what it did on either side of it.
+	! grep -Fqx 'official-installer' "$output" || return 1
 	[[ "${UPGRADE_STEP_RESULT[$label]:-}" == recovered ]] || return 1
-	grep -Fq 'primary update failed (exit 7); retrying with the official installer' "$output" || return 1
+	grep -Fq 'self-update failed (exit 7); retrying with the official installer' "$output" || return 1
+	grep -Fq 'Cursor CLI reinstalled' "$output" || return 1
 	! grep -Fq '>> FAILED' "$output"
 )
 
@@ -505,6 +509,7 @@ test_a_windows_cursor_is_never_executed() (
 		# only thing that answers to a Cursor name is the Windows editor.
 		export PATH="$win_bin:/usr/bin:/bin"
 		export DOTFILES_WINDOWS_MOUNT_ROOT="$machine/mnt"
+		export DOTFILES_NO_PROGRESS_ANIMATION=1
 		run_vendor_shell_installer() { printf 'fallback\n' >>"$calls"; }
 		_run_upgrade_step 'Cursor CLI' 'dotfiles update' upgrade_cursor_cli >"$output" 2>&1
 		printf '%s' "${UPGRADE_STEP_RESULT[$label]:-}"
@@ -514,7 +519,7 @@ test_a_windows_cursor_is_never_executed() (
 	# present the honest outcome is "not installed".
 	[[ ! -s "$calls" ]] || return 1
 	[[ "$result" == skipped ]] || return 1
-	grep -Fq 'not installed, skipping' "$output"
+	grep -Fq 'Cursor CLI not installed' "$output"
 )
 
 test_the_apt_upgrade_is_quiet_and_reported_as_updated() (
@@ -527,6 +532,7 @@ test_the_apt_upgrade_is_quiet_and_reported_as_updated() (
 
 	local result
 	result="$(
+		export DOTFILES_NO_PROGRESS_ANIMATION=1
 		apt_upgradable_count() { printf '140\n'; }
 		sudo() { printf 'DPKG-NOISE\n'; }
 		_update_apt_packages >"$output" 2>&1
@@ -536,7 +542,7 @@ test_the_apt_upgrade_is_quiet_and_reported_as_updated() (
 	# The dpkg output is captured, not printed; the count is what the operator
 	# is told, so a hidden upgrade is still an announced one.
 	! grep -Fq 'DPKG-NOISE' "$output" || return 1
-	grep -Fq 'Upgrading 140 package(s)' "$output" || return 1
+	grep -Fq 'Apply 140 package upgrade(s)' "$output" || return 1
 	grep -Fq 'Upgraded 140 package(s)' "$output" || return 1
 	[[ "$result" == updated ]]
 )
