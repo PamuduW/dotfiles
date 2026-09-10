@@ -91,7 +91,8 @@ _github_token_menu_render() {
 	printf '  %sNo repository scopes are needed for this workflow.%s\n\n' \
 		"${C_DIM:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
 	printf '  %s\n' \
-		"$(ui_format_shortcuts s 'Save or replace' r 'Reveal once' d Remove q Back)${C_RESET:-}" \
+		"$(ui_format_shortcuts s 'Save or replace' r 'Reveal once' \
+			c 'Check with GitHub' d Remove q Back)${C_RESET:-}" \
 		>&"$GITHUB_TOKEN_MENU_OUT_FD"
 	if [[ -n "$_GITHUB_TOKEN_MENU_STATUS" ]]; then
 		printf '\n  %s\n' "$_GITHUB_TOKEN_MENU_STATUS" >&"$GITHUB_TOKEN_MENU_OUT_FD"
@@ -165,6 +166,27 @@ _github_token_menu_reveal() {
 	fi
 }
 
+# The saved token, checked against GitHub on demand. Saving checks what is
+# being typed; nothing checked what was already there, and a token that was
+# good when it was saved is exactly the thing that expires or gets revoked
+# later. Same three outcomes as the save path, for the same reasons.
+_github_token_menu_check_saved() {
+	local token='' rc=0
+	github_token_read token
+	if [[ -z "$token" ]]; then
+		_github_token_menu_say "${C_YELLOW:-}No valid saved token to check.${C_RESET:-}"
+		return 0
+	fi
+	printf '  %sChecking the saved token with GitHub...%s\n' \
+		"${C_DIM:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
+	github_token_verify "$token" || rc=$?
+	case "$rc" in
+	0) _github_token_menu_say "${C_GREEN:-}GitHub accepted the saved token.${C_RESET:-}" ;;
+	1) _github_token_menu_say "${C_RED:-}GitHub rejected the saved token; it is invalid, expired, or revoked.${C_RESET:-}" ;;
+	*) _github_token_menu_say "${C_YELLOW:-}Could not reach GitHub to check the saved token.${C_RESET:-}" ;;
+	esac
+}
+
 _github_token_menu_remove() {
 	if [[ ! -e "$(github_token_file)" && ! -L "$(github_token_file)" ]]; then
 		_github_token_menu_say "${C_DIM:-}No saved token file exists.${C_RESET:-}"
@@ -198,6 +220,7 @@ github_token_menu() {
 		case "$action" in
 		s | S) _github_token_menu_save ;;
 		r | R) _github_token_menu_reveal ;;
+		c | C) _github_token_menu_check_saved ;;
 		d | D) _github_token_menu_remove ;;
 		q | Q) break ;;
 		*) _github_token_menu_say "${C_YELLOW:-}Invalid choice.${C_RESET:-}" ;;

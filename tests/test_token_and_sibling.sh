@@ -269,6 +269,42 @@ test_fingerprint_and_warned_one_time_reveal() (
 	grep -Fq 'Press Enter to continue' "$output"
 )
 
+test_saved_token_can_be_checked_from_the_menu() (
+	# Saving checks what is being typed; nothing checked what was already
+	# saved, and a token that was good when it was written is exactly the thing
+	# that expires or gets revoked later.
+	reset_token_state
+	local output="$TEST_HARNESS_ROOT/check-saved.menu"
+	local saved
+	saved="$(make_token saved)"
+	github_token_write "$saved" || return 1
+
+	local rc
+	for rc in 0 1 2; do
+		eval "github_token_verify() { return $rc; }"
+		run_menu_script $'c\nq\n' "$output" || return 1
+		case "$rc" in
+		0) grep -Fq 'GitHub accepted the saved token.' "$output" || return 1 ;;
+		1) grep -Fq 'GitHub rejected the saved token' "$output" || return 1 ;;
+		*) grep -Fq 'Could not reach GitHub to check the saved token.' "$output" || return 1 ;;
+		esac
+		# Only the render prints an outcome, so its presence is the proof it
+		# was carried into the next frame rather than wiped with the one it
+		# was produced on. And the saved token is never echoed to get there.
+		! grep -Fq "$saved" "$output" || return 1
+	done
+
+	# Nothing saved is not an error, and asks GitHub nothing.
+	reset_token_state
+	github_token_verify() {
+		printf 'must not be asked\n' >>"$output"
+		return 0
+	}
+	run_menu_script $'c\nq\n' "$output" || return 1
+	grep -Fq 'No valid saved token to check.' "$output" || return 1
+	! grep -Fq 'must not be asked' "$output"
+)
+
 test_menu_presentation_is_complete() (
 	reset_token_state
 	local output="$TEST_HARNESS_ROOT/presentation.menu"
@@ -376,5 +412,6 @@ expect_success 'invalid saved state warns once across menu redraw and Reveal per
 expect_success 'migration and export consolidate one bad-target warning per attempt' test_migration_and_export_consolidate_target_warning_per_attempt
 expect_success 'root github_token hook reaches screen without reorder or extra pause' test_root_hook_reaches_token_menu_without_reordering
 expect_success 'original-home legacy and active token paths remain unchanged' test_original_home_token_paths_remain_unchanged
+expect_success 'the saved token can be checked against GitHub from the menu' test_saved_token_can_be_checked_from_the_menu
 
 finish_tests
