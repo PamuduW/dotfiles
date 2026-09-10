@@ -91,6 +91,28 @@ test_progress_animation_stays_out_of_the_log() (
 		return 1
 	}
 
+	# Every frame leaves the cursor at column 0. A tool that prints to stdout
+	# mid-step then overwrites the animation from the left instead of welding
+	# itself to the end of the step name, which is how a stray container id
+	# arrived as "...with requested image1ecaa0f4c86...".
+	# Each frame is followed by a carriage return, so the text never sits under
+	# the cursor waiting to be appended to.
+	local frames
+	frames="$(cat "$out")"
+	# Two carriage returns: the frame's own, then the next frame's. One alone
+	# would mean the text was left sitting under the cursor.
+	[[ "$frames" == *"Install something slow"$'\r\r'* ]] || {
+		printf 'the animation does not park the cursor at column 0\n' >&2
+		return 1
+	}
+	# And the last thing written is the erase, not a frame.
+	[[ "$frames" == *$'\r\033[K' ]] || return 1
+
+	# A rule separates one component's output from the next.
+	local rule
+	rule="$(NO_COLOR=1 log_component_rule)"
+	[[ "$rule" =~ ^-+$ ]] || return 1
+
 	# A run with no terminal has no animation and no complaint about it.
 	local quiet="$TEST_HARNESS_ROOT/spinner-quiet.log"
 	DOTFILES_TTY_OUTPUT=/dev/null DOTFILES_NO_PROGRESS_ANIMATION=1 bash -c '

@@ -294,7 +294,10 @@ _replace_managed_portainer() {
 
 _create_stopped_portainer() {
 	local portainer_image="$1"
-	run_docker create \
+	# `docker create` prints the id of what it made; the run says what it did
+	# in its own words a line later.
+	_run_quiet_command 'create portainer container' \
+		run_docker create \
 		-p 8000:8000 \
 		-p 9443:9443 \
 		--name portainer \

@@ -4,10 +4,13 @@ _run_quiet_command() {
 	local label="$1"
 	shift
 
-	local tmp
+	local tmp status=0
 	tmp="$(mktemp)"
 
-	if "$@" >"$tmp" 2>&1; then
+	# Captured on the failing command itself: `$?` after `fi` is the status of
+	# the if statement, which is zero when no branch ran.
+	"$@" >"$tmp" 2>&1 || status=$?
+	if ((status == 0)); then
 		rm -f "$tmp"
 		return 0
 	fi
@@ -15,7 +18,10 @@ _run_quiet_command() {
 	echo "  Error during ${label}:" >&2
 	cat "$tmp" >&2
 	rm -f "$tmp"
-	return 1
+	# The command's own status, not a flat 1: hiding output is this helper's
+	# job, and callers that propagate an exit code -- install_portainer returns
+	# whatever docker said -- would otherwise lose it by being quieted.
+	return "$status"
 }
 
 # A step that is working, said in a way a log file will not inherit.
@@ -39,12 +45,28 @@ _step_spinner_start() {
 	(
 		local index=0
 		while true; do
-			tty_printf '\r  %s %s' "${_STEP_SPINNER_FRAMES[index % 10]}" "$message"
+			# The cursor is parked back at column 0 after each frame. Anything
+			# a tool prints mid-step then overwrites the animation from the
+			# left instead of being appended to the end of it -- which is how
+			# a stray container id arrived welded to the end of a step name.
+			tty_printf '\r  %s %s\r' "${_STEP_SPINNER_FRAMES[index % 10]}" "$message"
 			index=$((index + 1))
 			sleep 0.12
 		done
 	) &
 	_STEP_SPINNER_PID=$!
+}
+
+# A rule between one component's output and the next.
+#
+# Twenty components in one stream read as a wall; the boundary an operator cares
+# about is the component, which is what the install loop iterates. Dim, because
+# it separates rather than says anything.
+log_component_rule() {
+	if declare -F _rt_ensure_colors >/dev/null 2>&1; then
+		_rt_ensure_colors
+	fi
+	printf '%s%s%s\n' "${C_DIM:-}" '----------------------------------------' "${C_RESET:-}"
 }
 
 _step_spinner_stop() {

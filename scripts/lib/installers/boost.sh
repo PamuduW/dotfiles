@@ -162,7 +162,9 @@ boost_sync_latest_release() {
 	latest_digest="${metadata[1]}"
 	installed_tag="$(boost_installed_tag 2>/dev/null || true)"
 	if [[ -n "$installed_tag" ]] && [[ "$(printf '%s\n%s\n' "${installed_tag#v}" "${latest_tag#v}" | sort -V | tail -n1)" == "${installed_tag#v}" ]]; then
-		printf '  Boost CLI is already current at %s\n' "$installed_tag"
+		# [SKIP], not a bare line: every other "already satisfied" in the run
+		# says so in the legend's vocabulary, and this one sat outside it.
+		log_skip "Boost CLI already current at $installed_tag"
 		return 0
 	fi
 	boost_install_release "$latest_tag" "$latest_digest"

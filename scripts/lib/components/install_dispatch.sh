@@ -170,8 +170,16 @@ run_install() {
 	local run_started started
 	run_started="$(_install_now_seconds)"
 
+	local first_component=true
 	for key in "${COMP_INSTALL_ORDER[@]}"; do
 		is_on "$key" || continue
+		# Between components, not before the first: the heading above already
+		# separates the run from what came before it.
+		if [[ "$first_component" == true ]]; then
+			first_component=false
+		else
+			declare -F log_component_rule >/dev/null 2>&1 && log_component_rule
+		fi
 		started="$(_install_now_seconds)"
 		if comp_install "$key"; then
 			INSTALL_COMPONENT_RESULT["$key"]=completed
