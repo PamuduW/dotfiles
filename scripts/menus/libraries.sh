@@ -28,7 +28,7 @@ libraries_menu() {
 			if declare -F command_lib_menu >/dev/null; then
 				command_lib_menu || rc=$?
 			else
-				printf 'Command Lib is not available in this phase.\n'
+				printf '  Command Lib is not available in this phase.\n'
 				rc=1
 			fi
 			;;
@@ -36,7 +36,7 @@ libraries_menu() {
 			if declare -F package_lib_menu >/dev/null; then
 				package_lib_menu || rc=$?
 			else
-				printf 'Package Lib is not available in this phase.\n'
+				printf '  Package Lib is not available in this phase.\n'
 				rc=1
 			fi
 			;;

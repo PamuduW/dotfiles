@@ -352,12 +352,12 @@ removed_command_guidance() {
 
 cmd_help() {
 	cat <<EOF
-Usage: dotfiles <command> [options]
+  Usage: dotfiles <command> [options]
 
-Commands:
+  Commands:
 EOF
 	dotfiles_command_print_table
-	printf '\nRepo: %s\n' "$DOTFILES_DIR"
+	printf '\n  Repo: %s\n' "$DOTFILES_DIR"
 }
 
 main() {

@@ -68,7 +68,7 @@ _apply_noninteractive_git_defaults() {
 _run_setup_header() {
 	printf '\n'
 	ui_print_header "WSL Dotfiles Setup" ""
-	printf 'Log file: %s\n' "$LOG_FILE"
+	printf '  Log file: %s\n' "$LOG_FILE"
 }
 
 run_initial_setup_flow() {

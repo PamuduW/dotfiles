@@ -158,7 +158,7 @@ restore_dotfiles_backup() {
 			[[ "$resolved" == "$DOTFILES_DIR/"* ]] && rm -f -- "$target"
 		fi
 		if [[ -e "$target" || -L "$target" ]]; then
-			printf 'Error: cannot restore %s because the target is occupied. Backup remains at %s.\n' \
+			printf '  Error: cannot restore %s because the target is occupied. Backup remains at %s.\n' \
 				"$target" "$backup" >&2
 			continue
 		fi
