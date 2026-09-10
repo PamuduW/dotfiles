@@ -8,6 +8,81 @@ github_token_legacy_file() {
 	printf '%s\n' "${XDG_CONFIG_HOME:-$HOME/.config}/agent_bootstrap/github.env"
 }
 
+# Whether GitHub itself accepts the credential, as opposed to whether it looks
+# like one. github_token_is_valid checks shape -- length and character class --
+# so a mistyped, expired or revoked token passed it and was saved, and the
+# operator found out later when a rate-limited call failed instead.
+#
+# /user answers exactly the question being asked: 200 means GitHub accepts this
+# credential, 401 means it does not. It needs no scopes -- a classic token with
+# none set still reads it -- and no body is parsed, so nothing sensitive is
+# read back or logged.
+#
+# The token goes in through curl's private stdin config, never its argv, the
+# same discipline github_curl uses: an argv is world-readable in /proc.
+#
+#   0  accepted by GitHub
+#   1  refused by GitHub
+#   2  could not ask -- no curl, no network, or an answer that decides nothing
+GITHUB_TOKEN_VERIFY_TIMEOUT="${GITHUB_TOKEN_VERIFY_TIMEOUT:-10}"
+
+# curl carrying an explicit token, with the token in its private stdin config
+# and never in its argv, where /proc would publish it to every user on the
+# machine. github_curl wraps this with the saved token; verification needs the
+# same guarantee for a token that is not saved yet, so the discipline lives
+# here, once, in the tree both products share.
+#
+# Stderr is filtered rather than discarded: curl names the URL it failed on,
+# which is worth keeping, and a redirect or a verbose run can echo the header.
+github_token_curl() (
+	local token="$1"
+	shift
+	local rc=0 stderr_file old_umask content=''
+	old_umask="$(umask)"
+	umask 077
+	stderr_file="$(mktemp "${TMPDIR:-/tmp}/github-token-curl.stderr.XXXXXX")" || {
+		umask "$old_umask"
+		return 1
+	}
+	umask "$old_umask"
+	trap 'rm -f -- "$stderr_file"' EXIT
+
+	curl --config - "$@" 2>"$stderr_file" <<EOF || rc=$?
+header = "Authorization: Bearer ${token}"
+EOF
+	IFS= read -r -d '' content <"$stderr_file" || true
+	[[ -z "$content" ]] || printf '%s' "${content//"$token"/[redacted]}" >&2
+	rm -f -- "$stderr_file"
+	trap - EXIT
+	return "$rc"
+)
+
+github_token_verify() (
+	local token="$1" status='' rc=0 url
+	# Inside the function that uses it: a sensitive URL at file scope sits
+	# outside any boundary, which is exactly what the consumer scanner reads it
+	# as, and it is right to.
+	url="${GITHUB_TOKEN_VERIFY_URL:-https://api.github.com/user}"
+	command -v curl >/dev/null 2>&1 || return 2
+	status="$(
+		github_token_curl "$token" \
+			--silent --output /dev/null --write-out '%{http_code}' \
+			--max-time "$GITHUB_TOKEN_VERIFY_TIMEOUT" --proto '=https' --tlsv1.2 \
+			--header 'Accept: application/vnd.github+json' \
+			--header 'User-Agent: dotfiles-token-check' \
+			"$url" 2>/dev/null
+	)" || rc=$?
+	((rc == 0)) || return 2
+	case "$status" in
+	200) return 0 ;;
+	401) return 1 ;;
+	# 403 is a secondary rate limit or a blocked agent, not a verdict on the
+	# credential; anything else is GitHub having a bad day. Neither is grounds
+	# for refusing a token the operator may well have typed correctly.
+	*) return 2 ;;
+	esac
+)
+
 github_token_is_valid() {
 	local token="$1"
 	if [[ "$token" == ghs_* ]]; then

@@ -212,7 +212,11 @@ for name in sys.argv[1:]:
     lines = pathlib.Path(name).read_text().splitlines()
     function_starts = [
         index for index, line in enumerate(lines)
-        if re.match(r'^\s*[A-Za-z_][A-Za-z0-9_]*\s*\(\)\s*\{', line)
+        # `name() (` as well as `name() {`: the two curl boundaries both use a
+        # subshell body, so a regex that only knew braces attributed a URL
+        # inside one of them to whichever braced function happened to be above
+        # it, and could have missed a real bypass there entirely.
+        if re.match(r'^\s*[A-Za-z_][A-Za-z0-9_]*\s*\(\)\s*[\{\(]', line)
     ]
     for i, line in enumerate(lines):
         if re.search(r'https://(?:api\.github\.com/|github\.com/.*/releases/download/)', line):
@@ -224,8 +228,14 @@ for name in sys.argv[1:]:
             later = [candidate for candidate in function_starts if candidate > start]
             end = later[0] if later else len(lines)
             function_lines = lines[start:end]
-            if not any('github_curl' in candidate for candidate in function_lines):
-                print(f'{name}:{i + 1}: sensitive function does not call github_curl', file=sys.stderr)
+            # Either boundary: github_curl carries the saved token,
+            # github_token_curl an explicit one for a token being verified
+            # before it is saved. Both put it in curl's stdin config.
+            if not any(
+                'github_curl' in candidate or 'github_token_curl' in candidate
+                for candidate in function_lines
+            ):
+                print(f'{name}:{i + 1}: sensitive function does not call a curl boundary', file=sys.stderr)
                 raise SystemExit(1)
             direct_curl = re.compile(
                 r'^\s*(?:(?:if|elif)\s+!\s+)?curl(?:\s|$)'
@@ -304,6 +314,7 @@ test_global_dotfiles_routed() {
 test_complete_consumer_inventory() {
 	local files=(
 		"$REPO_DIR/scripts/lib/github_api.sh"
+		"$REPO_DIR/scripts/lib/shared/github_token.sh"
 		"$REPO_DIR/scripts/lib/installers/github_release.sh"
 		"$REPO_DIR/scripts/lib/installers/fonts.sh"
 		"$REPO_DIR/scripts/lib/installers/cli_tools.sh"
@@ -378,6 +389,62 @@ test_release_lookup_is_fetched_once_per_repository() (
 	[[ "$(wc -l <"$calls")" -eq 2 ]]
 )
 
+test_token_verification_asks_github_before_saving() (
+	# github_token_is_valid checks shape only -- length and character class --
+	# so a mistyped, expired or revoked token passed it and was saved, and the
+	# operator found out later when a rate-limited call failed. The three
+	# outcomes are distinct on purpose: being unable to ask is not a refusal.
+	local calls="$TEST_HARNESS_ROOT/verify.calls"
+
+	# 200: GitHub accepts the credential.
+	: >"$calls"
+	(
+		github_token_curl() {
+			printf '%s\n' "$*" >>"$calls"
+			printf '200'
+		}
+		github_token_verify tok-accepted
+	) || return 1
+
+	# The token reaches the boundary as its first argument, never as a curl
+	# option: an argv is world-readable in /proc.
+	grep -q '^tok-accepted ' "$calls" || return 1
+	grep -q 'api.github.com/user' "$calls" || return 1
+
+	# 401: GitHub refuses it.
+	local rc=0
+	(
+		github_token_curl() { printf '401'; }
+		github_token_verify tok-refused
+	) || rc=$?
+	[[ "$rc" -eq 1 ]] || return 1
+
+	# Anything else decides nothing, and neither does a curl that fails.
+	rc=0
+	(
+		github_token_curl() { printf '403'; }
+		github_token_verify tok-throttled
+	) || rc=$?
+	[[ "$rc" -eq 2 ]] || return 1
+
+	rc=0
+	(
+		github_token_curl() { return 6; }
+		github_token_verify tok-offline
+	) || rc=$?
+	[[ "$rc" -eq 2 ]] || return 1
+
+	# No curl at all is the same "could not ask", not a refusal.
+	rc=0
+	(
+		# shellcheck disable=SC2123  # Deliberate: the point is that curl is
+		# unreachable, and the subshell keeps it from leaving.
+		export PATH=/nonexistent
+		github_token_verify tok-nocurl
+	) || rc=$?
+	[[ "$rc" -eq 2 ]]
+)
+
 expect_success 'missing token preserves anonymous argv and sends no auth config' test_anonymous_exact_argv
 expect_success 'malformed, invalid, and wrong-mode saved state warn and stay anonymous' test_invalid_saved_states_fall_back
 expect_success 'valid environment token uses private curl config only' test_environment_token_private_config
@@ -396,5 +463,6 @@ expect_success 'structural scanner rejects a direct curl bypass near github_curl
 expect_success 'vendor shell installers use the downloaded-script boundary' test_excluded_downloads_unchanged
 expect_success 'tests remain isolated behind the fail-closed curl fake' test_isolation_and_fake_network
 expect_success 'a release lookup is fetched once per repository' test_release_lookup_is_fetched_once_per_repository
+expect_success 'saving asks GitHub before it writes the token' test_token_verification_asks_github_before_saving
 
 finish_tests

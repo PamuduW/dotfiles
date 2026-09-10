@@ -1,16 +1,10 @@
 # shellcheck shell=bash
 # GitHub Releases API helpers (User-Agent + optional GITHUB_TOKEN).
 
-_github_curl_redact_stderr() {
-	local token="$1" stderr_file="$2" content=''
-	IFS= read -r -d '' content <"$stderr_file" || true
-	printf '%s' "${content//"$token"/[redacted]}" >&2
-}
-
 # Keep token discovery and curl authentication inside a child shell. The token
 # is supplied through curl's private standard-input config, never its argv.
 github_curl() (
-	local token='' rc stderr_file old_umask
+	local token='' rc
 	if declare -F github_token_export_if_valid >/dev/null; then
 		github_token_export_if_valid
 		token="${GITHUB_TOKEN:-}"
@@ -22,26 +16,11 @@ github_curl() (
 		return
 	fi
 
-	old_umask="$(umask)"
-	umask 077
-	stderr_file="$(mktemp "${TMPDIR:-/tmp}/github-curl.stderr.XXXXXX")" || {
-		umask "$old_umask"
-		return 1
-	}
-	umask "$old_umask"
-	trap 'rm -f -- "$stderr_file"' EXIT
-
-	if curl --config - "$@" \
-		2>"$stderr_file" <<EOF; then
-header = "Authorization: Bearer ${token}"
-EOF
-		rc=0
-	else
-		rc=$?
-	fi
-	_github_curl_redact_stderr "$token" "$stderr_file"
-	rm -f -- "$stderr_file"
-	trap - EXIT
+	# One implementation of "the token goes in through stdin, never argv", in
+	# the shared tree, so the saved token and a token being verified before it
+	# is saved get the same guarantee.
+	rc=0
+	github_token_curl "$token" "$@" || rc=$?
 	return "$rc"
 )
 

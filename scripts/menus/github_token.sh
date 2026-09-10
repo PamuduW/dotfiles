@@ -99,6 +99,32 @@ _github_token_menu_render() {
 	printf '\n' >&"$GITHUB_TOKEN_MENU_OUT_FD"
 }
 
+# Ask GitHub before saving, rather than only checking the shape. A refusal is
+# definitive -- the token is wrong, expired or revoked -- so nothing is saved
+# and the operator is told which of those it is not. Being unable to ask is not
+# a refusal: an operator configuring this offline still gets the normal
+# question, with the check named as skipped rather than passed.
+_github_token_menu_check() {
+	local token="$1" rc=0
+	printf '  %sChecking it with GitHub...%s\n' \
+		"${C_DIM:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
+	github_token_verify "$token" || rc=$?
+	case "$rc" in
+	0)
+		printf '  %sGitHub accepted it.%s\n\n' \
+			"${C_GREEN:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
+		;;
+	1)
+		_github_token_menu_say "${C_RED:-}GitHub rejected this token; nothing was saved.${C_RESET:-}"
+		return 1
+		;;
+	*)
+		printf '  %sCould not reach GitHub to check it; saving without a check.%s\n\n' \
+			"${C_YELLOW:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
+		;;
+	esac
+}
+
 _github_token_menu_save() {
 	local token=''
 	printf '  %sInput is hidden while you type.%s\n' \
@@ -109,9 +135,10 @@ _github_token_menu_save() {
 		_github_token_menu_say "${C_RED:-}Invalid token; nothing was saved.${C_RESET:-}"
 		return 0
 	fi
-	printf '\n  %sProposed:%s %s%s%s\n\n' \
+	printf '\n  %sProposed:%s %s%s%s\n' \
 		"${C_DIM:-}" "${C_RESET:-}" "${C_CYAN:-}" \
 		"$(github_token_fingerprint "$token")" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
+	_github_token_menu_check "$token" || return 0
 	if _github_token_menu_confirm "  Save this token?"; then
 		if github_token_write "$token"; then
 			_github_token_menu_say "${C_GREEN:-}GitHub token saved.${C_RESET:-}"
