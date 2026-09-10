@@ -233,6 +233,10 @@ cmd_full_update() {
 		esac
 	done
 	if [[ "$DOTFILES_FORCE_REINSTALL" == 1 ]]; then
+		# The blank line the plan screen's own notice carries. It was supplied
+		# by the menu until that duplicate copy was removed, and the notice
+		# then sat directly under the answer the operator had just typed.
+		printf '\n'
 		_msg 'Forced reinstall: already-installed components will be reinstalled.'
 	fi
 
