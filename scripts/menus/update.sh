@@ -51,8 +51,9 @@ run_full_update_flow() {
 			return_full_update_run
 			return $?
 			;;
+		# No notice here: cmd_full_update prints one for --force, and it runs
+		# for the CLI and this screen alike, so saying it again said it twice.
 		x | X)
-			printf '\n  Forced reinstall: already-installed components will be reinstalled.\n'
 			return_full_update_run --force
 			return $?
 			;;

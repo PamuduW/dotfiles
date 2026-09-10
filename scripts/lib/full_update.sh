@@ -69,6 +69,42 @@ full_update_install_applied_components() {
 	return "$rc"
 }
 
+full_update_expected_agentbot_home() {
+	local expected="${FULL_UPDATE_EXPECTED_AGENTBOT_HOME:-$(dirname -- "$DOTFILES_DIR")/agentbot}"
+	realpath -m -- "$expected"
+}
+
+# Not installed at all, as opposed to installed and unreachable.
+#
+# A Dotfiles-only machine is a supported state: the bootstrap script offers
+# "Dotfiles only" as one of its two choices and closes by saying how to add
+# Agentbot later. Ending that machine's full update on "Action failed (exit
+# 127)" reported the run as broken when it had done everything there was to
+# do. A checkout that exists but whose launcher is not on PATH is a different
+# thing -- that one is broken, and still fails.
+full_update_agentbot_is_absent() {
+	command -v agentbot >/dev/null 2>&1 && return 1
+	[[ -d "$(full_update_expected_agentbot_home)" ]] && return 1
+	return 0
+}
+
+full_update_without_agentbot() {
+	local expected rc=0
+	expected="$(full_update_expected_agentbot_home)"
+	rt_print_header 'Dotfiles updated' 'Dotfiles › Full Update › Summary'
+	printf '  Agentbot is not installed, so this run updated Dotfiles only.\n'
+	printf '  Add it by cloning it to %s, or rerun the bootstrap script and\n' "$expected"
+	printf '  choose Agentbot.\n'
+	# The Dotfiles half still gets its health check; only Agentbot's is absent.
+	printf '\n'
+	full_update_dotfiles_doctor || rc=$?
+	if ((rc != 0)); then
+		printf '\n  %sDotfiles updated; the machine needs attention.%s\n' "${C_RED:-}" "${C_RESET:-}"
+		return 1
+	fi
+	printf '\n  %sDotfiles update completed.%s\n' "${C_GREEN:-}" "${C_RESET:-}"
+}
+
 full_update_print_identity() {
 	local dotfiles_launcher agentbot_launcher agentbot_resolved agentbot_home expected_home
 	dotfiles_launcher="$(readlink -f "$DOTFILES_DIR/bin/bin/dotfiles")" || return 1
@@ -76,8 +112,7 @@ full_update_print_identity() {
 		_err 'Agentbot is not installed or is not available on PATH.'
 		return 127
 	}
-	expected_home="${FULL_UPDATE_EXPECTED_AGENTBOT_HOME:-$(dirname -- "$DOTFILES_DIR")/agentbot}"
-	expected_home="$(realpath -m -- "$expected_home")"
+	expected_home="$(full_update_expected_agentbot_home)"
 	if [[ "$agentbot_launcher" == */* ]]; then
 		agentbot_resolved="$(readlink -f "$agentbot_launcher")" || return 1
 		agentbot_home="$(dirname -- "$(dirname -- "$agentbot_resolved")")"
@@ -230,6 +265,11 @@ cmd_full_update() {
 		;;
 	*) return "$dotfiles_rc" ;;
 	esac
+
+	if full_update_agentbot_is_absent; then
+		full_update_without_agentbot
+		return $?
+	fi
 
 	full_update_print_identity || return $?
 	full_update_run_agentbot || return $?

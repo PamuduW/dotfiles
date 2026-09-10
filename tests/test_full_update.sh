@@ -458,9 +458,56 @@ test_full_update_module_set_is_closed_over_its_own_references() {
 }
 
 expect_success 'full-update reports resolved launcher and checkout identity' test_full_update_reports_resolved_launcher_identity
+test_full_update_without_agentbot_is_not_a_failure() (
+	# Break caught on a fresh Ubuntu 26 machine that chose "Dotfiles only" at
+	# the bootstrap prompt: the Dotfiles half completed in full, and the run
+	# then ended on "Agentbot is not installed" and "Action failed (exit 127)".
+	# Bootstrap offers that choice and closes by saying how to add Agentbot
+	# later, so it is a supported state, not a broken one.
+	local output_file="$TEST_HARNESS_ROOT/full-update-no-agentbot.out"
+	local missing="$TEST_HARNESS_ROOT/no-such-agentbot"
+	rm -rf -- "$missing"
+	local rc=0
+	(
+		export FULL_UPDATE_EXPECTED_AGENTBOT_HOME="$missing"
+		export PATH=/usr/bin:/bin
+		_dotfiles_run_update() { :; }
+		full_update_dotfiles_doctor() { printf '  doctor ran\n'; }
+		full_update_run_agentbot() {
+			printf 'agentbot phase must not run\n'
+			return 1
+		}
+		NO_COLOR=1 cmd_full_update
+	) >"$output_file" 2>&1 || rc=$?
+
+	[[ "$rc" -eq 0 ]] || return 1
+	grep -Fq 'Agentbot is not installed, so this run updated Dotfiles only.' "$output_file" || return 1
+	grep -Fq "$missing" "$output_file" || return 1
+	grep -Fq 'doctor ran' "$output_file" || return 1
+	grep -Fq 'Dotfiles update completed.' "$output_file" || return 1
+	! grep -Fq 'agentbot phase must not run' "$output_file" || return 1
+	! grep -Fq 'Action failed' "$output_file"
+)
+
+test_full_update_still_fails_when_agentbot_is_installed_but_unreachable() (
+	# The other half of the distinction: a checkout that exists but whose
+	# launcher is not on PATH is broken, and must still be reported as such.
+	local present="$TEST_HARNESS_ROOT/present-agentbot"
+	mkdir -p -- "$present"
+	local rc=0
+	(
+		export FULL_UPDATE_EXPECTED_AGENTBOT_HOME="$present"
+		export PATH=/usr/bin:/bin
+		full_update_agentbot_is_absent
+	) && rc=1
+	[[ "$rc" -eq 0 ]]
+)
+
 expect_success 'full-update refuses an unexpected Agentbot checkout' test_full_update_refuses_unexpected_agentbot_checkout
 expect_success 'postflight distinguishes healthy warning and error outcomes' test_postflight_distinguishes_warnings_errors_and_health
 expect_success 'Agentbot warning output maps to the postflight warning state' test_agentbot_doctor_warning_output_maps_to_warning_state
 expect_success 'the full-update module set is closed over its own references' test_full_update_module_set_is_closed_over_its_own_references
+expect_success 'full update without Agentbot is not a failure' test_full_update_without_agentbot_is_not_a_failure
+expect_success 'full update still fails when Agentbot is installed but unreachable' test_full_update_still_fails_when_agentbot_is_installed_but_unreachable
 
 finish_tests
