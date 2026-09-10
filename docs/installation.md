@@ -11,14 +11,18 @@ cd "$HOME/dotfiles"
 ./install.sh
 ```
 
-The boot menu offers status, installation, update, full update, token
-configuration, reference libraries, and quit. Install Dotfiles runs the
+The boot menu offers status, installation, update, full update, logs, restow,
+token configuration, reference libraries, and quit. Install Dotfiles runs the
 repository gate before opening the component menu. Use arrows to navigate,
 Space to toggle, and Enter to continue. The installer displays an execution
 plan before applying the selection.
 
-Git identity is prompted only when selected. SSH-key generation is also an
-explicit opt-in. Component dependencies remain enforced while toggling.
+Git identity is prompted only when selected. Component dependencies remain
+enforced while toggling.
+
+A failed apt index refresh does not end the run. The components whose
+installers need the index are reported as not run, everything else is applied,
+and the summary and log location still reach the operator.
 
 ## Non-interactive setup
 

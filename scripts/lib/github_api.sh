@@ -97,12 +97,53 @@ raise SystemExit(1)
 }
 
 # Prints tag without leading "v" (e.g. v1.400 -> 1.400).
+# Memoised for the life of the process. One update run asked GitHub for the
+# same release two or three times per component -- the report's check, the
+# upgrade's own comparison, and the installer again when it actually installs
+# -- at roughly 700ms each, against an unauthenticated budget of 60 calls an
+# hour. A release does not change mid-run, so every repeat was the first
+# answer bought again, and the report and the apply could not disagree about
+# what "latest" was even if the release moved between them.
+#
+# On disk rather than in a variable: every caller reads this function through
+# `$(...)`, and the probe phase runs its checks in background subshells, so a
+# cache held in memory would be written in a child and lost on the way out.
+# The directory is named for the shell that owns it; entries for shells that
+# are gone are swept on the way in, because nothing here runs a trap.
+_github_release_cache_dir() {
+	local base="${TMPDIR:-/tmp}/dotfiles-release-cache" dir peer pid
+	dir="$base/$$"
+	mkdir -p -- "$dir" 2>/dev/null || return 1
+	for peer in "$base"/*; do
+		[[ -d "$peer" ]] || continue
+		pid="${peer##*/}"
+		[[ "$pid" == "$$" ]] && continue
+		[[ "$pid" =~ ^[0-9]+$ ]] || continue
+		kill -0 "$pid" 2>/dev/null || rm -rf -- "$peer"
+	done
+	printf '%s\n' "$dir"
+}
+
 github_latest_release_version() {
 	local repo="$1"
-	local json tag
+	local json tag dir entry
+
+	# One path segment: the repo slug carries a slash.
+	if dir="$(_github_release_cache_dir)"; then
+		entry="$dir/${repo//\//__}"
+		if [[ -s "$entry" ]]; then
+			cat -- "$entry"
+			return 0
+		fi
+	else
+		entry=''
+	fi
 
 	json="$(github_api_release_json "$repo")" || return 1
 	tag="$(printf '%s' "$json" | grep -Po '"tag_name":\s*"\K[^"]+' | head -n1)" || return 1
 	[[ -n "$tag" ]] || return 1
+	# Only successes are cached: a transient failure must not persuade the rest
+	# of the run that the version is unknowable.
+	[[ -z "$entry" ]] || printf '%s\n' "${tag#v}" >"$entry" 2>/dev/null || true
 	printf '%s\n' "${tag#v}"
 }

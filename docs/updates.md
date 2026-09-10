@@ -58,8 +58,21 @@ shadowed commands are preserved and reported.
 6. Run Dotfiles and Agentbot Doctor as postflight checks.
 
 Agentbot warnings produce a warning outcome; a Doctor error fails postflight.
-Current full update does not reinstall all previously selected Dotfiles
-components. That expansion is tracked in the workspace roadmap.
+
+The component install in step 1 derives its selection from the probes, never
+from a stored answer, so a full update never silently adds a component the
+operator did not choose. Components whose installer needs an answer only the
+operator can give — Git identity — are excluded.
+
+`dotfiles full-update --force` reinstalls components that are already present,
+the unattended equivalent of the execution plan's `x`. From the menu, Full
+Update asks with the same keys the plan uses:
+
+| Key | Meaning |
+|---|---|
+| `c` | Run the full update |
+| `x` | Run it, reinstalling components that are already present |
+| `q` | Back to the menu |
 
 ## Logs
 
@@ -73,4 +86,8 @@ dotfiles logs --last
 ```
 
 `DOTFILES_LOG_RETAIN` controls retention and defaults to 20.
+
+The menu's Logs screen reports the count and offers the actions a menu can
+usefully take on a folder: open it in Explorer or VS Code, or delete the logs.
+Deleting keeps back the capture the current run is still writing.
 

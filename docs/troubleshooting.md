@@ -8,8 +8,10 @@ dotfiles doctor
 dotfiles logs --last
 ```
 
-Status shows all local component states without fetching. Doctor shows only
-items needing attention and exits nonzero when remediation is required.
+Status shows all local component states without fetching, and ends with what
+needs attention and the command that fixes it. Doctor prints those same two
+blocks without the table and exits nonzero when remediation is required, which
+is what makes it usable in a script or a CI check.
 
 ## Stow conflicts
 

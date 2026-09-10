@@ -339,6 +339,45 @@ source "$REPO_DIR/scripts/lib/github_token.sh"
 # shellcheck source=scripts/lib/github_api.sh
 source "$REPO_DIR/scripts/lib/github_api.sh"
 
+test_release_lookup_is_fetched_once_per_repository() (
+	# One update run asked GitHub for the same release two or three times per
+	# component -- the report's check, the upgrade's comparison, and the
+	# installer -- at roughly 700ms each, against 60 unauthenticated calls an
+	# hour. The cache is on disk because every caller reads this through
+	# `$(...)` and the probe phase runs in background subshells, so an
+	# in-memory one is written in a child and lost.
+	local calls="$TEST_HARNESS_ROOT/release-lookup.calls"
+	: >"$calls"
+	local first second third
+	(
+		github_api_release_json() {
+			printf 'x\n' >>"$calls"
+			printf '{"tag_name":"v1.2.3"}'
+		}
+		first="$(github_latest_release_version fake/repo)"
+		second="$(github_latest_release_version fake/repo)"
+		third="$(github_latest_release_version fake/repo)"
+		[[ "$first" == 1.2.3 && "$second" == 1.2.3 && "$third" == 1.2.3 ]] || exit 1
+		# A different repository is still its own lookup.
+		github_latest_release_version other/repo >/dev/null || exit 1
+	) || return 1
+	[[ "$(wc -l <"$calls")" -eq 2 ]] || return 1
+
+	# A failure is not cached: a transient one must not persuade the rest of
+	# the run that the version is unknowable.
+	: >"$calls"
+	(
+		github_api_release_json() {
+			printf 'x\n' >>"$calls"
+			return 1
+		}
+		github_latest_release_version flaky/repo >/dev/null 2>&1 && exit 1
+		github_latest_release_version flaky/repo >/dev/null 2>&1 && exit 1
+		exit 0
+	) || return 1
+	[[ "$(wc -l <"$calls")" -eq 2 ]]
+)
+
 expect_success 'missing token preserves anonymous argv and sends no auth config' test_anonymous_exact_argv
 expect_success 'malformed, invalid, and wrong-mode saved state warn and stay anonymous' test_invalid_saved_states_fall_back
 expect_success 'valid environment token uses private curl config only' test_environment_token_private_config
@@ -356,5 +395,6 @@ expect_success 'all active GitHub API and release URLs have no direct-curl bypas
 expect_success 'structural scanner rejects a direct curl bypass near github_curl' test_scanner_rejects_nearby_direct_curl_bypass
 expect_success 'vendor shell installers use the downloaded-script boundary' test_excluded_downloads_unchanged
 expect_success 'tests remain isolated behind the fail-closed curl fake' test_isolation_and_fake_network
+expect_success 'a release lookup is fetched once per repository' test_release_lookup_is_fetched_once_per_repository
 
 finish_tests

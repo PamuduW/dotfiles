@@ -72,15 +72,21 @@ Check Status
 Install Dotfiles
 Update
 Full Update (Dotfiles + Agentbot)
+Logs
+Restow
 GitHub Token Config
 Libraries
 Quit
 ```
 
+Every public `dotfiles` command is reachable from the menu. Check Status also
+carries what `dotfiles doctor` reports: when a component needs attention it
+lists which, and the command that fixes it.
+
 Install Dotfiles checks the repository, opens the component selector, shows an
-execution plan, and asks for confirmation. Git identity and SSH-key generation
-are off by default; other registered components start selected. Dependencies
-such as Portainer requiring Docker are enforced automatically.
+execution plan, and asks for confirmation. Git identity is off by default;
+other registered components start selected. Dependencies such as Portainer
+requiring Docker are enforced automatically.
 
 The execution plan offers two ways to confirm:
 

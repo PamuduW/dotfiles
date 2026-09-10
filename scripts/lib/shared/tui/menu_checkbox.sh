@@ -39,14 +39,6 @@ _menu_cb_page_for_cursor() {
 	menu_page_for_cursor "$@"
 }
 
-_menu_cb_page_count() {
-	menu_page_count "$@"
-}
-
-_menu_cb_page_range() {
-	menu_page_range "$@"
-}
-
 _menu_cb_render_lines() {
 	menu_page_render_lines "$1" "$2" "$3" "$(_menu_cb_fixed_rows)"
 }
@@ -189,8 +181,8 @@ _menu_cb_draw_body() {
 	local i
 
 	page="$(_menu_cb_page_for_cursor "$cur" "$page_size")"
-	read -r start end < <(_menu_cb_page_range "$count" "$page_size" "$page")
-	total_pages="$(_menu_cb_page_count "$count" "$page_size")"
+	read -r start end < <(menu_page_range "$count" "$page_size" "$page")
+	total_pages="$(menu_page_count "$count" "$page_size")"
 
 	ui_print_header "${MENU_CB_TITLE}" "${MENU_CB_BREADCRUMB:-}" "$cols"
 	printf '  %s%s%s\e[K\n' "$C_DIM" "$(ui_color_input_hint "$(menu_fit_indent "$hint" "$cols" 2)")" "$C_RESET"

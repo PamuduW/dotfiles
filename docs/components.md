@@ -28,13 +28,15 @@ registry metadata
   -> execution plan
   -> install dispatch
   -> component probe
-  -> install summary / status / Doctor
+  -> install summary / status
 ```
 
 Probes must report observable local state. They must not fetch remote metadata
-or mutate the machine. `dotfiles status` shows every component; `dotfiles
-doctor` shows only components needing attention and exits nonzero when any are
-missing or unhealthy.
+or mutate the machine. `dotfiles status` shows every component and, when any
+needs attention, the ones that do and the command that fixes each. `dotfiles
+doctor` prints those same two blocks without the full table and exits nonzero
+when anything needs attention, which is what full update's postflight and any
+scripted check read.
 
 ### Interrogation and classification
 
