@@ -164,6 +164,56 @@ test_every_component_has_an_installer() (
 	comp_registry_validate
 )
 
+test_failed_apt_index_still_reports_the_run() (
+	# Break caught: a failed `apt-get update` returned out of run_install
+	# before a single component ran -- no summary, no "Done. Log saved to",
+	# nothing but "Action failed (exit 1)" after the operator had already
+	# typed their password. It is the likeliest failure in the run and the
+	# only one that produced no report at all.
+	local out="$TEST_HARNESS_ROOT/apt-index-fail.out"
+	local rc=0
+	(
+		export DOTFILES_NO_PROGRESS_ANIMATION=1
+		# The four apt-backed components, plus two apt cannot touch, so both
+		# halves of the outcome are represented.
+		DOTFILES_COMPONENTS='system_packages,python,powershell,docker,monaspace_fonts,lazygit' \
+			apply_dotfiles_components_env >/dev/null 2>&1
+		sudo_prime() { :; }
+		_run_quiet_command() {
+			[[ "$1" == 'apt indexes refresh' ]] && return 100
+			return 0
+		}
+		comp_install() { return 0; }
+		collect_component_status_rows() {
+			local -n out_ref="$1"
+			out_ref=()
+			local k
+			for k in "${COMP_KEYS[@]}"; do
+				is_on "$k" && out_ref+=("${COMP_LABELS[$(comp_index_of "$k")]}|probe detail|installed")
+			done
+		}
+		menu_tty_cols() { printf '96\n'; }
+		LOG_FILE="$TEST_HARNESS_ROOT/apt-index-fail.log"
+		NO_COLOR=1 run_install
+	) >"$out" 2>&1 || rc=$?
+
+	# Partial, not a hard failure: the run finished and said what it did.
+	[[ "$rc" -eq "${DOTFILES_INSTALL_PARTIAL_RC:-4}" ]] || return 1
+	grep -Fq 'apt indexes refresh failed' "$out" || return 1
+	grep -Fq 'the rest of the run continues' "$out" || return 1
+	# The apt-backed components are named as not run, not silently skipped.
+	local key
+	for key in system_packages python powershell docker; do
+		grep -Fq "Not run, apt index refresh failed: $key" "$out" || return 1
+	done
+	# And the parts of the run apt cannot touch still happened, under a summary
+	# that reached the operator along with the log location.
+	grep -Fq 'Install summary' "$out" || return 1
+	grep -Fq 'Install finished' "$out" || return 1
+	grep -Fq 'Done. Log saved to:' "$out" || return 1
+	grep -Fq 'not run (apt index refresh failed)' "$out"
+)
+
 check 'component registry validates dependencies and installation order' test_component_registry_validates_dependencies_and_install_order
 test_force_reinstall_is_a_flag_not_an_ambient_variable() (
 	# cmd_full_update resets DOTFILES_FORCE_REINSTALL before reading its own
@@ -241,6 +291,7 @@ check 'install mode goes straight to component selection' test_install_mode_goes
 check 'repository update can be pre-authorized by the caller' test_repository_update_can_be_pre_authorized
 check 'install orchestration reports failures after attempting all selected components' test_install_orchestrator_collects_failures_and_finishes_selected_work
 check 'install summary cannot hide a failed installer behind a probeable artifact' test_install_summary_preserves_failed_installer_with_probeable_artifact
+check 'a failed apt index refresh still reports the run' test_failed_apt_index_still_reports_the_run
 
 test_harness_cleanup
 finish_tests

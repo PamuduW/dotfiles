@@ -99,6 +99,19 @@ _comp_install_dotfiles() {
 	ensure_bash_profile_sources_bashrc || return $?
 }
 
+# Components whose installer needs a usable apt index. When the refresh fails
+# these cannot honestly be attempted; everything else on the list -- fonts,
+# nvm, the vendor CLIs, stow, the config writers -- is untouched by it.
+INSTALL_APT_INDEX_COMPONENTS=(system_packages python powershell docker)
+
+_install_needs_apt_index() {
+	local key="$1" needed
+	for needed in "${INSTALL_APT_INDEX_COMPONENTS[@]}"; do
+		[[ "$key" == "$needed" ]] && return 0
+	done
+	return 1
+}
+
 _run_install_preamble() {
 	if is_on system_packages || is_on python || is_on powershell; then
 		log_step "Refresh apt indexes"
@@ -172,7 +185,19 @@ run_install() {
 	local run_started started
 	run_started="$(_install_now_seconds)"
 
-	_run_install_preamble || return $?
+	# A failed index refresh used to end the run here: no component ran, no
+	# summary printed, and the operator was not even told where the log was --
+	# after having typed their password. It is the likeliest failure in the
+	# run (a network blip, an apt lock) and it was the only one that produced
+	# no report at all, while a component that fails is recorded and the run
+	# carries on. The apt-backed components cannot honestly be attempted, so
+	# they are marked and skipped; the rest of the run proceeds and reports.
+	local apt_index_failed=false
+	_run_install_preamble || apt_index_failed=true
+	if [[ "$apt_index_failed" == true ]]; then
+		log_warn "Skipping apt-backed components; the rest of the run continues."
+		declare -F log_component_rule >/dev/null 2>&1 && log_component_rule
+	fi
 
 	local first_component=true
 	for key in "${COMP_INSTALL_ORDER[@]}"; do
@@ -183,6 +208,12 @@ run_install() {
 			first_component=false
 		else
 			declare -F log_component_rule >/dev/null 2>&1 && log_component_rule
+		fi
+		if [[ "$apt_index_failed" == true ]] && _install_needs_apt_index "$key"; then
+			INSTALL_COMPONENT_RESULT["$key"]=not-run
+			failures=$((failures + 1))
+			log_skip "Not run, apt index refresh failed: $key"
+			continue
 		fi
 		started="$(_install_now_seconds)"
 		if comp_install "$key"; then

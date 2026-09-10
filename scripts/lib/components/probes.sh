@@ -1105,10 +1105,18 @@ print_install_summary() {
 		if declare -p INSTALL_COMPONENT_RESULT >/dev/null 2>&1; then
 			install_result="${INSTALL_COMPONENT_RESULT[$key]:-}"
 		fi
-		if [[ "$install_result" == failed ]]; then
+		case "$install_result" in
+		failed)
 			detail="installer failed; $detail"
 			result=failed
-		fi
+			;;
+		# Never attempted, so whatever the probe found is what was already on
+		# the machine -- saying "installed" here would credit the run for it.
+		not-run)
+			detail="not run (apt index refresh failed); $detail"
+			result=check
+			;;
+		esac
 		case "$result" in
 		installed | configured) ((++ok_count)) ;;
 		*) ((++miss_count)) ;;

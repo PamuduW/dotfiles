@@ -127,10 +127,30 @@ test_progress_animation_stays_out_of_the_log() (
 	[[ "$(wc -l <"$quiet")" -eq 2 ]]
 )
 
+test_table_padding_survives_a_non_utf8_locale() (
+	# ${#text} counts bytes unless the locale is UTF-8, so under LC_ALL=C an
+	# em-dash cost three columns instead of one and the Bash renderer's rows
+	# landed two short of the terminal.
+	local width
+	width="$(
+		LC_ALL=C NO_COLOR=1 DOTFILES_PY_SERVICE=0 DOTFILES_REPORT_COLS=80 \
+			bash -c '
+				REPO_DIR="'"$REPO_DIR"'"
+				source "$REPO_DIR/tests/lib/dotfiles_env.sh" >/dev/null 2>&1
+				_collect_check_rows() { printf "%s\n" "Cursor CLI|2026.07.09-a3815c0|—|up to date"; }
+				print_report_table
+			' 2>/dev/null | grep -F 'Cursor CLI' | head -n1 | wc -m
+	)"
+	# wc -m counts the trailing newline.
+	[[ "$width" -eq 81 ]]
+)
+
 expect_success 'install legend uses semantic status colors' test_install_legend_uses_status_colors
 expect_success 'progress animation stays out of the log' test_progress_animation_stays_out_of_the_log
 expect_success 'install status markers use semantic colors' test_install_status_markers_use_semantic_colors
 expect_success 'confirmation hint colors its action keys' test_confirm_hint_uses_colored_action_keys
 expect_success 'install confirmation prompt colors full action text' test_install_confirm_prompt_colors_full_action_text
 expect_success 'shortcut labels use normal text intensity' test_shortcut_hint_keeps_labels_undimmed
+expect_success 'table padding survives a non-UTF-8 locale' test_table_padding_survives_a_non_utf8_locale
+
 finish_tests

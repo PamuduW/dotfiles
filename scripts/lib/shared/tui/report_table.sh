@@ -115,6 +115,44 @@ _rt_rule() {
 	printf '%s' "${rule// /-}"
 }
 
+# ${#text} counts bytes, not characters, unless the locale is UTF-8. Every cell
+# these tables pad is measured that way, so under LC_ALL=C an em-dash costs
+# three instead of one and the row lands two columns short of the terminal --
+# and _rt_fit_line would truncate mid-character on a narrow screen.
+#
+# C.UTF-8 rather than the operator's own locale: its messages are English,
+# which the probes grep out of apt and git, and it gives bash the character
+# semantics the tables need. A locale that already counts characters is left
+# exactly as it is.
+_rt_locale_counts_characters() {
+	local probe
+	printf -v probe '\u2014'
+	((${#probe} == 1))
+}
+
+_rt_settle_locale() {
+	local candidate
+	[[ -z "${_RT_LOCALE_SETTLED:-}" ]] || return 0
+	_RT_LOCALE_SETTLED=1
+	_rt_locale_counts_characters && return 0
+	# Built-ins only, no `locale -a | grep`: this is sourced by commands that
+	# run with a stripped PATH, where the pipeline's "grep: command not found"
+	# lands on a stderr the caller asserts is empty. Bash re-reads the locale
+	# on assignment to LC_ALL, so trying a candidate is the whole test.
+	for candidate in C.UTF-8 C.utf8 en_US.UTF-8; do
+		# shellcheck disable=SC2030,SC2031  # Deliberately scoped: the probe
+		# must not leak a locale that turns out not to exist.
+		if (
+			LC_ALL="$candidate"
+			_rt_locale_counts_characters
+		); then
+			export LC_ALL="$candidate" LANG="$candidate"
+			return 0
+		fi
+	done
+	return 0
+}
+
 _rt_print_fixed_cell() {
 	local text="$1" width="$2" color_fn="${3:-}" fit padding
 	fit="$(_rt_fit_line "$text" "$width")"
@@ -250,3 +288,6 @@ rt_print_rollup() {
 			"$C_YELLOW" "$check_count" "$C_RESET"
 	fi
 }
+
+# Once per process, before any cell width is computed.
+_rt_settle_locale
