@@ -1,5 +1,10 @@
 # shellcheck shell=bash
 
+# Every line the run prints starts at the same column as the headers and tables
+# around it: two spaces, the indent ui_print_header and rt_print_table_row
+# already use. Steps, rules and the legend sat hard against column 0 and the
+# screen read as two documents laid on top of each other.
+
 _run_quiet_command() {
 	local label="$1"
 	shift
@@ -16,7 +21,7 @@ _run_quiet_command() {
 	fi
 
 	echo "  Error during ${label}:" >&2
-	cat "$tmp" >&2
+	sed 's/^/    /' "$tmp" >&2
 	rm -f "$tmp"
 	# The command's own status, not a flat 1: hiding output is this helper's
 	# job, and callers that propagate an exit code -- install_portainer returns
@@ -49,7 +54,7 @@ _step_spinner_start() {
 			# a tool prints mid-step then overwrites the animation from the
 			# left instead of being appended to the end of it -- which is how
 			# a stray container id arrived welded to the end of a step name.
-			tty_printf '\r  %s %s\r' "${_STEP_SPINNER_FRAMES[index % 10]}" "$message"
+			tty_printf '\r    %s %s\r' "${_STEP_SPINNER_FRAMES[index % 10]}" "$message"
 			index=$((index + 1))
 			sleep 0.12
 		done
@@ -69,7 +74,7 @@ log_component_rule() {
 	# A boundary ends the step before it, so no animation is left running
 	# underneath the next component's output.
 	_step_spinner_stop
-	printf '%s%s%s\n' "${C_DIM:-}" '----------------------------------------' "${C_RESET:-}"
+	printf '  %s%s%s\n' "${C_DIM:-}" '----------------------------------------' "${C_RESET:-}"
 }
 
 _step_spinner_stop() {
@@ -105,7 +110,7 @@ _log_prefix() {
 	# Any line ends the step that was running: the run has moved on, and the
 	# animation must not still be claiming otherwise underneath it.
 	_step_spinner_stop
-	printf '%s[%s]%s %s\n' "$color" "$level" "$C_RESET" "$message"
+	printf '  %s[%s]%s %s\n' "$color" "$level" "$C_RESET" "$message"
 	_LOG_LINE_COUNT=$((_LOG_LINE_COUNT + 1))
 	[[ "$level" == STEP ]] && _step_spinner_start "$message"
 	return 0
@@ -117,7 +122,7 @@ _log_legend_line() {
 	else
 		C_RESET='' C_CYAN='' C_GREEN='' C_DIM='' C_YELLOW=''
 	fi
-	printf '[Legend] %sSTEP=starting%s  %sOK=completed%s  %sSKIP=already satisfied%s  %sWARN=needs attention%s\n' \
+	printf '  [Legend] %sSTEP=starting%s  %sOK=completed%s  %sSKIP=already satisfied%s  %sWARN=needs attention%s\n' \
 		"$C_CYAN" "$C_RESET" "$C_GREEN" "$C_RESET" "$C_DIM" "$C_RESET" "$C_YELLOW" "$C_RESET"
 }
 

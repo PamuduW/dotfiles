@@ -130,7 +130,7 @@ print_report_table() {
 	# table underneath came out plain. Same predicate, same place in the order.
 	_rt_ensure_colors
 
-	printf '%s%s== Update report ==%s\n\n' "$C_BOLD" "$C_YELLOW" "$C_RESET"
+	rt_print_header 'Update report' 'Dotfiles › Update › Report'
 	# ADR-0001: the layout moved to Python. The title above and the summary
 	# sentences below stay here -- they are phrasing, not layout, and the seam
 	# holds if the caller keeps owning what it says while the renderer owns how
@@ -189,7 +189,7 @@ print_upgrade_summary() {
 
 	_load_update_rows rows "$repo_result_name" "$snapshot_name"
 
-	printf '\n%s%s== Upgrade summary ==%s\n\n' "$C_BOLD" "$C_YELLOW" "$C_RESET"
+	rt_print_header 'Upgrade summary' 'Dotfiles › Update › Summary'
 	_print_update_table_header result
 
 	for row in "${rows[@]}"; do
@@ -215,7 +215,7 @@ print_upgrade_summary() {
 		_print_check_table_row "$component" "$installed" "$available" "$display" result
 	done
 
-	printf '\n'
+	printf '\n  '
 	[[ $fail_count -eq 0 ]] && printf '%s' "$C_GREEN" || printf '%s' "$C_RED"
 	printf 'Upgrade finished%s — %d updated; %d already current; %d checked/no change; %d recovered; %d skipped; %d failed; %d not run.\n' \
 		"$C_RESET" "$updated_count" "$current_count" "$checked_count" "$recovered_count" \
@@ -290,7 +290,7 @@ _apply_repository_update_step() {
 # than one component's, so it gets its own rule and step lines.
 _run_apt_index_refresh() {
 	local rc=0
-	log_component_rule
+	_upgrade_rule_between
 	log_step 'Refresh apt package index'
 	_run_quiet_command 'apt-get update' sudo apt-get update -qq || rc=$?
 	if ((rc != 0)); then
@@ -305,6 +305,7 @@ _run_apt_index_refresh() {
 _run_update_downstream() {
 	local key label apply retry npm_target apt_refresh_rc=0
 	UPGRADE_STEP_RESULT=()
+	upgrade_section_begin
 	update_step_registry_validate || {
 		_err 'Invalid update-step registry.'
 		return 1
@@ -369,8 +370,9 @@ _dotfiles_run_update() {
 		_msg 'Downstream updates skipped.'
 		return 0
 	fi
-	printf '\n%s%s=== Upgrade ===%s\n\n' "$C_BOLD" "$C_ORANGE" "$C_RESET"
+	rt_print_header 'Upgrade' 'Dotfiles › Update › Upgrade'
 	_log_legend_line
+	echo ""
 	# One prompt these tools own and can place, rather than sudo's own arriving
 	# from inside whichever step needs root first. Same call, same reason, as
 	# the install run.

@@ -37,7 +37,7 @@ _report_command_failure() {
 	# Any line ends the running step, and a failure notice most of all: the
 	# animation would otherwise still be claiming the step was in progress.
 	declare -F _step_spinner_stop >/dev/null 2>&1 && _step_spinner_stop
-	printf '%s>> FAILED (exit %s) — retry manually: %s <<%s\n' \
+	printf '  %s>> FAILED (exit %s) — retry manually: %s <<%s\n' \
 		"$C_RED" "$exit_status" "$retry_command" "$C_RESET" >&2
 }
 
@@ -57,11 +57,23 @@ _upgrade_step_close() {
 	esac
 }
 
+# The rule separates one component from the next, so the first thing a section
+# prints must not be one: the install screen opens on its first step, not on a
+# rule with nothing above it.
+_UPGRADE_SECTION_START=0
+
+upgrade_section_begin() { _UPGRADE_SECTION_START="$_LOG_LINE_COUNT"; }
+
+_upgrade_rule_between() {
+	((_LOG_LINE_COUNT > _UPGRADE_SECTION_START)) || return 0
+	log_component_rule
+}
+
 _run_upgrade_step() {
 	local label="$1" retry_command="$2"
 	shift 2
 	local lines_before="$_LOG_LINE_COUNT"
-	log_component_rule
+	_upgrade_rule_between
 	log_step "$label"
 	UPGRADE_STEP_ACTIVE_RESULT="$UPGRADE_RESULT_CHECKED_NO_CHANGE"
 	set +e

@@ -1050,8 +1050,8 @@ print_install_summary() {
 
 	echo ""
 	if [[ $miss_count -eq 0 ]]; then
-		echo "Install finished — ${ok_count} component(s) look good."
+		echo "  Install finished — ${ok_count} component(s) look good."
 	else
-		echo "Install finished — ${ok_count} ok, ${miss_count} need attention (see log above)."
+		echo "  Install finished — ${ok_count} ok, ${miss_count} need attention (see log above)."
 	fi
 }

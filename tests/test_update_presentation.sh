@@ -13,11 +13,13 @@ test_update_report_uses_clear_title_spacing_and_aligned_action_rule() (
 	local output_file="$TEST_HARNESS_ROOT/update-report.output"
 	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|current'; }
 	NO_COLOR=1 print_report_table >"$output_file"
-	[[ "$(sed -n '1p' "$output_file")" == '== Update report ==' ]] || return 1
-	grep -Fq $'== Update report ==\n\ncomponent' "$output_file" || return 1
+	# The shared header: orange === title ===, a dim breadcrumb, a blank line.
+	[[ "$(sed -n '2p' "$output_file")" == '  === Update report ===' ]] || return 1
+	[[ "$(sed -n '3p' "$output_file")" == '  Dotfiles › Update › Report' ]] || return 1
+	grep -Fq $'  Dotfiles › Update › Report\n\ncomponent' "$output_file" || return 1
 	! grep -Fq 'Upgrade report' "$output_file" || return 1
 	grep -Fq $'0 verified upgrades — everything verified current.\n\n' "$output_file" || return 1
-	awk 'NR == 4 { expected=$0; next } NR == 5 { exit(length($0) == length(expected) ? 0 : 1) }' "$output_file"
+	awk 'NR == 6 { expected=$0; next } NR == 7 { exit(length($0) == length(expected) ? 0 : 1) }' "$output_file"
 )
 
 test_report_title_honours_no_color_even_with_a_palette_loaded() (
@@ -255,17 +257,25 @@ test_update_topics_use_submenu_yellow() (
 	C_BOLD=$'\033[1m' C_CYAN=$'\033[36m' C_ORANGE=$'\033[38;5;208m' C_YELLOW=$'\033[33m' C_RESET=$'\033[0m'
 	_collect_check_rows() { printf '%s\n' 'apt packages|system packages|none|up to date'; }
 	output="$(print_report_table)" 2>/dev/null || true
-	grep -Fq $'\033[33m== Update report ==' <<<"$output" || return 1
+	grep -Fq $'\033[38;5;208m=== Update report ===' <<<"$output" || return 1
 
 	# A component step is the install screen's rule plus a cyan [STEP] line, not
 	# a yellow heading of its own; a probe that says nothing still gets a
 	# closing outcome line rather than a heading with nothing under it.
 	_upgrade_topic_probe() { :; }
-	output="$(DOTFILES_NO_PROGRESS_ANIMATION=1 _run_upgrade_step lazygit 'dotfiles update' _upgrade_topic_probe)"
-	# -e, because the rule starts with a dash and grep would read it as options.
-	grep -Fq -e '----------------------------------------' <<<"$output" || return 1
+	output="$(
+		DOTFILES_NO_PROGRESS_ANIMATION=1
+		upgrade_section_begin
+		_run_upgrade_step lazygit 'dotfiles update' _upgrade_topic_probe
+		_run_upgrade_step lazydocker 'dotfiles update' _upgrade_topic_probe
+	)"
 	grep -Fq $'\033[36m[STEP]\033[0m lazygit' <<<"$output" || return 1
 	grep -Fq 'lazygit checked' <<<"$output" || return 1
+	# The rule separates one component from the next, so a section does not open
+	# on one and the second step in it does.
+	# -e, because the rule starts with a dash and grep would read it as options.
+	[[ "$(sed -n '1p' <<<"$output")" != *'--------'* ]] || return 1
+	grep -Fq -e '  ----------------------------------------' <<<"$output" || return 1
 
 	repo_update_run() {
 		local -n result_ref="$4"

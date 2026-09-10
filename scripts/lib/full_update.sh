@@ -86,9 +86,9 @@ full_update_print_identity() {
 		agentbot_home="$expected_home"
 	fi
 
-	printf '%s%s=== Resolved maintenance targets ===%s\n' "${C_BOLD:-}" "${C_ORANGE:-}" "${C_RESET:-}"
-	printf 'Dotfiles launcher: %s\nDotfiles checkout: %s\n' "$dotfiles_launcher" "$DOTFILES_DIR"
-	printf 'Agentbot launcher: %s\nAgentbot checkout: %s\n' "$agentbot_resolved" "$agentbot_home"
+	rt_print_header 'Resolved maintenance targets' 'Dotfiles › Full Update › Targets'
+	printf '  Dotfiles launcher: %s\n  Dotfiles checkout: %s\n' "$dotfiles_launcher" "$DOTFILES_DIR"
+	printf '  Agentbot launcher: %s\n  Agentbot checkout: %s\n' "$agentbot_resolved" "$agentbot_home"
 	if [[ "$agentbot_home" != "$expected_home" ]]; then
 		_err "Refusing unexpected Agentbot checkout: expected $expected_home, resolved $agentbot_home"
 		return 1
@@ -108,7 +108,7 @@ full_update_run_agentbot() {
 		_err "Agentbot is not installed or is not available on PATH."
 		return 127
 	}
-	printf '\n%s%s=== Agentbot full ===%s\n' "${C_BOLD:-}" "${C_ORANGE:-}" "${C_RESET:-}"
+	rt_print_header 'Agentbot full' 'Dotfiles › Full Update › Agentbot'
 	agentbot help full >/dev/null 2>&1 || capability_rc=$?
 	case "$capability_rc" in
 	0) ;;
@@ -162,19 +162,19 @@ full_update_agentbot_doctor() {
 
 full_update_postflight() {
 	local dotfiles_rc=0 agentbot_rc=0
-	printf '\n%s%s=== Postflight health ===%s\n' "${C_BOLD:-}" "${C_ORANGE:-}" "${C_RESET:-}"
+	rt_print_header 'Postflight health' 'Dotfiles › Full Update › Postflight'
 	full_update_dotfiles_doctor || dotfiles_rc=$?
 	full_update_agentbot_doctor || agentbot_rc=$?
 
 	if [[ $dotfiles_rc -ne 0 || ($agentbot_rc -ne 0 && $agentbot_rc -ne 10) ]]; then
-		printf '\n%sUpdates succeeded; system needs attention.%s\n' "${C_RED:-}" "${C_RESET:-}"
+		printf '\n  %sUpdates succeeded; system needs attention.%s\n' "${C_RED:-}" "${C_RESET:-}"
 		return 1
 	fi
 	if [[ $agentbot_rc -eq 10 ]]; then
-		printf '\n%sFull system update completed with warnings.%s\n' "${C_YELLOW:-}" "${C_RESET:-}"
+		printf '\n  %sFull system update completed with warnings.%s\n' "${C_YELLOW:-}" "${C_RESET:-}"
 		return 0
 	fi
-	printf '\n%sFull system update completed.%s\n' "${C_GREEN:-}" "${C_RESET:-}"
+	printf '\n  %sFull system update completed.%s\n' "${C_GREEN:-}" "${C_RESET:-}"
 }
 
 cmd_full_update() {
@@ -205,7 +205,7 @@ cmd_full_update() {
 	# unattended failure leaves something to read.
 	declare -F start_action_log >/dev/null 2>&1 && start_action_log
 
-	printf '%s%s=== Dotfiles full update ===%s\n' "${C_BOLD:-}" "${C_ORANGE:-}" "${C_RESET:-}"
+	rt_print_header 'Dotfiles full update' 'Dotfiles › Full Update'
 	# repo update -> component install -> downstream updates, the order
 	# bootstrap uses, so the first run and every run after it converge.
 	_dotfiles_run_update _dotfiles_approve_repo_update true false \

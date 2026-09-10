@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Password prompt for sudo.
+# Masked password prompt for sudo.
 #
-# Echoes nothing, like sudo's own prompt: a `*` per keystroke publishes the
-# length of the password to anyone looking at the screen, and this is the prompt
-# the operator answers most often and in the least private places.
+# sudo's own prompt echoes nothing at all, so there is no way to tell a
+# registered keystroke from a dropped one, or a paste that arrived from one that
+# did not. Every prompt these tools own already masks with `*`; this is the one
+# the operator sees most often and it was the odd one out.
 #
 # Invoked by sudo through SUDO_ASKPASS, which is the supported mechanism for
 # replacing that prompt -- the same one ssh-askpass and ksshaskpass use. The
@@ -25,6 +26,6 @@ prompt="${1:-Password:}"
 tty_available || exit 1
 
 password=''
-read_tty_secret password "  $prompt " '' || exit 1
+read_tty_secret password "  $prompt " || exit 1
 
 printf '%s\n' "$password"

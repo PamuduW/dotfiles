@@ -32,14 +32,15 @@ test_install_status_markers_use_semantic_colors() {
 	unset NO_COLOR
 	FORCE_COLOR=1
 	ui_init_colors
+	# Two spaces, the same left edge the headers and tables use.
 	output="$(log_step 'starting')"
-	[[ "$output" == "${C_CYAN}[STEP]${C_RESET} starting" ]] || return 1
+	[[ "$output" == "  ${C_CYAN}[STEP]${C_RESET} starting" ]] || return 1
 	output="$(log_ok 'completed')"
-	[[ "$output" == "${C_GREEN}[OK]${C_RESET} completed" ]] || return 1
+	[[ "$output" == "  ${C_GREEN}[OK]${C_RESET} completed" ]] || return 1
 	output="$(log_skip 'already satisfied')"
-	[[ "$output" == "${C_DIM}[SKIP]${C_RESET} already satisfied" ]] || return 1
+	[[ "$output" == "  ${C_DIM}[SKIP]${C_RESET} already satisfied" ]] || return 1
 	output="$(log_warn 'needs attention')"
-	[[ "$output" == "${C_YELLOW}[WARN]${C_RESET} needs attention" ]]
+	[[ "$output" == "  ${C_YELLOW}[WARN]${C_RESET} needs attention" ]]
 }
 
 test_confirm_hint_uses_colored_action_keys() {
@@ -84,8 +85,8 @@ test_progress_animation_stays_out_of_the_log() (
 	' >"$logged" 2>&1
 
 	# The log reads as it always did.
-	[[ "$(grep -c "^\[STEP\] Install something slow$" "$logged")" -eq 1 ]] || return 1
-	[[ "$(grep -c "^\[OK\] installed$" "$logged")" -eq 1 ]] || return 1
+	[[ "$(grep -c "^  \[STEP\] Install something slow$" "$logged")" -eq 1 ]] || return 1
+	[[ "$(grep -c "^  \[OK\] installed$" "$logged")" -eq 1 ]] || return 1
 	grep -q '⠋\|⠙\|⠹\|⠸\|⠼\|⠴\|⠦\|⠧\|⠇\|⠏' "$logged" && {
 		printf 'animation frames reached the log\n' >&2
 		return 1
@@ -111,7 +112,7 @@ test_progress_animation_stays_out_of_the_log() (
 	# A rule separates one component's output from the next.
 	local rule
 	rule="$(NO_COLOR=1 log_component_rule)"
-	[[ "$rule" =~ ^-+$ ]] || return 1
+	[[ "$rule" =~ ^\ \ -+$ ]] || return 1
 
 	# A run with no terminal has no animation and no complaint about it.
 	local quiet="$TEST_HARNESS_ROOT/spinner-quiet.log"
