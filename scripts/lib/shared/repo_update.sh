@@ -253,7 +253,7 @@ _repo_update_print_result_default() {
 		case "${result_ref[state]}" in behind) action='pull --ff-only' ;; ahead | diverged) action='replace after backup' ;; current) action='current' ;; *) action='check' ;; esac
 	fi
 
-	printf '\n%s%sRepository update%s\n\n' "${C_BOLD:-}" "${C_YELLOW:-}" "${C_RESET:-}"
+	printf '\n  %s%sRepository update%s\n\n' "${C_BOLD:-}" "${C_YELLOW:-}" "${C_RESET:-}"
 	_repo_update_print_table_header action
 	if [[ "${result_ref[dirty]}" == 1 ]]; then
 		_repo_update_print_table_row "${result_ref[label]}" "${branch}@${local_rev}" "${change_count} local change(s)" "$action"
@@ -298,15 +298,15 @@ repo_update_print_stopped() {
 	repo_update_print_changes "$result_name"
 	case "${result_ref[reason]:-unknown}" in
 	dirty)
-		printf '%sRepository pull and downstream updates stopped.%s\n' "${C_RED:-}" "${C_RESET:-}" >&2
-		printf '%sResolve the local changes, then retry.%s\n' "${C_RED:-}" "${C_RESET:-}" >&2
+		printf '  %sRepository pull and downstream updates stopped.%s\n' "${C_RED:-}" "${C_RESET:-}" >&2
+		printf '  %sResolve the local changes, then retry.%s\n' "${C_RED:-}" "${C_RESET:-}" >&2
 		;;
 	fetch-failed)
-		printf '%sRepository pull and downstream updates stopped because remote freshness is unknown.%s\n' \
+		printf '  %sRepository pull and downstream updates stopped because remote freshness is unknown.%s\n' \
 			"${C_RED:-}" "${C_RESET:-}" >&2
 		;;
 	*)
-		printf '%sRepository pull and downstream updates stopped: %s.%s\n' \
+		printf '  %sRepository pull and downstream updates stopped: %s.%s\n' \
 			"${C_RED:-}" "${result_ref[reason]:-unknown}" "${C_RESET:-}" >&2
 		;;
 	esac
@@ -328,7 +328,7 @@ repo_update_request_approval() {
 		fi
 		result_ref[reason]=replace-declined
 		result_ref[outcome]=stopped
-		printf '\n\n%sReplacement declined; update stopped.%s\n' "${C_RED:-}" "${C_RESET:-}"
+		printf '\n\n  %sReplacement declined; update stopped.%s\n' "${C_RED:-}" "${C_RESET:-}"
 		return 1
 	fi
 	if [[ "${result_ref[safe]}" != 1 ]]; then
@@ -360,9 +360,9 @@ repo_update_request_approval() {
 	result_ref[reason]="${result_ref[state]}-declined"
 	result_ref[outcome]=stopped
 	if [[ "${result_ref[state]}" == behind ]]; then
-		printf '\n\n%sPull declined; update stopped.%s\n' "${C_RED:-}" "${C_RESET:-}"
+		printf '\n\n  %sPull declined; update stopped.%s\n' "${C_RED:-}" "${C_RESET:-}"
 	else
-		printf '\n\n%sUpdate stopped; no downstream work was run.%s\n' "${C_RED:-}" "${C_RESET:-}"
+		printf '\n\n  %sUpdate stopped; no downstream work was run.%s\n' "${C_RED:-}" "${C_RESET:-}"
 	fi
 	return 1
 }
@@ -435,9 +435,9 @@ repo_update_print_recovery() {
 	local result_name="$1"
 	local -n result_ref="$result_name"
 	[[ -n "${result_ref[recovery_branch]:-}${result_ref[recovery_stash]:-}" ]] || return 0
-	printf 'Recovery data preserved:\n'
-	[[ -n "${result_ref[recovery_branch]:-}" ]] && printf '  Recovery branch: %s\n' "${result_ref[recovery_branch]}"
-	[[ -n "${result_ref[recovery_stash]:-}" ]] && printf '  Recovery stash: %s\n' "${result_ref[recovery_stash]}"
+	printf '  Recovery data preserved:\n'
+	[[ -n "${result_ref[recovery_branch]:-}" ]] && printf '    Recovery branch: %s\n' "${result_ref[recovery_branch]}"
+	[[ -n "${result_ref[recovery_stash]:-}" ]] && printf '    Recovery stash: %s\n' "${result_ref[recovery_stash]}"
 }
 
 repo_update_apply() {
@@ -460,7 +460,7 @@ repo_update_apply() {
 			result_ref[outcome]=repository_changed
 		else
 			[[ -n "$pull_output" ]] && printf '%s\n' "$pull_output" >&2
-			printf 'Fast-forward pull failed; resolve the repository manually.\n' >&2
+			printf '  Fast-forward pull failed; resolve the repository manually.\n' >&2
 			result_ref[reason]=pull-failed
 			result_ref[outcome]=stopped
 			return 1

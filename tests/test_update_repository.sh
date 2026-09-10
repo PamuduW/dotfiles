@@ -247,12 +247,12 @@ test_declined_repository_pull_prints_one_report_and_one_pause_boundary() (
 	set -e
 	clean_output="$(sed -E $'s/\033\\[[0-9;]*m//g' <<<"$output")"
 	[[ "$rc" -eq 0 ]] || return 1
-	[[ "$(grep -c '^Repository update$' <<<"$clean_output")" -eq 1 ]] || return 1
+	[[ "$(grep -c '^  Repository update$' <<<"$clean_output")" -eq 1 ]] || return 1
 	# The question goes to the terminal so the operator sees it live; the
 	# outcome goes to stdout so the action log keeps it.
 	[[ "$(sed -E $'s/\033\\[[0-9;]*m//g' "$tty_out")" == *'Pull 3 commit(s) with --ff-only? [y/N]: '* ]] || return 1
-	[[ "$clean_output" == *$'\n\n''Pull declined; update stopped.'* ]] || return 1
-	[[ "$output" == *$'\033[31mPull declined; update stopped.\033[0m'* ]] || return 1
+	[[ "$clean_output" == *$'\n\n''  Pull declined; update stopped.'* ]] || return 1
+	[[ "$output" == *$'  \033[31mPull declined; update stopped.\033[0m'* ]] || return 1
 	[[ "$clean_output" != *'Repository pull and downstream updates stopped: behind.'* ]]
 )
 
@@ -272,8 +272,8 @@ test_declined_install_repository_pull_uses_shared_failure_output() (
 	clean_output="$(sed -E $'s/\033\\[[0-9;]*m//g' <<<"$output")"
 	[[ "$rc" -eq 0 ]] || return 1
 	[[ "$DOTFILES_REPOSITORY_UPDATE_DECLINED" == true ]] || return 1
-	[[ "$(grep -c '^Repository update$' <<<"$clean_output")" -eq 1 ]] || return 1
-	[[ "$clean_output" == *'Pull 3 commit(s) with --ff-only? [y/N]: '*$'\n\n''Pull declined; update stopped.'* ]] || return 1
+	[[ "$(grep -c '^  Repository update$' <<<"$clean_output")" -eq 1 ]] || return 1
+	[[ "$clean_output" == *'Pull 3 commit(s) with --ff-only? [y/N]: '*$'\n\n''  Pull declined; update stopped.'* ]] || return 1
 	[[ "$clean_output" != *'Install stopped; the Dotfiles repository is not ready for setup.'* ]] || return 1
 	[[ "$clean_output" != *'Repository pull and downstream updates stopped: behind.'* ]]
 )

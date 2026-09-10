@@ -50,7 +50,12 @@ upgrade_cursor_cli() {
 		upgrade_result_set skipped
 		return 0
 	fi
-	_run_quiet_command 'cursor-agent update' "$executable" update || update_rc=$?
+	# Discarded rather than quieted: this failure is one the step handles, and
+	# _run_quiet_command prints the whole captured output when a command fails.
+	# An "unauthenticated" error block above a step that went on to reinstall
+	# successfully reads as a broken run. The warning below carries the status,
+	# and a fallback that also fails prints its own output.
+	"$executable" update >/dev/null 2>&1 || update_rc=$?
 	if [[ $update_rc -eq 0 ]]; then
 		log_ok "Cursor CLI checked ($(cursor_installed_version))"
 		upgrade_result_set checked-no-change

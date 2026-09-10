@@ -229,7 +229,7 @@ print_upgrade_summary() {
 # upgrade was declined by something nobody typed.
 _dotfiles_confirm() {
 	local prompt="$1" answer=''
-	read_tty_line answer "$(printf '%s%s%s [y/N]: ' "$C_YELLOW" "$prompt" "$C_RESET")" || return 1
+	read_tty_line answer "$(printf '  %s%s%s [y/N]: ' "$C_YELLOW" "$prompt" "$C_RESET")" || return 1
 	case "$answer" in y | Y | yes | YES) return 0 ;; *) return 1 ;; esac
 }
 
