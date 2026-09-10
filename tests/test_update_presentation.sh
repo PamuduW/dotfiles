@@ -233,7 +233,8 @@ test_repository_update_preview_uses_semantic_colors() (
 	)
 	C_BOLD=$'\033[1m' C_CYAN=$'\033[36m' C_ORANGE=$'\033[38;5;208m' C_DIM=$'\033[2m' C_YELLOW=$'\033[33m' C_RESET=$'\033[0m'
 	output="$(repo_update_print_result result)"
-	grep -Fq $'\033[1m\033[33mRepository update\033[0m' <<<"$output" || return 1
+	# The shared header, like every other section heading in the run.
+	grep -Fq $'\033[38;5;208m=== Repository update ===' <<<"$output" || return 1
 	! grep -Fq '==Repository update==' <<<"$output" || return 1
 	grep -Fq $'\033[1mcomponent' <<<"$output" || return 1
 	grep -Fq $'\033[2m-------------------+' <<<"$output" || return 1

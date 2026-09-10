@@ -42,6 +42,9 @@ fi
 # Renderer for the result table; overridable so each product keeps its own
 # table style. Defaults to the shared fixed-width report table.
 : "${REPO_UPDATE_REPORT_FN:=_repo_update_print_result_default}"
+# Breadcrumb under the default report's heading. A product that renders its own
+# report overrides REPO_UPDATE_REPORT_FN and never reads this.
+: "${REPO_UPDATE_REPORT_BREADCRUMB:=Dotfiles › Update › Repository}"
 
 _repo_update_result_init() {
 	local result_name="$1" repo_dir="$2" repo_label="$3"
@@ -79,8 +82,17 @@ _repo_update_result_stop() {
 _repo_update_print_fetch_output() {
 	local output="$1" line
 	while IFS= read -r line; do
-		printf '%s%s%s\n' "${C_CYAN:-}" "$line" "${C_RESET:-}"
+		printf '  %s%s%s\n' "${C_CYAN:-}" "$line" "${C_RESET:-}"
 	done <<<"$output"
+}
+
+# Git's own output on the failure paths. Same indent, no colour: this is the
+# raw text of something that went wrong, not a notice the run is making.
+_repo_update_print_raw_output() {
+	local line
+	while IFS= read -r line; do
+		printf '  %s\n' "$line"
+	done <<<"$1"
 }
 
 repo_update_origin_allowed() {
@@ -164,7 +176,7 @@ repo_update_preflight() {
 	[[ -n "${result_ref[changes]}" ]] && result_ref[dirty]=1
 
 	if ! fetch_output="$(git -C "$repo_dir" fetch --prune 2>&1)"; then
-		[[ -n "$fetch_output" ]] && printf '%s\n' "$fetch_output" >&2
+		[[ -n "$fetch_output" ]] && _repo_update_print_raw_output "$fetch_output" >&2
 		_repo_update_result_stop "$result_name" fetch-failed 'Git fetch failed; remote freshness is unknown.'
 		return 0
 	fi
@@ -253,7 +265,7 @@ _repo_update_print_result_default() {
 		case "${result_ref[state]}" in behind) action='pull --ff-only' ;; ahead | diverged) action='replace after backup' ;; current) action='current' ;; *) action='check' ;; esac
 	fi
 
-	printf '\n  %s%sRepository update%s\n\n' "${C_BOLD:-}" "${C_YELLOW:-}" "${C_RESET:-}"
+	rt_print_header 'Repository update' "$REPO_UPDATE_REPORT_BREADCRUMB"
 	_repo_update_print_table_header action
 	if [[ "${result_ref[dirty]}" == 1 ]]; then
 		_repo_update_print_table_row "${result_ref[label]}" "${branch}@${local_rev}" "${change_count} local change(s)" "$action"
@@ -394,7 +406,7 @@ _repo_update_stash_changes() {
 		return 1
 	}
 	if ! stash_output="$(git -C "${result_ref[dir]}" stash push --include-untracked -m "$message" 2>&1)"; then
-		[[ -n "$stash_output" ]] && printf '%s\n' "$stash_output" >&2
+		[[ -n "$stash_output" ]] && _repo_update_print_raw_output "$stash_output" >&2
 		result_ref[reason]=stash-failed
 		return 1
 	fi
@@ -423,7 +435,7 @@ _repo_update_replace_with_upstream() {
 		return 1
 	fi
 	if ! reset_output="$(git -C "${result_ref[dir]}" reset --hard '@{upstream}' 2>&1)"; then
-		[[ -n "$reset_output" ]] && printf '%s\n' "$reset_output" >&2
+		[[ -n "$reset_output" ]] && _repo_update_print_raw_output "$reset_output" >&2
 		result_ref[reason]=reset-failed
 		return 1
 	fi
@@ -459,7 +471,7 @@ repo_update_apply() {
 			[[ -n "$pull_output" ]] && _repo_update_print_fetch_output "$pull_output"
 			result_ref[outcome]=repository_changed
 		else
-			[[ -n "$pull_output" ]] && printf '%s\n' "$pull_output" >&2
+			[[ -n "$pull_output" ]] && _repo_update_print_raw_output "$pull_output" >&2
 			printf '  Fast-forward pull failed; resolve the repository manually.\n' >&2
 			result_ref[reason]=pull-failed
 			result_ref[outcome]=stopped
@@ -510,6 +522,6 @@ repo_update_is_declined() {
 }
 
 repo_update_print_changed() {
-	printf '%sRepository fast-forward succeeded%s\n\n' "${C_GREEN:-}" "${C_RESET:-}"
-	printf 'Run setup again when ready.\n'
+	printf '  %sRepository fast-forward succeeded%s\n\n' "${C_GREEN:-}" "${C_RESET:-}"
+	printf '  Run setup again when ready.\n'
 }

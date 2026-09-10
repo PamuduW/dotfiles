@@ -144,7 +144,7 @@ test_install_repo_gate_uses_repository_update_topic() (
 	}
 	ui_confirm_yes_no() { return 0; }
 	output="$(_dotfiles_install_repo_gate 2>&1)" || return 1
-	[[ "$output" == *$'\033[33mRepository update\033[0m'* ]] || return 1
+	[[ "$output" == *'=== Repository update ==='* ]] || return 1
 	[[ "$output" != *'==Repository update=='* ]] || return 1
 	[[ "$output" == *'component'* && "$output" == *'dotfiles repo'* && "$output" == *'origin/main'* ]] || return 1
 	[[ "$output" == *$'\033[33m1 commit(s) behind\033[0m'* && "$output" == *$'\033[36mpull --ff-only\033[0m'* ]]
