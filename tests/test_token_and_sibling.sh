@@ -237,6 +237,32 @@ test_hidden_entry_requires_save_confirmation() (
 	! grep -Fq "$token" "$output"
 )
 
+test_confirm_prompt_offers_only_the_keys_it_reads() (
+	# The hint read [y/N/q] while the case below it collapsed everything that
+	# is not y into no, so q did exactly what n did. Two keys are offered
+	# because two keys exist, which is what the sibling product's shared
+	# tui_confirm has always shown.
+	reset_token_state
+	local token output="$TEST_HARNESS_ROOT/confirm-hint.menu"
+	token="$(make_token)"
+	run_menu_script $'s\n'"${token}"$'\nn\nq\n' "$output" || return 1
+	# The colour reset lands between the question mark and the hint.
+	grep -Fq 'Save this token?' "$output" || return 1
+	grep -Fq -e '[y/N]: ' "$output" || return 1
+	! grep -Fq -e '[y/N/q]' "$output"
+)
+
+test_save_hint_names_what_will_be_shown() (
+	# "Input is hidden while you type" says the typing is masked; it does not
+	# say what comes back. The screen answers with a fingerprint, and the
+	# sibling product's line said so first.
+	reset_token_state
+	local token output="$TEST_HARNESS_ROOT/save-hint.menu"
+	token="$(make_token)"
+	run_menu_script $'s\n'"${token}"$'\nn\nq\n' "$output" || return 1
+	grep -Fq 'Input is hidden; only its fingerprint will be shown.' "$output"
+)
+
 test_menu_save_cancel_remove_and_q_state_machine() (
 	reset_token_state
 	local token output="$TEST_HARNESS_ROOT/state.menu"
@@ -404,6 +430,8 @@ expect_success 'legacy migration handles absent, valid, identical, conflict, and
 expect_success 'canary is absent outside confirmed reveal output' test_canary_never_leaks_outside_confirmed_reveal
 expect_success 'hidden entry does not write before save confirmation' test_hidden_entry_requires_save_confirmation
 expect_success 'menu save, entry cancel, remove confirm/cancel, and q preserve state' test_menu_save_cancel_remove_and_q_state_machine
+expect_success 'the confirm prompt offers only the keys it reads' test_confirm_prompt_offers_only_the_keys_it_reads
+expect_success 'the save hint names the fingerprint it will show' test_save_hint_names_what_will_be_shown
 expect_success 'existing token is fingerprinted and Reveal is warned, confirmed, and one-time' test_fingerprint_and_warned_one_time_reveal
 expect_success 'token screen header, breadcrumb, path, and optional no-scope copy are complete' test_menu_presentation_is_complete
 expect_success 'token screen separates the action prompt from the options' test_menu_presentation_separates_action_prompt

@@ -37,9 +37,14 @@ _github_token_menu_secret() {
 	printf -v "$out_var" '%s' "$value"
 }
 
+# [y/N], not [y/N/q]. The hint said q for long enough to look deliberate, but
+# nothing below reads it: every answer that is not y is no, and all three
+# callers -- save, reveal, remove -- treat a no as "go back". A third key that
+# does what the second key does is a promise the screen cannot keep, and the
+# sibling product's shared tui_confirm never made it.
 _github_token_menu_confirm() {
 	local answer=''
-	_github_token_menu_line answer "${C_YELLOW:-}$1${C_RESET:-} [y/N/q]: "
+	_github_token_menu_line answer "${C_YELLOW:-}$1${C_RESET:-} [y/N]: "
 	case "$answer" in y | Y | yes | YES) return 0 ;; *) return 1 ;; esac
 }
 
@@ -128,7 +133,7 @@ _github_token_menu_check() {
 
 _github_token_menu_save() {
 	local token=''
-	printf '  %sInput is hidden while you type.%s\n' \
+	printf '  %sInput is hidden; only its fingerprint will be shown.%s\n' \
 		"${C_DIM:-}" "${C_RESET:-}" >&"$GITHUB_TOKEN_MENU_OUT_FD"
 	_github_token_menu_secret token "  ${C_CYAN:-}GitHub token${C_RESET:-} (q cancels): "
 	[[ "$token" != q && "$token" != Q && -n "$token" ]] || return 0
