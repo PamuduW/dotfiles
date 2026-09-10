@@ -33,10 +33,13 @@ generate_ssh_key() {
 	# after announcing a prompt the operator never saw.
 	ssh-keygen -t ed25519 -C "$ssh_comment" -f "$HOME/.ssh/id_ed25519" \
 		-N "${SETUP_SSH_PASSPHRASE:-}" -q || return $?
+	# Held, not printed here: a detail line belongs under the result it
+	# describes, and the result is logged once the key file is written.
+	local key_note=''
 	if [[ -n "${SETUP_SSH_PASSPHRASE:-}" ]]; then
-		echo '  Key protected by a passphrase. Add it to your agent with: ssh-add ~/.ssh/id_ed25519'
+		key_note='  Key protected by a passphrase. Add it to your agent with: ssh-add ~/.ssh/id_ed25519'
 	else
-		echo '  Key generated without a passphrase.'
+		key_note='  Key generated without a passphrase.'
 		# Only worth doing unprotected: ssh-add on a protected key would stop
 		# here asking for the passphrase again.
 		eval "$(ssh-agent -s)" >/dev/null || return $?
@@ -62,6 +65,7 @@ Next steps:
 EOF
 
 	log_ok "SSH key generated"
+	[[ -z "$key_note" ]] || printf '%s\n' "$key_note"
 	log_ok "Details saved to ~/.ssh/github-setup.txt"
 }
 

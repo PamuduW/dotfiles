@@ -112,6 +112,10 @@ _run_install_preamble() {
 			log_warn "apt indexes refresh failed"
 			return 1
 		fi
+		# This is the run's own work, not the first component's. Without the
+		# rule the index refresh sat inside the first component's block and
+		# read as part of it.
+		declare -F log_component_rule >/dev/null 2>&1 && log_component_rule
 	fi
 }
 
