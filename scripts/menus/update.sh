@@ -71,26 +71,122 @@ return_full_update_run() {
 	_run_dotfiles_subcommand full-update "$@"
 }
 
-# The Dotfiles command the menu has no entry for otherwise. Read-only, so it
-# runs straight through; the CLI owns the report.
-run_doctor_flow() {
-	_run_dotfiles_subcommand doctor
+# The list itself was noise: twenty timestamped filenames and their sizes,
+# none of which an operator can act on from a menu. What they actually want is
+# to get at the folder, or to clear it. The CLI keeps `dotfiles logs --list`
+# and `--last` for reading one.
+_logs_dir() { printf '%s\n' "${DOTFILES_DIR}/log"; }
+
+_logs_count() {
+	local dir
+	dir="$(_logs_dir)"
+	[[ -d "$dir" ]] || {
+		printf '0\n'
+		return 0
+	}
+	find "$dir" -maxdepth 1 -type f -name '*.log' -print | wc -l
 }
 
-# --list is what the operator wants first; --last is one key away rather than a
-# second menu entry, because it is the same command with a different argument.
-run_logs_flow() {
-	local answer='' rc=0
-	_run_dotfiles_subcommand logs --list || return $?
-	printf '\n'
-	read_tty_line answer "  $(ui_format_shortcuts l 'show newest in full' q back_to_menu) : ${C_RESET:-}"
-	case "$answer" in
-	l | L)
-		printf '\n'
-		_run_dotfiles_subcommand logs --last || rc=$?
+# Windows interop, because this is a WSL product and the folder an operator
+# wants to open is on the Linux side. wslpath renders the \\wsl.localhost path
+# Explorer understands; without interop there is nothing to open and the
+# action says so rather than failing silently.
+_logs_open_in() {
+	local what="$1" dir
+	dir="$(_logs_dir)"
+	[[ -d "$dir" ]] || {
+		printf '  No log folder yet.\n'
+		return 0
+	}
+	case "$what" in
+	explorer)
+		if ! command -v explorer.exe >/dev/null 2>&1; then
+			printf '  explorer.exe is not reachable from this shell.\n'
+			printf '  The folder is: %s\n' "$dir"
+			return 0
+		fi
+		# explorer.exe returns 1 even when it opens the window.
+		explorer.exe "$(wslpath -w "$dir" 2>/dev/null || printf '%s' "$dir")" >/dev/null 2>&1 || true
+		printf '  Opened %s in Explorer.\n' "$dir"
+		;;
+	vscode)
+		if ! command -v code >/dev/null 2>&1; then
+			printf '  code is not on PATH.\n'
+			printf '  The folder is: %s\n' "$dir"
+			return 0
+		fi
+		code "$dir" >/dev/null 2>&1 || {
+			printf '  code could not open %s.\n' "$dir"
+			return 0
+		}
+		printf '  Opened %s in VS Code.\n' "$dir"
 		;;
 	esac
-	return "$rc"
+}
+
+# Deleting the capture the current run is still writing would leave its
+# finalizer working on an unlinked inode, so the live one is kept back. It is
+# named by LOG_FILE/RAW_LOG_FILE when this menu runs under an action log.
+_logs_delete_all() {
+	local dir file removed=0 kept=0
+	dir="$(_logs_dir)"
+	[[ -d "$dir" ]] || {
+		printf '  No log folder yet.\n'
+		return 0
+	}
+	while IFS= read -r file; do
+		if [[ "$file" == "${LOG_FILE:-}" || "$file" == "${RAW_LOG_FILE:-}" ]]; then
+			kept=$((kept + 1))
+			continue
+		fi
+		rm -f -- "$file" && removed=$((removed + 1))
+	done < <(find "$dir" -maxdepth 1 -type f \( -name '*.log' -o -name '*.log.raw' \) -print)
+	printf '  Deleted %d log(s).\n' "$removed"
+	((kept == 0)) || printf '  Kept %d still being written by this run.\n' "$kept"
+}
+
+run_logs_flow() {
+	local answer='' count
+	while true; do
+		ui_clear
+		ui_print_header 'Logs' 'Dotfiles › Logs'
+		count="$(_logs_count)"
+		printf '  %s log(s)\n\n' "$count"
+		printf '  %s\n' "$(ui_format_shortcuts e open_folder_in_explorer c open_folder_in_vscode)"
+		if ! read_tty_line answer "  $(ui_format_shortcuts d delete_all q back_to_menu) : ${C_RESET:-}"; then
+			return 0
+		fi
+		printf '%s' "${C_RESET:-}"
+		case "$answer" in
+		e | E)
+			printf '\n'
+			_logs_open_in explorer
+			ui_pause
+			;;
+		c | C)
+			printf '\n'
+			_logs_open_in vscode
+			ui_pause
+			;;
+		d | D)
+			printf '\n'
+			if ((count == 0)); then
+				printf '  Nothing to delete.\n'
+			elif ui_confirm_yes_no "  Delete all ${count} log(s)?"; then
+				printf '\n'
+				_logs_delete_all
+			else
+				printf '  Kept.\n'
+			fi
+			ui_pause
+			;;
+		q | Q) return 0 ;;
+		*)
+			printf '\n  Invalid choice.\n'
+			ui_pause
+			;;
+		esac
+	done
 }
 
 # Mutating, and it rewrites links in the operator's home directory, so it asks

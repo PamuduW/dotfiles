@@ -177,5 +177,8 @@ print_status_summary_all() {
 		# One call: each branch passed a zero the variable already held, so all
 		# three were the same call written three ways.
 		rt_print_rollup "$ok_count" "$check_count" "$miss_count"
+		# What Doctor was for. Printed under the table that found the problem
+		# rather than on a screen of its own; see status_print_suggestions.
+		status_print_suggestions rows || true
 	} >"$status_output"
 }

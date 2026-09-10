@@ -41,7 +41,6 @@ test_exact_root_contract() {
 		"Install Dotfiles"
 		"Update"
 		"Full Update (Dotfiles + Agentbot)"
-		"Doctor"
 		"Logs"
 		"Restow"
 		"GitHub Token Config"
@@ -49,7 +48,7 @@ test_exact_root_contract() {
 		"Quit"
 	)
 	# shellcheck disable=SC2034  # Read through a nameref in assert_array_equals.
-	local expected_keys=(status install update full_update doctor logs restow github_token libraries quit)
+	local expected_keys=(status install update full_update logs restow github_token libraries quit)
 	assert_array_equals _main_menu_labels expected_labels || return 1
 	assert_array_equals _main_menu_keys expected_keys || return 1
 	local i description
@@ -333,7 +332,9 @@ test_libraries_menu_contains_command_and_package_libs() {
 test_every_public_command_is_reachable_from_the_menu() (
 	source "$REPO_DIR/scripts/lib/command_metadata.sh"
 	# menu is the TUI itself; commands, packages and help are the Libraries
-	# child menu, which the root reaches through the libraries key.
+	# child menu, which the root reaches through the libraries key; and doctor
+	# is Check Status, which prints the suggestions that were doctor's only
+	# non-duplicated content.
 	# Subscripts quoted: bash evaluates an unquoted one as arithmetic, and
 	# shfmt duly reformats [full-update] into [full - update].
 	local -A reached=(
@@ -349,8 +350,8 @@ test_every_public_command_is_reachable_from_the_menu() (
 		printf 'commands with no way in from the menu: %s\n' "${missing[*]}" >&2
 		return 1
 	}
-	# And the three that were added really are wired to the root menu.
-	for key in doctor logs restow; do
+	# And the two that were added really are wired to the root menu.
+	for key in logs restow; do
 		[[ " ${_main_menu_keys[*]} " == *" $key "* ]] || return 1
 	done
 )

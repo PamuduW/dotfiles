@@ -5,7 +5,7 @@ _main_menu_desc_fn() {
 	case "$key" in
 	status)
 		echo "Show install status for every setup component."
-		echo "Read-only summary with installed, missing, and check counts."
+		echo "Read-only; lists what needs attention and the command that fixes it."
 		;;
 	install)
 		echo "Choose setup components, review the plan, and install."
@@ -18,10 +18,6 @@ _main_menu_desc_fn() {
 	full_update)
 		echo "Update Dotfiles, then install and update Agentbot, without prompts."
 		echo "Auto-approves application prompts and may replace replaceable local Git state."
-		;;
-	doctor)
-		echo "Show only the components that need attention."
-		echo "Read-only; the same check the full update runs at the end."
 		;;
 	logs)
 		echo "List the retained action logs, newest first."
@@ -45,22 +41,23 @@ _main_menu_desc_fn() {
 	esac
 }
 
-# Every public Dotfiles command reaches the menu. doctor, logs and restow were
-# CLI-only, so a menu operator had no way to check what needs attention, read
-# a run's log, or repair a clobbered link without the command line.
+# Every public Dotfiles command reaches the menu. logs and restow were CLI-only,
+# so a menu operator had no way to read a run's log or repair a clobbered link
+# without the command line. Doctor has no item of its own: it was Check Status's
+# rows filtered down, and the suggestions that were its real content print under
+# that table now.
 _main_menu_labels=(
 	"Check Status"
 	"Install Dotfiles"
 	"Update"
 	"Full Update (Dotfiles + Agentbot)"
-	"Doctor"
 	"Logs"
 	"Restow"
 	"GitHub Token Config"
 	"Libraries"
 	"Quit"
 )
-_main_menu_keys=(status install update full_update doctor logs restow github_token libraries quit)
+_main_menu_keys=(status install update full_update logs restow github_token libraries quit)
 
 _main_menu_unavailable() {
 	local message="$1"
@@ -127,9 +124,6 @@ _main_menu_dispatch() {
 		;;
 	full_update)
 		_main_menu_run_direct_action run_full_update_flow
-		;;
-	doctor)
-		_main_menu_run_direct_action run_doctor_flow
 		;;
 	logs)
 		_main_menu_run_direct_action run_logs_flow

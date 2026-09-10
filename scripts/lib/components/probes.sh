@@ -1016,6 +1016,74 @@ _comp_probe_git_credential() {
 	comp_classify git_credential "$helper" "$recurse" "$fetch" "$push" "$summary"
 }
 
+# What Doctor used to be. It was a second screen over the same probes as Check
+# Status, showing a strict subset of its rows -- on a healthy machine, one row
+# reading "All components | installed or configured | ok" against Status's
+# twenty. The part that was not a duplicate is this: the list of commands that
+# fix what the probes found. It belongs under the table that found it.
+#
+# Callers pass the rows they already collected, so nothing is probed twice.
+# Returns 1 when something needs attention, which is what `dotfiles doctor`
+# reports as its exit status and full-update's postflight reads.
+status_print_suggestions() {
+	local rows_name="$1"
+	local -n suggestion_rows="$rows_name"
+	local row component detail result codex_path
+	local miss_count=0 check_count=0 codex_missing=0 codex_conflict=0
+	local -a attention=()
+	local width=0
+
+	for row in "${suggestion_rows[@]}"; do
+		IFS='|' read -r component detail result <<<"$row"
+		[[ -n "$component" ]] || continue
+		# Green is fine and a skip is a deliberate non-event.
+		case "$result" in
+		skipped*) continue ;;
+		esac
+		[[ "$(status_result_class "$result")" == ok ]] && continue
+		if [[ "$component" == 'Codex CLI' ]]; then
+			if [[ "$result" == missing ]]; then
+				codex_missing=1
+			elif [[ "$detail" == *'(external; migration required)'* || "$detail" == *'shadowed by'* ]]; then
+				codex_conflict=1
+			fi
+		fi
+		case "$result" in
+		missing) ((++miss_count)) ;;
+		*) ((++check_count)) ;;
+		esac
+		((${#component} > width)) && width="${#component}"
+		attention+=("$row")
+	done
+
+	((miss_count + check_count > 0)) || return 0
+
+	# The one useful thing the Doctor screen did that the table does not: pull
+	# the handful that need attention out of twenty rows that do not.
+	printf '\n'
+	rt_print_section 'Needs attention'
+	for row in "${attention[@]}"; do
+		IFS='|' read -r component detail result <<<"$row"
+		printf '    %-*s  %s\n' "$width" "$component" "$detail"
+	done
+
+	printf '\n'
+	rt_print_section 'Suggested'
+	((codex_missing > 0)) &&
+		printf '    Run initial setup and select Codex CLI:  dotfiles menu\n'
+	if ((codex_conflict > 0)); then
+		codex_path="$(codex_active_command 2>/dev/null || true)"
+		printf '    Resolve the conflicting Codex command:  %s\n' "${codex_path:-unknown}"
+		printf '    See README.md#codex-cli-migration.\n'
+	fi
+	((miss_count > 0)) &&
+		printf '    Install what is missing:  dotfiles menu  (Install Dotfiles)\n'
+	((check_count > 0)) &&
+		printf '    Re-check after updating:  dotfiles update\n'
+	printf '    Repair stow links only:   dotfiles restow\n'
+	return 1
+}
+
 print_install_summary() {
 	local row label detail result cols key install_result i
 	local ok_count=0 miss_count=0
