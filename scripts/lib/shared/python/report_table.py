@@ -100,8 +100,11 @@ def four_column_widths(columns: int) -> FourWidths:
     vocabulary is fixed -- "up to date", "upgrade", "refresh-required" -- and a
     column that only ever holds known strings should not shrink and grow as the
     other three change.
+
+    The 11 subtracted covers the two-space indent and the three ' | '
+    separators.
     """
-    available = columns - 9
+    available = columns - 11
     w4 = 18 if available >= 55 else available * 25 // 100
     w1 = (available - w4) * 25 // 100
     w2 = (available - w4) * 42 // 100
@@ -112,12 +115,12 @@ def four_column_widths(columns: int) -> FourWidths:
 def format_four_column_header(
     widths: FourWidths, headers: tuple[str, str, str, str]
 ) -> tuple[str, str]:
-    """Column line and rule. No leading indent: the update report starts at
-    column zero, unlike the three-column table."""
-    cells = " | ".join(f"{fit_line(h, w):<{w}}" for h, w in zip(headers, widths))
-    rule = "-+-".join("-" * w for w in widths)
+    """Column line and rule, indented like the three-column table: every line
+    the run prints shares one left edge."""
+    cells = "  " + " | ".join(f"{fit_line(h, w):<{w}}" for h, w in zip(headers, widths))
+    rule = "  " + "-+-".join("-" * w for w in widths)
     return cells, rule
 
 
 def format_four_column_row(widths: FourWidths, cells: tuple[str, str, str, str]) -> str:
-    return " | ".join(f"{fit_line(c, w):<{w}}" for c, w in zip(cells, widths))
+    return "  " + " | ".join(f"{fit_line(c, w):<{w}}" for c, w in zip(cells, widths))

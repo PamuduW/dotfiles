@@ -53,7 +53,9 @@ test_report_title_still_colours_when_colour_is_wanted() (
 _report_row_widths() {
 	local line
 	while IFS= read -r line; do
-		[[ "$line" == *'|'* || "$line" == -* ]] || continue
+		# The rule is indented like every other row, so the dash test looks past
+		# the indent rather than at column zero.
+		[[ "$line" == *'|'* || "${line#  }" == -* ]] || continue
 		display_width "$line"
 		printf '\n'
 	done
@@ -145,7 +147,7 @@ test_upgrade_summary_marks_unattempted_steps_after_early_failure() (
 	UPGRADE_STEP_RESULT=(['apt packages']=failed)
 	local output
 	output="$(NO_COLOR=1 print_upgrade_summary)"
-	grep -Eq '^Cursor CLI[[:space:]]+\|.*\|[[:space:]]+not run[[:space:]]*$' <<<"$output" || return 1
+	grep -Eq '^  Cursor CLI[[:space:]]+\|.*\|[[:space:]]+not run[[:space:]]*$' <<<"$output" || return 1
 	grep -Fq '0 updated; 0 already current; 1 checked/no change; 0 recovered; 0 skipped; 1 failed; 1 not run.' <<<"$output"
 )
 
@@ -183,7 +185,7 @@ test_update_report_ignores_empty_probe_rows() (
 	}
 	local output
 	output="$(NO_COLOR=1 print_report_table)"
-	[[ "$(grep -c '^apt packages' <<<"$output")" -eq 1 ]] || return 1
+	[[ "$(grep -c '^  apt packages' <<<"$output")" -eq 1 ]] || return 1
 	! grep -Eq '^[[:space:]]+\|[[:space:]]+\|[[:space:]]+\|' <<<"$output"
 )
 
@@ -193,7 +195,7 @@ test_upgrade_summary_ignores_empty_probe_rows() (
 	}
 	local output
 	output="$(NO_COLOR=1 print_upgrade_summary)" || return 1
-	[[ "$(grep -c '^apt packages' <<<"$output")" -eq 1 ]] || return 1
+	[[ "$(grep -c '^  apt packages' <<<"$output")" -eq 1 ]] || return 1
 	! grep -Eq '^[[:space:]]+\|[[:space:]]+\|[[:space:]]+\|' <<<"$output"
 )
 
@@ -208,14 +210,14 @@ test_update_rows_align_unicode_available_cells() (
 	# The em-dash occupies one column and three bytes, which is the whole point
 	# of this case: measured in bash under a UTF-8 locale, never in awk.
 	while IFS= read -r line; do
-		[[ "$line" == 'Cursor CLI'* ]] || continue
+		[[ "$line" == '  Cursor CLI'* ]] || continue
 		(($(display_width "$line") == 80)) || return 1
 		line="${line//—/-}"
 		pipes=''
 		for ((index = 0; index < ${#line}; index++)); do
 			[[ "${line:index:1}" == '|' ]] && pipes+="$((index + 1)),"
 		done
-		[[ "$pipes" == '15,40,61,' ]] || return 1
+		[[ "$pipes" == '16,40,61,' ]] || return 1
 		found=true
 	done <<<"$output"
 	[[ "$found" == true ]]
@@ -328,7 +330,10 @@ test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan() (
 test_upgrade_summary_marks_repo_gate_as_handled() (
 	_collect_check_rows() { printf '%s\n' 'dotfiles repo|main@abc123|none|current'; }
 	local output
-	output="$(print_upgrade_summary)"
+	# Pinned, because the assertion is on the label rather than on how it fits:
+	# an unpinned run takes its width from COLUMNS, and the component column at
+	# 80 is narrower than "dotfiles repo".
+	output="$(DOTFILES_REPORT_COLS=120 print_upgrade_summary)"
 	grep -Fq 'dotfiles repo' <<<"$output" || return 1
 	grep -Fq 'checked/no change' <<<"$output"
 )

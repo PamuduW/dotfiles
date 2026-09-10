@@ -159,7 +159,7 @@ print_report_table() {
 		done
 	fi
 
-	printf '\n'
+	printf '\n  '
 	if [[ $upgrade_count -eq 0 && $remaining_count -eq 0 ]]; then
 		printf '%s0 verified upgrades%s — everything verified current.\n' "$C_GREEN" "$C_RESET"
 	elif [[ $upgrade_count -eq 0 ]]; then

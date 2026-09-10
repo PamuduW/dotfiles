@@ -95,7 +95,9 @@ _rt_three_column_widths() {
 rt_four_column_widths() {
 	local output_name="$1" available w1 w2 w3 w4
 	local -n widths_ref="$output_name"
-	available=$(($(rt_report_columns) - 9))
+	# The 11 subtracted covers the two-space indent and the three ' | '
+	# separators.
+	available=$(($(rt_report_columns) - 11))
 	if ((available >= 55)); then
 		w4=18
 	else
@@ -129,7 +131,7 @@ _rt_print_fixed_cell() {
 rt_print_four_column_header() {
 	local w1="$1" h1="$2" w2="$3" h2="$4" w3="$5" h3="$6" w4="$7" h4="$8"
 	_rt_ensure_colors
-	printf '%s' "$C_BOLD"
+	printf '  %s' "$C_BOLD"
 	_rt_print_fixed_cell "$h1" "$w1"
 	printf ' | '
 	_rt_print_fixed_cell "$h2" "$w2"
@@ -138,12 +140,13 @@ rt_print_four_column_header() {
 	printf ' | '
 	_rt_print_fixed_cell "$h4" "$w4"
 	printf '%s\n' "$C_RESET"
-	printf '%s%s-+-%s-+-%s-+-%s%s\n' "$C_DIM" "$(_rt_rule "$w1")" "$(_rt_rule "$w2")" "$(_rt_rule "$w3")" "$(_rt_rule "$w4")" "$C_RESET"
+	printf '  %s%s-+-%s-+-%s-+-%s%s\n' "$C_DIM" "$(_rt_rule "$w1")" "$(_rt_rule "$w2")" "$(_rt_rule "$w3")" "$(_rt_rule "$w4")" "$C_RESET"
 }
 
 rt_print_four_column_row() {
 	local w1="$1" t1="$2" w2="$3" t2="$4" w3="$5" t3="$6" w4="$7" t4="$8"
 	local color3="${9:-}" color4="${10:-}"
+	printf '  '
 	_rt_print_fixed_cell "$t1" "$w1"
 	printf ' | '
 	_rt_print_fixed_cell "$t2" "$w2"

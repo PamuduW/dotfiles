@@ -86,11 +86,13 @@ prompt_git_identity() {
 	current_email="$(git config --global user.email 2>/dev/null || true)"
 
 	echo ""
-	echo "Git identity (press Enter to keep default):"
-	read_tty_line SETUP_GIT_NAME "  Name [${current_name:-}]: "
+	# The heading shares the screen's left edge; its two fields sit one level in
+	# from it, the way the timing rows sit under their heading.
+	echo "  Git identity (press Enter to keep default):"
+	read_tty_line SETUP_GIT_NAME "    Name [${current_name:-}]: "
 	SETUP_GIT_NAME="${SETUP_GIT_NAME:-$current_name}"
 
-	read_tty_line SETUP_GIT_EMAIL "  Email [${current_email:-}]: "
+	read_tty_line SETUP_GIT_EMAIL "    Email [${current_email:-}]: "
 	SETUP_GIT_EMAIL="${SETUP_GIT_EMAIL:-$current_email}"
 }
 
