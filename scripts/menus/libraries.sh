@@ -46,7 +46,7 @@ libraries_menu() {
 			;;
 		esac
 		if ((rc != 0)); then
-			printf '%sAction failed (exit %d).%s\n' "${C_RED:-}" "$rc" "${C_RESET:-}" >&2
+			printf '  %sAction failed (exit %d).%s\n' "${C_RED:-}" "$rc" "${C_RESET:-}" >&2
 			ui_pause
 		fi
 	done

@@ -67,7 +67,7 @@ _main_menu_run_direct_action() {
 			# matters when something is genuinely broken.
 			rc=0
 		else
-			printf '%sAction failed (exit %d).%s\n' "${C_RED:-}" "$rc" "${C_RESET:-}" >&2
+			printf '  %sAction failed (exit %d).%s\n' "${C_RED:-}" "$rc" "${C_RESET:-}" >&2
 		fi
 	fi
 	if [[ "${DOTFILES_EXIT_AFTER_REPOSITORY_UPDATE:-false}" == true ]]; then
@@ -81,7 +81,7 @@ _main_menu_run_child_menu() {
 	local menu_fn="$1" rc=0
 	"$menu_fn" || rc=$?
 	if ((rc != 0)); then
-		printf '%sAction failed (exit %d).%s\n' "${C_RED:-}" "$rc" "${C_RESET:-}" >&2
+		printf '  %sAction failed (exit %d).%s\n' "${C_RED:-}" "$rc" "${C_RESET:-}" >&2
 		ui_pause
 	fi
 	return "$rc"

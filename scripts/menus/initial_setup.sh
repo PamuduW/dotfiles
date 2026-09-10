@@ -120,7 +120,7 @@ confirm_loop() {
 		# unaffected -- it needs answers this screen already has.
 		x | X)
 			DOTFILES_FORCE_REINSTALL=1
-			tty_printf '\n%s\n' "    Forced reinstall: already-installed components will be reinstalled."
+			tty_printf '\n%s\n' "  Forced reinstall: already-installed components will be reinstalled."
 			return 0
 			;;
 		e | E)
@@ -128,12 +128,12 @@ confirm_loop() {
 			need_git_prompt=true
 			;;
 		q | Q)
-			tty_printf '\n%s\n' "Returning to Dotfiles menu."
+			tty_printf '\n%s\n' "  Returning to Dotfiles menu."
 			return 1
 			;;
 		# Carried, not printed: the loop redraws the plan next, and ui_clear
 		# would take this with it before it could be read.
-		*) _CONFIRM_NOTICE="    Invalid choice." ;;
+		*) _CONFIRM_NOTICE="  Invalid choice." ;;
 		esac
 	done
 }

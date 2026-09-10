@@ -34,7 +34,7 @@ ui_clear() {
 ui_pause() {
 	local _ui_pause_reply=''
 	tty_printf '\n'
-	read_tty_line _ui_pause_reply "${C_YELLOW:-}Press Enter to continue:${C_RESET:-} "
+	read_tty_line _ui_pause_reply "  ${C_YELLOW:-}Press Enter to continue:${C_RESET:-} "
 }
 
 ui_wait_back() {

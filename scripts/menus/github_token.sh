@@ -46,7 +46,7 @@ _github_token_menu_confirm() {
 _github_token_menu_pause() {
 	# shellcheck disable=SC2034  # Filled indirectly by _github_token_menu_line.
 	local ignored=''
-	_github_token_menu_line ignored "${C_DIM:-}Press Enter to continue:${C_RESET:-} "
+	_github_token_menu_line ignored "  ${C_DIM:-}Press Enter to continue:${C_RESET:-} "
 }
 
 # What the last action did, shown by the next frame.
