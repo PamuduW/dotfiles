@@ -1084,6 +1084,23 @@ status_print_suggestions() {
 	return 1
 }
 
+# How the run went, coloured the way the update's closing line always has been
+# while the install said the same thing in plain text.
+#
+# Yellow rather than the update's red for the partial case: "need attention" is
+# yellow in the result vocabulary everywhere else, and a partial install is not
+# a failed one -- it has DOTFILES_INSTALL_PARTIAL_RC for exactly that reason.
+_install_closing_lines() {
+	local ok_count="$1" miss_count="$2"
+	if ((miss_count == 0)); then
+		printf '  %sInstall finished — %d component(s) look good.%s\n' \
+			"${C_GREEN:-}" "$ok_count" "${C_RESET:-}"
+	else
+		printf '  %sInstall finished — %d ok, %d need attention.%s\n' \
+			"${C_YELLOW:-}" "$ok_count" "$miss_count" "${C_RESET:-}"
+	fi
+}
+
 print_install_summary() {
 	local row label detail result cols key install_result i
 	local ok_count=0 miss_count=0
@@ -1125,9 +1142,5 @@ print_install_summary() {
 	done
 
 	echo ""
-	if [[ $miss_count -eq 0 ]]; then
-		echo "  Install finished — ${ok_count} component(s) look good."
-	else
-		echo "  Install finished — ${ok_count} ok, ${miss_count} need attention (see log above)."
-	fi
+	_install_closing_lines "$ok_count" "$miss_count"
 }

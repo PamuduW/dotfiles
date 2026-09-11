@@ -140,6 +140,20 @@ print_install_timing() {
 	print_timing_summary Install INSTALL_COMPONENT_SECONDS "$1"
 }
 
+# Restart-your-shell, printed when the run gave it a reason.
+#
+# The notice is about the operator's *current* shell being stale, and only the
+# stow component changes what a login shell loads: direnv's hook and
+# BROWSER=wslview live inside the stowed .bashrc rather than being appended to
+# the operator's, and every other component installs a binary the existing PATH
+# already finds. A run that installed docker was telling them to restart for
+# nothing.
+_install_shell_notice() {
+	[[ "${INSTALL_COMPONENT_RESULT[dotfiles]:-}" == completed ]] || return 0
+	echo ""
+	echo "  Shell configuration changed. Run: exec bash -l"
+}
+
 run_install() {
 	local key failures=0
 	declare -gA INSTALL_COMPONENT_RESULT=()
@@ -214,10 +228,7 @@ run_install() {
 	print_install_summary
 	print_install_timing "$((($(_install_now_seconds)) - run_started))"
 
-	echo ""
-	echo "  Done. Log saved to: $LOG_FILE"
-	echo ""
-	echo "  Open a new terminal, or run: exec bash -l"
+	_install_shell_notice
 	# A distinct status for "the run completed, but N components need
 	# attention". A caller sequencing further work -- bootstrap.sh -- can then
 	# carry on and report, instead of treating one failed component as a reason

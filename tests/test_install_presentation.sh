@@ -11,9 +11,39 @@ source "$REPO_DIR/scripts/lib/shared/tui/tty.sh"
 source "$REPO_DIR/scripts/lib/shared/tui/report_table.sh"
 source "$REPO_DIR/scripts/lib/shared/tui/ui.sh"
 source "$REPO_DIR/scripts/lib/installers/logging.sh"
+# shellcheck source=scripts/lib/components/probes.sh
+source "$REPO_DIR/scripts/lib/components/probes.sh"
+# shellcheck source=scripts/lib/components/install_dispatch.sh
+source "$REPO_DIR/scripts/lib/components/install_dispatch.sh"
 ui_init_colors
 
 test_harness_report_init
+
+test_the_closing_line_says_how_it_went_in_colour() (
+	# The update has always closed in green or red; the install said the same
+	# thing in plain text.
+	unset NO_COLOR
+	FORCE_COLOR=1
+	ui_init_colors
+	local good bad
+	good="$(printf '  %sInstall finished — %d component(s) look good.%s' "$C_GREEN" 20 "$C_RESET")"
+	bad="$(printf '  %sInstall finished — %d ok, %d need attention.%s' "$C_YELLOW" 19 1 "$C_RESET")"
+	# Yellow, not the update's red: "need attention" is yellow in the result
+	# vocabulary everywhere else, and a partial install is not a failed one --
+	# it has its own exit status for exactly that reason.
+	grep -Fq "$good" <<<"$(_install_closing_lines 20 0)" || return 1
+	grep -Fq "$bad" <<<"$(_install_closing_lines 19 1)"
+)
+
+test_the_shell_notice_waits_for_a_reason() (
+	# The notice is about the operator's current shell being stale. Only the
+	# stow component changes what a login shell loads, so a run that installed
+	# docker was telling them to restart for nothing.
+	declare -A INSTALL_COMPONENT_RESULT=([docker]=completed)
+	[[ -z "$(_install_shell_notice)" ]] || return 1
+	INSTALL_COMPONENT_RESULT[dotfiles]=completed
+	grep -Fq 'exec bash -l' <<<"$(_install_shell_notice)"
+)
 
 test_install_legend_uses_status_colors() {
 	local output
@@ -145,6 +175,8 @@ test_table_padding_survives_a_non_utf8_locale() (
 	[[ "$width" -eq 81 ]]
 )
 
+expect_success 'the closing line says how it went, in colour' test_the_closing_line_says_how_it_went_in_colour
+expect_success 'the shell notice waits for a reason to print' test_the_shell_notice_waits_for_a_reason
 expect_success 'install legend uses semantic status colors' test_install_legend_uses_status_colors
 expect_success 'progress animation stays out of the log' test_progress_animation_stays_out_of_the_log
 expect_success 'install status markers use semantic colors' test_install_status_markers_use_semantic_colors

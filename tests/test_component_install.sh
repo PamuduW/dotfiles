@@ -166,10 +166,10 @@ test_every_component_has_an_installer() (
 
 test_failed_apt_index_still_reports_the_run() (
 	# Break caught: a failed `apt-get update` returned out of run_install
-	# before a single component ran -- no summary, no "Done. Log saved to",
-	# nothing but "Action failed (exit 1)" after the operator had already
-	# typed their password. It is the likeliest failure in the run and the
-	# only one that produced no report at all.
+	# before a single component ran -- no summary, nothing but "Action failed
+	# (exit 1)" after the operator had already typed their password. It is the
+	# likeliest failure in the run and the only one that produced no report at
+	# all.
 	local out="$TEST_HARNESS_ROOT/apt-index-fail.out"
 	local rc=0
 	(
@@ -207,10 +207,10 @@ test_failed_apt_index_still_reports_the_run() (
 		grep -Fq "Not run, apt index refresh failed: $key" "$out" || return 1
 	done
 	# And the parts of the run apt cannot touch still happened, under a summary
-	# that reached the operator along with the log location.
+	# that reached the operator. The log location used to be asserted here too;
+	# the run no longer prints it, and the Logs menu is where it lives.
 	grep -Fq 'Install summary' "$out" || return 1
 	grep -Fq 'Install finished' "$out" || return 1
-	grep -Fq 'Done. Log saved to:' "$out" || return 1
 	grep -Fq 'not run (apt index refresh failed)' "$out"
 )
 

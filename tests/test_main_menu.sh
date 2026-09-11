@@ -228,7 +228,7 @@ test_partial_install_is_reported_not_called_a_failure() {
 	local pauses=0 rc output
 	# shellcheck disable=SC2317  # Test double invoked indirectly by menu dispatch.
 	run_install_action() {
-		printf 'Install finished — 19 ok, 1 need attention (see log above).\n'
+		printf 'Install finished — 19 ok, 1 need attention.\n'
 		return "${DOTFILES_INSTALL_PARTIAL_RC:-4}"
 	}
 	ui_clear() { :; }
