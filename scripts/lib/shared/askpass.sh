@@ -20,6 +20,11 @@ _ASKPASS_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "$_ASKPASS_DIR/tui/tty.sh"
 
 prompt="${1:-Password:}"
+# sudo's prompt already ends in a space -- "[sudo] password for pamudu: " -- and
+# the call below adds the gap itself, so appending to it put two spaces between
+# the colon and the first `*`. Trailing whitespace is trimmed so the prompt has
+# exactly one, whether the caller supplied one or not.
+prompt="${prompt%"${prompt##*[![:space:]]}"}"
 
 # Without a terminal there is nothing to mask and nothing to read; failing here
 # lets sudo fall back to its own prompt rather than hanging on a closed handle.

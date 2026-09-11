@@ -109,6 +109,36 @@ test_prime_is_silent_where_sudo_is_absent() (
 	sudo_prime
 )
 
+test_the_masked_prompt_keeps_one_space_before_the_first_star() (
+	# sudo passes "[sudo] password for pamudu: ", already ending in a space,
+	# and the helper added the gap itself -- so the operator saw two of them
+	# between the colon and the first star:
+	#
+	#   [sudo] password for pamudu:  *****
+	#
+	# Driven through the shipped helper rather than a restated expression: a
+	# copy of the trim would agree with itself while askpass.sh drifted.
+	local rendered
+	rendered="$(
+		set -u
+		# shellcheck disable=SC2016
+		prompt='[sudo] password for pamudu: '
+		eval "$(grep -F 'prompt="${prompt%' "$REPO_DIR/scripts/lib/shared/askpass.sh")"
+		printf '[%s]' "  $prompt "
+	)"
+	[[ "$rendered" == '[  [sudo] password for pamudu: ]' ]] || return 1
+
+	# A prompt with no trailing space still gets exactly one.
+	rendered="$(
+		set -u
+		prompt='Password:'
+		eval "$(grep -F 'prompt="${prompt%' "$REPO_DIR/scripts/lib/shared/askpass.sh")"
+		printf '[%s]' "  $prompt "
+	)"
+	[[ "$rendered" == '[  Password: ]' ]]
+)
+
+check 'the masked prompt keeps one space before the first star' test_the_masked_prompt_keeps_one_space_before_the_first_star
 check 'askpass masks the input and gives sudo the password' test_askpass_masks_and_prints_the_password
 check 'priming uses the owned helper when a terminal exists' test_prime_uses_the_owned_helper_when_a_terminal_exists
 check 'priming falls back to sudo without a terminal' test_prime_falls_back_to_sudo_without_a_terminal
