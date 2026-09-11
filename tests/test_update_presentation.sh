@@ -231,7 +231,7 @@ test_repository_update_preview_uses_semantic_colors() (
 		[ahead]=0 [behind]=2 [dirty]=0 [changes]='' [upstream]=origin/main
 		[reason]='' [safe]=1 [approved]=0 [outcome]=stopped
 	)
-	C_BOLD=$'\033[1m' C_CYAN=$'\033[36m' C_ORANGE=$'\033[38;5;208m' C_DIM=$'\033[2m' C_YELLOW=$'\033[33m' C_RESET=$'\033[0m'
+	C_BOLD=$'\033[1m' C_CYAN=$'\033[36m' C_ORANGE=$'\033[38;5;208m' C_DIM=$'\033[2m' C_YELLOW=$'\033[33m' C_WHITE=$'\033[37m' C_RESET=$'\033[0m'
 	output="$(repo_update_print_result result)"
 	# The shared header, like every other section heading in the run.
 	grep -Fq $'\033[38;5;208m=== Repository update ===' <<<"$output" || return 1
@@ -251,7 +251,10 @@ test_repository_update_preview_uses_semantic_colors() (
 		return 1
 	fi
 	prompt="$(<"$tty_out")"
-	grep -Fq $'\033[33mPull 2 commit(s) with --ff-only?' <<<"$prompt"
+	# White, not yellow. The table above it still uses yellow for "needs
+	# attention" and cyan for the action; a question is neither, and colouring
+	# it as a warning made every prompt in the run look like one.
+	grep -Fq $'\033[37mPull 2 commit(s) with --ff-only?' <<<"$prompt"
 )
 
 test_update_topics_use_submenu_yellow() (

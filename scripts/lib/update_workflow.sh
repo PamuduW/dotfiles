@@ -171,8 +171,12 @@ print_report_table() {
 	if [[ $upgrade_count -eq 0 && $remaining_count -eq 0 ]]; then
 		printf '%s0 verified upgrades%s — everything verified current.\n' "$C_GREEN" "$C_RESET"
 	elif [[ $upgrade_count -eq 0 ]]; then
+		# White, not yellow. Yellow means "needs attention" everywhere else in
+		# both products, and a count of what is still to be checked is a fact
+		# about the report above it, not a warning about the machine. The
+		# all-clear above stays green, which is a verdict.
 		printf '%s0 verified upgrades; %s.%s\n' \
-			"$C_YELLOW" "$remaining_phrase" "$C_RESET"
+			"$C_WHITE" "$remaining_phrase" "$C_RESET"
 	else
 		# shellcheck disable=SC2016  # Backticks are literal documentation formatting.
 		printf '%s%d verified upgrade%s available' \
@@ -238,7 +242,10 @@ print_upgrade_summary() {
 # upgrade was declined by something nobody typed.
 _dotfiles_confirm() {
 	local prompt="$1" answer=''
-	read_tty_line answer "$(printf '  %s%s%s [y/N]: ' "$C_YELLOW" "$prompt" "$C_RESET")" || return 1
+	# White, for the same reason the count above it is: a question is not a
+	# warning, and yellow is what this product uses to say something needs
+	# attention.
+	read_tty_line answer "$(printf '  %s%s%s [y/N]: ' "$C_WHITE" "$prompt" "$C_RESET")" || return 1
 	case "$answer" in y | Y | yes | YES) return 0 ;; *) return 1 ;; esac
 }
 
