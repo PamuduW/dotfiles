@@ -3,6 +3,12 @@
 # Shared update result tracking, version comparison, and command-failure output.
 
 declare -gA UPGRADE_STEP_RESULT=()
+# Declared here beside UPGRADE_STEP_RESULT, not where the run resets it. An
+# associative array that is only declared inside the run is an *indexed* one
+# everywhere else, and bash evaluates an indexed subscript as arithmetic -- so
+# `UPGRADE_STEP_SECONDS["probe"]=5` died on "probe: unbound variable" in every
+# test that drives a step directly.
+declare -gA UPGRADE_STEP_SECONDS=()
 UPGRADE_STEP_ACTIVE_RESULT=checked-no-change
 
 UPDATE_CHECK_UPGRADE=upgrade
@@ -76,10 +82,16 @@ _run_upgrade_step() {
 	_upgrade_rule_between
 	log_step "$label"
 	UPGRADE_STEP_ACTIVE_RESULT="$UPGRADE_RESULT_CHECKED_NO_CHANGE"
+	# Per-step wall clock, so the update can close on where its time went the
+	# way the install already does. Started after the heading and stopped
+	# before the outcome is reported, which is the step's own work.
+	local step_started
+	step_started="$(timing_now_seconds)"
 	set +e
 	"$@"
 	local rc=$?
 	set -e
+	UPGRADE_STEP_SECONDS["$label"]=$(($(timing_now_seconds) - step_started))
 	if [[ $rc -ne 0 ]]; then
 		_report_command_failure "$rc" "$retry_command"
 		UPGRADE_STEP_RESULT["$label"]="$UPGRADE_RESULT_FAILED"

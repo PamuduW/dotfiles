@@ -131,32 +131,13 @@ _run_install_preamble() {
 # Exit status meaning "installed, but some components failed".
 DOTFILES_INSTALL_PARTIAL_RC=4
 
-_install_now_seconds() {
-	printf '%s\n' "${EPOCHSECONDS:-$(date +%s)}"
-}
-
-# The slowest handful and the total. Enough to tell a network-bound component
-# from a slow one without turning the summary into a profile.
-# Minutes and seconds, the way the total above the list is written. A column of
-# raw seconds made the reader convert every row to compare it with the heading.
-_install_format_duration() {
-	printf '%dm %02ds' "$(($1 / 60))" "$(($1 % 60))"
-}
+# Both moved to scripts/lib/installers/logging.sh, where the update's load set
+# reaches them too. Kept as names because this file's callers use them.
+_install_now_seconds() { timing_now_seconds; }
+_install_format_duration() { timing_format "$1"; }
 
 print_install_timing() {
-	local total="$1" key seconds
-	((${#INSTALL_COMPONENT_SECONDS[@]} > 0)) || return 0
-	echo ""
-	printf '  %sInstall took %s. Slowest components:%s\n' \
-		"${C_ORANGE:-}" "$(_install_format_duration "$total")" "${C_RESET:-}"
-	while read -r seconds key; do
-		((seconds > 0)) || continue
-		printf '    %7s  %s\n' "$(_install_format_duration "$seconds")" "$key"
-	done < <(
-		for key in "${!INSTALL_COMPONENT_SECONDS[@]}"; do
-			printf '%s %s\n' "${INSTALL_COMPONENT_SECONDS[$key]}" "$key"
-		done | sort -rn | head -6
-	)
+	print_timing_summary Install INSTALL_COMPONENT_SECONDS "$1"
 }
 
 run_install() {

@@ -314,6 +314,7 @@ _run_apt_index_refresh() {
 _run_update_downstream() {
 	local key label apply retry npm_target apt_refresh_rc=0
 	UPGRADE_STEP_RESULT=()
+	UPGRADE_STEP_SECONDS=()
 	upgrade_section_begin
 	update_step_registry_validate || {
 		_err 'Invalid update-step registry.'
@@ -392,9 +393,18 @@ _dotfiles_run_update() {
 	if declare -F sudo_prime >/dev/null 2>&1; then
 		sudo_prime || true
 	fi
-	local downstream_rc=0
+	# Started here rather than inside _run_update_downstream: this function
+	# owns the summary, so it owns the clock the summary reports, and a caller
+	# that replaces the downstream phase does not leave the total unset.
+	local downstream_rc=0 upgrade_started
+	upgrade_started="$(timing_now_seconds)"
 	_run_update_downstream || downstream_rc=$?
 	print_upgrade_summary repo_result observation_rows
+	# Steps, not components: this run checks and upgrades tools rather than
+	# installing them, and calling them components would name the install's
+	# units for the update's work.
+	TIMING_SUMMARY_NOUN=steps print_timing_summary Update UPGRADE_STEP_SECONDS \
+		"$(($(timing_now_seconds) - upgrade_started))"
 	return "$downstream_rc"
 }
 

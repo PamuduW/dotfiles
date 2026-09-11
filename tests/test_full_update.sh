@@ -19,6 +19,11 @@ C_BOLD='' C_ORANGE='' C_GREEN='' C_RESET=''
 # Harmless, and it buried the one real failure here under a hundred lines of it.
 # shellcheck source=scripts/lib/shared/tui/report_table.sh
 source "$REPO_DIR/scripts/lib/shared/tui/report_table.sh"
+# full_update.sh times each section through the helpers beside log_step. The
+# real command has them -- `dotfiles_load_command full-update` pulls in the
+# installer logging -- and this file sources full_update.sh on its own.
+# shellcheck source=scripts/lib/installers/logging.sh
+source "$REPO_DIR/scripts/lib/installers/logging.sh"
 [[ -f "$REPO_DIR/scripts/lib/full_update.sh" ]] && source "$REPO_DIR/scripts/lib/full_update.sh"
 
 test_force_flag_reaches_the_installers_and_survives_a_restart() (
@@ -519,6 +524,38 @@ test_full_update_still_fails_when_agentbot_is_installed_but_unreachable() (
 	[[ "$rc" -eq 0 ]]
 )
 
+test_full_update_closes_on_what_each_section_spent() (
+	# The longest command in the product, and the only one saying nothing
+	# about where its time went while both halves it drives close on their own
+	# summary.
+	local output
+	C_ORANGE='' C_RESET=''
+	FULL_UPDATE_SECTION_SECONDS=()
+	FULL_UPDATE_STARTED="$(($(timing_now_seconds) - 90))"
+	_slow() { sleep 0; }
+	_full_update_section Dotfiles _slow || return 1
+	_full_update_section Agentbot _slow || return 1
+	output="$(_full_update_print_timing)"
+
+	grep -Eq '^  Full update took [0-9]+m [0-9]{2}s\. Slowest sections:$' <<<"$output" || return 1
+	# Both sections recorded, whatever they measured.
+	[[ -n "${FULL_UPDATE_SECTION_SECONDS['Dotfiles']+set}" ]] || return 1
+	[[ -n "${FULL_UPDATE_SECTION_SECONDS['Agentbot']+set}" ]]
+)
+
+test_a_section_keeps_the_status_it_wrapped() (
+	# The clock must not swallow a failure: a section that fails still fails,
+	# and is still recorded.
+	local rc=0
+	FULL_UPDATE_SECTION_SECONDS=()
+	_failing() { return 7; }
+	_full_update_section Agentbot _failing || rc=$?
+	[[ "$rc" -eq 7 ]] || return 1
+	[[ -n "${FULL_UPDATE_SECTION_SECONDS['Agentbot']+set}" ]]
+)
+
+expect_success 'full update closes on what each section spent' test_full_update_closes_on_what_each_section_spent
+expect_success 'a timed section keeps the status it wrapped' test_a_section_keeps_the_status_it_wrapped
 expect_success 'full-update refuses an unexpected Agentbot checkout' test_full_update_refuses_unexpected_agentbot_checkout
 expect_success 'postflight distinguishes healthy warning and error outcomes' test_postflight_distinguishes_warnings_errors_and_health
 expect_success 'Agentbot warning output maps to the postflight warning state' test_agentbot_doctor_warning_output_maps_to_warning_state

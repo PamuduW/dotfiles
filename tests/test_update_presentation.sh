@@ -541,6 +541,34 @@ expect_success 'repository fetch notices use cyan' test_repository_fetch_notice_
 expect_success 'repository fetch notices color each line independently' test_repository_fetch_notice_colors_each_line
 expect_success 'update apply uses a high-level Upgrade heading without opt-in plan noise' test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan
 expect_success 'upgrade summary marks the repo gate as handled' test_upgrade_summary_marks_repo_gate_as_handled
+test_update_closes_on_what_it_spent() (
+	# The install has closed on "Install took ... Slowest components:" for a
+	# while; the update, which is usually the longer of the two, closed on
+	# nothing. The shared helper lives beside log_step now, because the
+	# update's load set does not pull in the component installer.
+	local output
+	C_ORANGE='' C_RESET=''
+	declare -A UPGRADE_STEP_SECONDS=(['Cursor CLI']=12 ['npm']=3 [instant]=0)
+	output="$(TIMING_SUMMARY_NOUN=steps print_timing_summary Update UPGRADE_STEP_SECONDS 20)"
+
+	grep -Fqx '  Update took 0m 20s. Slowest steps:' <<<"$output" || return 1
+	grep -Fqx '     0m 12s  Cursor CLI' <<<"$output" || return 1
+	grep -Fqx '     0m 03s  npm' <<<"$output" || return 1
+	# A step that rounds to nothing says nothing, as the install's list does.
+	! grep -Fq 'instant' <<<"$output"
+)
+
+test_a_step_records_its_own_wall_clock() (
+	# Recorded around the step's own work, so the label the summary lists is
+	# the label the run printed.
+	UPGRADE_STEP_SECONDS=()
+	_slow_probe() { :; }
+	_run_upgrade_step 'probe' 'probe --retry' _slow_probe >/dev/null 2>&1
+	[[ -n "${UPGRADE_STEP_SECONDS['probe']+set}" ]]
+)
+
+expect_success 'the update closes on what it spent' test_update_closes_on_what_it_spent
+expect_success 'an upgrade step records its own wall clock' test_a_step_records_its_own_wall_clock
 expect_success 'update preview and summary share one captured snapshot' test_update_preview_and_summary_share_one_snapshot
 expect_success 'update registry has stable complete check and apply pairs' test_update_step_registry_has_stable_complete_pairs
 expect_success 'TUI runs shared update directly without a submenu' test_tui_runs_shared_update_without_submenu

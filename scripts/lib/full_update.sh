@@ -69,6 +69,29 @@ full_update_install_applied_components() {
 	return "$rc"
 }
 
+# Wall clock per section of a full update.
+#
+# The longest command in the product, and the only one that said nothing about
+# where its time went -- while both halves it drives now close on their own
+# summary. Declared at module scope: an associative array declared only inside
+# the run is an indexed one everywhere else, and bash evaluates an indexed
+# subscript as arithmetic.
+declare -gA FULL_UPDATE_SECTION_SECONDS=()
+
+_full_update_section() {
+	local label="$1" started rc=0
+	shift
+	started="$(timing_now_seconds)"
+	"$@" || rc=$?
+	FULL_UPDATE_SECTION_SECONDS["$label"]=$(($(timing_now_seconds) - started))
+	return "$rc"
+}
+
+_full_update_print_timing() {
+	TIMING_SUMMARY_NOUN=sections print_timing_summary 'Full update' \
+		FULL_UPDATE_SECTION_SECONDS "$(($(timing_now_seconds) - FULL_UPDATE_STARTED))"
+}
+
 full_update_expected_agentbot_home() {
 	local expected="${FULL_UPDATE_EXPECTED_AGENTBOT_HOME:-$(dirname -- "$DOTFILES_DIR")/agentbot}"
 	realpath -m -- "$expected"
@@ -244,13 +267,18 @@ cmd_full_update() {
 	# unattended failure leaves something to read.
 	declare -F start_action_log >/dev/null 2>&1 && start_action_log
 
+	FULL_UPDATE_SECTION_SECONDS=()
+	declare -g FULL_UPDATE_STARTED
+	FULL_UPDATE_STARTED="$(timing_now_seconds)"
+
 	# No header of its own. It announced a section with no body -- the install
 	# phase prints "=== Installing ===" as its very next line -- and repeated
 	# the menu's own "Dotfiles › Full Update" breadcrumb verbatim two lines
 	# after it. The three section headers this run does print say where it is.
 	# repo update -> component install -> downstream updates, the order
 	# bootstrap uses, so the first run and every run after it converge.
-	_dotfiles_run_update _dotfiles_approve_repo_update true false \
+	_full_update_section Dotfiles \
+		_dotfiles_run_update _dotfiles_approve_repo_update true false \
 		full_update_install_applied_components || dotfiles_rc=$?
 	case "$dotfiles_rc" in
 	0) ;;
@@ -271,11 +299,16 @@ cmd_full_update() {
 	esac
 
 	if full_update_agentbot_is_absent; then
-		full_update_without_agentbot
-		return $?
+		local absent_rc=0
+		_full_update_section 'Dotfiles health check' full_update_without_agentbot || absent_rc=$?
+		_full_update_print_timing
+		return "$absent_rc"
 	fi
 
 	full_update_print_identity || return $?
-	full_update_run_agentbot || return $?
-	full_update_postflight
+	_full_update_section Agentbot full_update_run_agentbot || return $?
+	local postflight_rc=0
+	_full_update_section Postflight full_update_postflight || postflight_rc=$?
+	_full_update_print_timing
+	return "$postflight_rc"
 }

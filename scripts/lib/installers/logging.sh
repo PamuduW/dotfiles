@@ -126,6 +126,46 @@ _log_legend_line() {
 		"$C_CYAN" "$C_RESET" "$C_GREEN" "$C_RESET" "$C_DIM" "$C_RESET" "$C_YELLOW" "$C_RESET"
 }
 
+# Wall-clock reporting, shared by the install and the update.
+#
+# The install has closed on "Install took ... Slowest components:" for a while
+# and the update closed on nothing, so the longer of the two runs was the one
+# that never said where its time went. These live here, beside log_step, so
+# both load sets reach them -- the update's does not load the component
+# installer, which is where this used to live in full.
+
+timing_now_seconds() {
+	printf '%s\n' "${EPOCHSECONDS:-$(date +%s)}"
+}
+
+# Minutes and seconds, the way the total above the list is written. A column of
+# raw seconds made the reader convert every row to compare it with the heading.
+timing_format() {
+	printf '%dm %02ds' "$(($1 / 60))" "$(($1 % 60))"
+}
+
+# The slowest handful and the total. Enough to tell a network-bound step from a
+# slow one without turning the summary into a profile.
+#
+#   print_timing_summary <label> <associative-array-name> <total-seconds>
+print_timing_summary() {
+	local label="$1" total="$3" key seconds
+	local -n _timing_seconds="$2"
+	((${#_timing_seconds[@]} > 0)) || return 0
+	echo ""
+	printf '  %s%s took %s. Slowest %s:%s\n' \
+		"${C_ORANGE:-}" "$label" "$(timing_format "$total")" \
+		"${TIMING_SUMMARY_NOUN:-components}" "${C_RESET:-}"
+	while read -r seconds key; do
+		((seconds > 0)) || continue
+		printf '    %7s  %s\n' "$(timing_format "$seconds")" "$key"
+	done < <(
+		for key in "${!_timing_seconds[@]}"; do
+			printf '%s %s\n' "${_timing_seconds[$key]}" "$key"
+		done | sort -rn | head -6
+	)
+}
+
 log_step() { _log_prefix STEP "$1"; }
 log_ok() { _log_prefix OK "$1"; }
 log_skip() { _log_prefix SKIP "$1"; }
