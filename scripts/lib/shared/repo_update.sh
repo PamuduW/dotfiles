@@ -521,7 +521,13 @@ repo_update_is_declined() {
 	esac
 }
 
+# REPO_UPDATE_CALLER_RESTARTS=1 says the caller restarts itself after a
+# checkout moves -- a full update does, on the very next line -- so the advice
+# below would contradict the run that printed it. The fast-forward line stays
+# either way: that one is a fact, not a request.
 repo_update_print_changed() {
-	printf '  %sRepository fast-forward succeeded%s\n\n' "${C_GREEN:-}" "${C_RESET:-}"
-	printf '  Run setup again when ready.\n'
+	printf '  %sRepository fast-forward succeeded%s\n' "${C_GREEN:-}" "${C_RESET:-}"
+	[[ "${REPO_UPDATE_CALLER_RESTARTS:-0}" == 1 ]] && return 0
+	printf '\n  Run setup again when ready.\n'
+	return 0
 }

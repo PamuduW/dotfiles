@@ -94,7 +94,20 @@ _full_update_section() {
 # install" from "Dotfiles update" -- the run reported them as one section while
 # printing two summaries of its own.
 _full_update_dotfiles_install() {
-	_full_update_section 'Dotfiles install' full_update_install_applied_components
+	local rc=0 started
+	started="$(timing_now_seconds)"
+	DOTFILES_INSTALL_SECONDS=''
+	full_update_install_applied_components || rc=$?
+	# The install's own figure when it published one. Wrapping it with a clock
+	# here starts before the sudo prompt, so the section disagreed with the
+	# "Install took" line printed a few rows above it -- by however long the
+	# operator spent typing their password.
+	if [[ "${DOTFILES_INSTALL_SECONDS:-}" =~ ^[0-9]+$ ]]; then
+		FULL_UPDATE_SECTION_SECONDS['Dotfiles install']="$DOTFILES_INSTALL_SECONDS"
+	else
+		FULL_UPDATE_SECTION_SECONDS['Dotfiles install']=$(($(timing_now_seconds) - started))
+	fi
+	return "$rc"
 }
 
 # Agentbot's two halves, as Agentbot reports them.
@@ -124,8 +137,11 @@ _full_update_run_agentbot_timed() {
 }
 
 _full_update_print_timing() {
-	TIMING_SUMMARY_NOUN=sections print_timing_summary 'Full update' \
-		FULL_UPDATE_SECTION_SECONDS "$(($(timing_now_seconds) - FULL_UPDATE_STARTED))"
+	# Every section, not the slowest handful: there are five, and naming five
+	# of five "the slowest" says nothing about any of them.
+	TIMING_SUMMARY_NOUN=sections TIMING_SUMMARY_LIMIT=0 \
+		print_timing_summary 'Full update' FULL_UPDATE_SECTION_SECONDS \
+		"$(($(timing_now_seconds) - FULL_UPDATE_STARTED))"
 }
 
 full_update_expected_agentbot_home() {
@@ -303,6 +319,10 @@ cmd_full_update() {
 	# unattended failure leaves something to read.
 	declare -F start_action_log >/dev/null 2>&1 && start_action_log
 
+	# This run restarts itself when a checkout moves, in both repositories, so
+	# neither should tell the operator to run setup again. Exported, because
+	# the Agentbot half is a child process making the same decision.
+	export REPO_UPDATE_CALLER_RESTARTS=1
 	FULL_UPDATE_SECTION_SECONDS=()
 	declare -g FULL_UPDATE_STARTED
 	FULL_UPDATE_STARTED="$(timing_now_seconds)"

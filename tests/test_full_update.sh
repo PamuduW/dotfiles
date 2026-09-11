@@ -537,10 +537,33 @@ test_full_update_closes_on_what_each_section_spent() (
 	_full_update_section Agentbot _slow || return 1
 	output="$(_full_update_print_timing)"
 
-	grep -Eq '^  Full update took [0-9]+m [0-9]{2}s\. Slowest sections:$' <<<"$output" || return 1
+	# Every section, not a slowest-few: five of five is not a ranking.
+	grep -Eq '^  Full update took [0-9]+m [0-9]{2}s\. Sections:$' <<<"$output" || return 1
 	# Both sections recorded, whatever they measured.
 	[[ -n "${FULL_UPDATE_SECTION_SECONDS['Dotfiles']+set}" ]] || return 1
 	[[ -n "${FULL_UPDATE_SECTION_SECONDS['Agentbot']+set}" ]]
+)
+
+test_the_install_section_uses_the_installs_own_clock() (
+	# Wrapping the install with a clock here starts before the sudo prompt, so
+	# the section disagreed with the "Install took" line a few rows above it --
+	# by however long the operator spent typing a password. 2m 04s printed,
+	# 3m 17s recorded, one screen.
+	FULL_UPDATE_SECTION_SECONDS=()
+	full_update_install_applied_components() {
+		DOTFILES_INSTALL_SECONDS=124
+	}
+	_full_update_dotfiles_install || return 1
+	[[ "${FULL_UPDATE_SECTION_SECONDS['Dotfiles install']}" == 124 ]]
+)
+
+test_the_install_section_falls_back_to_its_own_clock() (
+	# An install that publishes nothing -- an older checkout, or one that
+	# stopped early -- still has to be timed.
+	FULL_UPDATE_SECTION_SECONDS=()
+	full_update_install_applied_components() { DOTFILES_INSTALL_SECONDS=''; }
+	_full_update_dotfiles_install || return 1
+	[[ "${FULL_UPDATE_SECTION_SECONDS['Dotfiles install']}" =~ ^[0-9]+$ ]]
 )
 
 test_a_section_keeps_the_status_it_wrapped() (
@@ -594,6 +617,8 @@ expect_success 'Agentbot reports its install and update separately' test_agentbo
 expect_success 'an Agentbot that reports nothing is still one section' test_an_agentbot_that_reports_nothing_is_still_one_section
 expect_success 'a failing Agentbot keeps its status' test_a_failing_agentbot_keeps_its_status
 expect_success 'full update closes on what each section spent' test_full_update_closes_on_what_each_section_spent
+expect_success 'the install section uses the figure the install published' test_the_install_section_uses_the_installs_own_clock
+expect_success 'the install section falls back to its own clock' test_the_install_section_falls_back_to_its_own_clock
 expect_success 'a timed section keeps the status it wrapped' test_a_section_keeps_the_status_it_wrapped
 expect_success 'full-update refuses an unexpected Agentbot checkout' test_full_update_refuses_unexpected_agentbot_checkout
 expect_success 'postflight distinguishes healthy warning and error outcomes' test_postflight_distinguishes_warnings_errors_and_health

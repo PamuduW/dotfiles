@@ -148,21 +148,40 @@ timing_format() {
 # slow one without turning the summary into a profile.
 #
 #   print_timing_summary <label> <associative-array-name> <total-seconds>
+# Every row, or the first N. `cat` and `head` rather than `A && B || C`, which
+# runs C when A is true and B fails.
+_timing_head() {
+	if (($1 == 0)); then
+		cat
+	else
+		head -n "$1"
+	fi
+}
+
 print_timing_summary() {
 	local label="$1" total="$3" key seconds
 	local -n _timing_seconds="$2"
 	((${#_timing_seconds[@]} > 0)) || return 0
+	# TIMING_SUMMARY_LIMIT=0 lists every row and drops the word "Slowest" with
+	# it. An install has twenty components and wants the head of the list; a
+	# full update has five sections, and calling five of five "the slowest"
+	# says nothing.
+	local limit="${TIMING_SUMMARY_LIMIT:-6}"
+	local noun="${TIMING_SUMMARY_NOUN:-components}"
+	local heading="Slowest $noun"
+	# Capitalised when it opens the clause, which "Slowest" was doing before.
+	((limit == 0)) && heading="${noun^}"
 	echo ""
-	printf '  %s%s took %s. Slowest %s:%s\n' \
+	printf '  %s%s took %s. %s:%s\n' \
 		"${C_ORANGE:-}" "$label" "$(timing_format "$total")" \
-		"${TIMING_SUMMARY_NOUN:-components}" "${C_RESET:-}"
+		"$heading" "${C_RESET:-}"
 	while read -r seconds key; do
 		((seconds > 0)) || continue
 		printf '    %7s  %s\n' "$(timing_format "$seconds")" "$key"
 	done < <(
 		for key in "${!_timing_seconds[@]}"; do
 			printf '%s %s\n' "${_timing_seconds[$key]}" "$key"
-		done | sort -rn | head -6
+		done | sort -rn | _timing_head "$limit"
 	)
 }
 

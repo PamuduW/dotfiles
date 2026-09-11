@@ -226,7 +226,13 @@ run_install() {
 	declare -F _step_spinner_stop >/dev/null 2>&1 && _step_spinner_stop
 
 	print_install_summary
-	print_install_timing "$((($(_install_now_seconds)) - run_started))"
+	# Published as well as printed. A full update timed this phase by wrapping
+	# it, which started the clock before the sudo prompt -- so the same install
+	# reported "Install took 2m 04s" and "Dotfiles install 3m 17s" on one
+	# screen, the difference being how long the operator took to type a
+	# password. This number is the run's own work, and it is the one both say.
+	declare -g DOTFILES_INSTALL_SECONDS=$(($(_install_now_seconds) - run_started))
+	print_install_timing "$DOTFILES_INSTALL_SECONDS"
 
 	_install_shell_notice
 	# A distinct status for "the run completed, but N components need
