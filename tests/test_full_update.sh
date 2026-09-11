@@ -12,6 +12,13 @@ DOTFILES_DIR="$REPO_DIR"
 _msg() { printf '%s\n' "$*"; }
 _err() { printf '%s\n' "$*" >&2; }
 C_BOLD='' C_ORANGE='' C_GREEN='' C_RESET=''
+# full_update.sh prints its three section headings through rt_print_header. The
+# real command has it -- `dotfiles_load_command full-update` pulls in the shared
+# report table -- but this file sources full_update.sh on its own, so every run
+# wrote "rt_print_header: command not found" to stderr three times per test.
+# Harmless, and it buried the one real failure here under a hundred lines of it.
+# shellcheck source=scripts/lib/shared/tui/report_table.sh
+source "$REPO_DIR/scripts/lib/shared/tui/report_table.sh"
 [[ -f "$REPO_DIR/scripts/lib/full_update.sh" ]] && source "$REPO_DIR/scripts/lib/full_update.sh"
 
 test_force_flag_reaches_the_installers_and_survives_a_restart() (
@@ -318,7 +325,16 @@ test_agentbot_capability_failure_propagates_its_status() (
 )
 
 test_missing_agentbot_is_reported_not_ignored() (
-	local rc=0
+	# An Agentbot checkout that exists whose launcher is not on PATH: broken,
+	# and still a failure. Since absent and unreachable became different
+	# things, which of the two this is depends on whether a checkout is found
+	# at the expected home -- and this test did not say. It passed on a
+	# developer's machine, where the workspace keeps agentbot and dotfiles side
+	# by side so one was always there, and failed on CI, which checks out this
+	# repository alone. Its two newer siblings pin the home; so does it now.
+	local rc=0 present="$TEST_HARNESS_ROOT/unreachable-agentbot"
+	mkdir -p -- "$present"
+	export FULL_UPDATE_EXPECTED_AGENTBOT_HOME="$present"
 	_dotfiles_run_update() { return 0; }
 	command() {
 		[[ "$*" == '-v agentbot' ]] && return 1
