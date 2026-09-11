@@ -107,9 +107,18 @@ _print_check_table_row() {
 		"${widths[3]}" "$last_col" '' "$color_fn"
 }
 
+# follow_up: what happens after this report.
+#
+#   advise -- nothing does; the reader has to run the command themselves.
+#   apply  -- the upgrade is the next thing on screen.
+#
+# It said "run `dotfiles update` to apply" in both cases, which inside a
+# `dotfiles update` run told the operator to do the thing the run was already
+# doing two headers later.
 print_report_table() {
 	local repo_result_name="${1:-}"
 	local snapshot_name="${2:-}"
+	local follow_up="${3:-advise}"
 	local -a rows=()
 	local row component installed available state display
 	local upgrade_count=0 remaining_count=0
@@ -184,9 +193,13 @@ print_report_table() {
 		if [[ $remaining_count -gt 0 ]]; then
 			printf '; %s' "$remaining_phrase"
 		fi
-		# shellcheck disable=SC2016  # Backticks are literal documentation formatting.
-		printf '%s — run `%sdotfiles update%s` to apply.\n' \
-			"$C_RESET" "$C_BOLD" "$C_RESET"
+		if [[ "$follow_up" == apply ]]; then
+			printf '.%s\n' "$C_RESET"
+		else
+			# shellcheck disable=SC2016  # Backticks are literal documentation formatting.
+			printf '%s — run `%sdotfiles update%s` to apply.\n' \
+				"$C_RESET" "$C_BOLD" "$C_RESET"
+		fi
 	fi
 	# No trailing blank: rt_print_header opens with one, and the two together
 	# left a two-line gap above "=== Upgrade ===".
@@ -378,7 +391,12 @@ _dotfiles_run_update() {
 	fi
 
 	mapfile -t observation_rows < <(_collect_check_rows repo_result)
-	print_report_table repo_result observation_rows
+	# Dry run is the one path here that really does end at the report.
+	if [[ "$dry_run" == true ]]; then
+		print_report_table repo_result observation_rows advise
+	else
+		print_report_table repo_result observation_rows apply
+	fi
 	if [[ "$dry_run" == true ]]; then
 		_msg 'Dry run: nothing was changed downstream.'
 		return 0

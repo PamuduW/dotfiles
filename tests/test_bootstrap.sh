@@ -437,6 +437,88 @@ test_agentbot_phase_sees_tools_dotfiles_just_installed() (
 	' _ "$BOOTSTRAP"
 )
 
+# One Agentbot checkout whose launcher either carries the install-menu
+# capability marker or does not, plus a logging install.sh, so the selector
+# branch and its fallback can both be driven directly.
+_agentbot_checkout() {
+	local root="$1" generation="$2"
+	rm -rf -- "$root"
+	mkdir -p -- "$root/bin"
+	cat >"$root/install.sh" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1:-}" == --help ]]; then
+	printf 'Options:\n  --components L\n'
+	exit 0
+fi
+printf 'install.sh %s\n' "$*" >>"$BOOTSTRAP_TEST_LOG"
+EOF
+	{
+		printf '#!/usr/bin/env bash\n'
+		[[ "$generation" == menu ]] && printf '# capability: install-menu\n'
+		printf 'printf "launcher %%s\\n" "$*" >>"$BOOTSTRAP_TEST_LOG"\n'
+		printf 'exit "${BOOTSTRAP_TEST_LAUNCHER_RC:-0}"\n'
+	} >"$root/bin/agentbot"
+	chmod +x -- "$root/install.sh" "$root/bin/agentbot"
+}
+
+# run_agentbot with everything around it stubbed: the point is which command the
+# install step invokes, not what that command does.
+_run_agentbot_step() {
+	local checkout="$1" launcher_rc="${2:-0}"
+	BOOTSTRAP_SOURCE_ONLY=1 \
+		BOOTSTRAP_TEST_LOG="$BOOTSTRAP_TEST_LOG" \
+		BOOTSTRAP_TEST_LAUNCHER_RC="$launcher_rc" \
+		AGENTBOT_DIR="$checkout" bash -c '
+		source "$1"
+		AGENTBOT_DIR="$2"
+		load_dotfiles_environment() { :; }
+		agentbot_prerequisites() { return 0; }
+		interactive() { return 0; }
+		restart_after_repository_update() { printf "restart %s\n" "$1"; }
+		run_agentbot || exit $?
+		printf "%s\n" "${SUMMARY[@]}"
+	' _ "$BOOTSTRAP" "$checkout"
+}
+
+test_the_install_step_opens_the_selector_not_the_whole_menu() (
+	# Break caught: this ran the launcher with no arguments, which opens
+	# Agentbot's main menu. The step offered Check Status, Prune Skills and Quit
+	# instead of installing, and recorded whatever the operator did as
+	# "agentbot install".
+	local checkout="$TEST_HARNESS_ROOT/agentbot-menu"
+	BOOTSTRAP_TEST_LOG="$TEST_HARNESS_ROOT/agentbot-menu.log"
+	: >"$BOOTSTRAP_TEST_LOG"
+	_agentbot_checkout "$checkout" menu
+	_run_agentbot_step "$checkout" >/dev/null || return 1
+	grep -Fq 'launcher install --menu' "$BOOTSTRAP_TEST_LOG" || return 1
+	! grep -Eq '^launcher $|^launcher$' "$BOOTSTRAP_TEST_LOG"
+)
+
+test_a_launcher_without_the_selector_falls_back_to_a_plain_install() (
+	local checkout="$TEST_HARNESS_ROOT/agentbot-legacy"
+	BOOTSTRAP_TEST_LOG="$TEST_HARNESS_ROOT/agentbot-legacy.log"
+	: >"$BOOTSTRAP_TEST_LOG"
+	_agentbot_checkout "$checkout" legacy
+	_run_agentbot_step "$checkout" >/dev/null || return 1
+	grep -Fq 'install.sh install' "$BOOTSTRAP_TEST_LOG" || return 1
+	! grep -Fq 'launcher install --menu' "$BOOTSTRAP_TEST_LOG"
+)
+
+test_backing_out_of_the_selector_is_not_recorded_as_an_install() (
+	# The selector's own "back" is a legitimate answer, but nothing was
+	# installed -- so the summary must not claim the phase ran, and the run must
+	# not stop either.
+	local checkout="$TEST_HARNESS_ROOT/agentbot-cancel" output
+	BOOTSTRAP_TEST_LOG="$TEST_HARNESS_ROOT/agentbot-cancel.log"
+	: >"$BOOTSTRAP_TEST_LOG"
+	_agentbot_checkout "$checkout" menu
+	output="$(_run_agentbot_step "$checkout" 4)" || return 1
+	grep -Fq 'cancelled at the selector' <<<"$output" || return 1
+	! grep -Eq '^ *[0-9]+m [0-9]{2}s +agentbot install$' <<<"$output" || return 1
+	# The update still runs: the checkout is there either way.
+	grep -Fq 'install.sh update' "$BOOTSTRAP_TEST_LOG"
+)
+
 test_the_summary_prints_exactly_once_before_the_shell_offer() (
 	# start_new_shell execs, and exec does not run EXIT traps, so the summary is
 	# printed explicitly at the end of main. It must not also come from the
@@ -656,6 +738,9 @@ expect_success 'a checkout behind the remote advances itself' test_a_checkout_be
 expect_success 'each repository may restart once' test_each_repository_may_restart_once
 expect_success 'one repository restarting twice is still a loop' test_one_repository_restarting_twice_is_still_a_loop
 expect_success 'the Agentbot phase sees tools Dotfiles just installed' test_agentbot_phase_sees_tools_dotfiles_just_installed
+expect_success 'the install step opens the selector, not the whole menu' test_the_install_step_opens_the_selector_not_the_whole_menu
+expect_success 'a launcher without the selector falls back to a plain install' test_a_launcher_without_the_selector_falls_back_to_a_plain_install
+expect_success 'backing out of the selector is not recorded as an install' test_backing_out_of_the_selector_is_not_recorded_as_an_install
 expect_success 'the summary prints exactly once before the shell offer' test_the_summary_prints_exactly_once_before_the_shell_offer
 expect_success 'a non-interactive run does not exec a shell' test_a_non_interactive_run_does_not_exec_a_shell
 

@@ -453,6 +453,47 @@ test_go_upgrade_stops_when_asdf_install_fails() (
 	! grep -Eq '^asdf:(set|reshim)' "$calls"
 )
 
+test_go_reads_asdf_from_where_the_installer_put_it() (
+	# Break caught: the bootstrap installs Go through asdf, then runs the update
+	# in a new process whose PATH predates the stowed .bashrc. The update
+	# reported "Go (asdf) | not installed" and skipped the upgrade one screen
+	# after the install reported go1.27.1 installed.
+	local home="$TEST_HARNESS_ROOT/asdf-home"
+	rm -rf -- "$home"
+	mkdir -p -- "$home/.asdf/bin" "$home/.asdf/shims"
+	cat >"$home/.asdf/bin/asdf" <<'EOF'
+#!/usr/bin/env bash
+case "$1 $2" in
+'current golang') printf 'golang 1.27.1 %s\n' "$HOME/.tool-versions" ;;
+'latest golang') printf '1.27.1\n' ;;
+esac
+EOF
+	chmod +x -- "$home/.asdf/bin/asdf"
+
+	local output
+	# PATH stripped: the machine running the suite may have its own asdf, and
+	# finding that one would prove nothing about the fallback.
+	output="$(HOME="$home" ASDF_DIR="$home/.asdf" PATH=/usr/bin:/bin bash -c '
+		source "$1"
+		NOT_INSTALLED="not installed"
+		go_installed_version
+	' _ "$REPO_DIR/scripts/lib/updates/runtimes.sh")" || return 1
+	[[ "$output" == '1.27.1' ]] || return 1
+
+	# No checkout, no claim: an absent asdf is still reported as absent, and
+	# PATH holds nothing at all so a system `go` cannot answer for it either.
+	local empty="$TEST_HARNESS_ROOT/asdf-absent"
+	rm -rf -- "$empty"
+	mkdir -p -- "$empty/bin"
+	# Absolute interpreter: PATH is deliberately empty of everything.
+	output="$(HOME="$empty" ASDF_DIR="$empty/.asdf" PATH="$empty/bin" /bin/bash -c '
+		source "$1"
+		NOT_INSTALLED="not installed"
+		go_installed_version
+	' _ "$REPO_DIR/scripts/lib/updates/runtimes.sh")" || return 1
+	[[ "$output" == 'not installed' ]]
+)
+
 test_cursor_update_falls_back_to_official_installer() (
 	local calls="$TEST_HARNESS_ROOT/cursor-update.calls" output="$TEST_HARNESS_ROOT/cursor-update.output" label='Cursor CLI'
 	: >"$calls"
@@ -683,6 +724,7 @@ expect_success 'upgrade step marks failures in red with retry command' test_upgr
 expect_success 'upgrade step omits failure marker after success' test_upgrade_step_omits_failure_marker_after_success
 expect_success 'Node.js upgrade stops when nvm install fails' test_node_upgrade_stops_when_nvm_install_fails
 expect_success 'Go upgrade stops when asdf install fails' test_go_upgrade_stops_when_asdf_install_fails
+expect_success 'Go reads asdf from where the installer put it' test_go_reads_asdf_from_where_the_installer_put_it
 expect_success 'Cursor update falls back to the official installer after agent update failure' test_cursor_update_falls_back_to_official_installer
 expect_success 'a Windows cursor is never executed' test_a_windows_cursor_is_never_executed
 expect_success 'the apt upgrade is quiet and reported as updated' test_the_apt_upgrade_is_quiet_and_reported_as_updated

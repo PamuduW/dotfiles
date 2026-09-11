@@ -149,8 +149,26 @@ upgrade_npm() {
 }
 
 # --- Go (asdf) — opt-in ---
+
+# asdf installs to ~/.asdf and reaches PATH through the stowed .bashrc, so a
+# process that has not sourced it cannot see it -- which is every `dotfiles
+# update` run from a shell older than the install, and the bootstrap's update
+# phase moments after its own install phase reported "Go installed". The update
+# read that as "not installed" and skipped the Go upgrade.
+#
+# The installer already knows the location; this is the same knowledge on the
+# reading side, and it publishes the shims too so `go` itself resolves.
+_asdf_available() {
+	command -v asdf >/dev/null 2>&1 && return 0
+	local asdf_dir="${ASDF_DIR:-$HOME/.asdf}"
+	[[ -x "$asdf_dir/bin/asdf" ]] || return 1
+	export PATH="$asdf_dir/bin:$asdf_dir/shims:$PATH"
+	hash -r 2>/dev/null || true
+	command -v asdf >/dev/null 2>&1
+}
+
 go_installed_version() {
-	if command -v asdf >/dev/null 2>&1; then
+	if _asdf_available; then
 		local ver
 		ver="$(asdf current golang 2>/dev/null | awk '$1=="golang" {print $2; exit}')"
 		if [[ -n "$ver" ]]; then
@@ -166,7 +184,7 @@ go_installed_version() {
 }
 
 go_latest_version() {
-	if command -v asdf >/dev/null 2>&1; then
+	if _asdf_available; then
 		asdf latest golang 2>/dev/null || echo "—"
 	else
 		echo "—"
@@ -190,7 +208,7 @@ check_go() {
 }
 
 upgrade_go() {
-	if ! command -v asdf >/dev/null 2>&1; then
+	if ! _asdf_available; then
 		log_skip "asdf is not installed; skipping the Go upgrade"
 		upgrade_result_set skipped
 		return 0

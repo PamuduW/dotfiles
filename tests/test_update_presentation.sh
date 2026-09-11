@@ -22,6 +22,22 @@ test_update_report_uses_clear_title_spacing_and_aligned_action_rule() (
 	awk 'NR == 6 { expected=$0; next } NR == 7 { exit(length($0) == length(expected) ? 0 : 1) }' "$output_file"
 )
 
+test_the_report_does_not_tell_the_run_to_run_itself() (
+	# Break caught: `dotfiles update` printed its report and closed it with
+	# "run `dotfiles update` to apply", two headers above the upgrade it was
+	# about to perform. The advice belongs to a reader who has to act, which
+	# here is the dry run and nobody else.
+	local applying advising
+	_collect_check_rows() { printf '%s\n' 'npm|11.19.0|12.0.2|upgrade'; }
+	applying="$(NO_COLOR=1 print_report_table '' '' apply)"
+	advising="$(NO_COLOR=1 print_report_table '' '' advise)"
+	[[ "$applying" == *'1 verified upgrade available.'* ]] || return 1
+	[[ "$applying" != *'to apply'* ]] || return 1
+	[[ "$advising" == *'to apply'* ]] || return 1
+	# The default is the one that says nothing about a caller's intent.
+	[[ "$(NO_COLOR=1 print_report_table)" == "$(NO_COLOR=1 print_report_table '' '' advise)" ]]
+)
+
 test_report_title_honours_no_color_even_with_a_palette_loaded() (
 	# Every rt_* helper settles the palette before drawing, but the report title
 	# printed before the first one ran, so it read $C_BOLD/$C_YELLOW directly.
@@ -621,6 +637,7 @@ expect_success 'CLI and TUI status use the same component-state collector' test_
 expect_success 'status update and restow retain removed command capabilities' test_retained_capability_coverage
 expect_success 'summary upgrade and self fail with migration guidance' test_removed_commands_have_guidance
 expect_success 'metadata help Command Lib and dispatch share ten keys' test_exact_command_set_parity
+expect_success 'the report does not tell the run to run itself' test_the_report_does_not_tell_the_run_to_run_itself
 expect_success 'report title honours NO_COLOR with a palette loaded' test_report_title_honours_no_color_even_with_a_palette_loaded
 expect_success 'report title still colours when colour is wanted' test_report_title_still_colours_when_colour_is_wanted
 expect_success 'harness fakes prevent real repo network apt home and stow mutation' test_harness_safety_and_no_real_mutation

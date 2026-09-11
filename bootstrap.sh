@@ -388,6 +388,16 @@ run_dotfiles() {
 	record_phase 'dotfiles update'
 }
 
+# The selector is the launcher's screen, not the backend's, so `install.sh
+# --help` cannot answer whether it is there. The launcher carries a capability
+# marker for exactly this probe; a checkout that predates it falls back to the
+# non-interactive install, which is what this script did before the selector
+# existed.
+AGENTBOT_INSTALL_CANCELLED_RC=4
+agentbot_has_install_menu() {
+	grep -Fq '# capability: install-menu' "$AGENTBOT_DIR/bin/agentbot" 2>/dev/null
+}
+
 run_agentbot() {
 	local rc=0
 	load_dotfiles_environment
@@ -398,9 +408,12 @@ run_agentbot() {
 	# all-or-nothing install. Feature-detected, because this script is always
 	# fetched fresh and may be driving a checkout that predates the selector --
 	# the same position it already takes for `--install` and `agentbot full`.
-	if interactive && "$AGENTBOT_DIR/install.sh" --help 2>/dev/null |
-		grep -Fq -- '--components'; then
-		AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/bin/agentbot" || rc=$?
+	if interactive && agentbot_has_install_menu; then
+		# `install --menu`, not a bare launcher call: bare opens Agentbot's main
+		# menu, so this step handed the operator Check Status, Prune Skills and
+		# Quit instead of installing, and recorded whatever they did as
+		# "agentbot install".
+		AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/bin/agentbot" install --menu || rc=$?
 	else
 		AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" install || rc=$?
 	fi
@@ -408,11 +421,18 @@ run_agentbot() {
 		restart_after_repository_update Agentbot
 		return 1
 	fi
-	if ((rc != 0)); then
+	# The operator backed out of the selector. Nothing installed, nothing
+	# broken, and the update below still has a checkout to work on.
+	if ((rc == AGENTBOT_INSTALL_CANCELLED_RC)); then
+		record 'SKIPPED   agentbot install (cancelled at the selector)'
+		PHASE_STARTED="$SECONDS"
+		rc=0
+	elif ((rc != 0)); then
 		record 'FAILED   agentbot install'
 		return 1
+	else
+		record_phase 'agentbot install'
 	fi
-	record_phase 'agentbot install'
 	step 'Update Agentbot'
 	AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" update || {
 		record 'FAILED   agentbot update'
