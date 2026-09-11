@@ -46,18 +46,54 @@ off: Agentbot pins both `[update] auto_update` and the `boost-auto-update`
 feature flag to false, so nothing replaces the binary behind the marker. Codex updates only an active standalone installation. External or
 shadowed commands are preserved and reported.
 
+## Timing
+
+Install, update, and full update each close on a timing block: how long the run
+took, and where the time went. The install and the update name their slowest
+six; there is no point ranking a list short enough to read whole.
+
+```text
+  Update took 1m 31s. Slowest steps:
+     1m 09s  apt packages
+     0m 06s  npm
+```
+
+`TIMING_SUMMARY_LIMIT=0` lists every row instead and drops the word "Slowest",
+which is what the full update uses: five sections named "the slowest five" says
+nothing about any of them.
+
 ## Full update
 
 `dotfiles full-update` performs one unattended maintenance sequence:
 
-1. Run the Dotfiles update workflow with approved application prompts.
-2. Restart once if the Dotfiles repository changes.
-3. Print the resolved Dotfiles and Agentbot launchers/checkouts.
-4. Refuse an unexpected Agentbot checkout.
+1. Run the repository gate on the Dotfiles checkout, restarting once if it
+   moves forward.
+2. Reinstall the components the probes report as already applied.
+3. Run the Dotfiles update workflow with approved application prompts.
+4. Print the resolved Dotfiles and Agentbot launchers/checkouts, and refuse an
+   unexpected Agentbot checkout.
 5. Delegate Agentbot's install/update sequence to `agentbot full`.
 6. Run Dotfiles and Agentbot Doctor as postflight checks.
+7. Report the wall clock of each section.
 
 Agentbot warnings produce a warning outcome; a Doctor error fails postflight.
+
+The sections are the five the operator watched go past — Dotfiles install,
+Dotfiles update, Agentbot install, Agentbot update, Postflight. Agentbot's two
+halves are one command from here, so it reports them through
+`AGENTBOT_TIMING_FILE`: one `<stage> <seconds>` line per stage. An Agentbot that
+does not know how to — an older checkout, mid-upgrade — writes nothing and the
+whole delegation is recorded as one section.
+
+Each half also reports its own figure on screen, and the run uses that figure
+rather than its own clock where one is published. Wrapping the Dotfiles install
+from outside starts the clock before the `sudo` prompt, so the section
+disagreed with the "Install took" line a few rows above it by however long the
+operator spent typing a password.
+
+`REPO_UPDATE_CALLER_RESTARTS=1` is set for the whole sequence: this run restarts
+itself when a checkout moves, so neither repository gate should tell the
+operator to run setup again.
 
 The component install in step 1 derives its selection from the probes, never
 from a stored answer, so a full update never silently adds a component the

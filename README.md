@@ -47,8 +47,13 @@ Dotfiles is cloned to `$HOME/dotfiles` and Agentbot to `$HOME/agentbot`; they
 must stay siblings because `dotfiles full-update` resolves Agentbot that way.
 An existing destination is reused when it is a clean checkout of the same
 repository, and anything else stops the run with a report — nothing is ever
-deleted or moved. After the Dotfiles phases finish, bootstrap asks before
-installing Agentbot.
+deleted or moved.
+
+The selection above is the only question. Everything after it follows from it:
+the Dotfiles component selector and execution plan, then the Dotfiles update,
+then Agentbot's own component selector and plan, then the Agentbot update. A
+destination that cannot be used safely stops the run with a report rather than
+a second question.
 
 To read the script before running it, or on a machine that already has Git:
 
@@ -143,7 +148,7 @@ DOTFILES_COMPONENTS=system_packages,docker,portainer,dotfiles \
 
 ## Component summary
 
-The registry contains 21 components:
+The registry contains 20 components:
 
 | Area | Components |
 |---|---|
@@ -186,10 +191,10 @@ dotfiles restow
 dotfiles full-update
 ```
 
-The command verifies the resolved installed checkouts, delegates Agentbot's
-internal lifecycle to `agentbot full`, and finishes with both Doctors. Current
-full update updates managed components but does not yet rerun all previously
-selected installers; that expansion remains on the workspace roadmap.
+The command reinstalls the components the probes report as already applied,
+updates every managed component, verifies the resolved installed checkouts,
+delegates Agentbot's internal lifecycle to `agentbot full`, and finishes with
+both Doctors. It closes on a timing block naming each of its five sections.
 
 ### Start optional services
 
@@ -228,10 +233,13 @@ See the [Git wrapper contract](docs/git-wrapper.md).
 
 - [Technical documentation index](docs/README.md)
 - [Architecture](docs/architecture.md)
+- [Components](docs/components.md)
 - [Installation](docs/installation.md)
 - [Updates](docs/updates.md)
+- [Git wrapper](docs/git-wrapper.md)
 - [Codex and Remote Control](docs/codex-and-remote-control.md)
 - [Security](docs/security.md)
+- [Development and validation](docs/development.md)
 - [Troubleshooting](docs/troubleshooting.md)
 - [Package policy](packages/README.md)
 - [WSL command reference](WSL_COMMANDS.md)

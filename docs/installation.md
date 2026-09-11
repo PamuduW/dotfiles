@@ -52,7 +52,15 @@ does not authorize package removal.
 The installer refreshes apt indexes once when selected components require apt.
 It then follows the registry's deterministic order. Each component is attempted
 and recorded independently, and the final summary distinguishes completed,
-skipped, and failed work.
+skipped, and failed work. The run closes on how long it took and which six
+components were slowest, and offers `exec bash -l` only when the Stow component
+applied — nothing else changes what a login shell loads.
+
+`sudo` is primed once at the start, so its credential cache covers every later
+call site and the operator is asked for a password exactly once. That prompt
+goes through `SUDO_ASKPASS`, which masks it; the install's own clock starts
+after it, so the reported duration is the run's rather than the operator's
+typing speed.
 
 Important boundaries:
 
