@@ -87,6 +87,42 @@ _full_update_section() {
 	return "$rc"
 }
 
+# The Dotfiles install, timed as its own section.
+#
+# It runs as _dotfiles_run_update's post_repo_fn, between the repository gate
+# and the downstream upgrade, so wrapping it here is what separates "Dotfiles
+# install" from "Dotfiles update" -- the run reported them as one section while
+# printing two summaries of its own.
+_full_update_dotfiles_install() {
+	_full_update_section 'Dotfiles install' full_update_install_applied_components
+}
+
+# Agentbot's two halves, as Agentbot reports them.
+#
+# `agentbot full` is one command from here, so its install and its update could
+# only be timed together. It writes a line per stage to the file named below
+# when asked. An Agentbot that does not know how to -- an older checkout, mid
+# upgrade -- writes nothing, and the whole run is recorded as one section, which
+# is what this did before.
+_full_update_run_agentbot_timed() {
+	local file rc=0 label seconds recorded=false
+	file="$(mktemp)" || return 1
+	local started
+	started="$(timing_now_seconds)"
+	# Quiet: the [info] lines are for an operator running Agentbot directly,
+	# and this run has its own headings saying where it is.
+	AGENTBOT_QUIET=1 AGENTBOT_TIMING_FILE="$file" full_update_run_agentbot || rc=$?
+	while read -r label seconds; do
+		[[ -n "$label" && "$seconds" =~ ^[0-9]+$ ]] || continue
+		FULL_UPDATE_SECTION_SECONDS["Agentbot ${label}"]="$seconds"
+		recorded=true
+	done <"$file"
+	rm -f -- "$file"
+	[[ "$recorded" == true ]] ||
+		FULL_UPDATE_SECTION_SECONDS[Agentbot]=$(($(timing_now_seconds) - started))
+	return "$rc"
+}
+
 _full_update_print_timing() {
 	TIMING_SUMMARY_NOUN=sections print_timing_summary 'Full update' \
 		FULL_UPDATE_SECTION_SECONDS "$(($(timing_now_seconds) - FULL_UPDATE_STARTED))"
@@ -277,9 +313,16 @@ cmd_full_update() {
 	# after it. The three section headers this run does print say where it is.
 	# repo update -> component install -> downstream updates, the order
 	# bootstrap uses, so the first run and every run after it converge.
-	_full_update_section Dotfiles \
-		_dotfiles_run_update _dotfiles_approve_repo_update true false \
-		full_update_install_applied_components || dotfiles_rc=$?
+	# Timed as two sections, not one. The install records itself from inside
+	# (it is the post_repo_fn below); what is left of the elapsed total is the
+	# repository gate and the downstream upgrade, which is the update half.
+	local dotfiles_started
+	dotfiles_started="$(timing_now_seconds)"
+	_dotfiles_run_update _dotfiles_approve_repo_update true false \
+		_full_update_dotfiles_install || dotfiles_rc=$?
+	FULL_UPDATE_SECTION_SECONDS['Dotfiles update']=$(( \
+		$(timing_now_seconds) - dotfiles_started - \
+		${FULL_UPDATE_SECTION_SECONDS['Dotfiles install']:-0}))
 	case "$dotfiles_rc" in
 	0) ;;
 	2)
@@ -306,7 +349,7 @@ cmd_full_update() {
 	fi
 
 	full_update_print_identity || return $?
-	_full_update_section Agentbot full_update_run_agentbot || return $?
+	_full_update_run_agentbot_timed || return $?
 	local postflight_rc=0
 	_full_update_section Postflight full_update_postflight || postflight_rc=$?
 	_full_update_print_timing

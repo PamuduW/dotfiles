@@ -554,6 +554,45 @@ test_a_section_keeps_the_status_it_wrapped() (
 	[[ -n "${FULL_UPDATE_SECTION_SECONDS['Agentbot']+set}" ]]
 )
 
+test_agentbot_reports_its_two_halves_separately() (
+	# `agentbot full` is one command from here, so its install and its update
+	# could only be timed as one section -- while both halves print their own
+	# timing on screen. Agentbot writes a line per stage to a file when asked.
+	FULL_UPDATE_SECTION_SECONDS=()
+	full_update_run_agentbot() {
+		printf 'install 33\nupdate 41\n' >>"$AGENTBOT_TIMING_FILE"
+		# The [info] lines are for someone running Agentbot directly.
+		[[ "${AGENTBOT_QUIET:-}" == 1 ]] || return 1
+	}
+	_full_update_run_agentbot_timed || return 1
+
+	[[ "${FULL_UPDATE_SECTION_SECONDS['Agentbot install']}" == 33 ]] || return 1
+	[[ "${FULL_UPDATE_SECTION_SECONDS['Agentbot update']}" == 41 ]] || return 1
+	[[ -z "${FULL_UPDATE_SECTION_SECONDS[Agentbot]+set}" ]]
+)
+
+test_an_agentbot_that_reports_nothing_is_still_one_section() (
+	# An older checkout, or one mid-upgrade, does not know how to write the
+	# file. The run still has to say how long it took.
+	FULL_UPDATE_SECTION_SECONDS=()
+	full_update_run_agentbot() { :; }
+	_full_update_run_agentbot_timed || return 1
+
+	[[ -n "${FULL_UPDATE_SECTION_SECONDS[Agentbot]+set}" ]] || return 1
+	[[ -z "${FULL_UPDATE_SECTION_SECONDS['Agentbot install']+set}" ]]
+)
+
+test_a_failing_agentbot_keeps_its_status() (
+	local rc=0
+	FULL_UPDATE_SECTION_SECONDS=()
+	full_update_run_agentbot() { return 7; }
+	_full_update_run_agentbot_timed || rc=$?
+	[[ "$rc" -eq 7 ]]
+)
+
+expect_success 'Agentbot reports its install and update separately' test_agentbot_reports_its_two_halves_separately
+expect_success 'an Agentbot that reports nothing is still one section' test_an_agentbot_that_reports_nothing_is_still_one_section
+expect_success 'a failing Agentbot keeps its status' test_a_failing_agentbot_keeps_its_status
 expect_success 'full update closes on what each section spent' test_full_update_closes_on_what_each_section_spent
 expect_success 'a timed section keeps the status it wrapped' test_a_section_keeps_the_status_it_wrapped
 expect_success 'full-update refuses an unexpected Agentbot checkout' test_full_update_refuses_unexpected_agentbot_checkout
