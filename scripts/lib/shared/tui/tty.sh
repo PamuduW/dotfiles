@@ -160,6 +160,28 @@ read_tty_secret() {
 	local __secret='' __char='' __rc=0
 
 	tty_available || return 1
+
+	# Echo is disabled once, for the whole prompt, rather than per character.
+	#
+	# tty_read_key_char reads with `read -rsn1`, and -s suppresses echo only
+	# for that one call: bash restores the terminal's echo setting between
+	# every character. A typed secret survives that, because the operator
+	# cannot type into the gap. A *pasted* one does not -- the whole token
+	# lands in the terminal's input buffer at once, and the driver echoes
+	# whatever is still buffered during each of those windows. The result on
+	# screen was the leading characters of the token in clear text followed by
+	# asterisks for the rest, with the secret left in the scrollback.
+	#
+	# Saved and restored around the loop, including on failure, so a caller
+	# that breaks out early does not leave the operator with a terminal that
+	# no longer echoes anything.
+	local __saved_stty='' __echo_off=false
+	if __saved_stty="$(_tty_stty_state 2>/dev/null)" && [[ -n "$__saved_stty" ]]; then
+		if _tty_stty_apply -echo 2>/dev/null; then
+			__echo_off=true
+		fi
+	fi
+
 	tty_printf '%s' "$prompt"
 	while true; do
 		tty_read_key_char __char || {
@@ -180,9 +202,33 @@ read_tty_secret() {
 			;;
 		esac
 	done
+	[[ "$__echo_off" == true ]] && _tty_stty_apply "$__saved_stty" 2>/dev/null
 	tty_printf '\n'
 	((__rc == 0)) || return "$__rc"
 	printf -v "$__var_name" '%s' "$__secret"
+}
+
+# stty against whichever input seam is in use. Both helpers fail quietly when
+# the input is not a terminal -- the tests drive these prompts from files, and
+# a file has no echo setting to change.
+_tty_stty_state() {
+	if tty_use_input_fd; then
+		stty -g <&"$DOTFILES_TTY_IN_FD"
+	else
+		local input_path
+		input_path="$(tty_input_path)" || return 1
+		stty -g <"$input_path"
+	fi
+}
+
+_tty_stty_apply() {
+	if tty_use_input_fd; then
+		stty "$@" <&"$DOTFILES_TTY_IN_FD"
+	else
+		local input_path
+		input_path="$(tty_input_path)" || return 1
+		stty "$@" <"$input_path"
+	fi
 }
 
 tty_read_key_char() {
