@@ -173,7 +173,7 @@ full_update_without_agentbot() {
 	# The Dotfiles half still gets its health check; only Agentbot's is absent.
 	printf '\n'
 	full_update_dotfiles_doctor || rc=$?
-	if ((rc != 0)); then
+	if ((rc != 0)) || [[ "${FULL_UPDATE_DOTFILES_DEGRADED:-false}" == true ]]; then
 		printf '\n  %sDotfiles updated; the machine needs attention.%s\n' "${C_RED:-}" "${C_RESET:-}"
 		return 1
 	fi
@@ -276,6 +276,13 @@ full_update_postflight() {
 	full_update_dotfiles_doctor || dotfiles_rc=$?
 	full_update_agentbot_doctor || agentbot_rc=$?
 
+	# Said before the doctor verdicts below, because it is about a step that
+	# already failed rather than about what the health checks just found.
+	if [[ "${FULL_UPDATE_DOTFILES_DEGRADED:-false}" == true ]]; then
+		printf '\n  %sA Dotfiles update step failed; Agentbot still ran. The machine needs attention.%s\n' \
+			"${C_RED:-}" "${C_RESET:-}"
+		return 1
+	fi
 	if [[ $dotfiles_rc -ne 0 || ($agentbot_rc -ne 0 && $agentbot_rc -ne 10) ]]; then
 		printf '\n  %sUpdates succeeded; system needs attention.%s\n' "${C_RED:-}" "${C_RESET:-}"
 		return 1
@@ -289,6 +296,10 @@ full_update_postflight() {
 
 cmd_full_update() {
 	local resumed=false arg dotfiles_rc=0
+	# Reset per run: the Agentbot phase and the postflight verdict both read it,
+	# and a stale true from an earlier run in the same shell would condemn a
+	# clean machine.
+	declare -g FULL_UPDATE_DOTFILES_DEGRADED=false
 	# Reset, then set from the flag alone. Inheriting an ambient
 	# DOTFILES_FORCE_REINSTALL would let an exported shell variable silently
 	# force every run; the restart below carries the flag explicitly instead.
@@ -345,6 +356,13 @@ cmd_full_update() {
 		${FULL_UPDATE_SECTION_SECONDS['Dotfiles install']:-0}))
 	case "$dotfiles_rc" in
 	0) ;;
+	# Downstream steps ran and some failed. Agentbot is a separate program with
+	# its own installer and its own network calls, so a Boost download that came
+	# back 401 says nothing about whether Agentbot can be updated. Carry on and
+	# let the postflight report the machine as needing attention.
+	"${DOTFILES_UPDATE_PARTIAL_RC:-4}")
+		FULL_UPDATE_DOTFILES_DEGRADED=true
+		;;
 	2)
 		if [[ "$resumed" == true ]]; then
 			_err 'Dotfiles repository changed more than once; full update stopped.'

@@ -192,6 +192,41 @@ test_components_needing_attention_do_not_stop_the_update() (
 	full_update_install_applied_components >/dev/null
 )
 
+# One GitHub download that came back 401 skipped the whole Agentbot half, its
+# postflight, and the timing summary. Agentbot is a separate program: a failed
+# Dotfiles step says nothing about whether it can be updated.
+test_a_failed_update_step_does_not_skip_agentbot() (
+	local events="$TEST_HARNESS_ROOT/full-update-degraded.events"
+	local output rc=0
+	: >"$events"
+	_dotfiles_run_update() { return "${DOTFILES_UPDATE_PARTIAL_RC:-4}"; }
+	full_update_print_identity() { :; }
+	agentbot() {
+		printf 'agentbot:%s\n' "$*" >>"$events"
+		[[ "$*" == 'help full' || "$*" == 'full' || "$*" == doctor ]]
+	}
+	cmd_doctor() { return 0; }
+
+	output="$(cmd_full_update 2>&1)" || rc=$?
+	grep -Fqx 'agentbot:full' "$events" || return 1
+	# Still a failed run: the operator is told the machine needs attention.
+	[[ "$rc" -eq 1 ]] || return 1
+	[[ "$output" == *'Agentbot still ran'* ]] || return 1
+	[[ "$output" != *'Full system update completed.'* ]]
+)
+
+# The Dotfiles-only machine takes the same position.
+test_a_failed_update_step_is_reported_without_agentbot_too() (
+	local output rc=0
+	_dotfiles_run_update() { return "${DOTFILES_UPDATE_PARTIAL_RC:-4}"; }
+	full_update_agentbot_is_absent() { return 0; }
+	cmd_doctor() { return 0; }
+
+	output="$(cmd_full_update 2>&1)" || rc=$?
+	[[ "$rc" -eq 1 ]] || return 1
+	[[ "$output" == *'needs attention'* ]]
+)
+
 test_install_runs_between_the_repository_gate_and_downstream_updates() (
 	# Bootstrap and full-update must apply things in the same order or they
 	# converge on different machine state.
@@ -422,6 +457,8 @@ expect_success 'operator-input components are never installed by full-update' te
 expect_success 'full-update installs only components that probe as present' test_full_update_installs_only_components_that_probe_as_present
 expect_success 'an unverifiable component is reinstalled and said so' test_an_unverifiable_component_is_reinstalled_and_said_so
 expect_success 'components needing attention do not stop the update' test_components_needing_attention_do_not_stop_the_update
+expect_success 'a failed update step does not skip Agentbot' test_a_failed_update_step_does_not_skip_agentbot
+expect_success 'a failed update step is still reported without Agentbot' test_a_failed_update_step_is_reported_without_agentbot_too
 expect_success 'install runs between the repository gate and downstream updates' test_install_runs_between_the_repository_gate_and_downstream_updates
 expect_success 'full-update runs Dotfiles, then one Agentbot full run' test_success_runs_dotfiles_then_agentbot_full
 expect_success 'a legacy Agentbot bootstraps once before full' test_legacy_agentbot_bootstraps_once_before_full

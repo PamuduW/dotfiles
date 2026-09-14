@@ -30,6 +30,34 @@ test_downstream_executes_apt_first_then_every_managed_step() (
 	grep -Fq 'step:Monaspace fonts|' "$events"
 )
 
+# A failed step is a report about one tool, not a dead run: full-update reads
+# this status to decide whether the phases queued behind the update still go.
+test_a_failed_step_reports_partial_rather_than_plain_failure() (
+	local rc=0
+	sudo() { :; }
+	npm_available_version() { printf '12.0.2\n'; }
+	_run_upgrade_step() {
+		if [[ "$1" == 'Boost CLI' ]]; then
+			UPGRADE_STEP_RESULT["$1"]="$UPGRADE_RESULT_FAILED"
+		else
+			UPGRADE_STEP_RESULT["$1"]=ok
+		fi
+	}
+
+	_run_update_downstream >/dev/null || rc=$?
+	[[ "$rc" -eq "${DOTFILES_UPDATE_PARTIAL_RC:-4}" ]]
+)
+
+test_an_apt_refresh_failure_reports_partial_too() (
+	local rc=0
+	_run_apt_index_refresh() { return 1; }
+	_run_upgrade_step() { UPGRADE_STEP_RESULT["$1"]=ok; }
+
+	_run_update_downstream >/dev/null 2>&1 || rc=$?
+	[[ "$rc" -eq "${DOTFILES_UPDATE_PARTIAL_RC:-4}" ]] || return 1
+	[[ "${UPGRADE_STEP_RESULT['apt packages']}" == "$UPGRADE_RESULT_FAILED" ]]
+)
+
 test_update_accepts_all_flag_as_a_compatibility_no_op() (
 	local events="$TEST_HARNESS_ROOT/downstream-all-flag.events"
 	: >"$events"
@@ -702,6 +730,8 @@ test_status_and_update_share_one_tool_resolver() (
 expect_success 'installed-version reports installed when the version command fails' test_installed_version_reports_installed_when_version_command_fails
 expect_success 'status and update share one tool resolver' test_status_and_update_share_one_tool_resolver
 expect_success 'downstream execution runs apt refresh first, then every managed step' test_downstream_executes_apt_first_then_every_managed_step
+expect_success 'a failed step reports partial rather than plain failure' test_a_failed_step_reports_partial_rather_than_plain_failure
+expect_success 'an apt refresh failure reports partial too' test_an_apt_refresh_failure_reports_partial_too
 expect_success 'update accepts --all as a compatibility no-op' test_update_accepts_all_flag_as_a_compatibility_no_op
 expect_success 'Node.js probe follows nvm default instead of a stale shell PATH' test_node_probe_uses_nvm_default_when_shell_path_is_stale
 expect_success 'npm probe reports upgrade current and missing states' test_npm_probe_reports_upgrade_current_and_missing_states

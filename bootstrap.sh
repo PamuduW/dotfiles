@@ -308,6 +308,11 @@ restart_after_repository_update() {
 # what went wrong.
 DOTFILES_INSTALL_PARTIAL_RC=4
 
+# The same report from the update half: its steps ran and some of them failed.
+# A GitHub download that came back 401 is not a reason to skip the Agentbot
+# phase this script sequences after it.
+DOTFILES_UPDATE_PARTIAL_RC=4
+
 # This script is always fetched fresh, but it drives a checkout of any age, so
 # a flag it knows about may be one the checkout has never heard of. Ask before
 # using it. An older checkout takes --initial -- a flag current Dotfiles no
@@ -381,11 +386,16 @@ run_dotfiles() {
 	# --yes: the operator approved this run at the plan, and a bootstrap has no
 	# second prompt to spend. Without it the update reported the pending apt and
 	# npm upgrades and applied none of them.
-	"$DOTFILES_DIR/bin/bin/dotfiles" update --yes || {
+	rc=0
+	"$DOTFILES_DIR/bin/bin/dotfiles" update --yes || rc=$?
+	if ((rc == DOTFILES_UPDATE_PARTIAL_RC)); then
+		record_phase 'dotfiles update (some steps need attention)'
+	elif ((rc != 0)); then
 		record 'FAILED   dotfiles update'
 		return 1
-	}
-	record_phase 'dotfiles update'
+	else
+		record_phase 'dotfiles update'
+	fi
 }
 
 # The selector is the launcher's screen, not the backend's, so `install.sh

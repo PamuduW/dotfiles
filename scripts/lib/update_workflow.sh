@@ -329,6 +329,17 @@ _run_apt_index_refresh() {
 	log_ok 'apt package index refreshed'
 }
 
+# Steps that ran and failed, as opposed to an update that could not start.
+#
+# A failed step is a report about one tool, not a reason to abandon whatever the
+# caller had queued behind the update: `dotfiles full-update` skipped the entire
+# Agentbot half, its postflight, and its timing summary because one GitHub
+# download returned 401. Deliberately the same value as the installer's
+# DOTFILES_INSTALL_PARTIAL_RC, so a caller has one "finished, needs attention"
+# status to recognise rather than two. The repository gate keeps failing with 1:
+# continuing from a checkout that could not be updated is not safe.
+DOTFILES_UPDATE_PARTIAL_RC=4
+
 # One approved update runs every managed step, including the runtimes and fonts
 # that `--all` used to gate. See cmd_update for the compatibility note.
 _run_update_downstream() {
@@ -345,7 +356,7 @@ _run_update_downstream() {
 		if [[ $apt_refresh_rc -ne 0 ]]; then
 			UPGRADE_STEP_RESULT["${UPDATE_STEP_LABEL[apt]}"]="$UPGRADE_RESULT_FAILED"
 			log_component_rule
-			return "$apt_refresh_rc"
+			return "$DOTFILES_UPDATE_PARTIAL_RC"
 		fi
 	fi
 	for key in "${UPDATE_STEP_KEYS[@]}"; do
@@ -366,7 +377,7 @@ _run_update_downstream() {
 
 	local result failures=0
 	for result in "${UPGRADE_STEP_RESULT[@]}"; do [[ "$result" == "$UPGRADE_RESULT_FAILED" ]] && failures=$((failures + 1)); done
-	((failures == 0))
+	((failures == 0)) || return "$DOTFILES_UPDATE_PARTIAL_RC"
 }
 
 # post_repo_fn runs between the repository gate and the downstream updates, so
