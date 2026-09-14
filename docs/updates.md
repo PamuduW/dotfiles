@@ -64,7 +64,8 @@ nothing about any of them.
 
 ## Full update
 
-`dotfiles full-update` performs one unattended maintenance sequence:
+`dotfiles full-update`, or its short form `dotfiles fu`, performs one
+unattended maintenance sequence:
 
 1. Run the repository gate on the Dotfiles checkout, restarting once if it
    moves forward.

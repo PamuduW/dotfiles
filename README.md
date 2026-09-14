@@ -130,7 +130,7 @@ Changes to `/etc/wsl.conf` require `wsl --shutdown` from Windows.
 | `dotfiles doctor` | Show only components needing attention; exit nonzero when any do |
 | `dotfiles update --dry-run` | Print the captured update report without applying updates |
 | `dotfiles update` | Run the repository gate, then update every managed component after confirmation |
-| `dotfiles full-update` | Update Dotfiles, run `agentbot full`, and perform postflight health checks |
+| `dotfiles full-update` | Update Dotfiles, run `agentbot full`, and perform postflight health checks (short form: `dotfiles fu`) |
 | `dotfiles restow` | Reapply the `bash`, `bin`, and `readline` Stow packages |
 | `dotfiles logs [--list\|--last]` | List retained action logs or print the newest |
 | `dotfiles commands` | Print authoritative command and configuration metadata |

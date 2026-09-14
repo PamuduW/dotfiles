@@ -109,12 +109,53 @@ test_logs_is_quiet_with_no_logs_and_rejects_bad_options() (
 	[[ "$rc" -eq 64 ]]
 )
 
+# Short forms resolve before dispatch. The cases that matter are the ones a
+# careless alias map gets wrong: resolving to the canonical key, leaving a real
+# command alone, leaving an unknown word alone so it still reports as unknown,
+# and never shadowing a command that already exists.
+test_alias_resolves_to_the_canonical_command() (
+	[[ "$(dotfiles_command_resolve fu)" == 'full-update' ]] || return 1
+	[[ -n "${DOTFILES_COMMAND_HANDLERS[$(dotfiles_command_resolve fu)]:-}" ]]
+)
+
+test_resolve_passes_through_non_aliases() (
+	[[ "$(dotfiles_command_resolve status)" == 'status' ]] || return 1
+	[[ "$(dotfiles_command_resolve full-update)" == 'full-update' ]] || return 1
+	[[ "$(dotfiles_command_resolve nonsense)" == 'nonsense' ]]
+)
+
+test_no_alias_shadows_a_command() (
+	local alias
+	for alias in "${!DOTFILES_COMMAND_ALIAS_OF[@]}"; do
+		[[ -z "${DOTFILES_COMMAND_HANDLERS[$alias]:-}" ]] || return 1
+	done
+	dotfiles_command_metadata_validate
+)
+
+# The loader keys off the resolved name too. An alias that dispatched the
+# handler without loading its modules would fail on a missing function.
+test_alias_loads_the_same_modules() (
+	dotfiles_load_command "$(dotfiles_command_resolve fu)" || return 1
+	declare -F cmd_full_update >/dev/null
+)
+
+test_alias_is_documented_in_command_detail() (
+	local detail
+	detail="$(NO_COLOR=1 dotfiles_command_print_detail full-update 2>&1)" || return 1
+	[[ "$detail" == *'Alias'* && "$detail" == *'fu'* ]]
+)
+
 expect_success 'doctor lists only components needing attention and exits nonzero' test_doctor_reports_only_what_needs_attention
 expect_success 'doctor exits zero when everything is healthy' test_doctor_succeeds_when_everything_is_healthy
 expect_success 'update --dry-run reports then stops before any downstream work' test_update_dry_run_reports_then_stops
 expect_success 'update without --dry-run still confirms and runs downstream' test_update_without_dry_run_still_prompts_and_runs
 expect_success 'logs lists newest first and --last prints the newest' test_logs_lists_newest_first_and_prints_the_last
 expect_success 'logs is quiet when empty and rejects unknown options' test_logs_is_quiet_with_no_logs_and_rejects_bad_options
+expect_success 'a short form resolves to its canonical command' test_alias_resolves_to_the_canonical_command
+expect_success 'resolution leaves real commands and unknown words alone' test_resolve_passes_through_non_aliases
+expect_success 'no alias shadows an existing command' test_no_alias_shadows_a_command
+expect_success 'a short form loads the same modules as its command' test_alias_loads_the_same_modules
+expect_success 'command detail documents the short form' test_alias_is_documented_in_command_detail
 
 test_harness_cleanup
 finish_tests

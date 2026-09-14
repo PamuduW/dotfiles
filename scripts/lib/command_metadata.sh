@@ -20,17 +20,23 @@ declare -gA DOTFILES_COMMAND_DEFAULTS=()
 declare -gA DOTFILES_COMMAND_EFFECTS=()
 declare -gA DOTFILES_COMMAND_EXAMPLES=()
 declare -gA DOTFILES_COMMAND_RELATED=()
+# Alias -> canonical key, and the reverse for display. An alias is never a key
+# of its own: it resolves before dispatch, so the command it names keeps one
+# record, one help entry and one loader branch.
+declare -gA DOTFILES_COMMAND_ALIAS_OF=()
+declare -gA DOTFILES_COMMAND_ALIASES=()
 
 # dotfiles_command_define <key> --handler FN --class read-only|mutating
 #     --description D --options ROWS --defaults D --effects E
-#     --example E --related R [--usage U] [--note N]
+#     --example E --related R [--usage U] [--note N] [--alias "A B"]
 #
 # --options rows are "option|description|default", one per line.
+# --alias takes a space-separated list of short forms for the same command.
 dotfiles_command_define() {
 	local key="$1"
 	shift
 	local handler='' usage='' class='' description='' note=''
-	local options='' defaults='' effects='' example='' related=''
+	local options='' defaults='' effects='' example='' related='' aliases=''
 
 	while (($#)); do
 		case "$1" in
@@ -74,6 +80,10 @@ dotfiles_command_define() {
 			related="$2"
 			shift 2
 			;;
+		--alias)
+			aliases="$2"
+			shift 2
+			;;
 		*)
 			printf 'dotfiles_command_define %s: unknown option %s\n' "$key" "$1" >&2
 			return 2
@@ -92,7 +102,20 @@ dotfiles_command_define() {
 	DOTFILES_COMMAND_EFFECTS["$key"]="$effects"
 	DOTFILES_COMMAND_EXAMPLES["$key"]="$example"
 	DOTFILES_COMMAND_RELATED["$key"]="$related"
+	DOTFILES_COMMAND_ALIASES["$key"]="$aliases"
+	local alias
+	for alias in $aliases; do
+		DOTFILES_COMMAND_ALIAS_OF["$alias"]="$key"
+	done
 	return 0
+}
+
+# Resolve a word the operator typed to a canonical command key, echoing it
+# back unchanged when it is not an alias. Dispatch and module loading both go
+# through this, so an alias can never load one command and run another.
+dotfiles_command_resolve() {
+	local word="$1"
+	printf '%s\n' "${DOTFILES_COMMAND_ALIAS_OF[$word]:-$word}"
 }
 
 dotfiles_command_define 'menu' \
@@ -126,6 +149,7 @@ dotfiles_command_define 'full-update' \
 	--defaults 'Running the command authorizes application prompts and recoverable repository replacement.' \
 	--effects 'May preserve local Git state and update the system; postflight reports warnings separately and exits nonzero for Doctor errors.' \
 	--example 'dotfiles full-update' \
+	--alias 'fu' \
 	--related 'Use update for an interactive Dotfiles-only run.'
 
 dotfiles_command_define 'doctor' \
@@ -287,6 +311,16 @@ dotfiles_command_metadata_validate() {
 		[[ -n "${DOTFILES_SURFACE_DESCRIPTION[$key]:-}" ]] || return 1
 		[[ -n "${DOTFILES_SURFACE_LOCATION[$key]:-}" ]] || return 1
 	done
+	# An alias that shadows a real command, or names one that does not exist,
+	# silently sends the operator somewhere else. Both are rejected here rather
+	# than discovered at the prompt.
+	local alias target
+	for alias in "${!DOTFILES_COMMAND_ALIAS_OF[@]}"; do
+		[[ -n "$alias" ]] || return 1
+		[[ -z "${seen[$alias]+x}" ]] || return 1
+		target="${DOTFILES_COMMAND_ALIAS_OF[$alias]}"
+		[[ -n "${seen[$target]+x}" ]] || return 1
+	done
 	[[ "${#seen[@]}" -eq "${#DOTFILES_COMMAND_KEYS[@]}" ]]
 }
 
@@ -412,6 +446,10 @@ _dotfiles_command_print_one() {
 	_rt_ensure_colors
 	printf '  %s%sCommand: %s%s\n' "$C_BOLD" "$C_YELLOW" "$key" "$C_RESET"
 	_dotfiles_command_print_field 'Usage' "$(dotfiles_command_display_usage "$key")" "$cols"
+	# Detail rather than the table: the command column is width-fitted, and a
+	# short form appended there is the first thing truncation would eat.
+	[[ -n "${DOTFILES_COMMAND_ALIASES[$key]:-}" ]] &&
+		_dotfiles_command_print_field 'Alias' "${DOTFILES_COMMAND_ALIASES[$key]}" "$cols"
 	_dotfiles_command_print_field 'Behavior' "${DOTFILES_COMMAND_CLASS[$key]}" "$cols"
 	_dotfiles_command_print_field 'Purpose' "${DOTFILES_COMMAND_DESCRIPTION[$key]}" "$cols"
 	printf '  %sOptions%s\n' "$C_BOLD" "$C_RESET"

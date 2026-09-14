@@ -339,6 +339,11 @@ main() {
 		;;
 	esac
 
+	# Resolve before lookup, so the alias reaches dotfiles_load_command too: a
+	# short form that dispatched the handler but loaded nothing would fail on a
+	# missing function rather than run the command it names.
+	command="$(dotfiles_command_resolve "$command")"
+
 	handler="${DOTFILES_COMMAND_HANDLERS[$command]:-}"
 	if [[ -n "$handler" ]]; then
 		shift
