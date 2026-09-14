@@ -128,6 +128,41 @@ export NVM_DIR="$HOME/.nvm"
 # --- asdf (version manager) ---
 export PATH="$HOME/.asdf/bin:$HOME/.asdf/shims:$PATH"
 
+# --- Agentbot MCP credentials ---
+#
+# The managed MCP entries reference their credential by environment variable
+# name, never by value: Claude and Cursor render `${GITHUB_MCP_TOKEN}` into a
+# header and Codex names it in `bearer_token_env_var`. A client launched from
+# this shell inherits the variable; nothing on disk carries the secret into a
+# configuration file.
+#
+# The token itself lives in a mode-0600 file under ~/.config/agentbot, written
+# by Token Config. Read here only when the file is safe: a regular file, not a
+# symlink, mode 600, in a mode-700 directory. Anything else is left unset, and
+# `agentbot mcp status` reports the reference as missing rather than a shell
+# silently exporting whatever a tampered file contained.
+__dotfiles_export_agentbot_token() {
+	local file="$1" key="$2" name="$3" line
+	[ -f "$file" ] && [ ! -L "$file" ] || return 0
+	[ "$(stat -c %a -- "$file" 2>/dev/null)" = 600 ] || return 0
+	[ "$(stat -c %a -- "$(dirname -- "$file")" 2>/dev/null)" = 700 ] || return 0
+	IFS= read -r line <"$file" || return 0
+	case "$line" in
+	"$key"=?*) export "$name=${line#"$key"=}" ;;
+	esac
+}
+
+__dotfiles_agentbot_config="${XDG_CONFIG_HOME:-$HOME/.config}/agentbot"
+# GitHub stores one token under its own name and it serves both the skill
+# installs and the MCP entry, so the value is exported under the name the
+# catalog references rather than duplicated on disk.
+__dotfiles_export_agentbot_token \
+	"$__dotfiles_agentbot_config/github.env" GITHUB_TOKEN GITHUB_MCP_TOKEN
+__dotfiles_export_agentbot_token \
+	"$__dotfiles_agentbot_config/gitlab.env" GITLAB_MCP_READ_TOKEN GITLAB_MCP_READ_TOKEN
+unset __dotfiles_agentbot_config
+unset -f __dotfiles_export_agentbot_token
+
 if [ -f ~/.bash_aliases ]; then
 	. ~/.bash_aliases
 fi
