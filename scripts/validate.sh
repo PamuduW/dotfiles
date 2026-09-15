@@ -71,8 +71,8 @@ if ((${#json_files[@]} > 0)); then
 	fi
 fi
 
-printf 'Checking shared library drift...\n'
-"$REPO_DIR/scripts/sync-shared.sh" --check
+printf 'Checking the shared contract...\n'
+"$REPO_DIR/tests/check_shared_contract.sh"
 
 printf 'Checking diff whitespace...\n'
 git -C "$REPO_DIR" diff --check

@@ -16,8 +16,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      # Both products resolve shared code from a dotfiles-shared checkout beside
+      # their own, so CI lays the workspace out the way a real machine does
+      # rather than special-casing the path.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: dotfiles
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: PamuduW/dotfiles-shared
+          path: dotfiles-shared
       - name: Install shell tooling
         run: sudo apt-get update && sudo apt-get install -y shellcheck shfmt ripgrep
       - name: Validate
+        working-directory: dotfiles
         run: scripts/validate.sh
