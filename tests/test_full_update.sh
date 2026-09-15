@@ -385,7 +385,11 @@ test_missing_agentbot_is_reported_not_ignored() (
 	[[ "$rc" -eq 127 ]]
 )
 
-test_full_update_reports_resolved_launcher_identity() (
+test_full_update_resolves_identity_without_printing_it() (
+	# The launchers and checkouts are facts about the machine, not about the
+	# run, and naming all four on every run was four lines the operator had not
+	# asked for. Resolution still happens -- the refusal beside this test is
+	# what it is for -- and says nothing when everything is where it belongs.
 	local fake_root="$TEST_HARNESS_ROOT/agentbot" output
 	mkdir -p "$fake_root/bin"
 	printf '#!/bin/sh\nexit 0\n' >"$fake_root/bin/agentbot"
@@ -397,9 +401,8 @@ test_full_update_reports_resolved_launcher_identity() (
 		}
 		builtin command "$@"
 	}
-	output="$(FULL_UPDATE_EXPECTED_AGENTBOT_HOME="$fake_root" full_update_print_identity)" || return 1
-	grep -Fq "Dotfiles checkout: $DOTFILES_DIR" <<<"$output" || return 1
-	grep -Fq "Agentbot checkout: $fake_root" <<<"$output"
+	output="$(FULL_UPDATE_EXPECTED_AGENTBOT_HOME="$fake_root" full_update_print_identity 2>&1)" || return 1
+	[[ -z "$output" ]]
 )
 
 test_full_update_refuses_unexpected_agentbot_checkout() (
@@ -517,7 +520,7 @@ test_full_update_module_set_is_closed_over_its_own_references() {
 	fi
 }
 
-expect_success 'full-update reports resolved launcher and checkout identity' test_full_update_reports_resolved_launcher_identity
+expect_success 'full-update resolves identity without printing it' test_full_update_resolves_identity_without_printing_it
 test_full_update_without_agentbot_is_not_a_failure() (
 	# Break caught on a fresh Ubuntu 26 machine that chose "Dotfiles only" at
 	# the bootstrap prompt: the Dotfiles half completed in full, and the run

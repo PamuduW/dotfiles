@@ -181,8 +181,10 @@ full_update_without_agentbot() {
 }
 
 full_update_print_identity() {
-	local dotfiles_launcher agentbot_launcher agentbot_resolved agentbot_home expected_home
-	dotfiles_launcher="$(readlink -f "$DOTFILES_DIR/bin/bin/dotfiles")" || return 1
+	local agentbot_launcher agentbot_resolved agentbot_home expected_home
+	# Resolved for the check, not for a value: an unresolvable launcher stops
+	# the run. Nothing prints it any more.
+	readlink -f "$DOTFILES_DIR/bin/bin/dotfiles" >/dev/null || return 1
 	agentbot_launcher="$(command -v agentbot 2>/dev/null)" || {
 		_err 'Agentbot is not installed or is not available on PATH.'
 		return 127
@@ -196,9 +198,11 @@ full_update_print_identity() {
 		agentbot_home="$expected_home"
 	fi
 
-	rt_print_header 'Resolved maintenance targets' 'Dotfiles › Full update › Targets'
-	printf '  Dotfiles launcher: %s\n  Dotfiles checkout: %s\n' "$dotfiles_launcher" "$DOTFILES_DIR"
-	printf '  Agentbot launcher: %s\n  Agentbot checkout: %s\n' "$agentbot_resolved" "$agentbot_home"
+	# Resolved silently. This printed a four-line surface naming both launchers
+	# and both checkouts on every run, which is a fact about the machine rather
+	# than about the run, and the operator had not asked for it. The refusal
+	# below names both paths itself, so the only case that needs them still has
+	# them.
 	if [[ "$agentbot_home" != "$expected_home" ]]; then
 		_err "Refusing unexpected Agentbot checkout: expected $expected_home, resolved $agentbot_home"
 		return 1
