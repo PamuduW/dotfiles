@@ -18,10 +18,12 @@
 # failure it reports the checkout it wanted and the command that creates it,
 # rather than letting the caller die on `source: No such file`.
 
-# The CONTRACT revision this repository is written against. dotfiles-shared
-# raises its CONTRACT only for a change that is not backward compatible, so the
-# two must match exactly; a mismatch is a loud stop, not a warning.
-DOTFILES_SHARED_CONTRACT_REQUIRED=1
+# The CONTRACT revision this repository is written against. It is raised
+# whenever the pairing changes -- including when this side starts requiring a
+# file the shared checkout did not used to carry, which is a breaking
+# combination even though the shared side only gained something. The two must
+# match exactly; a mismatch is a loud stop, not a warning.
+DOTFILES_SHARED_CONTRACT_REQUIRED=2
 
 DOTFILES_SHARED_URL='https://github.com/PamuduW/dotfiles-shared'
 
