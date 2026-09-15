@@ -120,7 +120,7 @@ test_cmd_update_executes_outcome_contract() (
 	: >"$events"
 	repo_update_run() {
 		local -n result_ref="$4"
-		printf 'gate\n' >>"$events"
+		printf 'gate:%s\n' "$2" >>"$events"
 		result_ref=([outcome]="${TEST_GATE_OUTCOME:?}")
 		case "$TEST_GATE_OUTCOME" in
 		stopped) return 1 ;;
@@ -140,26 +140,28 @@ test_cmd_update_executes_outcome_contract() (
 
 	TEST_GATE_OUTCOME=stopped
 	if cmd_update >/dev/null 2>&1; then return 1; fi
-	[[ "$(<"$events")" == gate ]] || return 1
+	# Shared first: it is gated before this repository because either product
+	# loads code from it. A stop there never reaches the dotfiles gate.
+	[[ "$(<"$events")" == 'gate:shared repo' ]] || return 1
 
 	: >"$events"
 	TEST_GATE_OUTCOME=current
 	replies=no
 	cmd_update >/dev/null || return 1
-	[[ "$(sed -n '1p' "$events")" == gate && "$(sed -n '2p' "$events")" == report && "$(sed -n '3p' "$events")" == confirm:* ]] || return 1
+	[[ "$(sed -n '1p' "$events")" == 'gate:shared repo' && "$(sed -n '2p' "$events")" == 'gate:dotfiles repo' && "$(sed -n '3p' "$events")" == report && "$(sed -n '4p' "$events")" == confirm:* ]] || return 1
 
 	: >"$events"
 	TEST_GATE_OUTCOME=current
 	replies=yes
 	cmd_update >/dev/null || return 1
-	[[ "$(sed -n '1p' "$events")" == gate && "$(sed -n '2p' "$events")" == report && "$(sed -n '3p' "$events")" == confirm:* && "$(sed -n '4p' "$events")" == downstream && "$(sed -n '5p' "$events")" == summary ]] || return 1
+	[[ "$(sed -n '3p' "$events")" == report && "$(sed -n '4p' "$events")" == confirm:* && "$(sed -n '5p' "$events")" == downstream && "$(sed -n '6p' "$events")" == summary ]] || return 1
 	! grep -Fq 'Include Node.js, npm, Go, and Monaspace fonts' "$events" || return 1
 
 	: >"$events"
 	TEST_GATE_OUTCOME=current
 	replies=yes
 	cmd_update --all >/dev/null || return 1
-	[[ "$(sed -n '3p' "$events")" == confirm:* && "$(sed -n '4p' "$events")" == downstream && "$(sed -n '5p' "$events")" == summary ]] || return 1
+	[[ "$(sed -n '4p' "$events")" == confirm:* && "$(sed -n '5p' "$events")" == downstream && "$(sed -n '6p' "$events")" == summary ]] || return 1
 
 	# --yes carries the caller's approval: downstream runs and no question is
 	# asked. Bootstrap needs this -- its update had no terminal to ask on, so
@@ -194,14 +196,14 @@ test_cmd_update_declined_pull_is_handled_without_failure() (
 	repo_update_run() {
 		local -n result_ref="$4"
 		result_ref=([outcome]=stopped [reason]=behind-declined)
-		printf 'gate\n' >>"$events"
+		printf 'gate:%s\n' "$2" >>"$events"
 		return 1
 	}
 	set +e
 	cmd_update --all >/dev/null 2>&1
 	local declined_rc=$?
 	set -e
-	[[ "$declined_rc" -eq 0 && "$(<"$events")" == gate ]]
+	[[ "$declined_rc" -eq 0 && "$(<"$events")" == 'gate:shared repo' ]]
 )
 
 test_cmd_update_reports_dirty_paths_and_remote_state_before_stopping() (
@@ -276,6 +278,34 @@ test_declined_install_repository_pull_uses_shared_failure_output() (
 	[[ "$clean_output" == *'Pull 3 commit(s) with --ff-only? [y/N]: '*$'\n\n''  Pull declined; update stopped.'* ]] || return 1
 	[[ "$clean_output" != *'Install stopped; the Dotfiles repository is not ready for setup.'* ]] || return 1
 	[[ "$clean_output" != *'Repository pull and downstream updates stopped: behind.'* ]]
+)
+
+test_shared_repository_is_gated_before_this_one() (
+	# The shared library is checked first and on its own terms: either product
+	# loads code from it, so a pull there is as disqualifying as a pull here.
+	# Declining it stops the run before the Dotfiles repository is even asked
+	# about, and before any downstream work.
+	local output clean_output rc
+	TEST_SHARED_REPO_STATE=behind TEST_REPO_STATE=current
+	export TEST_SHARED_REPO_STATE TEST_REPO_STATE
+	local tty_in="$TEST_HARNESS_ROOT/shared-decline.input"
+	local tty_out="$TEST_HARNESS_ROOT/shared-decline.output"
+	printf 'n\n' >"$tty_in"
+	: >"$tty_out"
+	DOTFILES_TTY_INPUT="$tty_in" DOTFILES_TTY_OUTPUT="$tty_out"
+	export DOTFILES_TTY_INPUT DOTFILES_TTY_OUTPUT
+	test_harness_reset_logs
+	set +e
+	output="$(cmd_update 2>&1 </dev/null)"
+	rc=$?
+	set -e
+	clean_output="$(sed -E $'s/\033\\[[0-9;]*m//g' <<<"$output")"
+	# A declined pull is a handled outcome, not a failure.
+	[[ "$rc" -eq 0 ]] || return 1
+	[[ "$clean_output" == *'shared repo'* ]] || return 1
+	[[ "$clean_output" == *'Pull declined; update stopped.'* ]] || return 1
+	# Nothing downstream ran.
+	! grep -Eq $'^(apt-get|sudo|stow|curl|npx)\t' "$TEST_COMMAND_LOG"
 )
 
 test_dirty_change_report_is_bounded_and_copyable() (
@@ -406,6 +436,7 @@ expect_success 'successful pull reports a changed repository and stops old-proce
 expect_success 'cmd_update executes one repository update exit contract' test_cmd_update_executes_outcome_contract
 expect_success 'cmd_update handles declined pulls without a failure status' test_cmd_update_declined_pull_is_handled_without_failure
 expect_success 'cmd_update reports dirty paths and verified remote state before stopping' test_cmd_update_reports_dirty_paths_and_remote_state_before_stopping
+expect_success 'the shared repository is gated before this one' test_shared_repository_is_gated_before_this_one
 expect_success 'declined repository pulls print one report before the pause boundary' test_declined_repository_pull_prints_one_report_and_one_pause_boundary
 expect_success 'declined install pulls use shared failure output' test_declined_install_repository_pull_uses_shared_failure_output
 expect_success 'dirty path report is bounded and includes a copyable full-list command' test_dirty_change_report_is_bounded_and_copyable

@@ -25,11 +25,11 @@ _dotfiles_install_repo_gate() {
 	local -A result=()
 	DOTFILES_REPOSITORY_UPDATE_DECLINED=false
 
-	if ! declare -F repo_update_run >/dev/null || [[ -z "${DOTFILES_DIR:-}" ]]; then
+	if ! declare -F dotfiles_repo_gate >/dev/null || [[ -z "${DOTFILES_DIR:-}" ]]; then
 		return 0
 	fi
 
-	repo_update_run "$DOTFILES_DIR" 'dotfiles repo' _dotfiles_install_repo_decision result 'PamuduW/dotfiles' || repo_rc=$?
+	dotfiles_repo_gate _dotfiles_install_repo_decision result || repo_rc=$?
 	if ((repo_rc == 2)); then
 		repo_update_print_changed
 		return 2

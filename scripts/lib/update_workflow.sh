@@ -394,7 +394,7 @@ _dotfiles_run_update() {
 	local post_repo_fn="${4:-}" repo_rc=0
 	local -A repo_result=()
 	local -a observation_rows=()
-	repo_update_run "$DOTFILES_DIR" 'dotfiles repo' "$repository_decision_fn" repo_result 'PamuduW/dotfiles' || repo_rc=$?
+	dotfiles_repo_gate "$repository_decision_fn" repo_result || repo_rc=$?
 	if ((repo_rc == 2)); then
 		repo_update_print_changed
 		return 2

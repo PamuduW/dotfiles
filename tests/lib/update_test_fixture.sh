@@ -10,16 +10,30 @@ printf 'git' >>"${TEST_COMMAND_LOG:?}"
 for arg in "$@"; do printf '\t%s' "$arg" >>"$TEST_COMMAND_LOG"; done
 printf '\n' >>"$TEST_COMMAND_LOG"
 args=("$@")
-if [[ "${args[0]:-}" == -C ]]; then args=("${args[@]:2}"); fi
+# The gate walks more than one repository now, so the fake answers per
+# checkout rather than identically for every path: -C names which one, and the
+# shared library gets its own state and its own origin. Without this every
+# repository looked like the Dotfiles one, which is not a state any machine
+# can be in.
+repo_dir=''
+if [[ "${args[0]:-}" == -C ]]; then
+	repo_dir="${args[1]}"
+	args=("${args[@]:2}")
+fi
 cmd="${args[*]}"
+slug='PamuduW/dotfiles'
 state="${TEST_REPO_STATE:-current}"
+if [[ -n "$repo_dir" && -n "${DOTFILES_SHARED_ROOT:-}" && "$repo_dir" == "$DOTFILES_SHARED_ROOT" ]]; then
+	slug='PamuduW/dotfiles-shared'
+	state="${TEST_SHARED_REPO_STATE:-current}"
+fi
 case "$cmd" in
   'rev-parse --is-inside-work-tree') printf 'true\n' ;;
   'rev-parse --is-bare-repository') printf 'false\n' ;;
   'remote get-url origin')
     [[ "$state" == no-origin ]] && exit 2
     [[ "$state" == wrong-origin ]] && { printf 'https://github.com/other/dotfiles.git\n'; exit 0; }
-    printf 'https://github.com/PamuduW/dotfiles.git\n' ;;
+    printf 'https://github.com/%s.git\n' "$slug" ;;
   'symbolic-ref --quiet --short HEAD') [[ "$state" == detached ]] && exit 1; printf 'main\n' ;;
   'rev-parse --abbrev-ref --symbolic-full-name @{upstream}')
     [[ "$state" == no-upstream ]] && exit 1

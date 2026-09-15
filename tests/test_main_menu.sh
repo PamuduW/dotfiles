@@ -111,14 +111,18 @@ test_install_dispatch_gates_repository_before_menu() (
 	ui_pause() { :; }
 	DOTFILES_DIR=/tmp/dotfiles-test-repo
 	_main_menu_dispatch install || return 1
-	[[ "$(<"$calls")" == $'gate:/tmp/dotfiles-test-repo\nsetup' ]]
+	# Checked line by line rather than as one blob: the shared root is a real
+	# path, and $'...' would compare it literally instead of expanding it.
+	[[ "$(sed -n '1p' "$calls")" == "gate:$DOTFILES_SHARED_ROOT" ]] || return 1
+	[[ "$(sed -n '2p' "$calls")" == "gate:$DOTFILES_DIR" ]] || return 1
+	[[ "$(sed -n '3p' "$calls")" == setup ]]
 )
 
 test_install_dispatch_blocks_when_repository_is_not_ready() (
 	local calls="$TEST_HARNESS_ROOT/install-gate-blocked.calls"
 	: >"$calls"
 	repo_update_run() {
-		printf 'gate\n' >>"$calls"
+		printf 'gate:%s\n' "$1" >>"$calls"
 		local -n result_ref="$4"
 		result_ref=([outcome]=stopped)
 		return 1
@@ -128,7 +132,8 @@ test_install_dispatch_blocks_when_repository_is_not_ready() (
 	ui_pause() { :; }
 	DOTFILES_DIR=/tmp/dotfiles-test-repo
 	_main_menu_dispatch install || return 1
-	[[ "$(<"$calls")" == 'gate' ]]
+	# Stopped at the shared library, so this repository is never reached.
+	[[ "$(<"$calls")" == "gate:$DOTFILES_SHARED_ROOT" ]]
 )
 
 test_install_repo_gate_uses_repository_update_topic() (
