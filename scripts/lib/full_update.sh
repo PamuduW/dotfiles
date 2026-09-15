@@ -219,7 +219,13 @@ full_update_run_agentbot() {
 		return 127
 	}
 	rt_print_header 'Agentbot full' 'Dotfiles › Full update › Agentbot'
-	agentbot help full >/dev/null 2>&1 || capability_rc=$?
+	# The probe's output is captured rather than discarded. Exit 2 is the
+	# answer it asks for -- an older checkout without `agentbot full` -- but
+	# any other failure means Agentbot could not start at all, and throwing its
+	# stderr away printed this heading and nothing else. A shared checkout
+	# newer than that Agentbot did exactly that.
+	local capability_output=''
+	capability_output="$(agentbot help full 2>&1)" || capability_rc=$?
 	case "$capability_rc" in
 	0) ;;
 	2)
@@ -241,7 +247,11 @@ full_update_run_agentbot() {
 		*) return "$capability_rc" ;;
 		esac
 		;;
-	*) return "$capability_rc" ;;
+	*)
+		_err "Agentbot could not run (exit ${capability_rc}):"
+		[[ -n "$capability_output" ]] && printf '%s\n' "$capability_output" >&2
+		return "$capability_rc"
+		;;
 	esac
 
 	rc=0

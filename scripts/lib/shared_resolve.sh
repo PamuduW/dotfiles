@@ -74,9 +74,23 @@ dotfiles_shared_resolve() {
 	contract=''
 	[[ -r "$found/CONTRACT" ]] && read -r contract <"$found/CONTRACT"
 	contract="${contract//[[:space:]]/}"
-	if [[ "$contract" != "$DOTFILES_SHARED_CONTRACT_REQUIRED" ]]; then
-		_dotfiles_shared_err "dotfiles-shared at $found is CONTRACT ${contract:-unreadable}, but this repository requires ${DOTFILES_SHARED_CONTRACT_REQUIRED}."
-		printf '  Update both checkouts to matching revisions, then rerun:\n' >&2
+	# At least, not exactly. A revision is raised when a consumer starts
+	# needing something the shared tree gained, so a shared checkout ahead of
+	# this repository is a superset and safe. Behind is the unsafe direction:
+	# the files this repository loads are not there yet.
+	#
+	# Exact matching deadlocked a self-update. An Agentbot that predated a
+	# raise could not start, so it could not run the gate that would have
+	# pulled the newer Agentbot -- and the error told the operator to pull the
+	# shared checkout, which was already current.
+	if [[ ! "$contract" =~ ^[0-9]+$ ]]; then
+		_dotfiles_shared_err "dotfiles-shared at $found has an unreadable CONTRACT."
+		printf '    git -C %s pull\n' "$found" >&2
+		return 1
+	fi
+	if ((contract < DOTFILES_SHARED_CONTRACT_REQUIRED)); then
+		_dotfiles_shared_err "dotfiles-shared at $found is CONTRACT ${contract}, older than the ${DOTFILES_SHARED_CONTRACT_REQUIRED} this repository needs."
+		printf '  Update the shared checkout, then rerun:\n' >&2
 		printf '    git -C %s pull\n' "$found" >&2
 		return 1
 	fi
