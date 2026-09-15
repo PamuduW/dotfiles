@@ -25,9 +25,6 @@ source "$ROOT/scripts/lib/components/registry.sh"
 # shellcheck source=scripts/lib/components/menu.sh
 source "$ROOT/scripts/lib/components/menu.sh"
 
-_fit_menu_line() { menu_fit_line "$@"; }
-_fit_menu_line_with_indent() { menu_fit_indent "$@"; }
-
 test_harness_report_init
 
 configure_simple_menu_with_descriptions() {

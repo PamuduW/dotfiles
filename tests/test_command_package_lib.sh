@@ -37,11 +37,6 @@ ui_init_colors
 
 test_harness_report_init
 
-count_exact_line() {
-	local expected="$1" file="$2"
-	awk -v expected="$expected" '$0 == expected { count++ } END { print count + 0 }' "$file"
-}
-
 test_authoritative_command_metadata() {
 	declare -F dotfiles_command_metadata_validate >/dev/null || return 1
 	dotfiles_command_metadata_validate || return 1
