@@ -3,6 +3,10 @@ name: Validate
 on:
   push:
   workflow_dispatch:
+  # Weekly, for what breaks without anyone touching the repository: the runner
+  # image, apt, tool versions, and the release downloads the installers pull.
+  schedule:
+    - cron: "0 6 * * 1"
 
 permissions:
   contents: read
@@ -31,3 +35,49 @@ jobs:
       - name: Validate
         working-directory: dotfiles
         run: scripts/validate.sh
+
+  bootstrap:
+    name: Fresh-machine bootstrap
+    # Weekly only: it installs a machine's worth of software, and it is the one
+    # check that exercises the published state of all three repositories the way
+    # an operator meets them -- curl the script, clone three repos, install.
+    #
+    # Nothing else covers this path. It found a CONTRACT mismatch that every
+    # unit suite passed straight through, because the suites resolve a checkout
+    # that is already correct.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Run bootstrap as a fresh user
+        run: |
+          set -uo pipefail
+          sudo useradd -m -s /bin/bash op
+          echo 'op ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/op >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq util-linux
+
+          curl -fsSL https://raw.githubusercontent.com/PamuduW/dotfiles/main/bootstrap.sh -o /tmp/b.sh
+          chmod a+r /tmp/b.sh
+          sudo chmod 777 /tmp
+
+          # script(1) gives the run a controlling terminal. su alone does not,
+          # and the component menu reads /dev/tty; without this the install
+          # stops on "No such device or address". 'q' closes that menu.
+          sudo -u op bash -lc \
+            "printf 'q\n' | timeout 1200 script -qec 'BOOTSTRAP_SELECTION=2 bash /tmp/b.sh' /tmp/typescript" \
+            </dev/null || true
+
+          echo "=== what the run printed ==="
+          sudo sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g' /tmp/typescript | tail -40
+
+      - name: The three repositories landed, shared first
+        run: |
+          set -eu
+          for repo in dotfiles-shared dotfiles; do
+            test -d "/home/op/$repo/.git" || { echo "missing: $repo"; exit 1; }
+          done
+          echo "shared CONTRACT: $(cat /home/op/dotfiles-shared/CONTRACT)"
+          # The whole point of the gate: the products must start.
+          sudo -u op env NO_COLOR=1 /home/op/dotfiles/bin/bin/dotfiles help >/dev/null
+          echo "dotfiles CLI runs from the bootstrapped checkout"

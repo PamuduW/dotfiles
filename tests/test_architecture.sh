@@ -136,9 +136,12 @@ test_repository_has_one_validation_entrypoint_and_ci() (
 	[[ -x "$REPO_DIR/tests/run.sh" && -x "$REPO_DIR/scripts/validate.sh" ]]
 	rg -q 'test_\*\.sh' "$REPO_DIR/tests/run.sh"
 	rg -q 'scripts/validate.sh' "$REPO_DIR/.github/workflows/validate.yml"
+	# Every apt-get install line in the workflow, not the only one: a second
+	# job with its own install step used to break this by leaving the first
+	# line's last tool followed by a newline rather than a space.
 	install_step="$(grep 'apt-get install' "$REPO_DIR/.github/workflows/validate.yml")"
 	for tool in shellcheck shfmt ripgrep; do
-		[[ " $install_step " == *" $tool "* ]] || return 1
+		grep -qw -- "$tool" <<<"$install_step" || return 1
 	done
 )
 
