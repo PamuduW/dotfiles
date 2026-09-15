@@ -42,47 +42,46 @@ source "$DOTFILES_SHARED_LIB/repo_update.sh"
 # the update registry still gets a usable associative array.
 declare -gA DOTFILES_SHARED_REPO_RESULT=()
 
-_dotfiles_repo_gate_adopt() {
-	local -n _adopt_dst="$1"
-	local -n _adopt_src="$2"
-	local key
-	_adopt_dst=()
-	for key in "${!_adopt_src[@]}"; do
-		_adopt_dst["$key"]="${_adopt_src[$key]}"
-	done
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/repo_gate.sh"
+
+_DOTFILES_GATE_DECISION=''
+_DOTFILES_GATE_RESULT=''
+
+# One repository, named the way this product names them. The ordering, the
+# aggregation and the exit contract belong to repo_gate_run.
+_dotfiles_gate_one() {
+	local rc=0
+	case "$1" in
+	shared)
+		repo_update_run "$DOTFILES_SHARED_ROOT" 'shared repo' "$_DOTFILES_GATE_DECISION" \
+			DOTFILES_SHARED_REPO_RESULT 'PamuduW/dotfiles-shared' || rc=$?
+		# A stop here is the one the caller reports, so it is adopted before
+		# the gate returns and the Dotfiles repository is never reached.
+		((rc == 0 || rc == 2)) ||
+			repo_gate_adopt "$_DOTFILES_GATE_RESULT" DOTFILES_SHARED_REPO_RESULT
+		;;
+	own)
+		repo_update_run "$DOTFILES_DIR" 'dotfiles repo' "$_DOTFILES_GATE_DECISION" \
+			"$_DOTFILES_GATE_RESULT" 'PamuduW/dotfiles' || rc=$?
+		;;
+	esac
+	return "$rc"
 }
 
+# Every command that touches this checkout gates the repositories it depends on
+# together, before any work: the shared library first, because either product
+# loads code from it, then this repository. Only the ones present are checked,
+# so "Dotfiles only" is gated on two and a full run on three.
 dotfiles_repo_gate() {
-	local decision_fn="$1" result_name="$2"
-	local rc=0 changed=0
+	_DOTFILES_GATE_DECISION="$1"
+	_DOTFILES_GATE_RESULT="$2"
+	local -a targets=()
 
 	# shellcheck disable=SC2034  # Read by shared_repo_status to build its row.
 	DOTFILES_SHARED_REPO_RESULT=()
-	if [[ -n "${DOTFILES_SHARED_ROOT:-}" ]]; then
-		repo_update_run "$DOTFILES_SHARED_ROOT" 'shared repo' "$decision_fn" \
-			DOTFILES_SHARED_REPO_RESULT 'PamuduW/dotfiles-shared' || rc=$?
-		case "$rc" in
-		0) ;;
-		2) changed=1 ;;
-		*)
-			# Whichever repository stopped becomes the reported result, so a
-			# caller's decline and stop handling works without having to know
-			# which one it was.
-			_dotfiles_repo_gate_adopt "$result_name" DOTFILES_SHARED_REPO_RESULT
-			return "$rc"
-			;;
-		esac
-	fi
+	[[ -n "${DOTFILES_SHARED_ROOT:-}" ]] && targets+=(shared)
+	targets+=(own)
 
-	rc=0
-	repo_update_run "$DOTFILES_DIR" 'dotfiles repo' "$decision_fn" "$result_name" \
-		'PamuduW/dotfiles' || rc=$?
-	case "$rc" in
-	0) ;;
-	2) changed=1 ;;
-	*) return "$rc" ;;
-	esac
-
-	((changed)) && return 2
-	return 0
+	repo_gate_run _dotfiles_gate_one "${targets[@]}"
 }
