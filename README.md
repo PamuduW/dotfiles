@@ -63,28 +63,35 @@ git clone https://github.com/PamuduW/dotfiles "$HOME/dotfiles"
 "$HOME/dotfiles"/bootstrap.sh
 ```
 
-To work with an existing checkout directly:
+To work with an existing checkout directly. The shared library is a separate
+repository that this installer loads at runtime, and `bootstrap.sh` clones it
+for you; clone it yourself when you are skipping bootstrap:
 
 ```bash
+git clone https://github.com/PamuduW/dotfiles-shared "$HOME/dotfiles-shared"
 cd "$HOME/dotfiles"
 ./install.sh
 ```
 
+It is found beside this checkout, or at `$HOME/dotfiles-shared`, or wherever
+`DOTFILES_SHARED_DIR` points. A missing one stops with the clone command rather
+than a failure part-way through.
+
 The interactive menu offers:
 
 ```text
-Check Status
+Check status
 Install Dotfiles
 Update
-Full Update (Dotfiles + Agentbot)
+Full update (Dotfiles + Agentbot)
 Logs
 Restow
-GitHub Token Config
+GitHub token config
 Libraries
 Quit
 ```
 
-Every public `dotfiles` command is reachable from the menu. Check Status also
+Every public `dotfiles` command is reachable from the menu. Check status also
 carries what `dotfiles doctor` reports: when a component needs attention it
 lists which, and the command that fixes it.
 
