@@ -21,6 +21,18 @@ Install and update use the same repository service. It validates the checkout
 and upstream, records dirty paths, fetches `origin`, and classifies ahead,
 behind, and diverged state.
 
+**Every repository this checkout depends on is gated together, before any
+work.** The shared library goes first, because this installer loads its
+terminal stack, token storage and repository machinery from
+[`dotfiles-shared`](https://github.com/PamuduW/dotfiles-shared); this
+repository follows. Only the checkouts actually present are gated. Both appear
+in the update report as `shared repo` and `dotfiles repo`.
+
+One gate rather than one per repository, and up front rather than when each is
+first needed: you learn everything that will move before anything moves, and a
+change costs one restart instead of one per repository. Whichever repository
+stops is the one reported.
+
 - A clean strictly-behind branch may be pulled with `--ff-only` after approval.
 - A successful pull stops old-process work and requests or performs a bounded
   restart from the updated checkout.
@@ -67,8 +79,8 @@ nothing about any of them.
 `dotfiles full-update`, or its short form `dotfiles fu`, performs one
 unattended maintenance sequence:
 
-1. Run the repository gate on the Dotfiles checkout, restarting once if it
-   moves forward.
+1. Run the repository gate over the shared library and the Dotfiles checkout,
+   restarting once if either moves forward.
 2. Reinstall the components the probes report as already applied.
 3. Run the Dotfiles update workflow with approved application prompts.
 4. Print the resolved Dotfiles and Agentbot launchers/checkouts, and refuse an
