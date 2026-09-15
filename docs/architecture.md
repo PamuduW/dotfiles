@@ -43,13 +43,13 @@ do not own installation policy.
 
 ## The Python side
 
-Readings, layout and the repository check are Python, under
-`scripts/lib/shared/python/`, vendored byte-identical into the Agentbot checkout
-by `scripts/sync-shared.sh` (ADR-0001 in the workspace repository records why).
+Readings, layout and the repository check are Python, in the dotfiles-shared
+repository that this installer and the Agentbot CLI both resolve at runtime
+(ADR-0002 in the workspace repository records why it was extracted).
 Bash gathers the raw facts and says what a report is for; Python decides what an
 answer means and how the columns line up.
 
-One command runs one interpreter. `scripts/lib/shared/py_service.sh` starts
+One command runs one interpreter. `py_service.sh` in dotfiles-shared starts
 `python/service.py` as a coprocess the first time something needs it and sends
 it `classify`, `render` and `repo_status` requests, rather than spawning a
 script per phase. Two rules come with it, both pinned by

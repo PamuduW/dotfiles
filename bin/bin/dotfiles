@@ -18,8 +18,15 @@ _dotfiles_source_module() {
 	_DOTFILES_LOADED_MODULES["$path"]=1
 }
 
-_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/shared/py_service.sh"
-_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/shared/tui/report_table.sh"
+# Shared code lives in the dotfiles-shared checkout. Resolve it before the
+# module list is walked, so a missing checkout names itself and the clone that
+# fixes it rather than reporting a path this repository no longer owns.
+# shellcheck source=scripts/lib/shared_resolve.sh
+source "${DOTFILES_DIR}/scripts/lib/shared_resolve.sh"
+dotfiles_shared_require "$DOTFILES_DIR" || exit 1
+
+_dotfiles_source_module "${DOTFILES_SHARED_LIB}/py_service.sh"
+_dotfiles_source_module "${DOTFILES_SHARED_LIB}/tui/report_table.sh"
 _dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/command_metadata.sh"
 
 _dotfiles_use_color() {
@@ -48,7 +55,7 @@ _err() { printf '  %s%s%s\n' "$C_RED" "$*" "$C_RESET" >&2; }
 _dotfiles_load_status_modules() {
 	local path
 	for path in \
-		"${DOTFILES_DIR}/scripts/lib/shared/tui/tty.sh" \
+		"${DOTFILES_SHARED_LIB}/tui/tty.sh" \
 		"${DOTFILES_DIR}/scripts/lib/parallel_probe.sh" \
 		"${DOTFILES_DIR}/scripts/lib/tool_resolve.sh" \
 		"${DOTFILES_DIR}/scripts/lib/managed_tool_state.sh" \
@@ -64,7 +71,7 @@ _dotfiles_load_update_modules() {
 	local path
 	_dotfiles_load_status_modules || return 1
 	for path in \
-		"${DOTFILES_DIR}/scripts/lib/shared/sudo_prime.sh" \
+		"${DOTFILES_SHARED_LIB}/sudo_prime.sh" \
 		"${DOTFILES_DIR}/scripts/lib/arch.sh" \
 		"${DOTFILES_DIR}/scripts/lib/repo_update.sh" \
 		"${DOTFILES_DIR}/scripts/lib/github_token.sh" \
@@ -106,7 +113,7 @@ dotfiles_load_command() {
 		_dotfiles_load_update_modules &&
 			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/bootstrap.sh" &&
 			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/docker.sh" &&
-			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/shared/tui/menu_render.sh" &&
+			_dotfiles_source_module "${DOTFILES_SHARED_LIB}/tui/menu_render.sh" &&
 			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/installers/load.sh" &&
 			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/components/load.sh" &&
 			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/full_update.sh"
@@ -116,7 +123,7 @@ dotfiles_load_command() {
 }
 
 # ADR-0001: the report layout lives in Python now
-# (scripts/lib/shared/python/). Width and colour stay here, because the Bash
+# (python/ in dotfiles-shared). Width and colour stay here, because the Bash
 # side already owns those predicates and duplicating them is the divergence the
 # consolidation exists to remove -- they are passed as arguments instead.
 #
@@ -142,7 +149,7 @@ _dotfiles_render_report() {
 		_rt_ensure_colors
 		[[ -n "${C_RESET:-}" ]] && args+=(--color)
 		# Process substitution rather than a pipeline: bash closes coprocess
-		# descriptors in pipeline children. See scripts/lib/shared/py_service.sh.
+		# descriptors in pipeline children. See py_service.sh in dotfiles-shared.
 		if py_service_call render "${args[@]}" < <(printf '%s\n' "${_rows_ref[@]}"); then
 			return 0
 		fi

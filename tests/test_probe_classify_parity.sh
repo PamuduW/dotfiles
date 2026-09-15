@@ -4,7 +4,7 @@ set -uo pipefail
 
 # The probe classifications exist twice while ADR-0001 stage two is under way:
 # in Bash (scripts/lib/components/probes.sh) and in Python
-# (scripts/lib/shared/python/probe_classify.py). Until the Bash callers are
+# (python/probe_classify.py in dotfiles-shared). Until the Bash callers are
 # switched over, the two must agree on every state.
 #
 # This is the same method the renderer migration used, and it is what made those
@@ -27,7 +27,7 @@ test_harness_report_init
 # shellcheck source=/dev/null
 source "$REPO_DIR/scripts/lib/components/probes.sh"
 
-PY_DIR="$REPO_DIR/scripts/lib/shared/python"
+PY_DIR="$DOTFILES_SHARED_LIB/python"
 failures=0
 
 compare() {

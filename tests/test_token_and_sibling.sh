@@ -14,12 +14,12 @@ test_harness_protect_original_path ".config/agentbot/github.env"
 
 # shellcheck source=scripts/lib/github_token.sh
 source "$REPO_DIR/scripts/lib/github_token.sh"
-# shellcheck source=scripts/lib/shared/tui/menu_render.sh
-source "$REPO_DIR/scripts/lib/shared/tui/menu_render.sh"
-# shellcheck source=scripts/lib/shared/tui/tty.sh
-source "$REPO_DIR/scripts/lib/shared/tui/tty.sh"
-# shellcheck source=scripts/lib/shared/tui/ui.sh
-source "$REPO_DIR/scripts/lib/shared/tui/ui.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/menu_render.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/tty.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/ui.sh"
 ui_init_colors
 if [[ -f "$REPO_DIR/scripts/menus/github_token.sh" ]]; then
 	# shellcheck source=scripts/menus/github_token.sh

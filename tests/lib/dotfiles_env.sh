@@ -12,8 +12,16 @@
 DOTFILES_DIR="${REPO_DIR:?dotfiles_env.sh requires REPO_DIR}"
 export DOTFILES_DIR
 
-source "$REPO_DIR/scripts/lib/shared/tui/tty.sh"
-source "$REPO_DIR/scripts/lib/shared/tui/menu_render.sh"
+# Shared code lives in the dotfiles-shared checkout. Resolve it here so every
+# suite that loads this environment can address it as DOTFILES_SHARED_LIB.
+# shellcheck source=scripts/lib/shared_resolve.sh
+source "$REPO_DIR/scripts/lib/shared_resolve.sh"
+dotfiles_shared_require "$REPO_DIR" || return 1
+
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/tty.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/menu_render.sh"
 source "$REPO_DIR/scripts/lib/repo_update.sh"
 source "$REPO_DIR/scripts/lib/wsl_conf.sh"
 source "$REPO_DIR/scripts/lib/components/registry.sh"

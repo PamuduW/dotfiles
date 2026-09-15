@@ -17,8 +17,8 @@ C_BOLD='' C_ORANGE='' C_GREEN='' C_RESET=''
 # report table -- but this file sources full_update.sh on its own, so every run
 # wrote "rt_print_header: command not found" to stderr three times per test.
 # Harmless, and it buried the one real failure here under a hundred lines of it.
-# shellcheck source=scripts/lib/shared/tui/report_table.sh
-source "$REPO_DIR/scripts/lib/shared/tui/report_table.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/report_table.sh"
 # full_update.sh times each section through the helpers beside log_step. The
 # real command has them -- `dotfiles_load_command full-update` pulls in the
 # installer logging -- and this file sources full_update.sh on its own.
@@ -499,7 +499,9 @@ test_full_update_module_set_is_closed_over_its_own_references() {
 		files="$(for fn in $defined; do declare -F "$fn"; done | awk '{print $3}' | sort -u)"
 		# Repository-defined function names, and the names the loaded files use.
 		# Full-line comments are stripped so prose cannot trip the check.
-		defs="$(grep -rhoE '^[A-Za-z_][A-Za-z0-9_]*\(\)' "$REPO_DIR/scripts" "$REPO_DIR/bin" 2>/dev/null | tr -d '()' | sort -u)"
+		# The shared checkout is part of this repository's function universe
+		# even though it is a separate repository: full-update loads from it.
+		defs="$(grep -rhoE '^[A-Za-z_][A-Za-z0-9_]*\(\)' "$REPO_DIR/scripts" "$REPO_DIR/bin" "$DOTFILES_SHARED_LIB" 2>/dev/null | tr -d '()' | sort -u)"
 		refs="$(sed 's/^[[:space:]]*#.*$//' $files 2>/dev/null | grep -ohE '\b[A-Za-z_][A-Za-z0-9_]*\b' | sort -u)"
 
 		comm -12 <(printf '%s\n' "$defs") <(printf '%s\n' "$refs") | while read -r fn; do

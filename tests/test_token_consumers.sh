@@ -314,7 +314,7 @@ test_global_dotfiles_routed() {
 test_complete_consumer_inventory() {
 	local files=(
 		"$REPO_DIR/scripts/lib/github_api.sh"
-		"$REPO_DIR/scripts/lib/shared/github_token.sh"
+		"$DOTFILES_SHARED_LIB/github_token.sh"
 		"$REPO_DIR/scripts/lib/installers/github_release.sh"
 		"$REPO_DIR/scripts/lib/installers/fonts.sh"
 		"$REPO_DIR/scripts/lib/installers/cli_tools.sh"
@@ -322,7 +322,10 @@ test_complete_consumer_inventory() {
 	)
 	assert_sensitive_urls_use_boundary "${files[@]}" || return 1
 	local found
-	found="$(rg -l 'https://(api\.github\.com/|github\.com/.*/releases/download/)' "$REPO_DIR/scripts" "$REPO_DIR/bin" | sort)"
+	# The shared checkout is scanned too: it carries github_token.sh, which
+	# talks to the GitHub API, and dropping it from the roots would let a
+	# direct-curl bypass land there unnoticed.
+	found="$(rg -l 'https://(api\.github\.com/|github\.com/.*/releases/download/)' "$REPO_DIR/scripts" "$REPO_DIR/bin" "$DOTFILES_SHARED_LIB" | sort)"
 	[[ "$found" == "$(printf '%s\n' "${files[@]}" | sort)" ]]
 }
 

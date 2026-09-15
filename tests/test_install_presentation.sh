@@ -6,10 +6,14 @@ REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
 source "$TEST_DIR/lib/harness.sh"
 test_harness_init
 
-source "$REPO_DIR/scripts/lib/shared/tui/menu_render.sh"
-source "$REPO_DIR/scripts/lib/shared/tui/tty.sh"
-source "$REPO_DIR/scripts/lib/shared/tui/report_table.sh"
-source "$REPO_DIR/scripts/lib/shared/tui/ui.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/menu_render.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/tty.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/report_table.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/ui.sh"
 source "$REPO_DIR/scripts/lib/installers/logging.sh"
 # shellcheck source=scripts/lib/components/probes.sh
 source "$REPO_DIR/scripts/lib/components/probes.sh"
@@ -105,8 +109,8 @@ test_progress_animation_stays_out_of_the_log() (
 	: >"$out"
 
 	DOTFILES_TTY_OUTPUT="$out" bash -c '
-		source "'"$REPO_DIR"'/scripts/lib/shared/tui/colors.sh"
-		source "'"$REPO_DIR"'/scripts/lib/shared/tui/tty.sh"
+		source "'"$DOTFILES_SHARED_LIB"'/tui/colors.sh"
+		source "'"$DOTFILES_SHARED_LIB"'/tui/tty.sh"
 		source "'"$REPO_DIR"'/scripts/lib/installers/logging.sh"
 		colors_clear_palette
 		log_step "Install something slow"
@@ -147,8 +151,8 @@ test_progress_animation_stays_out_of_the_log() (
 	# A run with no terminal has no animation and no complaint about it.
 	local quiet="$TEST_HARNESS_ROOT/spinner-quiet.log"
 	DOTFILES_TTY_OUTPUT=/dev/null DOTFILES_NO_PROGRESS_ANIMATION=1 bash -c '
-		source "'"$REPO_DIR"'/scripts/lib/shared/tui/colors.sh"
-		source "'"$REPO_DIR"'/scripts/lib/shared/tui/tty.sh"
+		source "'"$DOTFILES_SHARED_LIB"'/tui/colors.sh"
+		source "'"$DOTFILES_SHARED_LIB"'/tui/tty.sh"
 		source "'"$REPO_DIR"'/scripts/lib/installers/logging.sh"
 		colors_clear_palette
 		log_step "Install something"

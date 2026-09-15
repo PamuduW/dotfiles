@@ -10,16 +10,19 @@ set -uo pipefail
 
 TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
+
+# shellcheck source=scripts/lib/shared_resolve.sh
+source "$REPO_DIR/scripts/lib/shared_resolve.sh"
+dotfiles_shared_require "$REPO_DIR" || exit 1
 export PYTHONDONTWRITEBYTECODE=1
 
 if ! command -v python3 >/dev/null 2>&1; then
 	printf 'ok - python service skipped; python3 unavailable\n'
 	exit 0
 fi
-
-# shellcheck source=scripts/lib/shared/py_service.sh
-source "$REPO_DIR/scripts/lib/shared/py_service.sh"
-PY_DIR="$REPO_DIR/scripts/lib/shared/python"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/py_service.sh"
+PY_DIR="$DOTFILES_SHARED_LIB/python"
 
 passed=0
 failed=0

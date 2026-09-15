@@ -9,6 +9,10 @@ set -uo pipefail
 
 TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
+
+# shellcheck source=scripts/lib/shared_resolve.sh
+source "$REPO_DIR/scripts/lib/shared_resolve.sh"
+dotfiles_shared_require "$REPO_DIR" || exit 1
 passed=0
 failed=0
 
@@ -31,7 +35,7 @@ test_askpass_masks_and_prints_the_password() {
 		exec {infd}<"$TEST_DIR/.askpass.in"
 		exec {outfd}>"$out"
 		DOTFILES_TTY_IN_FD=$infd DOTFILES_TTY_OUT_FD=$outfd \
-			bash "$REPO_DIR/scripts/lib/shared/askpass.sh" '[sudo] password:'
+			bash "$DOTFILES_SHARED_LIB/askpass.sh" '[sudo] password:'
 	)"
 	seen="$(cat "$out")"
 	rm -f "$TEST_DIR/.askpass.in" "$out"
@@ -44,10 +48,10 @@ test_askpass_masks_and_prints_the_password() {
 }
 
 _load_prime() {
-	# shellcheck source=scripts/lib/shared/tui/tty.sh
-	source "$REPO_DIR/scripts/lib/shared/tui/tty.sh"
-	# shellcheck source=scripts/lib/shared/sudo_prime.sh
-	source "$REPO_DIR/scripts/lib/shared/sudo_prime.sh"
+	# shellcheck source=/dev/null
+	source "$DOTFILES_SHARED_LIB/tui/tty.sh"
+	# shellcheck source=/dev/null
+	source "$DOTFILES_SHARED_LIB/sudo_prime.sh"
 }
 
 test_prime_uses_the_owned_helper_when_a_terminal_exists() (
@@ -123,7 +127,7 @@ test_the_masked_prompt_keeps_one_space_before_the_first_star() (
 		set -u
 		# shellcheck disable=SC2016
 		prompt='[sudo] password for pamudu: '
-		eval "$(grep -F 'prompt="${prompt%' "$REPO_DIR/scripts/lib/shared/askpass.sh")"
+		eval "$(grep -F 'prompt="${prompt%' "$DOTFILES_SHARED_LIB/askpass.sh")"
 		printf '[%s]' "  $prompt "
 	)"
 	[[ "$rendered" == '[  [sudo] password for pamudu: ]' ]] || return 1
@@ -132,7 +136,7 @@ test_the_masked_prompt_keeps_one_space_before_the_first_star() (
 	rendered="$(
 		set -u
 		prompt='Password:'
-		eval "$(grep -F 'prompt="${prompt%' "$REPO_DIR/scripts/lib/shared/askpass.sh")"
+		eval "$(grep -F 'prompt="${prompt%' "$DOTFILES_SHARED_LIB/askpass.sh")"
 		printf '[%s]' "  $prompt "
 	)"
 	[[ "$rendered" == '[  Password: ]' ]]

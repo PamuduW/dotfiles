@@ -7,8 +7,13 @@ if ! declare -F codex_cli_install_state >/dev/null 2>&1; then
 	source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/managed_tool_state.sh"
 fi
 if ! declare -F py_service_available >/dev/null 2>&1; then
-	# shellcheck source=scripts/lib/shared/py_service.sh
-	source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/shared/py_service.sh"
+	if [[ -z "${DOTFILES_SHARED_LIB:-}" ]]; then
+		# shellcheck source=scripts/lib/shared_resolve.sh
+		source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/shared_resolve.sh"
+		dotfiles_shared_require "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd)" || return 1
+	fi
+	# shellcheck source=/dev/null
+	source "$DOTFILES_SHARED_LIB/py_service.sh"
 fi
 
 _comp_probe_capture() {
@@ -87,7 +92,7 @@ _comp_classify_resolve() {
 
 	if [[ "$use_service" == 1 ]] && py_service_available; then
 		# Process substitution, not a pipeline: bash closes coprocess descriptors
-		# in pipeline children. See scripts/lib/shared/py_service.sh.
+		# in pipeline children. See py_service.sh in dotfiles-shared.
 		mapfile -t _results < <(py_service_call classify < <(printf '%s\n' "${_requests[@]}"))
 		((${#_results[@]} == ${#_requests[@]})) && return 0
 	fi

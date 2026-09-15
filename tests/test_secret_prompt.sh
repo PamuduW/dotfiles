@@ -18,6 +18,10 @@ set -uo pipefail
 
 TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
+
+# shellcheck source=scripts/lib/shared_resolve.sh
+source "$REPO_DIR/scripts/lib/shared_resolve.sh"
+dotfiles_shared_require "$REPO_DIR" || exit 1
 passed=0
 failed=0
 
@@ -37,14 +41,15 @@ check() {
 # on screen -- the window the reported leak came through. Prints the captured
 # length and whether the secret body appeared in the terminal stream.
 _paste_into_secret_prompt() {
-	python3 - "$REPO_DIR" <<'PY'
+	python3 - "$REPO_DIR" "$DOTFILES_SHARED_LIB" <<'PY'
 import os, pty, select, sys, time
 
 repo = sys.argv[1]
+shared = sys.argv[2]
 secret = "github_pat_11SECRETSECRETSECRETSE_" + "Z" * 59
 script = (
     f"cd {repo}\n"
-    "source scripts/lib/shared/tui/tty.sh\n"
+    f"source {shared}/tui/tty.sh\n"
     'read_tty_secret value "  token (q cancels): "\n'
     'printf "\\nLEN=%s\\n" "${#value}"\n'
 )
@@ -98,13 +103,14 @@ test_the_terminal_is_left_usable() (
 	# failure mode of disabling it without putting it back.
 	local state
 	state="$(
-		python3 - "$REPO_DIR" <<'PY'
+		python3 - "$REPO_DIR" "$DOTFILES_SHARED_LIB" <<'PY'
 import os, pty, select, sys, time
 
 repo = sys.argv[1]
+shared = sys.argv[2]
 script = (
     f"cd {repo}\n"
-    "source scripts/lib/shared/tui/tty.sh\n"
+    f"source {shared}/tui/tty.sh\n"
     'read_tty_secret value "  token: "\n'
     'stty -a | head -1 | tr " " "\\n" | grep -c "^-echo$" | sed "s/^/ECHO_OFF=/"\n'
 )

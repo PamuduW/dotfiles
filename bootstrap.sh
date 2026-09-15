@@ -5,7 +5,8 @@
 #
 # This script is fetched and run before either repository exists, so it stays
 # self-contained and deliberately small: preflight, ask what to install, install
-# git if it is missing, obtain the repositories, then hand off to the installers
+# git if it is missing, obtain the repositories (including the shared library
+# both installers load from), then hand off to the installers
 # that already live in them. It contains no component logic, no agent
 # configuration, and no token handling. Its only direct sudo use is installing
 # git.
@@ -15,8 +16,12 @@ set -euo pipefail
 
 DOTFILES_URL="${BOOTSTRAP_DOTFILES_URL:-https://github.com/PamuduW/dotfiles}"
 AGENTBOT_URL="${BOOTSTRAP_AGENTBOT_URL:-https://github.com/PamuduW/agentbot}"
+SHARED_URL="${BOOTSTRAP_SHARED_URL:-https://github.com/PamuduW/dotfiles-shared}"
 DOTFILES_DIR="${BOOTSTRAP_DOTFILES_DIR:-$HOME/dotfiles}"
 AGENTBOT_DIR="${BOOTSTRAP_AGENTBOT_DIR:-$HOME/agentbot}"
+# Both installers resolve this as a sibling of their own checkout, so it shares
+# the parent with them.
+SHARED_DIR="${BOOTSTRAP_SHARED_DIR:-$HOME/dotfiles-shared}"
 # `dotfiles full-update` resolves Agentbot as the sibling of the Dotfiles
 # checkout, so the two destinations must share a parent.
 BOOTSTRAP_SELECTION="${BOOTSTRAP_SELECTION:-}"
@@ -533,6 +538,10 @@ main() {
 	choose_targets
 	print_plan
 	ensure_git
+
+	# Shared code first: whichever of the two runs next loads from it, so a
+	# failure here must stop before an installer dies on a missing checkout.
+	obtain_repo "$SHARED_URL" "$SHARED_DIR" 'Shared library'
 
 	if ((WANT_DOTFILES == 1)); then
 		obtain_repo "$DOTFILES_URL" "$DOTFILES_DIR" Dotfiles

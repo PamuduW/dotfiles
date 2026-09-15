@@ -17,11 +17,16 @@ export PKG_FILE
 
 # Source the read-only presentation and component metadata dependencies.
 # shellcheck disable=SC1091
-source "$REPO_DIR/scripts/lib/shared/tui/menu_render.sh"
-source "$REPO_DIR/scripts/lib/shared/tui/tty.sh"
-source "$REPO_DIR/scripts/lib/shared/tui/report_table.sh"
-source "$REPO_DIR/scripts/lib/shared/tui/ui.sh"
-source "$REPO_DIR/scripts/lib/shared/tui/menu_paging.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/menu_render.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/tty.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/report_table.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/ui.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/menu_paging.sh"
 source "$REPO_DIR/scripts/lib/components/registry.sh"
 source "$REPO_DIR/scripts/lib/components/probes.sh"
 ui_init_colors

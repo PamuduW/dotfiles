@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 
-# shellcheck source=tests/lib/shared/assert.sh
-
 # Width assertions measure display columns, and `awk`'s length() counts bytes
 # under a non-UTF-8 locale -- so a row holding an em-dash reads as 82 columns
 # where the renderer laid out 80. The suite passed locally and failed in CI for
@@ -23,7 +21,13 @@ if [[ -z "${DOTFILES_TEST_LOCALE_SET:-}" ]]; then
 	export DOTFILES_TEST_LOCALE_SET=1
 fi
 
-source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/shared/assert.sh"
+if [[ -z "${DOTFILES_SHARED_ROOT:-}" ]]; then
+	# shellcheck source=scripts/lib/shared_resolve.sh
+	source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../scripts/lib" && pwd)/shared_resolve.sh"
+	dotfiles_shared_require "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)" || return 1
+fi
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_ROOT/tests/lib/shared/assert.sh"
 
 test_harness_cleanup() {
 	local root="${TEST_HARNESS_ROOT:-}"

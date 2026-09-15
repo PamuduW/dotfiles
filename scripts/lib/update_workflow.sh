@@ -4,8 +4,13 @@
 # Depends on update_components.sh and repo_update.sh.
 
 if ! declare -F py_service_available >/dev/null 2>&1; then
-	# shellcheck source=scripts/lib/shared/py_service.sh
-	source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/shared/py_service.sh"
+	if [[ -z "${DOTFILES_SHARED_LIB:-}" ]]; then
+		# shellcheck source=scripts/lib/shared_resolve.sh
+		source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/shared_resolve.sh"
+		dotfiles_shared_require "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)" || return 1
+	fi
+	# shellcheck source=/dev/null
+	source "$DOTFILES_SHARED_LIB/py_service.sh"
 fi
 
 _color_action() {
@@ -155,7 +160,7 @@ print_report_table() {
 		local -a render_args=(--cols "$(rt_report_columns)" --four-column)
 		[[ -n "${C_RESET:-}" ]] && render_args+=(--color)
 		# Process substitution rather than a pipeline: bash closes coprocess
-		# descriptors in pipeline children. See scripts/lib/shared/py_service.sh.
+		# descriptors in pipeline children. See py_service.sh in dotfiles-shared.
 		py_service_call render "${render_args[@]}" < <(printf '%s\n' "${render_rows[@]}")
 	else
 		_print_update_table_header action

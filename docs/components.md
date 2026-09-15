@@ -48,14 +48,14 @@ testable without the state that produces it.
 
 A probe therefore ends by calling `comp_classify <name> <argument>...` rather
 than deciding anything itself. The readings live in
-`scripts/lib/shared/python/probe_classify.py`, and one interpreter answers every
+`python/probe_classify.py` in dotfiles-shared, and one interpreter answers every
 probe in a run: the probes run in parallel children and emit requests, and the
 collector resolves all of them in a single call to the Python service described
 in `docs/architecture.md`. Per-probe spawn would cost roughly a third of
 `dotfiles status`.
 
 Six probes interrogate in Python as well: the ones that read the filesystem and
-Git configuration (`scripts/lib/shared/python/probes.py`), where a temporary
+Git configuration (`python/probes.py` in dotfiles-shared), where a temporary
 HOME reproduces every state exactly. They are answered by one service call that
 is sent before the parallel Bash probes start and read after they finish, so
 they cost no wall-clock. Probes that run a version command or query a package

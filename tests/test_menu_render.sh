@@ -4,23 +4,22 @@ set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
 source "$ROOT/tests/lib/harness.sh"
-
-# shellcheck source=scripts/lib/shared/tui/menu_render.sh
-source "$ROOT/scripts/lib/shared/tui/menu_render.sh"
-# shellcheck source=scripts/lib/shared/tui/ui.sh
-source "$ROOT/scripts/lib/shared/tui/ui.sh"
-# shellcheck source=scripts/lib/shared/tui/report_table.sh
-source "$ROOT/scripts/lib/shared/tui/report_table.sh"
-# shellcheck source=scripts/lib/shared/tui/menu_descriptions.sh
-source "$ROOT/scripts/lib/shared/tui/menu_descriptions.sh"
-# shellcheck source=scripts/lib/shared/tui/menu_simple.sh
-source "$ROOT/scripts/lib/shared/tui/menu_simple.sh"
-# shellcheck source=scripts/lib/shared/tui/menu_keys.sh
-source "$ROOT/scripts/lib/shared/tui/menu_keys.sh"
-# shellcheck source=scripts/lib/shared/tui/menu_checkbox.sh
-source "$ROOT/scripts/lib/shared/tui/menu_checkbox.sh"
-# shellcheck source=scripts/lib/shared/tui/menu_paging.sh
-source "$ROOT/scripts/lib/shared/tui/menu_paging.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/menu_render.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/ui.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/report_table.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/menu_descriptions.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/menu_simple.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/menu_keys.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/menu_checkbox.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/menu_paging.sh"
 # shellcheck source=scripts/lib/components/registry.sh
 source "$ROOT/scripts/lib/components/registry.sh"
 # shellcheck source=scripts/lib/components/menu.sh
@@ -331,7 +330,8 @@ test_menu_input_holds_echo_off_and_puts_it_back() (
 
 	# Off a terminal there is nothing to suppress, so the seam stays untouched.
 	unset -f tty_echo_off tty_echo_restore
-	source "$ROOT/scripts/lib/shared/tui/tty.sh"
+	# shellcheck source=/dev/null
+	source "$DOTFILES_SHARED_LIB/tui/tty.sh"
 	local scratch="$TEST_TMP/echo-seam"
 	: >"$scratch"
 	DOTFILES_TTY_INPUT="$scratch" tty_echo_off

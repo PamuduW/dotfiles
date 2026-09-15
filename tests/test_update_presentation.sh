@@ -623,7 +623,7 @@ test_bash_and_python_rollups_count_alike() (
 	local from_bash from_python
 	from_bash="$(NO_COLOR=1 rt_print_rollup "$ok" "$check" "$miss" | tail -1)"
 	from_python="$(NO_COLOR=1 PYTHONDONTWRITEBYTECODE=1 python3 \
-		"$REPO_DIR/scripts/lib/shared/python/render_report.py" --cols 80 --rollup <"$rows" | tail -1)"
+		"$DOTFILES_SHARED_LIB/python/render_report.py" --cols 80 --rollup <"$rows" | tail -1)"
 	[[ "$from_bash" == "$from_python" ]] || {
 		printf 'rollup counts differ:\n  bash:   %s\n  python: %s\n' \
 			"$from_bash" "$from_python" >&2

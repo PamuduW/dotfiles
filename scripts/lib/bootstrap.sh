@@ -7,8 +7,13 @@ if [[ -z "${DOTFILES_DIR:-}" ]]; then
 	DOTFILES_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 
 	# See scripts/install.sh: the controlling terminal decides this, not stdin.
-	# shellcheck source=scripts/lib/shared/tui/tty.sh
-	source "$DOTFILES_DIR/scripts/lib/shared/tui/tty.sh"
+	if [[ -z "${DOTFILES_SHARED_LIB:-}" ]]; then
+		# shellcheck source=scripts/lib/shared_resolve.sh
+		source "$DOTFILES_DIR/scripts/lib/shared_resolve.sh"
+		dotfiles_shared_require "$DOTFILES_DIR" || return 1
+	fi
+	# shellcheck source=/dev/null
+	source "$DOTFILES_SHARED_LIB/tui/tty.sh"
 	export DOTFILES_INTERACTIVE_TTY=false
 	if tty_available; then
 		DOTFILES_INTERACTIVE_TTY=true

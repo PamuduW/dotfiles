@@ -13,11 +13,16 @@ NO_COLOR=1
 PKG_FILE="$REPO_DIR/packages/packages.txt"
 export NO_COLOR PKG_FILE
 
-source "$REPO_DIR/scripts/lib/shared/tui/menu_render.sh"
-source "$REPO_DIR/scripts/lib/shared/tui/tty.sh"
-source "$REPO_DIR/scripts/lib/shared/tui/report_table.sh"
-source "$REPO_DIR/scripts/lib/shared/tui/menu_keys.sh"
-source "$REPO_DIR/scripts/lib/shared/tui/ui.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/menu_render.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/tty.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/report_table.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/menu_keys.sh"
+# shellcheck source=/dev/null
+source "$DOTFILES_SHARED_LIB/tui/ui.sh"
 source "$REPO_DIR/scripts/lib/command_metadata.sh"
 source "$REPO_DIR/scripts/lib/components/registry.sh"
 source "$REPO_DIR/scripts/menus/command_lib.sh"

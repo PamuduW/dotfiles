@@ -118,8 +118,8 @@ test_read_only_cli_commands_do_not_load_mutating_modules() (
 )
 
 test_four_column_table_layout_has_one_shared_implementation() (
-	rg -q '^rt_print_four_column_header\(\)' "$REPO_DIR/scripts/lib/shared/tui/report_table.sh"
-	rg -q '^rt_print_four_column_row\(\)' "$REPO_DIR/scripts/lib/shared/tui/report_table.sh"
+	rg -q '^rt_print_four_column_header\(\)' "$DOTFILES_SHARED_LIB/tui/report_table.sh"
+	rg -q '^rt_print_four_column_row\(\)' "$DOTFILES_SHARED_LIB/tui/report_table.sh"
 	! rg -n '^(_update|_repo_update)_(fit_text|table_rule|print_plain_cell|print_colored_cell)\(\)' \
 		"$REPO_DIR/scripts/lib/update_workflow.sh" "$REPO_DIR/scripts/lib/repo_update.sh"
 )

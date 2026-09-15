@@ -42,15 +42,15 @@ fakes fail closed.
 
 ## Shared libraries
 
-Dotfiles is the canonical owner of shared report, Git-repository, token, and TUI
-copies used by Agentbot. Run:
+Shared report, Git-repository, token, and TUI code lives in the
+[dotfiles-shared](https://github.com/PamuduW/dotfiles-shared) repository, which
+this installer and Agentbot both resolve at runtime. There is no vendored copy
+here and no sync step: edit it there, then run both suites, which exercise it
+through their parity tests.
 
-```bash
-./scripts/sync-shared.sh --check
-```
-
-Use `./scripts/sync-shared.sh` only when an intentional shared-library change
-must update the sibling checkout. Review both repositories afterward.
+The checkout is found via `DOTFILES_SHARED_DIR`, then a sibling of this
+repository, then `$HOME/dotfiles-shared`. Raise its `CONTRACT` only for a
+change that is not backward compatible, and update both consumers together.
 
 ## Documentation changes
 

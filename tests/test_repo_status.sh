@@ -9,6 +9,10 @@ set -uo pipefail
 
 TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
+
+# shellcheck source=scripts/lib/shared_resolve.sh
+source "$REPO_DIR/scripts/lib/shared_resolve.sh"
+dotfiles_shared_require "$REPO_DIR" || exit 1
 export PYTHONDONTWRITEBYTECODE=1
 
 if ! command -v python3 >/dev/null 2>&1; then
@@ -20,7 +24,7 @@ passed=0
 failed=0
 py() { python3 -c "
 import sys
-sys.path.insert(0, '$REPO_DIR/scripts/lib/shared/python')
+sys.path.insert(0, '$DOTFILES_SHARED_LIB/python')
 import repo_status as rs
 print(rs.classify($1))
 "; }

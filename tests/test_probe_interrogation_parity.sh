@@ -37,7 +37,7 @@ source "$REPO_DIR/scripts/lib/wsl_conf.sh"
 # shellcheck source=/dev/null
 source "$REPO_DIR/scripts/lib/components/probes.sh"
 
-PY_DIR="$REPO_DIR/scripts/lib/shared/python"
+PY_DIR="$DOTFILES_SHARED_LIB/python"
 failures=0
 work="$(mktemp -d)"
 trap 'rm -rf -- "$work"' EXIT

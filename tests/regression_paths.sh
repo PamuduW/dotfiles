@@ -48,7 +48,7 @@ test_removed_commands_have_migration_guidance() {
 
 test_report_separator_has_no_stray_trailing_dash() {
 	local output
-	output="$(NO_COLOR=1 bash -c 'source "$1/scripts/lib/shared/tui/report_table.sh"; rt_print_table_columns' _ "$ROOT")"
+	output="$(NO_COLOR=1 bash -c 'source "$1/tui/report_table.sh"; rt_print_table_columns' _ "$DOTFILES_SHARED_LIB")"
 	[[ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" -eq 2 ]] &&
 		[[ "$(printf '%s\n' "$output" | sed -n '2p')" == *+*+* ]] &&
 		! printf '%s\n' "$output" | sed -n '2p' | grep -Eq -- '-[0-9]+$'
@@ -74,7 +74,7 @@ test_failed_submenu_action_returns_to_menu_after_pause() {
 	local output
 	output="$(bash -c '
 		set -euo pipefail
-		source "$1/scripts/lib/shared/tui/menu_runner.sh"
+		source "$1/tui/menu_runner.sh"
 		state_file="$2/menu-loop-count"
 		printf "0\\n" >"$state_file"
 		menu_simple_run() {
@@ -94,7 +94,7 @@ test_failed_submenu_action_returns_to_menu_after_pause() {
 		keys=(bootstrap back)
 		menu_submenu_loop "Test" "Test" labels keys dispatch
 		printf "LOOP_RETURNED\\n"
-	' _ "$ROOT" "$1" 2>&1)"
+	' _ "$DOTFILES_SHARED_LIB" "$1" 2>&1)"
 	[[ "$output" == *"PAUSE_REACHED"* ]] && [[ "$output" == *"LOOP_RETURNED"* ]]
 }
 
