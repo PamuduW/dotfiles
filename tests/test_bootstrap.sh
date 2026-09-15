@@ -103,7 +103,28 @@ EOF
 	printf '%s\n' "$bare"
 }
 
-# One isolated machine: two fake remotes, empty destinations, a logging sudo,
+# The shared library is not an installable product, so it gets its own minimal
+# remote rather than make_remote's entry points: bootstrap only clones it, and
+# the resolvers accept a checkout by CONTRACT plus the renderer.
+make_shared_remote() {
+	local work="$1/work-shared"
+	local bare="$1/dotfiles-shared.git"
+	mkdir -p -- "$work/scripts/lib/shared/tui" "$work/tests/lib/shared"
+	printf '1\n' >"$work/CONTRACT"
+	: >"$work/scripts/lib/shared/tui/colors.sh"
+	{
+		"$REAL_GIT" init -q -b main "$work" &&
+			"$REAL_GIT" -C "$work" config user.name 'Bootstrap Test' &&
+			"$REAL_GIT" -C "$work" config user.email 'bootstrap@example.invalid' &&
+			"$REAL_GIT" -C "$work" add -A &&
+			"$REAL_GIT" -C "$work" commit -q -m 'shared library' &&
+			"$REAL_GIT" clone -q --bare "$work" "$bare"
+	} >/dev/null 2>&1 || return 1
+	rm -rf -- "$work"
+	printf '%s\n' "$bare"
+}
+
+# One isolated machine: three fake remotes, empty destinations, a logging sudo,
 # and every prerequisite present so the Agentbot phase is reachable.
 setup_machine() {
 	local dir="$TEST_HARNESS_ROOT/$1"
@@ -114,6 +135,7 @@ setup_machine() {
 	: >"$BOOTSTRAP_TEST_LOG"
 	DOTFILES_REMOTE="$(make_remote dotfiles "$dir/remotes")"
 	AGENTBOT_REMOTE="$(make_remote agentbot "$dir/remotes")"
+	SHARED_REMOTE="$(make_shared_remote "$dir/remotes")"
 	cat >"$dir/bin/sudo" <<EOF
 #!/usr/bin/env bash
 printf 'sudo %s\n' "\$*" >>"$BOOTSTRAP_TEST_LOG"
@@ -135,12 +157,28 @@ run_bootstrap() {
 		BOOTSTRAP_AGENTBOT_URL="$AGENTBOT_REMOTE" \
 		BOOTSTRAP_DOTFILES_DIR="$MACHINE/home/dotfiles" \
 		BOOTSTRAP_AGENTBOT_DIR="$MACHINE/home/agentbot" \
+		BOOTSTRAP_SHARED_URL="$SHARED_REMOTE" \
+		BOOTSTRAP_SHARED_DIR="$MACHINE/home/dotfiles-shared" \
 		"$@" \
 		bash "$BOOTSTRAP" </dev/null
 }
 
 log_has() { grep -Fq "$1" "$BOOTSTRAP_TEST_LOG"; }
 log_line() { grep -Fn "$1" "$BOOTSTRAP_TEST_LOG" | head -1 | cut -d: -f1; }
+
+test_every_selection_clones_the_shared_library() (
+	# The shared library is not optional for either product: both resolve it at
+	# runtime, so "Dotfiles only" and "Agentbot only" need it exactly as much as
+	# the pair does. Cloning it inside one of the WANT_* branches would leave the
+	# other selection installing a product that cannot start.
+	local selection
+	for selection in 1 2 3; do
+		setup_machine "selection-$selection"
+		run_bootstrap "$selection" >/dev/null 2>&1 || true
+		[[ -d "$MACHINE/home/dotfiles-shared/.git" ]] || return 1
+		[[ -f "$MACHINE/home/dotfiles-shared/CONTRACT" ]] || return 1
+	done
+)
 
 test_both_clones_installs_updates_then_runs_agentbot() (
 	setup_machine both
@@ -310,6 +348,8 @@ test_scripted_answers_drive_the_selection_prompt() (
 		BOOTSTRAP_AGENTBOT_URL="$AGENTBOT_REMOTE" \
 		BOOTSTRAP_DOTFILES_DIR="$MACHINE/home/dotfiles" \
 		BOOTSTRAP_AGENTBOT_DIR="$MACHINE/home/agentbot" \
+		BOOTSTRAP_SHARED_URL="$SHARED_REMOTE" \
+		BOOTSTRAP_SHARED_DIR="$MACHINE/home/dotfiles-shared" \
 		bash "$BOOTSTRAP" </dev/null >/dev/null 2>&1 || return 1
 
 	# Answer "2" means Dotfiles only, so Agentbot must never be obtained.
@@ -708,6 +748,7 @@ test_the_start_clock_survives_a_restart() (
 	printf '%s\n' "$output" | grep -Fq "  Started   ${announced[0]}"
 )
 
+expect_success 'every selection clones the shared library' test_every_selection_clones_the_shared_library
 expect_success 'both clones, installs, updates, then runs Agentbot' test_both_clones_installs_updates_then_runs_agentbot
 expect_success 'Dotfiles only skips every Agentbot step' test_dotfiles_only_skips_every_agentbot_step
 expect_success 'Agentbot only skips Dotfiles and does not ask' test_agentbot_only_skips_dotfiles_and_does_not_ask
