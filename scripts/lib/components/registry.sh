@@ -106,7 +106,7 @@ comp_define system_packages \
 	--plan 'System packages' \
 	--tags 'core cli system' \
 	--order 1 \
-	--desc $'Installs the curated apt package catalog from packages/packages.txt.\nPackage Lib shows every package name, tag, and description.'
+	--desc $'Installs the curated apt package catalog from packages/packages.txt.\nPackage lib shows every package name, tag, and description.'
 
 comp_define python \
 	--label 'Python packages (runtime + common libraries)' \

@@ -329,8 +329,8 @@ test_package_lib_components_are_metadata_only() (
 	comp_install() { install_calls=$((install_calls + 1)); }
 	test_harness_reset_logs
 	package_lib_render_components 80 >"$output" || return 1
-	grep -Fq '=== Package Lib ===' "$output" || return 1
-	grep -Fq 'Dotfiles › Package Lib' "$output" || return 1
+	grep -Fq '=== Package lib ===' "$output" || return 1
+	grep -Fq 'Dotfiles › Package lib' "$output" || return 1
 	local key
 	for key in "${COMP_KEYS[@]}"; do
 		[[ "$(grep -Ec "^[[:space:]]*${key}([[:space:]]|$)" "$output")" -eq 1 ]] || return 1
@@ -352,7 +352,7 @@ test_package_lib_all_view_has_no_paging_controls() (
 	package_metadata_load "$PKG_FILE" || return 1
 	local output="$TEST_HARNESS_ROOT/package-all.output"
 	package_lib_render_packages_all 100 >"$output" || return 1
-	grep -Fq '=== Package Lib ===' "$output" || return 1
+	grep -Fq '=== Package lib ===' "$output" || return 1
 	grep -Fq 'package            | category   | description' "$output" || return 1
 	[[ "$(grep -c 'Page ' "$output")" -eq 0 ]] || return 1
 	[[ "$(grep -c '^  [^|].*|' "$output")" -ge 31 ]] || return 1
@@ -428,10 +428,10 @@ expect_success 'Codex and Node component metadata reflect standalone ownership' 
 expect_success 'install defaults enable Boost and leave identity to the operator' test_install_defaults_enable_boost_and_exclude_identity_setup
 expect_success 'Python component owns globally installed common packages and is enabled by default' test_python_component_owns_default_global_packages
 expect_success 'package metadata contains 66 unique described names in 12/13/12/29 tags' test_package_metadata_has_exact_66_with_descriptions
-expect_success 'Package Lib renders all 20 components without probes or side effects' test_package_lib_components_are_metadata_only
-expect_success 'Package Lib opens the system package table directly' test_package_menu_opens_system_packages_directly
-expect_success 'Package Lib all view has no paging controls' test_package_lib_all_view_has_no_paging_controls
+expect_success 'Package lib renders all 20 components without probes or side effects' test_package_lib_components_are_metadata_only
+expect_success 'Package lib opens the system package table directly' test_package_menu_opens_system_packages_directly
+expect_success 'Package lib all view has no paging controls' test_package_lib_all_view_has_no_paging_controls
 expect_success 'install summary uses the report table alignment' test_install_summary_uses_report_table_alignment
-expect_success 'Command and Package Lib narrow rendering remains bounded' test_narrow_reports_remain_bounded
+expect_success 'Command and Package lib narrow rendering remains bounded' test_narrow_reports_remain_bounded
 
 finish_tests

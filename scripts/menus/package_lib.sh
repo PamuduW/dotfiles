@@ -81,7 +81,7 @@ package_lib_render_components() {
 	local cols="${1:-$(menu_tty_cols)}"
 	local i key label description row
 
-	_package_lib_header "Package Lib" "Dotfiles › Package Lib" "$cols"
+	_package_lib_header "Package lib" "Dotfiles › Package lib" "$cols"
 	printf '  %s\n' "$(_package_lib_fit "component            label and description" "$((cols - 2))")"
 	for i in "${!COMP_KEYS[@]}"; do
 		key="${COMP_KEYS[$i]}"
@@ -101,7 +101,7 @@ package_lib_render_packages_all() {
 	if ((${#PACKAGE_LIB_NAMES[@]} == 0)); then
 		package_metadata_load "${PKG_FILE:-}" || return 1
 	fi
-	_package_lib_header "Package Lib" "Dotfiles › Package Lib" "$cols"
+	_package_lib_header "Package lib" "Dotfiles › Package lib" "$cols"
 	_rt_ensure_colors
 	available=$((cols - 2 - 6))
 	description_w=$((available - package_w - tag_w))

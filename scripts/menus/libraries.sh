@@ -8,7 +8,7 @@ libraries_menu() {
 		MENU_SIMPLE_TITLE='Libraries'
 		MENU_SIMPLE_BREADCRUMB='Dotfiles › Libraries'
 		MENU_SIMPLE_HINT='Up/Down navigate   Enter confirm   q back'
-		MENU_SIMPLE_LABELS=('Command lib' 'Package Lib')
+		MENU_SIMPLE_LABELS=('Command lib' 'Package lib')
 		MENU_SIMPLE_KEYS=(command_lib package_lib)
 		MENU_SIMPLE_DESCS=(
 			$'Show Dotfiles commands and their usage.\nRead-only command and mutation matrix.'
@@ -36,7 +36,7 @@ libraries_menu() {
 			if declare -F package_lib_menu >/dev/null; then
 				package_lib_menu || rc=$?
 			else
-				printf '  Package Lib is not available in this phase.\n'
+				printf '  Package lib is not available in this phase.\n'
 				rc=1
 			fi
 			;;

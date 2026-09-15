@@ -328,7 +328,7 @@ test_libraries_menu_contains_command_and_package_libs() {
 		return 1
 	}
 	libraries_menu
-	[[ "$(<"$capture")" == $'Libraries|Dotfiles › Libraries|Command lib Package Lib|command_lib package_lib\nUp/Down navigate   Enter confirm   q back' ]]
+	[[ "$(<"$capture")" == $'Libraries|Dotfiles › Libraries|Command lib Package lib|command_lib package_lib\nUp/Down navigate   Enter confirm   q back' ]]
 }
 
 # Every command in the public catalog is reachable without the command line.
@@ -374,6 +374,7 @@ expect_success 'root cancel redraws and explicit Quit returns cleanly' test_canc
 expect_success 'failed direct action pauses exactly once and returns failure' test_failed_action_pauses_once
 expect_success 'a partial install is reported, not called a failure' test_partial_install_is_reported_not_called_a_failure
 expect_success 'a real failure is still reported as one' test_a_real_failure_is_still_reported_as_one
+expect_success 'libraries menu lists both libraries' test_libraries_menu_contains_command_and_package_libs
 expect_success 'changed-repository updates skip pause and mark the parent to quit' test_changed_repository_skips_pause_and_marks_parent_to_quit
 expect_success 'repository changes exit the Dotfiles menu without a redraw' test_changed_repository_exits_dotfiles_menu_without_redraw
 expect_success 'undefined deferred actions are unavailable and non-mutating' test_deferred_actions_are_safe_when_undefined

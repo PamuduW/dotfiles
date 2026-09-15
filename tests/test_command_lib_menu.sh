@@ -114,6 +114,6 @@ expect_success 'one command detail uses only authoritative metadata' test_one_co
 expect_success 'one command detail fits supported widths' test_one_command_detail_fits_supported_widths
 expect_success 'back wait ignores unrelated keys and accepts cancel' test_wait_back_ignores_unrelated_keys_and_accepts_cancel
 expect_success 'Command lib selects detail and returns to index' test_command_lib_selects_detail_and_returns_to_index
-expect_success 'Package Lib owns one back wait without pause' test_package_lib_owns_one_back_wait_without_pause
+expect_success 'Package lib owns one back wait without pause' test_package_lib_owns_one_back_wait_without_pause
 
 finish_tests
