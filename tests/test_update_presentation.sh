@@ -312,14 +312,18 @@ test_update_topics_use_submenu_yellow() (
 	grep -Fq $'\033[38;5;208m=== Updating ===' <<<"$output"
 )
 
-test_repository_fetch_notice_uses_cyan() (
+test_repository_fetch_says_nothing_on_success() (
+	# Git's fetch notice said what the report table below it was about to say,
+	# in Git's words rather than this run's, and arrived before the heading
+	# that would have framed it. A successful fetch is silent; a failed one
+	# still prints Git's own text, which is the case that needs it.
 	local output
 	local -A result=()
 	C_CYAN=$'\033[36m' C_RESET=$'\033[0m'
 	TEST_REPO_STATE=fetch-output
 	export TEST_REPO_STATE
 	output="$(repo_update_run "$TEST_HARNESS_ROOT/repo" 'dotfiles repo' confirm_state result 2>&1)" || return 1
-	grep -Fq $'\033[36mFrom github.com:PamuduW/dotfiles' <<<"$output"
+	! grep -Fq 'From github.com:PamuduW/dotfiles' <<<"$output"
 )
 
 test_repository_fetch_notice_colors_each_line() (
@@ -556,7 +560,7 @@ expect_success 'upgrade summary ignores empty probe rows' test_upgrade_summary_i
 expect_success 'update rows align a Unicode em-dash available cell' test_update_rows_align_unicode_available_cells
 expect_success 'repository update preview uses semantic colors' test_repository_update_preview_uses_semantic_colors
 expect_success 'update headings and step lines use their own palettes' test_update_topics_use_submenu_yellow
-expect_success 'repository fetch notices use cyan' test_repository_fetch_notice_uses_cyan
+expect_success 'a successful repository fetch says nothing' test_repository_fetch_says_nothing_on_success
 expect_success 'repository fetch notices color each line independently' test_repository_fetch_notice_colors_each_line
 expect_success 'update apply uses a high-level Upgrade heading without opt-in plan noise' test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan
 expect_success 'upgrade summary marks the repo gate as handled' test_upgrade_summary_marks_repo_gate_as_handled
