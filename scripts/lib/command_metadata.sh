@@ -182,7 +182,7 @@ dotfiles_command_define 'commands' \
 	--defaults 'Prints the complete catalog without changing state.' \
 	--effects 'Performs no installer, git, network, stow, package, or component action.' \
 	--example 'dotfiles commands' \
-	--related 'The interactive Command Lib renders this same catalog.'
+	--related 'The interactive Command lib renders this same catalog.'
 
 dotfiles_command_define 'packages' \
 	--handler 'cmd_packages' \
@@ -233,7 +233,7 @@ DOTFILES_CONFIG_KEYS=(
 declare -gA DOTFILES_CONFIG_DESCRIPTION=(
 	[DOTFILES_COMPONENTS]='Comma-separated component IDs for non-interactive component selection.'
 	[XDG_CONFIG_HOME]='Base directory for shared private Agentbot configuration.'
-	[GITHUB_TOKEN]='Optional GitHub API credential; its value is never rendered by Command Lib.'
+	[GITHUB_TOKEN]='Optional GitHub API credential; its value is never rendered by Command lib.'
 	[NO_COLOR]='Disables ANSI styling when set.'
 	[FORCE_COLOR]='Requests ANSI styling for non-TTY output when set.'
 	[DOTFILES_TUI]='Marks TUI execution for presentation/bridge behavior.'

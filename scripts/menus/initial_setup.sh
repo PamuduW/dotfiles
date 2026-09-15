@@ -65,7 +65,7 @@ _apply_noninteractive_git_defaults() {
 
 _run_setup_header() {
 	printf '\n'
-	ui_print_header "WSL Dotfiles Setup" ""
+	ui_print_header "WSL Dotfiles setup" ""
 	printf '  Log file: %s\n' "$LOG_FILE"
 }
 
@@ -158,7 +158,7 @@ print_status_summary_all() {
 	{
 		ui_clear
 		printf '\n'
-		ui_print_header "Check Status" "Dotfiles › Check Status" "$cols"
+		ui_print_header "Check status" "Dotfiles › Check status" "$cols"
 		rt_print_table_columns
 
 		for row in "${rows[@]}"; do

@@ -183,17 +183,17 @@ print_report_table() {
 
 	printf '\n  '
 	if [[ $upgrade_count -eq 0 && $remaining_count -eq 0 ]]; then
-		printf '%s0 verified upgrades%s — everything verified current.\n' "$C_GREEN" "$C_RESET"
+		printf '%s0 verified updates%s — everything verified current.\n' "$C_GREEN" "$C_RESET"
 	elif [[ $upgrade_count -eq 0 ]]; then
 		# White, not yellow. Yellow means "needs attention" everywhere else in
 		# both products, and a count of what is still to be checked is a fact
 		# about the report above it, not a warning about the machine. The
 		# all-clear above stays green, which is a verdict.
-		printf '%s0 verified upgrades; %s.%s\n' \
+		printf '%s0 verified updates; %s.%s\n' \
 			"$C_WHITE" "$remaining_phrase" "$C_RESET"
 	else
 		# shellcheck disable=SC2016  # Backticks are literal documentation formatting.
-		printf '%s%d verified upgrade%s available' \
+		printf '%s%d verified update%s available' \
 			"$C_YELLOW" "$upgrade_count" "$([[ $upgrade_count -eq 1 ]] && echo '' || echo 's')"
 		if [[ $remaining_count -gt 0 ]]; then
 			printf '; %s' "$remaining_phrase"
@@ -207,7 +207,7 @@ print_report_table() {
 		fi
 	fi
 	# No trailing blank: rt_print_header opens with one, and the two together
-	# left a two-line gap above "=== Upgrade ===".
+	# left a two-line gap above "=== Updating ===".
 }
 
 print_upgrade_summary() {
@@ -220,7 +220,7 @@ print_upgrade_summary() {
 
 	_load_update_rows rows "$repo_result_name" "$snapshot_name"
 
-	rt_print_header 'Upgrade summary' 'Dotfiles › Update › Summary'
+	rt_print_header 'Update summary' 'Dotfiles › Update › Summary'
 	_print_update_table_header result
 
 	for row in "${rows[@]}"; do
@@ -248,7 +248,7 @@ print_upgrade_summary() {
 
 	printf '\n  '
 	[[ $fail_count -eq 0 ]] && printf '%s' "$C_GREEN" || printf '%s' "$C_RED"
-	printf 'Upgrade finished%s — %d updated; %d already current; %d checked/no change; %d recovered; %d skipped; %d failed; %d not run.\n' \
+	printf 'Update finished%s — %d updated; %d already current; %d checked/no change; %d recovered; %d skipped; %d failed; %d not run.\n' \
 		"$C_RESET" "$updated_count" "$current_count" "$checked_count" "$recovered_count" \
 		"$skipped_count" "$fail_count" "$not_run_count"
 }
@@ -425,7 +425,7 @@ _dotfiles_run_update() {
 		_msg 'Downstream updates skipped.'
 		return 0
 	fi
-	rt_print_header 'Upgrade' 'Dotfiles › Update › Upgrade'
+	rt_print_header 'Updating' 'Dotfiles › Update › Updating'
 	_log_legend_line
 	echo ""
 	# One prompt these tools own and can place, rather than sudo's own arriving

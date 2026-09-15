@@ -482,7 +482,7 @@ _run_agentbot_step() {
 
 test_the_install_step_opens_the_selector_not_the_whole_menu() (
 	# Break caught: this ran the launcher with no arguments, which opens
-	# Agentbot's main menu. The step offered Check Status, Prune Skills and Quit
+	# Agentbot's main menu. The step offered Check status, Prune Skills and Quit
 	# instead of installing, and recorded whatever the operator did as
 	# "agentbot install".
 	local checkout="$TEST_HARNESS_ROOT/agentbot-menu"

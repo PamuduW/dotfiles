@@ -5,23 +5,23 @@ command_lib_render() {
 	local cols="${1:-$(menu_tty_cols)}"
 
 	if declare -F ui_print_header >/dev/null; then
-		ui_print_header "Command Lib" "Dotfiles › Command Lib" "$cols"
+		ui_print_header "Command lib" "Dotfiles › Command lib" "$cols"
 	else
-		rt_print_header "Command Lib" "Dotfiles › Command Lib"
+		rt_print_header "Command lib" "Dotfiles › Command lib"
 	fi
 	dotfiles_command_print_table "$cols"
 }
 
 command_lib_detail_render() {
 	local command="$1" cols="${2:-$(menu_tty_cols)}"
-	ui_print_header "$command" "Dotfiles › Command Lib › $command" "$cols"
+	ui_print_header "$command" "Dotfiles › Command lib › $command" "$cols"
 	dotfiles_command_print_detail "$command" "$cols"
 }
 
 _command_lib_index() {
 	local key
-	MENU_SIMPLE_TITLE='Command Lib'
-	MENU_SIMPLE_BREADCRUMB='Dotfiles › Command Lib'
+	MENU_SIMPLE_TITLE='Command lib'
+	MENU_SIMPLE_BREADCRUMB='Dotfiles › Command lib'
 	MENU_SIMPLE_HINT='Up/Down navigate   Enter confirm   q back'
 	MENU_SIMPLE_LABELS=()
 	MENU_SIMPLE_KEYS=()

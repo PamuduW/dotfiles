@@ -166,7 +166,7 @@ full_update_agentbot_is_absent() {
 full_update_without_agentbot() {
 	local expected rc=0
 	expected="$(full_update_expected_agentbot_home)"
-	rt_print_header 'Dotfiles updated' 'Dotfiles › Full Update › Summary'
+	rt_print_header 'Dotfiles updated' 'Dotfiles › Full update › Summary'
 	printf '  Agentbot is not installed, so this run updated Dotfiles only.\n'
 	printf '  Add it by cloning it to %s, or rerun the bootstrap script and\n' "$expected"
 	printf '  choose Agentbot.\n'
@@ -196,7 +196,7 @@ full_update_print_identity() {
 		agentbot_home="$expected_home"
 	fi
 
-	rt_print_header 'Resolved maintenance targets' 'Dotfiles › Full Update › Targets'
+	rt_print_header 'Resolved maintenance targets' 'Dotfiles › Full update › Targets'
 	printf '  Dotfiles launcher: %s\n  Dotfiles checkout: %s\n' "$dotfiles_launcher" "$DOTFILES_DIR"
 	printf '  Agentbot launcher: %s\n  Agentbot checkout: %s\n' "$agentbot_resolved" "$agentbot_home"
 	if [[ "$agentbot_home" != "$expected_home" ]]; then
@@ -218,7 +218,7 @@ full_update_run_agentbot() {
 		_err "Agentbot is not installed or is not available on PATH."
 		return 127
 	}
-	rt_print_header 'Agentbot full' 'Dotfiles › Full Update › Agentbot'
+	rt_print_header 'Agentbot full' 'Dotfiles › Full update › Agentbot'
 	agentbot help full >/dev/null 2>&1 || capability_rc=$?
 	case "$capability_rc" in
 	0) ;;
@@ -272,7 +272,7 @@ full_update_agentbot_doctor() {
 
 full_update_postflight() {
 	local dotfiles_rc=0 agentbot_rc=0
-	rt_print_header 'Postflight health' 'Dotfiles › Full Update › Postflight'
+	rt_print_header 'Postflight health' 'Dotfiles › Full update › Postflight'
 	full_update_dotfiles_doctor || dotfiles_rc=$?
 	full_update_agentbot_doctor || agentbot_rc=$?
 
@@ -340,7 +340,7 @@ cmd_full_update() {
 
 	# No header of its own. It announced a section with no body -- the install
 	# phase prints "=== Installing ===" as its very next line -- and repeated
-	# the menu's own "Dotfiles › Full Update" breadcrumb verbatim two lines
+	# the menu's own "Dotfiles › Full update" breadcrumb verbatim two lines
 	# after it. The three section headers this run does print say where it is.
 	# repo update -> component install -> downstream updates, the order
 	# bootstrap uses, so the first run and every run after it converge.

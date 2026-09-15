@@ -201,7 +201,7 @@ cmd_status() {
 	# The repository is a component of this machine's setup too, and its state
 	# belongs in the table rather than in a raw `git status -sb` underneath it.
 	_dotfiles_append_repo_row rows
-	_dotfiles_render_report 'Check Status' 'Dotfiles › Check Status' rows
+	_dotfiles_render_report 'Check status' 'Dotfiles › Check status' rows
 
 	# Local changes only. Remote freshness is answered by the Dotfiles repo row
 	# in the table above, so repeating "unchecked" here would now contradict it.
@@ -222,7 +222,7 @@ cmd_status() {
 # Status answers "what is installed"; this answers "what is wrong".
 # Kept as a command because its exit status is load-bearing: full-update's
 # postflight uses it to choose between "completed" and "needs attention", and
-# a script can gate on it. The report it used to print is Check Status's now --
+# a script can gate on it. The report it used to print is Check status's now --
 # it was the same probes filtered down, and the suggestions that were the real
 # content moved under that table.
 cmd_doctor() {

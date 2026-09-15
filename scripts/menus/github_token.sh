@@ -84,7 +84,7 @@ _github_token_menu_render() {
 		current='saved state is invalid or unsafe'
 		current_color="${C_RED:-}"
 	fi
-	ui_print_header "GitHub Token Config" "${root} › GitHub Token Config" "$cols" >&"$GITHUB_TOKEN_MENU_OUT_FD"
+	ui_print_header "GitHub token config" "${root} › GitHub token config" "$cols" >&"$GITHUB_TOKEN_MENU_OUT_FD"
 	printf '  %sCurrent:%s %s%s%s\n' \
 		"${C_BOLD:-}" "${C_RESET:-}" "$current_color" "$current" "${C_RESET:-}" \
 		>&"$GITHUB_TOKEN_MENU_OUT_FD"

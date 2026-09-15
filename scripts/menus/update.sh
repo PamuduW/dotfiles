@@ -29,7 +29,7 @@ run_update_flow() {
 run_full_update_flow() {
 	local answer='' notice=''
 	while true; do
-		ui_print_header 'Full Update' 'Dotfiles › Full Update'
+		ui_print_header 'Full update' 'Dotfiles › Full update'
 		printf '  Updates Dotfiles, then installs and updates Agentbot.\n'
 		printf '  Application prompts are auto-approved.\n'
 		printf '  Replaceable local Git state in both repositories may be backed up and replaced.\n\n'

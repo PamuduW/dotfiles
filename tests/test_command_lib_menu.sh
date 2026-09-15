@@ -93,8 +93,8 @@ test_command_lib_selects_detail_and_returns_to_index() (
 
 	command_lib_menu || return 1
 	[[ "$menu_calls" -eq 2 && "$waits" -eq 1 && "$clears" -eq 1 ]] || return 1
-	[[ "$index" == Command\ Lib\|Dotfiles\ ›\ Command\ Lib\|menu\ update\ full-update\ doctor\ status\ commands\ packages\ logs\ restow\ help\|* ]] || return 1
-	grep -Fq 'Dotfiles › Command Lib › status' "$capture" || return 1
+	[[ "$index" == Command\ lib\|Dotfiles\ ›\ Command\ lib\|menu\ update\ full-update\ doctor\ status\ commands\ packages\ logs\ restow\ help\|* ]] || return 1
+	grep -Fq 'Dotfiles › Command lib › status' "$capture" || return 1
 	grep -Fq 'Command: status' "$capture" || return 1
 	! grep -Fq 'Command: update' "$capture"
 )
@@ -113,7 +113,7 @@ test_package_lib_owns_one_back_wait_without_pause() (
 expect_success 'one command detail uses only authoritative metadata' test_one_command_detail_uses_only_authoritative_metadata
 expect_success 'one command detail fits supported widths' test_one_command_detail_fits_supported_widths
 expect_success 'back wait ignores unrelated keys and accepts cancel' test_wait_back_ignores_unrelated_keys_and_accepts_cancel
-expect_success 'Command Lib selects detail and returns to index' test_command_lib_selects_detail_and_returns_to_index
+expect_success 'Command lib selects detail and returns to index' test_command_lib_selects_detail_and_returns_to_index
 expect_success 'Package Lib owns one back wait without pause' test_package_lib_owns_one_back_wait_without_pause
 
 finish_tests

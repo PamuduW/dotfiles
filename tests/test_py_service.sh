@@ -52,8 +52,8 @@ expect 'classify matches the standalone script' \
 
 rows=$'Git identity|Ada <ada@example.com>|configured\nDocker Engine|29.8.0|installed\nApply dotfiles|8 targets missing|missing'
 expect 'render matches the standalone renderer' \
-	"$(printf '%s\n' "$rows" | python3 "$PY_DIR/render_report.py" --cols 80 --rollup --title 'Check Status')" \
-	"$(py_service_call render --cols 80 --rollup --title 'Check Status' < <(printf '%s\n' "$rows"))"
+	"$(printf '%s\n' "$rows" | python3 "$PY_DIR/render_report.py" --cols 80 --rollup --title 'Check status')" \
+	"$(py_service_call render --cols 80 --rollup --title 'Check status' < <(printf '%s\n' "$rows"))"
 
 expect 'repo status matches the standalone checker' \
 	"$(python3 "$PY_DIR/repo_status.py" "$REPO_DIR" --label 'Dotfiles repo' --timeout 5)" \

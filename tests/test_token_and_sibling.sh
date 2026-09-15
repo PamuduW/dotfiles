@@ -335,8 +335,8 @@ test_menu_presentation_is_complete() (
 	reset_token_state
 	local output="$TEST_HARNESS_ROOT/presentation.menu"
 	run_menu_script $'q\n' "$output" || return 1
-	grep -Fq '=== GitHub Token Config ===' "$output" || return 1
-	grep -Fq 'Dotfiles › GitHub Token Config' "$output" || return 1
+	grep -Fq '=== GitHub token config ===' "$output" || return 1
+	grep -Fq 'Dotfiles › GitHub token config' "$output" || return 1
 	grep -Fq "$(github_token_file)" "$output" || return 1
 	grep -Fqi 'optional' "$output" || return 1
 	grep -Fqi 'public-repository API rate limits' "$output" || return 1

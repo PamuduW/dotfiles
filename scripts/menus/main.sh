@@ -43,17 +43,17 @@ _main_menu_desc_fn() {
 
 # Every public Dotfiles command reaches the menu. logs and restow were CLI-only,
 # so a menu operator had no way to read a run's log or repair a clobbered link
-# without the command line. Doctor has no item of its own: it was Check Status's
+# without the command line. Doctor has no item of its own: it was Check status's
 # rows filtered down, and the suggestions that were its real content print under
 # that table now.
 _main_menu_labels=(
-	"Check Status"
+	"Check status"
 	"Install Dotfiles"
 	"Update"
-	"Full Update (Dotfiles + Agentbot)"
+	"Full update (Dotfiles + Agentbot)"
 	"Logs"
 	"Restow"
-	"GitHub Token Config"
+	"GitHub token config"
 	"Libraries"
 	"Quit"
 )
@@ -133,7 +133,7 @@ _main_menu_dispatch() {
 		;;
 	github_token)
 		_main_menu_dispatch_optional github_token_menu \
-			"GitHub Token Config is not available in this phase."
+			"GitHub token config is not available in this phase."
 		;;
 	libraries)
 		_main_menu_dispatch_optional libraries_menu \

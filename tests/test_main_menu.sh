@@ -37,13 +37,13 @@ assert_array_equals() {
 
 test_exact_root_contract() {
 	local expected_labels=(
-		"Check Status"
+		"Check status"
 		"Install Dotfiles"
 		"Update"
-		"Full Update (Dotfiles + Agentbot)"
+		"Full update (Dotfiles + Agentbot)"
 		"Logs"
 		"Restow"
-		"GitHub Token Config"
+		"GitHub token config"
 		"Libraries"
 		"Quit"
 	)
@@ -179,9 +179,9 @@ test_required_breadcrumb_literals() {
 	status_fn="$(declare -f print_status_summary_all)"
 	component_fn="$(declare -f component_menu)"
 	plan_fn="$(declare -f show_plan)"
-	[[ "$status_fn" == *'ui_print_header "Check Status" "Dotfiles › Check Status"'* ]] || return 1
+	[[ "$status_fn" == *'ui_print_header "Check status" "Dotfiles › Check status"'* ]] || return 1
 	[[ "$component_fn" == *"MENU_CB_TITLE='Install Dotfiles'"* && "$component_fn" == *"MENU_CB_BREADCRUMB='Dotfiles › Install Dotfiles'"* ]] || return 1
-	[[ "$plan_fn" == *'ui_print_header "Execution Plan" "Dotfiles › Install Dotfiles › Execution Plan"'* ]]
+	[[ "$plan_fn" == *'ui_print_header "Execution plan" "Dotfiles › Install Dotfiles › Execution plan"'* ]]
 }
 
 test_cancel_redraws_and_quit_returns() {
@@ -323,7 +323,7 @@ test_libraries_menu_contains_command_and_package_libs() {
 		return 1
 	}
 	libraries_menu
-	[[ "$(<"$capture")" == $'Libraries|Dotfiles › Libraries|Command Lib Package Lib|command_lib package_lib\nUp/Down navigate   Enter confirm   q back' ]]
+	[[ "$(<"$capture")" == $'Libraries|Dotfiles › Libraries|Command lib Package Lib|command_lib package_lib\nUp/Down navigate   Enter confirm   q back' ]]
 }
 
 # Every command in the public catalog is reachable without the command line.
@@ -333,7 +333,7 @@ test_every_public_command_is_reachable_from_the_menu() (
 	source "$REPO_DIR/scripts/lib/command_metadata.sh"
 	# menu is the TUI itself; commands, packages and help are the Libraries
 	# child menu, which the root reaches through the libraries key; and doctor
-	# is Check Status, which prints the suggestions that were doctor's only
+	# is Check status, which prints the suggestions that were doctor's only
 	# non-duplicated content.
 	# Subscripts quoted: bash evaluates an unquoted one as arithmetic, and
 	# shfmt duly reformats [full-update] into [full - update].

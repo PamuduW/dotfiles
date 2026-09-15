@@ -18,7 +18,7 @@ test_update_report_uses_clear_title_spacing_and_aligned_action_rule() (
 	[[ "$(sed -n '3p' "$output_file")" == '  Dotfiles › Update › Report' ]] || return 1
 	grep -Fq $'  Dotfiles › Update › Report\n\ncomponent' "$output_file" || return 1
 	! grep -Fq 'Upgrade report' "$output_file" || return 1
-	grep -Fq $'0 verified upgrades — everything verified current.\n\n' "$output_file" || return 1
+	grep -Fq $'0 verified updates — everything verified current.\n\n' "$output_file" || return 1
 	awk 'NR == 6 { expected=$0; next } NR == 7 { exit(length($0) == length(expected) ? 0 : 1) }' "$output_file"
 )
 
@@ -31,7 +31,7 @@ test_the_report_does_not_tell_the_run_to_run_itself() (
 	_collect_check_rows() { printf '%s\n' 'npm|11.19.0|12.0.2|upgrade'; }
 	applying="$(NO_COLOR=1 print_report_table '' '' apply)"
 	advising="$(NO_COLOR=1 print_report_table '' '' advise)"
-	[[ "$applying" == *'1 verified upgrade available.'* ]] || return 1
+	[[ "$applying" == *'1 verified update available.'* ]] || return 1
 	[[ "$applying" != *'to apply'* ]] || return 1
 	[[ "$advising" == *'to apply'* ]] || return 1
 	# The default is the one that says nothing about a caller's intent.
@@ -95,7 +95,7 @@ test_update_and_upgrade_rows_keep_the_last_column_width() (
 	done
 )
 
-test_mixed_preview_separates_verified_upgrades_from_remaining_checks() (
+test_mixed_preview_separates_verified_updates_from_remaining_checks() (
 	_collect_check_rows() {
 		printf '%s\n' \
 			'apt packages|system packages|none (cached)|refresh-required' \
@@ -107,7 +107,7 @@ test_mixed_preview_separates_verified_upgrades_from_remaining_checks() (
 	}
 	local output
 	output="$(NO_COLOR=1 print_report_table)"
-	grep -Fq '0 verified upgrades; 5 checks or refreshes remain.' <<<"$output" || return 1
+	grep -Fq '0 verified updates; 5 checks or refreshes remain.' <<<"$output" || return 1
 	! grep -Fq 'everything looks current' <<<"$output" || return 1
 	grep -Fq 'refresh on apply' <<<"$output" || return 1
 	grep -Fq 'latest unchecked' <<<"$output"
@@ -309,7 +309,7 @@ test_update_topics_use_submenu_yellow() (
 	print_upgrade_summary() { :; }
 	sudo_prime() { :; }
 	output="$(cmd_update)"
-	grep -Fq $'\033[38;5;208m=== Upgrade ===' <<<"$output"
+	grep -Fq $'\033[38;5;208m=== Updating ===' <<<"$output"
 )
 
 test_repository_fetch_notice_uses_cyan() (
@@ -342,7 +342,7 @@ test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan() (
 	print_upgrade_summary() { :; }
 	sudo_prime() { :; }
 	output="$(cmd_update)"
-	grep -Fq '=== Upgrade ===' <<<"$output" || return 1
+	grep -Fq '=== Updating ===' <<<"$output" || return 1
 	grep -Fq '[STEP] apt packages' <<<"$output" || return 1
 	! grep -Fq 'Opt-in plan:' <<<"$output"
 )
@@ -545,7 +545,7 @@ test_harness_safety_and_no_real_mutation() {
 
 expect_success 'update report title spacing and action separator are stable' test_update_report_uses_clear_title_spacing_and_aligned_action_rule
 expect_success 'update and upgrade rows preserve the fixed final column width' test_update_and_upgrade_rows_keep_the_last_column_width
-expect_success 'mixed preview separates verified upgrades from remaining checks' test_mixed_preview_separates_verified_upgrades_from_remaining_checks
+expect_success 'mixed preview separates verified updates from remaining checks' test_mixed_preview_separates_verified_updates_from_remaining_checks
 expect_success 'Codex preview renders external ownership and unchecked metadata truthfully' test_codex_preview_renders_external_and_unchecked_states
 expect_success 'upgrade summary counts semantic results' test_upgrade_summary_counts_semantic_results_and_not_run_steps
 expect_success 'upgrade summary marks unattempted steps after early failure' test_upgrade_summary_marks_unattempted_steps_after_early_failure
@@ -636,7 +636,7 @@ expect_success 'Bash and Python rollups count every state alike' test_bash_and_p
 expect_success 'CLI and TUI status use the same component-state collector' test_cli_and_tui_status_share_component_collector
 expect_success 'status update and restow retain removed command capabilities' test_retained_capability_coverage
 expect_success 'summary upgrade and self fail with migration guidance' test_removed_commands_have_guidance
-expect_success 'metadata help Command Lib and dispatch share ten keys' test_exact_command_set_parity
+expect_success 'metadata help Command lib and dispatch share ten keys' test_exact_command_set_parity
 expect_success 'the report does not tell the run to run itself' test_the_report_does_not_tell_the_run_to_run_itself
 expect_success 'report title honours NO_COLOR with a palette loaded' test_report_title_honours_no_color_even_with_a_palette_loaded
 expect_success 'report title still colours when colour is wanted' test_report_title_still_colours_when_colour_is_wanted
