@@ -18,7 +18,7 @@ boundary so token values do not appear in process arguments or reports.
 
 The optional shared GitHub token is stored under
 `${XDG_CONFIG_HOME:-$HOME/.config}/agentbot/` with strict permissions. Command
-and Package Lib never render its value. Invalid or unsafe saved state falls back
+and Package lib never render its value. Invalid or unsafe saved state falls back
 to anonymous access with a warning.
 
 Codex pairing values are terminal-only secrets.

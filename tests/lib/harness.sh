@@ -280,21 +280,6 @@ test_harness_log_call() {
 	printf '\n' >>"$TEST_COMMAND_LOG"
 }
 
-test_harness_create_fake_sibling() {
-	local name="$1" sibling installer
-	[[ "$name" =~ ^[A-Za-z0-9_-]+$ ]]
-	sibling="$TEST_FAKE_SIBLINGS/$name"
-	installer="$sibling/install.sh"
-	mkdir -p -- "$sibling"
-	# shellcheck disable=SC2016  # Expand TEST_FAKE_BIN when the generated installer runs.
-	printf '%s\n' \
-		'#!/usr/bin/env bash' \
-		'TEST_FAKE_COMMAND_NAME=sibling-install exec "${TEST_FAKE_BIN:?}/_test_fake_command" "$@"' \
-		>"$installer"
-	chmod 700 "$installer"
-	printf '%s\n' "$sibling"
-}
-
 test_harness_invoke_relaunch() {
 	local wrapper="${TEST_RELAUNCH_WRAPPER:-}"
 	if [[ -z "$wrapper" || "$(type -t "$wrapper" || true)" != "function" ]]; then

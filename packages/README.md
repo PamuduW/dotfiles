@@ -11,7 +11,7 @@ This folder holds the package list for the WSL/Debian/Ubuntu bootstrap.
 
 `packages.txt` uses `# @tag` section headers (e.g. `@core`, `@cli`, `@python`, `@system`).
 Each package entry uses `package-name  # concise description`. The installer
-strips the inline comment before invoking apt, while the read-only Package Lib
+strips the inline comment before invoking apt, while the read-only Package lib
 uses it as display metadata. Package names remain the authoritative install set.
 
 When you run `./install.sh` (root shim to `scripts/install.sh`), the interactive

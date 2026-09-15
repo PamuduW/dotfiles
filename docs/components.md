@@ -5,7 +5,7 @@
 `scripts/lib/components/registry.sh` defines the 20 stable component keys,
 labels, plan details, descriptions, package tags, dependencies, and installation
 order. Keep those records synchronized with probes, install dispatch, update
-logic, Command lib, Package Lib, and user documentation.
+logic, Command lib, Package lib, and user documentation.
 
 | Group | Components |
 |---|---|
