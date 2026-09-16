@@ -448,6 +448,76 @@ test_token_verification_asks_github_before_saving() (
 	[[ "$rc" -eq 2 ]]
 )
 
+test_token_verification_refuses_a_write_capable_scope() (
+	# "GitHub accepts it" and "safe to hand an agent" are different questions.
+	# The managed servers are read-only by contract, so a credential that could
+	# write is refused before it is stored rather than warned about after.
+	local rc
+
+	# A stub that answers 200 and writes the scopes GitHub would have sent.
+	reply_with_scopes() {
+		local scopes="$1"
+		eval "github_token_curl() {
+			local prev='' arg
+			for arg in \"\$@\"; do
+				[[ \"\$prev\" == --dump-header ]] && printf 'HTTP/2 200\r\nX-OAuth-Scopes: %s\r\n' \"$scopes\" >\"\$arg\"
+				prev=\"\$arg\"
+			done
+			printf '200'
+		}"
+	}
+
+	# Read-only scopes pass, and are published to the caller.
+	rc=0
+	(
+		reply_with_scopes 'read:org, read:user'
+		github_token_verify tok-readonly || exit $?
+		[[ "$GITHUB_TOKEN_VERIFY_SCOPES" == 'read:org, read:user' ]] || exit 9
+	) || rc=$?
+	[[ "$rc" -eq 0 ]] || return 1
+
+	# A write scope is exit 3 -- accepted by GitHub, refused by us.
+	local scope
+	for scope in 'repo' 'public_repo' 'gist' 'workflow' 'admin:public_key, read:org' 'write:packages'; do
+		rc=0
+		(
+			reply_with_scopes "$scope"
+			github_token_verify tok-writable
+		) || rc=$?
+		[[ "$rc" -eq 3 ]] || return 1
+	done
+
+	# Deny by default: a scope this function has never heard of is treated as
+	# write-capable, so a scope GitHub adds later fails closed.
+	rc=0
+	(
+		reply_with_scopes 'some_future_scope'
+		github_token_verify tok-future
+	) || rc=$?
+	[[ "$rc" -eq 3 ]] || return 1
+
+	# No header at all is what a fine-grained token produces: its permissions
+	# are not published this way. Unknown is not write-capable, and refusing on
+	# silence would reject the narrowest credential there is.
+	rc=0
+	(
+		github_token_curl() { printf '200'; }
+		github_token_verify tok-finegrained || exit $?
+		[[ -z "$GITHUB_TOKEN_VERIFY_SCOPES" ]] || exit 9
+	) || rc=$?
+	[[ "$rc" -eq 0 ]] || return 1
+
+	# A rejection still outranks any scope reading.
+	rc=0
+	(
+		reply_with_scopes 'repo'
+		github_token_curl() { printf '401'; }
+		github_token_verify tok-refused
+	) || rc=$?
+	[[ "$rc" -eq 1 ]]
+)
+
+expect_success 'a write-capable scope is refused before the token is stored' test_token_verification_refuses_a_write_capable_scope
 expect_success 'missing token preserves anonymous argv and sends no auth config' test_anonymous_exact_argv
 expect_success 'malformed, invalid, and wrong-mode saved state warn and stay anonymous' test_invalid_saved_states_fall_back
 expect_success 'valid environment token uses private curl config only' test_environment_token_private_config

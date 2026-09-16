@@ -306,12 +306,19 @@ test_saved_token_can_be_checked_from_the_menu() (
 	github_token_write "$saved" || return 1
 
 	local rc
-	for rc in 0 1 2; do
-		eval "github_token_verify() { return $rc; }"
+	for rc in 0 1 2 3; do
+		# Scopes matching the verdict: a read-only set for the accepted case,
+		# a write scope for the one that refuses over it.
+		local scopes='read:org'
+		[[ "$rc" -eq 3 ]] && scopes='repo'
+		eval "github_token_verify() { GITHUB_TOKEN_VERIFY_SCOPES='$scopes'; return $rc; }"
 		run_menu_script $'c\nq\n' "$output" || return 1
 		case "$rc" in
-		0) grep -Fq 'GitHub accepted the saved token.' "$output" || return 1 ;;
+		0) grep -Fq 'GitHub accepted the saved token: read:org.' "$output" || return 1 ;;
 		1) grep -Fq 'GitHub rejected the saved token' "$output" || return 1 ;;
+		# A token that was read-only when it was saved and has since been given
+		# a write scope is caught here or nowhere.
+		3) grep -Fq 'The saved token can write (repo)' "$output" || return 1 ;;
 		*) grep -Fq 'Could not reach GitHub to check the saved token.' "$output" || return 1 ;;
 		esac
 		# Only the render prints an outcome, so its presence is the proof it
