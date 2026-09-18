@@ -2,12 +2,13 @@ name: Validate
 
 on:
   workflow_dispatch:
-  # Daily at 10:00 UTC rather than on every push. What breaks this suite is
+  # Daily at 10:00 Asia/Colombo (04:30 UTC, which is what cron takes) rather
+  # than on every push. What breaks this suite is
   # mostly not a commit: the runner image, apt, tool versions, and the release
   # downloads the installers pull. `workflow_dispatch` covers a change here
   # that wants checking before tomorrow.
   schedule:
-    - cron: "0 10 * * *"
+    - cron: "30 4 * * *"
 
 permissions:
   contents: read
