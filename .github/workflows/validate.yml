@@ -1,12 +1,13 @@
 name: Validate
 
 on:
-  push:
   workflow_dispatch:
-  # Weekly, for what breaks without anyone touching the repository: the runner
-  # image, apt, tool versions, and the release downloads the installers pull.
+  # Daily at 10:00 UTC rather than on every push. What breaks this suite is
+  # mostly not a commit: the runner image, apt, tool versions, and the release
+  # downloads the installers pull. `workflow_dispatch` covers a change here
+  # that wants checking before tomorrow.
   schedule:
-    - cron: "0 6 * * 1"
+    - cron: "0 10 * * *"
 
 permissions:
   contents: read
