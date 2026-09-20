@@ -868,12 +868,12 @@ _comp_probe_go() {
 
 # Classification, separated from interrogation on purpose.
 #
-# ADR-0001's second amendment: three of the five component defects in
-# docs/history/bootstrap-clean-machine-testing.md were misreadings of an
-# interrogation that was itself correct, and defect 5 was this probe reading a
-# refused `docker ps` as "container not found". The reading is where the bugs
-# are, and a reading that takes its inputs as arguments can be tested against
-# every state without a docker to produce them.
+# ADR-0001's second amendment: three of the five component defects in the
+# workspace's archived `bootstrap-clean-machine-testing.md` record were
+# misreadings of an interrogation that was itself correct, and defect 5 was
+# this probe reading a refused `docker ps` as "container not found". The
+# reading is where the bugs are, and a reading that takes its inputs as
+# arguments can be tested against every state without a docker to produce them.
 #
 # Pure: no commands, no filesystem, no environment.
 _comp_classify_portainer() {

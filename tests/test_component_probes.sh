@@ -148,7 +148,7 @@ test_portainer_classification_covers_every_state() (
 	# timeout means having a docker that times out.
 	#
 	# Split out, the reading is a pure function and every state is one call.
-	# Defect 5 in docs/history/bootstrap-clean-machine-testing.md lived here.
+	# Defect 5 in the workspace's archived bootstrap testing record lived here.
 	local got
 
 	# docker absent entirely: not a judgement about the container.
