@@ -17,7 +17,7 @@ install_monaspace_fonts() {
 		echo "  curl required for Monaspace install." >&2
 		return 1
 	}
-	command -v unzip >/dev/null 2>&1 || sudo apt-get -o Dpkg::Use-Pty=0 install -y unzip
+	command -v unzip >/dev/null 2>&1 || sudo apt-get -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=600 install -y unzip
 
 	log_step "Install Monaspace Nerd Fonts from GitHub"
 	local ver tmp stage_dir='' backup_dir='' otf_count=0 count otf

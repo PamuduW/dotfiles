@@ -290,7 +290,7 @@ _update_apt_packages() {
 	if ((pending > 0)); then
 		log_step "Apply ${pending} package upgrade(s)"
 	fi
-	_run_quiet_command 'apt upgrade' sudo apt-get -qq -o Dpkg::Use-Pty=0 upgrade -y || return $?
+	_run_quiet_command 'apt upgrade' sudo apt-get -qq -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=600 upgrade -y || return $?
 	if ((pending > 0)); then
 		log_ok "Upgraded ${pending} package(s)"
 		# Not checked-no-change: the summary reported "no change" for a run that

@@ -90,7 +90,7 @@ apt_install_packages() {
 	fi
 
 	log_step "Install apt packages: $*"
-	if _run_quiet_command "apt packages ($*)" sudo apt-get -qq -o Dpkg::Use-Pty=0 install -y "${available[@]}"; then
+	if _run_quiet_command "apt packages ($*)" sudo apt-get -qq -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=600 install -y "${available[@]}"; then
 		if ((${#unavailable[@]} > 0)); then
 			log_ok "Apt packages installed: $* (${#unavailable[@]} unavailable on this release)"
 		else

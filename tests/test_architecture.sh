@@ -162,6 +162,23 @@ test_installer_help_exits_before_log_initialization() (
 	[[ ! -e "$probe_dir/log" ]]
 )
 
+test_package_installs_wait_for_the_dpkg_lock() (
+	# Break caught: a fresh Ubuntu 26.04 boots into unattended-upgrades, which
+	# holds the dpkg frontend lock for minutes. `dpkg -i` and a bare
+	# `apt-get install` both fail on it at once, and the PowerShell step died
+	# mid-install. Every package mutation waits for the lock instead.
+	local hits
+	hits="$({
+		rg -n 'sudo dpkg -i' "$REPO_DIR/scripts" "$REPO_DIR/bootstrap.sh"
+		rg -n 'sudo apt-get .*(install|upgrade)' "$REPO_DIR/scripts" "$REPO_DIR/bootstrap.sh" |
+			rg -v 'DPkg::Lock::Timeout=|\]='"'"
+	} || true)"
+	[[ -z "$hits" ]] || {
+		printf 'package mutation that does not wait for the dpkg lock:\n%s\n' "$hits" >&2
+		return 1
+	}
+)
+
 check 'repository update has no reload hook' test_repository_update_has_no_reload_hook
 check 'sibling repository is named agentbot' test_sibling_repository_is_named_agentbot
 check 'interactivity depends on the terminal, not stdin' test_interactivity_depends_on_the_terminal_not_stdin
@@ -174,6 +191,7 @@ check 'four-column reports share one ANSI-safe table layout implementation' test
 check 'Dotfiles install and update use the same repository runner' test_single_repository_install_and_update_use_one_runner
 check 'repository has one local validation entrypoint wired into CI' test_repository_has_one_validation_entrypoint_and_ci
 check 'installer help exits before log initialization' test_installer_help_exits_before_log_initialization
+check 'package installs wait for the dpkg lock' test_package_installs_wait_for_the_dpkg_lock
 
 test_harness_cleanup
 finish_tests
