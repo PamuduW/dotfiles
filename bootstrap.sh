@@ -230,7 +230,7 @@ ensure_git() {
 		err 'apt-get update failed; cannot install git'
 		return 1
 	}
-	sudo apt-get install -y git || {
+	sudo apt-get -o DPkg::Lock::Timeout=600 install -y git || {
 		err 'could not install git'
 		return 1
 	}

@@ -166,7 +166,7 @@ install_docker() {
 		codename="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
 
 		_run_quiet_command 'Docker prerequisites' \
-			sudo apt-get -qq -o Dpkg::Use-Pty=0 install -y ca-certificates curl || return $?
+			sudo apt-get -qq -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=600 install -y ca-certificates curl || return $?
 		sudo install -m 0755 -d /etc/apt/keyrings || return $?
 		sudo curl -fsSL "https://download.docker.com/linux/${docker_distro}/gpg" -o /etc/apt/keyrings/docker.asc || return $?
 		sudo chmod a+r /etc/apt/keyrings/docker.asc || return $?
@@ -186,7 +186,7 @@ DOCKEREOF
 			/etc/apt/sources.list.d/docker.sources \
 			/etc/apt/sources.list.d/docker.list || return $?
 		_run_quiet_command 'Docker Engine install' \
-			sudo apt-get -qq -o Dpkg::Use-Pty=0 install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin || return $?
+			sudo apt-get -qq -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=600 install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin || return $?
 		log_ok "Docker Engine installed"
 	fi
 

@@ -278,7 +278,7 @@ install_powershell_from_github() {
 		"https://github.com/PowerShell/PowerShell/releases/download/v${ver}/${deb}" || return $?
 	# apt resolves the package's own dependencies; dpkg alone would not.
 	_run_quiet_command 'PowerShell package install' \
-		sudo apt-get -qq -o Dpkg::Use-Pty=0 install -y "$tmp/$deb" || return $?
+		sudo apt-get -qq -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=600 install -y "$tmp/$deb" || return $?
 	rm -rf -- "$tmp"
 	trap - RETURN
 	log_ok "PowerShell ${ver} installed from the upstream release"
@@ -376,14 +376,16 @@ install_powershell() {
 	# HTTPS transport is built into supported modern apt releases; the legacy
 	# apt-transport-https package is unnecessary and may not exist on newer systems.
 	_run_quiet_command 'PowerShell prerequisites' \
-		sudo apt-get -qq -o Dpkg::Use-Pty=0 install -y wget software-properties-common || return $?
+		sudo apt-get -qq -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=600 install -y wget software-properties-common || return $?
 
 	if [[ ! -f /etc/apt/sources.list.d/microsoft-prod.list && ! -f /etc/apt/sources.list.d/microsoft-prod.sources ]]; then
 		local deb_file
 		deb_file="$(mktemp /tmp/packages-microsoft-prod.XXXXXX.deb)"
 		wget -q "https://packages.microsoft.com/config/${distro}/${version_id}/packages-microsoft-prod.deb" -O "$deb_file" || return $?
+		# apt rather than dpkg: a fresh Ubuntu boots into unattended-upgrades,
+		# and dpkg fails at once on the lock it holds where apt waits it out.
 		_run_quiet_command 'Microsoft repository package' \
-			sudo dpkg -i "$deb_file" || return $?
+			sudo apt-get -qq -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=600 install -y "$deb_file" || return $?
 		rm -f "$deb_file"
 		log_ok "Added Microsoft apt repository"
 	else
@@ -405,7 +407,7 @@ install_powershell() {
 		return 1
 	fi
 	_run_quiet_command 'PowerShell install' \
-		sudo apt-get -qq -o Dpkg::Use-Pty=0 install -y powershell || return $?
+		sudo apt-get -qq -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=600 install -y powershell || return $?
 
 	if command -v pwsh >/dev/null 2>&1; then
 		log_ok "PowerShell installed ($(pwsh --version 2>/dev/null || echo 'unknown'))"
