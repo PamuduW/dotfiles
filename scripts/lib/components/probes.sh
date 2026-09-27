@@ -936,6 +936,22 @@ _comp_probe_monaspace_fonts() {
 	comp_classify monaspace_fonts "$present" "$count" "$ver"
 }
 
+# Local state only: the installed .deb, or an obsidian on PATH that is not it.
+_comp_probe_obsidian() {
+	local ver='' path='' found=0 owned=0
+	ver="$(dpkg-query -W -f='${Status}\t${Version}\n' obsidian 2>/dev/null |
+		awk -F'\t' '$1 == "install ok installed" { print $2 }')"
+	if [[ -n "$ver" ]]; then
+		found=1
+		owned=1
+		path='/usr/bin/obsidian'
+	elif path="$(command -v obsidian 2>/dev/null)"; then
+		found=1
+	fi
+	comp_classify owned_cli obsidian 'obsidian' ' (deb)' ' (external)' \
+		"$found" 0 "$ver" "$path" "$owned"
+}
+
 # Pure: a link pointing somewhere else is as missing as no link at all, so the
 # count is of targets that do not resolve into this checkout.
 _comp_classify_stow_targets() {

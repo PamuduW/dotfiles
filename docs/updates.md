@@ -48,7 +48,7 @@ stops is the one reported.
 The update report separates installed, available, and action. Remote checks run
 through bounded helpers so one stalled tool does not freeze the full report.
 Managed update modules cover apt, Graphify, Boost, Cursor, Codex, Claude,
-lazygit, lazydocker, Node.js, npm, Go, Monaspace fonts, and repository state.
+lazygit, lazydocker, Node.js, npm, Go, Monaspace fonts, Obsidian, and repository state.
 
 Ownership checks prevent Dotfiles from replacing tools it cannot prove it
 owns. Graphify updates only when `uv tool list` attributes it to `graphifyy`.

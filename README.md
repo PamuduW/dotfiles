@@ -155,7 +155,7 @@ DOTFILES_COMPONENTS=system_packages,docker,portainer,dotfiles \
 
 ## Component summary
 
-The registry contains 20 components:
+The registry contains 21 components:
 
 | Area | Components |
 |---|---|
@@ -164,7 +164,14 @@ The registry contains 20 components:
 | Containers | Docker Engine, Portainer CE LTS, lazydocker |
 | Developer tools | Graphify CLI, Boost CLI, lazygit, Monaspace fonts |
 | Agent CLIs | Cursor, standalone Codex, Claude |
+| Desktop apps (WSLg) | Obsidian |
 | Shell and Git | Stow packages, Git identity, Git credentials/submodule defaults |
+
+Obsidian installs from its official amd64 `.deb`, verified against the SHA-256
+GitHub publishes for it, and opens on the Windows desktop through WSLg (from the
+Start menu or by running `obsidian`). The install is skipped when the session has
+no GUI display, and an Obsidian installed another way is left alone. Full update
+keeps it current once it is installed.
 
 The exact keys, dependencies, defaults, and descriptions are available through
 `dotfiles packages` and documented in [Component lifecycle](docs/components.md).

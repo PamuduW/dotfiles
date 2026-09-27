@@ -26,5 +26,7 @@ source "$_INSTALL_LIB_DIR/graphify.sh"
 source "$_INSTALL_LIB_DIR/boost.sh"
 # shellcheck source=scripts/lib/installers/fonts.sh
 source "$_INSTALL_LIB_DIR/fonts.sh"
+# shellcheck source=scripts/lib/installers/obsidian.sh
+source "$_INSTALL_LIB_DIR/obsidian.sh"
 # shellcheck source=scripts/lib/installers/stow.sh
 source "$_INSTALL_LIB_DIR/stow.sh"
