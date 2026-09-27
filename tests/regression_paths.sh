@@ -18,6 +18,32 @@ test_docker_stops_before_restart_on_config_failure() {
 	' _ "$ROOT" "$tmp"
 }
 
+test_docker_restarts_only_when_its_config_changed() {
+	# Break caught: every full update restarted Docker, stopping running
+	# containers, although the daemon config had not changed.
+	local tmp="$1"
+	RESTART_MARKER="$tmp/unchanged" bash -c '
+		source "$1/scripts/lib/installers/logging.sh"
+		source "$1/scripts/lib/installers/docker.sh"
+		docker() { printf "Docker version test\n"; }
+		groups() { printf "docker\n"; }
+		configure_docker_daemon() { DOCKER_DAEMON_CHANGED=0; }
+		restart_docker_service() { : >"$RESTART_MARKER"; }
+		install_docker >/dev/null
+	' _ "$ROOT" "$tmp" || return 1
+	[[ ! -e "$tmp/unchanged" ]] || return 1
+	RESTART_MARKER="$tmp/changed" bash -c '
+		source "$1/scripts/lib/installers/logging.sh"
+		source "$1/scripts/lib/installers/docker.sh"
+		docker() { printf "Docker version test\n"; }
+		groups() { printf "docker\n"; }
+		configure_docker_daemon() { DOCKER_DAEMON_CHANGED=1; }
+		restart_docker_service() { : >"$RESTART_MARKER"; }
+		install_docker >/dev/null
+	' _ "$ROOT" "$tmp" || return 1
+	[[ -e "$tmp/changed" ]]
+}
+
 test_docker_merge_temp_file_uses_sudo_boundary() {
 	# Both temporaries: the merge destination, and the empty-object source the
 	# fresh-install path merges onto. A user-owned 0600 mktemp file can reject
@@ -182,6 +208,7 @@ main() {
 
 	expect_failure 'Docker config failure prevents restart' test_docker_stops_before_restart_on_config_failure "$tmp"
 	expect_success 'Docker merge temporary file stays in the sudo boundary' test_docker_merge_temp_file_uses_sudo_boundary
+	expect_success 'Docker restarts only when its config changed' test_docker_restarts_only_when_its_config_changed "$tmp"
 	if [[ ! -e "$tmp/restarted" ]]; then
 		pass 'Docker restart was not attempted'
 	else
