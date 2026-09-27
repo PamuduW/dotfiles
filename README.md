@@ -53,7 +53,10 @@ The selection above is the only question. Everything after it follows from it:
 the Dotfiles component selector and execution plan, then the Dotfiles update,
 then Agentbot's own component selector and plan, then the Agentbot update. A
 destination that cannot be used safely stops the run with a report rather than
-a second question.
+a second question. The one exception is your memory vault, which the script
+cannot guess: when Agentbot is installed and no vault is configured, it asks for
+the vault's Git URL or an existing folder (Enter skips), then sets it up with
+its commit and push checks.
 
 To read the script before running it, or on a machine that already has Git:
 

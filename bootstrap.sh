@@ -456,6 +456,38 @@ run_agentbot() {
 	record_phase 'agentbot update'
 }
 
+# The memory vault is the one piece a new machine cannot guess: it is the
+# user's private repository. Asked only when Agentbot is installed and no vault
+# is configured yet, as free text that Enter skips, so a run without memory
+# stays one question long. A failure is recorded and never fails the run.
+setup_memory_vault() {
+	local launcher="$AGENTBOT_DIR/bin/agentbot" source rc=0
+	[[ -x "$launcher" ]] || return 0
+	"$launcher" memory status >/dev/null 2>&1 || rc=$?
+	((rc == 2)) || return 0 # configured already, or not ours to fix here
+	step 'Memory vault'
+	ask '  Your memory vault: its Git URL, or a folder already on this machine (Enter to skip): ' ''
+	source="$ANSWER"
+	if [[ -z "$source" ]]; then
+		record 'SKIPPED   memory vault (later: agentbot menu, then Memory)'
+		return 0
+	fi
+	rc=0
+	case "$source" in
+	*://* | git@*:*)
+		ask "  Clone it into [$HOME/agent-memory]: " "$HOME/agent-memory"
+		"$launcher" memory setup --clone "$source" --dest "$ANSWER" --yes || rc=$?
+		;;
+	*) "$launcher" memory setup --path "$source" --yes || rc=$? ;;
+	esac
+	if ((rc == 0)); then
+		record_phase 'memory vault'
+	else
+		record 'FAILED   memory vault (retry: agentbot menu, then Memory)'
+	fi
+	return 0
+}
+
 # --- plan and summary --------------------------------------------------------
 
 destination_note() {
@@ -559,7 +591,7 @@ main() {
 			msg ''
 			msg '  Dotfiles setup is complete.'
 		fi
-		run_agentbot
+		run_agentbot && setup_memory_vault
 	fi
 
 	# Print the summary here rather than leaving it to the trap: offer_new_shell

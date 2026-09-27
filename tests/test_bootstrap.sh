@@ -88,7 +88,14 @@ EOF
 #!/usr/bin/env bash
 printf '$repo_name-cli %s\n' "\$*" >>"\$BOOTSTRAP_TEST_LOG"
 EOF
-	chmod +x -- "$work/install.sh" "$work/bin/bin/dotfiles"
+	# A launcher that logs its calls and reports no memory vault configured.
+	cat >"$work/bin/agentbot" <<EOF
+#!/usr/bin/env bash
+printf '$repo_name-cli %s\n' "\$*" >>"\$BOOTSTRAP_TEST_LOG"
+[[ "\$1 \$2" == 'memory status' ]] && exit 2
+exit 0
+EOF
+	chmod +x -- "$work/install.sh" "$work/bin/bin/dotfiles" "$work/bin/agentbot"
 	# Every git call is silenced: this function returns the bare path on stdout,
 	# and a single stray line of git output would be captured as part of it.
 	{
@@ -378,6 +385,24 @@ test_agentbot_runs_without_a_second_question() (
 	[[ "$output" != *'Install and update Agentbot as well?'* ]] || return 1
 	log_has 'agentbot-install install' || return 1
 	log_has 'agentbot-install update'
+)
+
+test_a_new_machine_is_offered_its_memory_vault() (
+	# One command sets everything up: the vault is the only thing it cannot
+	# guess, so it asks, once, and Enter skips.
+	setup_machine memory-vault
+	local answers
+	for answers in $'https://github.com/me/agent-memory.git\n' $'\n'; do
+		: >"$BOOTSTRAP_TEST_LOG"
+		rm -rf -- "$MACHINE/home/dotfiles" "$MACHINE/home/agentbot" "$MACHINE/home/dotfiles-shared"
+		BOOTSTRAP_ANSWERS_OVERRIDE="$answers" run_bootstrap 1 >/dev/null 2>&1 || return 1
+		case "$answers" in
+		*github*)
+			log_has "agentbot-cli memory setup --clone https://github.com/me/agent-memory.git --dest $MACHINE/home/agent-memory --yes" || return 1
+			;;
+		*) ! log_has 'memory setup' || return 1 ;;
+		esac
+	done
 )
 
 test_only_the_selection_is_asked() (
@@ -768,6 +793,7 @@ expect_success 'scripted answers drive the selection prompt' test_scripted_answe
 expect_success 'the plan is shown, not asked' test_the_plan_is_shown_not_asked
 expect_success 'Agentbot runs without a second question' test_agentbot_runs_without_a_second_question
 expect_success 'only the selection is asked' test_only_the_selection_is_asked
+expect_success 'a new machine is offered its memory vault' test_a_new_machine_is_offered_its_memory_vault
 expect_success 'the run reports a duration per phase and a total' test_the_run_reports_a_duration_per_phase_and_a_total
 expect_success 'the start clock survives a restart' test_the_start_clock_survives_a_restart
 expect_success 'a repository update restarts instead of failing' test_a_repository_update_restarts_instead_of_failing
