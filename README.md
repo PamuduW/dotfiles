@@ -205,10 +205,11 @@ dotfiles restow
 dotfiles full-update
 ```
 
-The command reinstalls the components the probes report as already applied,
-updates every managed component, verifies the resolved installed checkouts,
-delegates Agentbot's internal lifecycle to `agentbot full`, and finishes with
-both Doctors. It closes on a timing block naming each of its five sections.
+The command re-applies the components the probes report as already applied
+(leaving version upkeep to the update steps), updates every managed component,
+verifies the resolved installed checkouts, runs `agentbot full` (Agentbot's one
+update pass once installed), and finishes with both Doctors. It closes on a
+timing block naming each of its sections.
 
 ### Start optional services
 

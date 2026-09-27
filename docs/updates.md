@@ -81,18 +81,22 @@ unattended maintenance sequence:
 
 1. Run the repository gate over the shared library and the Dotfiles checkout,
    restarting once if either moves forward.
-2. Reinstall the components the probes report as already applied.
+2. Re-apply the components the probes report as already applied, except
+   those an update step keeps current (Go, Node, lazygit, lazydocker, the
+   agent CLIs, fonts, Graphify, Boost, Obsidian), which step 3 updates.
 3. Run the Dotfiles update workflow with approved application prompts.
 4. Print the resolved Dotfiles and Agentbot launchers/checkouts, and refuse an
    unexpected Agentbot checkout.
-5. Delegate Agentbot's install/update sequence to `agentbot full`.
+5. Delegate to `agentbot full`, which on an installed machine is Agentbot's
+   single update pass.
 6. Run Dotfiles and Agentbot Doctor as postflight checks.
 7. Report the wall clock of each section.
 
 Agentbot warnings produce a warning outcome; a Doctor error fails postflight.
 
-The sections are the five the operator watched go past — Dotfiles install,
-Dotfiles update, Agentbot install, Agentbot update, Postflight. Agentbot's two
+The sections are the ones the operator watched go past — Dotfiles install,
+Dotfiles update, Agentbot (install on a first run, then update), Postflight.
+The apt index is refreshed once per run, by whichever phase needs it first. Agentbot's two
 halves are one command from here, so it reports them through
 `AGENTBOT_TIMING_FILE`: one `<stage> <seconds>` line per stage. An Agentbot that
 does not know how to — an older checkout, mid-upgrade — writes nothing and the
