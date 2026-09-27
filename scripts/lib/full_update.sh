@@ -16,6 +16,22 @@ _dotfiles_approve_repo_update() {
 # an unbound SETUP_GIT_NAME. That is initial-setup work.
 FULL_UPDATE_NEVER_INSTALL=(git_identity)
 
+# Components the update phase keeps current by itself. Running their installer
+# first as well installed "Go latest", then checked Go again, every day. They
+# are reinstalled only when their probe cannot tell, or with --force.
+FULL_UPDATE_KEPT_BY_UPDATE_STEPS=(
+	go nodejs lazygit lazydocker cursor_cli codex_cli claude_cli
+	monaspace_fonts graphify_cli boost_cli obsidian
+)
+
+_full_update_kept_by_update_step() {
+	local key="$1" kept
+	for kept in "${FULL_UPDATE_KEPT_BY_UPDATE_STEPS[@]}"; do
+		[[ "$key" == "$kept" ]] && return 0
+	done
+	return 1
+}
+
 _full_update_needs_operator_input() {
 	local key="$1" excluded
 	for excluded in "${FULL_UPDATE_NEVER_INSTALL[@]}"; do
@@ -37,7 +53,12 @@ full_update_select_applied_components() {
 		fi
 		result="${probe_results[$key]:-missing}"
 		case "$result" in
-		installed | configured) COMP_ON["$key"]=1 ;;
+		installed | configured)
+			COMP_ON["$key"]=1
+			if [[ "${DOTFILES_FORCE_REINSTALL:-0}" != 1 ]] && _full_update_kept_by_update_step "$key"; then
+				COMP_ON["$key"]=0
+			fi
+			;;
 		# `check` means the probe could not reach a verdict, not that the
 		# component is absent -- Portainer reads that way in any session that
 		# predates the docker group. Reinstalling is the safe direction, since

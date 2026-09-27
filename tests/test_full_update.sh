@@ -120,6 +120,32 @@ test_operator_input_components_are_never_installed_by_full_update() (
 	[[ "$(<"$installed")" == docker ]]
 )
 
+test_full_update_leaves_version_upkeep_to_the_update_steps() (
+	# Break caught: a full update ran each tool's installer ("install Go
+	# latest") and then its update step, every day. Present tools with an
+	# update step are updated, not reinstalled, unless --force asks for it.
+	local installed="$TEST_HARNESS_ROOT/full-update-kept.installed"
+	COMP_KEYS=(go docker dotfiles)
+	declare -A COMP_ON=()
+	collect_component_probe_results() {
+		local -n out="$1"
+		out=([go]=installed [docker]=installed [dotfiles]=configured)
+	}
+	run_install() {
+		local key
+		for key in "${COMP_KEYS[@]}"; do
+			[[ "${COMP_ON[$key]}" -eq 1 ]] && printf '%s\n' "$key" >>"$installed"
+		done
+		return 0
+	}
+	: >"$installed"
+	DOTFILES_FORCE_REINSTALL=0 full_update_install_applied_components >/dev/null || return 1
+	[[ "$(tr '\n' ' ' <"$installed")" == 'docker dotfiles ' ]] || return 1
+	: >"$installed"
+	DOTFILES_FORCE_REINSTALL=1 full_update_install_applied_components >/dev/null || return 1
+	[[ "$(tr '\n' ' ' <"$installed")" == 'go docker dotfiles ' ]]
+)
+
 test_full_update_installs_only_components_that_probe_as_present() (
 	# Roadmap item 2: full-update is install + update, so install-time work
 	# stops drifting. The selection is derived from probes and must never add a
@@ -458,6 +484,7 @@ expect_success 'the force flag reaches the installers and survives a restart' te
 expect_success 'full-update loads everything its install phase needs' test_full_update_loads_everything_its_install_phase_needs
 expect_success 'operator-input components are never installed by full-update' test_operator_input_components_are_never_installed_by_full_update
 expect_success 'full-update installs only components that probe as present' test_full_update_installs_only_components_that_probe_as_present
+expect_success 'full-update leaves version upkeep to the update steps' test_full_update_leaves_version_upkeep_to_the_update_steps
 expect_success 'an unverifiable component is reinstalled and said so' test_an_unverifiable_component_is_reinstalled_and_said_so
 expect_success 'components needing attention do not stop the update' test_components_needing_attention_do_not_stop_the_update
 expect_success 'a failed update step does not skip Agentbot' test_a_failed_update_step_does_not_skip_agentbot

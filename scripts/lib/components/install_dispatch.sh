@@ -120,6 +120,9 @@ _run_install_preamble() {
 	if is_on system_packages || is_on python || is_on powershell; then
 		log_step "Refresh apt indexes"
 		if _run_quiet_command "apt indexes refresh" sudo apt-get update -qq; then
+			# The update phase of the same run reads this instead of refreshing
+			# the same indexes again.
+			export DOTFILES_APT_INDEX_REFRESHED_AT="${EPOCHSECONDS:-$(date +%s)}"
 			log_ok "apt indexes refreshed"
 		else
 			log_warn "apt indexes refresh failed"

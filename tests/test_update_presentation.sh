@@ -382,6 +382,17 @@ test_update_preview_and_summary_share_one_snapshot() (
 	[[ "$(wc -l <"$calls")" -eq 1 ]]
 )
 
+test_the_apt_index_is_refreshed_once_per_run() (
+	local calls="$TEST_HARNESS_ROOT/apt-refresh.calls"
+	: >"$calls"
+	_run_quiet_command() { printf '%s\n' "$*" >>"$calls"; }
+	_upgrade_rule_between() { :; }
+	DOTFILES_APT_INDEX_REFRESHED_AT="${EPOCHSECONDS:-$(date +%s)}" _run_apt_index_refresh >/dev/null || return 1
+	[[ ! -s "$calls" ]] || return 1
+	DOTFILES_APT_INDEX_REFRESHED_AT=1 _run_apt_index_refresh >/dev/null || return 1
+	grep -q 'apt-get update' "$calls"
+)
+
 test_update_step_registry_has_stable_complete_pairs() (
 	local expected=(
 		'apt packages' 'Graphify CLI' 'Boost CLI' 'Cursor CLI' 'Codex CLI'
@@ -594,6 +605,7 @@ expect_success 'the update closes on what it spent' test_update_closes_on_what_i
 expect_success 'an upgrade step records its own wall clock' test_a_step_records_its_own_wall_clock
 expect_success 'update preview and summary share one captured snapshot' test_update_preview_and_summary_share_one_snapshot
 expect_success 'update registry has stable complete check and apply pairs' test_update_step_registry_has_stable_complete_pairs
+expect_success 'the apt index is refreshed once per run' test_the_apt_index_is_refreshed_once_per_run
 expect_success 'TUI runs shared update directly without a submenu' test_tui_runs_shared_update_without_submenu
 expect_success 'TUI propagates the changed-repository exit from the update child' test_tui_propagates_changed_repository_from_update_child
 expect_success 'stopped paths perform no apt tool network or stow work' test_stopped_paths_have_no_downstream

@@ -323,8 +323,14 @@ _apply_repository_update_step() {
 # The apt index refresh, before any component step. It is shared work rather
 # than one component's, so it gets its own rule and step lines.
 _run_apt_index_refresh() {
-	local rc=0
+	local rc=0 now
 	_upgrade_rule_between
+	now="${EPOCHSECONDS:-$(date +%s)}"
+	if [[ "${DOTFILES_APT_INDEX_REFRESHED_AT:-}" =~ ^[0-9]+$ ]] &&
+		((now - DOTFILES_APT_INDEX_REFRESHED_AT < 900)); then
+		log_skip 'apt package index already refreshed in this run'
+		return 0
+	fi
 	log_step 'Refresh apt package index'
 	_run_quiet_command 'apt-get update' sudo apt-get update -qq || rc=$?
 	if ((rc != 0)); then
