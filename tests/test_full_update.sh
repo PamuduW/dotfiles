@@ -229,7 +229,7 @@ test_a_failed_update_step_does_not_skip_agentbot() (
 	full_update_print_identity() { :; }
 	agentbot() {
 		printf 'agentbot:%s\n' "$*" >>"$events"
-		[[ "$*" == 'help full' || "$*" == 'full' || "$*" == doctor ]]
+		[[ "$*" == 'full' || "$*" == doctor ]]
 	}
 	cmd_doctor() { return 0; }
 
@@ -265,7 +265,7 @@ test_install_runs_between_the_repository_gate_and_downstream_updates() (
 		printf 'downstream\n' >>"$events"
 	}
 	full_update_install_applied_components() { printf 'install\n' >>"$events"; }
-	agentbot() { [[ "$*" == 'help full' || "$*" == 'full' || "$*" == doctor ]]; }
+	agentbot() { [[ "$*" == 'full' || "$*" == doctor ]]; }
 
 	cmd_full_update >/dev/null || return 1
 	[[ "$(<"$events")" == $'repo-gate\ninstall\ndownstream' ]]
@@ -284,56 +284,11 @@ test_success_runs_dotfiles_then_agentbot_full() (
 	}
 	agentbot() {
 		printf 'agentbot:%s:confirm=%s\n' "$*" "${AGENTBOT_INSTALL_CONFIRM:-unset}" >>"$events"
-		[[ "$*" == 'help full' || "$*" == 'full' || "$*" == doctor ]]
+		[[ "$*" == 'full' || "$*" == doctor ]]
 	}
 
 	cmd_full_update >/dev/null || return 1
-	[[ "$(<"$events")" == $'dotfiles:_dotfiles_approve_repo_update:true\nagentbot:help full:confirm=unset\nagentbot:full:confirm=yes\nagentbot:doctor:confirm=unset' ]]
-)
-
-test_legacy_agentbot_bootstraps_once_before_full() (
-	local events="$TEST_HARNESS_ROOT/full-update-legacy-agentbot.events"
-	local supports_full=false
-	: >"$events"
-	_dotfiles_run_update() { return 0; }
-	agentbot() {
-		printf 'agentbot:%s:confirm=%s\n' "$*" "${AGENTBOT_INSTALL_CONFIRM:-unset}" >>"$events"
-		case "$*" in
-		'help full')
-			[[ "$supports_full" == true ]] && return 0
-			return 2
-			;;
-		install)
-			supports_full=true
-			return 2
-			;;
-		full | doctor) return 0 ;;
-		esac
-		return 64
-	}
-
-	cmd_full_update >/dev/null || return 1
-	[[ "$(<"$events")" == $'agentbot:help full:confirm=unset\nagentbot:install:confirm=yes\nagentbot:help full:confirm=unset\nagentbot:full:confirm=yes\nagentbot:doctor:confirm=unset' ]]
-)
-
-test_agentbot_bootstrap_stops_if_full_is_still_unavailable() (
-	local events="$TEST_HARNESS_ROOT/full-update-incompatible-agentbot.events"
-	local output rc=0
-	: >"$events"
-	_dotfiles_run_update() { return 0; }
-	agentbot() {
-		printf 'agentbot:%s\n' "$*" >>"$events"
-		case "$*" in
-		'help full') return 2 ;;
-		install) return 0 ;;
-		esac
-		return 64
-	}
-
-	output="$(cmd_full_update 2>&1)" || rc=$?
-	[[ "$rc" -eq 1 ]] || return 1
-	[[ "$output" == *'still does not support agentbot full'* ]] || return 1
-	[[ "$(<"$events")" == $'agentbot:help full\nagentbot:install\nagentbot:help full' ]]
+	[[ "$(<"$events")" == $'dotfiles:_dotfiles_approve_repo_update:true\nagentbot:full:confirm=yes\nagentbot:doctor:confirm=unset' ]]
 )
 
 test_dotfiles_change_restarts_once_and_second_change_stops() (
@@ -359,10 +314,7 @@ test_dotfiles_change_restarts_once_and_second_change_stops() (
 test_agentbot_repository_change_stops_with_guidance() (
 	local output rc=0
 	_dotfiles_run_update() { return 0; }
-	agentbot() {
-		[[ "$*" == 'help full' ]] && return 0
-		return 2
-	}
+	agentbot() { return 2; }
 
 	output="$(cmd_full_update 2>&1)" || rc=$?
 	[[ "$rc" -eq 1 ]] || return 1
@@ -372,22 +324,10 @@ test_agentbot_repository_change_stops_with_guidance() (
 test_agentbot_failure_propagates_its_status() (
 	local rc=0
 	_dotfiles_run_update() { return 0; }
-	agentbot() {
-		[[ "$*" == 'help full' ]] && return 0
-		return 23
-	}
+	agentbot() { return 23; }
 
 	cmd_full_update >/dev/null 2>&1 || rc=$?
 	[[ "$rc" -eq 23 ]]
-)
-
-test_agentbot_capability_failure_propagates_its_status() (
-	local rc=0
-	_dotfiles_run_update() { return 0; }
-	agentbot() { return 42; }
-
-	cmd_full_update >/dev/null 2>&1 || rc=$?
-	[[ "$rc" -eq 42 ]]
 )
 
 test_missing_agentbot_is_reported_not_ignored() (
@@ -491,12 +431,9 @@ expect_success 'a failed update step does not skip Agentbot' test_a_failed_updat
 expect_success 'a failed update step is still reported without Agentbot' test_a_failed_update_step_is_reported_without_agentbot_too
 expect_success 'install runs between the repository gate and downstream updates' test_install_runs_between_the_repository_gate_and_downstream_updates
 expect_success 'full-update runs Dotfiles, then one Agentbot full run' test_success_runs_dotfiles_then_agentbot_full
-expect_success 'a legacy Agentbot bootstraps once before full' test_legacy_agentbot_bootstraps_once_before_full
-expect_success 'an incompatible Agentbot stops after one bootstrap attempt' test_agentbot_bootstrap_stops_if_full_is_still_unavailable
 expect_success 'Dotfiles repository change restarts once and a second change stops' test_dotfiles_change_restarts_once_and_second_change_stops
 expect_success 'Agentbot repository change stops with rerun guidance' test_agentbot_repository_change_stops_with_guidance
 expect_success 'Agentbot failure status propagates unchanged' test_agentbot_failure_propagates_its_status
-expect_success 'Agentbot capability failure status propagates unchanged' test_agentbot_capability_failure_propagates_its_status
 expect_success 'a missing agentbot is reported, not silently skipped' test_missing_agentbot_is_reported_not_ignored
 test_full_update_module_set_is_closed_over_its_own_references() {
 	# L3: the full-update loader is a hand-maintained list. It already missed
