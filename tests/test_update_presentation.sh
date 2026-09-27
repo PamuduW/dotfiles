@@ -533,18 +533,6 @@ test_retained_capability_coverage() {
 	declare -F cmd_restow >/dev/null 2>&1
 }
 
-test_removed_commands_have_guidance() {
-	local cmd output rc
-	for cmd in summary upgrade self; do
-		set +e
-		output="$("$REPO_DIR/bin/bin/dotfiles" "$cmd" 2>&1)"
-		rc=$?
-		set -e
-		[[ "$rc" -ne 0 ]] || return 1
-		case "$cmd" in summary) [[ "$output" == *'use dotfiles status'* ]] ;; upgrade) [[ "$output" == *'use dotfiles update [--all]'* ]] ;; self) [[ "$output" == *'use dotfiles update'* && "$output" == *restow* ]] ;; esac || return 1
-	done
-}
-
 test_exact_command_set_parity() {
 	source "$REPO_DIR/scripts/lib/command_metadata.sh"
 	local expected=(menu update full-update doctor status commands packages logs restow help) i
@@ -651,7 +639,6 @@ expect_success 'root status rollup has exactly one blank line before the summary
 expect_success 'Bash and Python rollups count every state alike' test_bash_and_python_rollups_count_alike
 expect_success 'CLI and TUI status use the same component-state collector' test_cli_and_tui_status_share_component_collector
 expect_success 'status update and restow retain removed command capabilities' test_retained_capability_coverage
-expect_success 'summary upgrade and self fail with migration guidance' test_removed_commands_have_guidance
 expect_success 'metadata help Command lib and dispatch share ten keys' test_exact_command_set_parity
 expect_success 'the report does not tell the run to run itself' test_the_report_does_not_tell_the_run_to_run_itself
 expect_success 'report title honours NO_COLOR with a palette loaded' test_report_title_honours_no_color_even_with_a_palette_loaded

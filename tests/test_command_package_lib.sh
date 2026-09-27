@@ -53,22 +53,6 @@ test_authoritative_command_metadata() {
 	[[ "${DOTFILES_COMMAND_CLASS[status]}" == read-only ]]
 }
 
-test_removed_commands_report_migration_guidance() {
-	local command output rc
-	for command in summary upgrade self; do
-		set +e
-		output="$("$REPO_DIR/bin/bin/dotfiles" "$command" 2>&1)"
-		rc=$?
-		set -e
-		[[ "$rc" -ne 0 ]] || return 1
-		case "$command" in
-		summary) [[ "$output" == *'dotfiles status'* ]] ;;
-		upgrade) [[ "$output" == *'dotfiles update [--all]'* ]] ;;
-		self) [[ "$output" == *'dotfiles update'* && "$output" == *'dotfiles restow'* ]] ;;
-		esac || return 1
-	done
-}
-
 test_help_commands_and_dispatch_share_metadata() {
 	declare -F dotfiles_command_print_table >/dev/null || return 1
 	local expected_table_file="$TEST_HARNESS_ROOT/commands.expected"
@@ -122,8 +106,7 @@ test_command_lib_documents_full_help_catalog() {
 	output="$(NO_COLOR=1 dotfiles_command_print_table 100)"
 	dotfiles_command_metadata_validate
 	for needle in \
-		'update [--all]' \
-		'--all' \
+		'update [--dry-run]' \
 		'Node.js, npm, Go, and Monaspace' \
 		'DOTFILES_COMPONENTS' \
 		'GITHUB_TOKEN' \
@@ -412,7 +395,6 @@ test_narrow_reports_remain_bounded() {
 expect_success 'command metadata exactly matches the ten-command dispatch contract' test_authoritative_command_metadata
 expect_success 'help, commands output, and dispatch consume authoritative metadata' test_help_commands_and_dispatch_share_metadata
 expect_success 'dispatch parity rejects missing or invalid command handlers' test_dispatch_parity_rejects_missing_or_invalid_handlers
-expect_success 'removed commands fail with migration guidance' test_removed_commands_report_migration_guidance
 expect_success 'report path shortening preserves the fixed detail width' test_report_path_shortening_preserves_exact_width
 expect_success 'Command lib renders all metadata once without side effects' test_command_lib_is_metadata_only
 expect_success 'Command lib documents the full command/config catalog' test_command_lib_documents_full_help_catalog

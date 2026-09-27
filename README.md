@@ -146,9 +146,6 @@ Changes to `/etc/wsl.conf` require `wsl --shutdown` from Windows.
 | `dotfiles commands` | Print authoritative command and configuration metadata |
 | `dotfiles packages` | Print component and apt-package metadata without probing |
 
-`dotfiles update --all` remains a compatibility no-op because one confirmed
-update already selects every managed update.
-
 For non-interactive installation, select stable component keys explicitly:
 
 ```bash

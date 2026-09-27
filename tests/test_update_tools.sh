@@ -58,15 +58,14 @@ test_an_apt_refresh_failure_reports_partial_too() (
 	[[ "${UPGRADE_STEP_RESULT['apt packages']}" == "$UPGRADE_RESULT_FAILED" ]]
 )
 
-test_update_accepts_all_flag_as_a_compatibility_no_op() (
+test_update_rejects_the_retired_all_flag() (
 	local events="$TEST_HARNESS_ROOT/downstream-all-flag.events"
 	: >"$events"
 	_dotfiles_run_update() { printf 'run:%s:%s\n' "$1" "$2" >>"$events"; }
 
 	cmd_update >/dev/null || return 1
-	cmd_update --all >/dev/null || return 1
-	[[ "$(sed -n '1p' "$events")" == "$(sed -n '2p' "$events")" ]] || return 1
-	[[ "$(sed -n '1p' "$events")" == 'run:_dotfiles_confirm_repo_update:false' ]]
+	! cmd_update --all >/dev/null 2>&1 || return 1
+	[[ "$(<"$events")" == 'run:_dotfiles_confirm_repo_update:false' ]]
 )
 
 test_node_probe_uses_nvm_default_when_shell_path_is_stale() (
@@ -732,7 +731,7 @@ expect_success 'status and update share one tool resolver' test_status_and_updat
 expect_success 'downstream execution runs apt refresh first, then every managed step' test_downstream_executes_apt_first_then_every_managed_step
 expect_success 'a failed step reports partial rather than plain failure' test_a_failed_step_reports_partial_rather_than_plain_failure
 expect_success 'an apt refresh failure reports partial too' test_an_apt_refresh_failure_reports_partial_too
-expect_success 'update accepts --all as a compatibility no-op' test_update_accepts_all_flag_as_a_compatibility_no_op
+expect_success 'update rejects the retired --all flag' test_update_rejects_the_retired_all_flag
 expect_success 'Node.js probe follows nvm default instead of a stale shell PATH' test_node_probe_uses_nvm_default_when_shell_path_is_stale
 expect_success 'npm probe reports upgrade current and missing states' test_npm_probe_reports_upgrade_current_and_missing_states
 expect_success 'npm version verification accepts only safe equal or newer versions' test_npm_version_reached_requires_a_safe_equal_or_newer_version

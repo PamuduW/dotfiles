@@ -17,7 +17,7 @@ test_update_all_calls_supported_command() (
 	DOTFILES_DIR="$REPO_DIR"
 	source "$REPO_DIR/bash/.bash_aliases"
 	update-all
-	[[ "$(<"$calls")" == 'update --all' ]]
+	[[ "$(<"$calls")" == 'update' ]]
 )
 
 test_update_codex_routes_through_dotfiles_update() (
@@ -106,7 +106,7 @@ test_action_log_retains_only_the_newest_logs() (
 	[[ ! -e "$probe_dir/log/2026-01-01_00-00-01.log" ]]
 )
 
-check 'update-all calls dotfiles update --all' test_update_all_calls_supported_command
+check 'update-all calls dotfiles update' test_update_all_calls_supported_command
 check 'update-codex routes through the guarded Dotfiles update workflow' test_update_codex_routes_through_dotfiles_update
 check 'update-copilot alias is absent' test_update_copilot_alias_is_absent
 check '.bashrc registers the Dotfiles prompt hook only once' test_bashrc_registers_prompt_hook_once

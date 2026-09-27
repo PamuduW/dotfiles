@@ -102,14 +102,14 @@ alias aptup='sudo apt update && sudo apt upgrade -y'
 alias aptclean='sudo apt autoremove -y && sudo apt autoclean'
 
 # ------------------------------------
-# System/CLI updates — see also: dotfiles update | dotfiles upgrade
+# System/CLI updates — see also: dotfiles update | dotfiles fu
 # ------------------------------------
 alias update-cursor='agent update'
 alias update-codex='dotfiles update'
 alias update-claude='claude update'
 
 update-all() {
-	dotfiles update --all
+	dotfiles update
 }
 
 # ------------------------------------

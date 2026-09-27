@@ -13,7 +13,6 @@ dotfiles doctor
 `status` and `doctor` are local and read-only. `update --dry-run` prints the
 captured update report and stops before downstream changes. `update` performs
 the repository gate and, after confirmation, applies every managed update.
-`--all` is accepted for compatibility but selects nothing additional.
 
 ## Repository gate
 

@@ -281,10 +281,8 @@ test_install_mode_goes_straight_to_component_selection() (
 
 	[[ "$(<"$calls")" == $'install-action\nflow' ]] || return 1
 
-	# And the retired flag says where it went rather than reading as a typo.
-	local retired
-	retired="$(bash "$REPO_DIR/scripts/install.sh" --initial 2>&1)" && return 1
-	[[ "$retired" == *'--initial has been removed'* && "$retired" == *'--install'* ]]
+	# The retired --initial flag is now just an unknown option.
+	! bash "$REPO_DIR/scripts/install.sh" --initial >/dev/null 2>&1
 )
 
 check 'install mode goes straight to component selection' test_install_mode_goes_straight_to_component_selection

@@ -155,9 +155,7 @@ choose_targets() {
 
 # --- repository acquisition --------------------------------------------------
 
-# Accept every spelling of the same GitHub repository, including the name it
-# used before the rename: GitHub redirects the old URL, so an existing checkout
-# legitimately still carries it.
+# Accept every spelling of the same GitHub repository.
 remote_matches() {
 	local remote="$1" url="$2" path
 	path="${url#https://github.com/}"
@@ -169,19 +167,6 @@ remote_matches() {
 		"git@github.com:${path}" "git@github.com:${path}.git"
 		"ssh://git@github.com/${path}" "ssh://git@github.com/${path}.git"
 	)
-	# legacy repository name: accepted on purpose so a checkout made before the
-	# rename is adopted rather than rejected. GitHub still redirects it.
-	local legacy='agent_bootstrap'
-	local owner
-	case "$path" in
-	*/agentbot)
-		owner="${path%/agentbot}"
-		accepted+=(
-			"https://github.com/${owner}/${legacy}" "https://github.com/${owner}/${legacy}.git"
-			"git@github.com:${owner}/${legacy}" "git@github.com:${owner}/${legacy}.git"
-		)
-		;;
-	esac
 	local candidate
 	for candidate in "${accepted[@]}"; do
 		[[ "$remote" == "$candidate" ]] && return 0

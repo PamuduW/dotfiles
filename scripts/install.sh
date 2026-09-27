@@ -158,16 +158,6 @@ main() {
 
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
-		--initial)
-			# Retired on 2026-09-09. It opened a two-entry submenu -- check
-			# status, run setup -- that the main menu already offers, and
-			# non-interactively it did exactly what --install does. Named
-			# explicitly rather than falling into "unknown option", because an
-			# operator who learned this flag deserves to be told where it went.
-			echo "--initial has been removed; use --install for component selection," >&2
-			echo "or run ./install.sh with no options for the menu." >&2
-			exit 1
-			;;
 		--install)
 			mode="install"
 			shift

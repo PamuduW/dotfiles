@@ -56,19 +56,14 @@ test_docker_merge_temp_file_uses_sudo_boundary() {
 		grep -Fq 'sudo rm -f "$source_file"' "$installer"
 }
 
-test_removed_commands_have_migration_guidance() {
+test_removed_commands_are_unknown() {
 	local cmd output rc
 	for cmd in summary upgrade self; do
 		set +e
 		output="$($ROOT/bin/bin/dotfiles "$cmd" 2>&1)"
 		rc=$?
 		set -e
-		[[ "$rc" -ne 0 ]] || return 1
-		case "$cmd" in
-		summary) [[ "$output" == *'use dotfiles status'* ]] || return 1 ;;
-		upgrade) [[ "$output" == *'use dotfiles update'* ]] || return 1 ;;
-		self) [[ "$output" == *'use dotfiles update'* && "$output" == *'restow'* ]] || return 1 ;;
-		esac
+		[[ "$rc" -ne 0 && "$output" == *'Unknown command'* ]] || return 1
 	done
 }
 
@@ -214,7 +209,7 @@ main() {
 	else
 		fail 'Docker restart was not attempted'
 	fi
-	expect_success 'removed dotfiles commands have migration guidance' test_removed_commands_have_migration_guidance
+	expect_success 'removed dotfiles commands are unknown' test_removed_commands_are_unknown
 	expect_success 'removed dotfiles commands are absent from help' test_help_omits_removed_commands
 	expect_success 'report separator has no stray trailing dash' test_report_separator_has_no_stray_trailing_dash
 
