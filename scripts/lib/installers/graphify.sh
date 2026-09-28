@@ -21,7 +21,7 @@ check_graphify_cli() {
 }
 
 upgrade_graphify_cli() {
-	local uv_cmd before after
+	local uv_cmd before after first status=0
 	if [[ "$(graphify_installed_version)" == "not installed" ]]; then
 		log_skip 'Graphify CLI not installed'
 		if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set skipped; fi
@@ -34,10 +34,21 @@ upgrade_graphify_cli() {
 	fi
 	uv_cmd="$(graphify_uv_command)" || return 1
 	before="$(graphify_installed_version)"
-	if ! _run_quiet_command 'uv tool upgrade graphifyy' "$uv_cmd" tool upgrade graphifyy; then
+	# On a network that re-signs HTTPS (a work laptop) the first attempt always
+	# fails and the retry with the system certificate store is the path that
+	# works, so the first error is shown only if the retry fails too.
+	first="$(mktemp)"
+	if ! "$uv_cmd" tool upgrade graphifyy >"$first" 2>&1; then
 		_run_quiet_command 'uv tool upgrade graphifyy --system-certs' \
-			"$uv_cmd" tool upgrade graphifyy --system-certs || return $?
+			"$uv_cmd" tool upgrade graphifyy --system-certs || status=$?
+		if ((status != 0)); then
+			echo "  The first attempt, without --system-certs:" >&2
+			sed 's/^/    /' "$first" >&2
+			rm -f -- "$first"
+			return "$status"
+		fi
 	fi
+	rm -f -- "$first"
 	after="$(graphify_installed_version)"
 	# The summary said "checked/no change" for a run that had just moved
 	# Graphify to a new release.

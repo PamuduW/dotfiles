@@ -433,6 +433,24 @@ test_graphify_upgrade_retries_with_system_certs_after_failure() (
 	grep -Fq 'Graphify CLI already current' <<<"$output"
 )
 
+test_graphify_first_attempt_error_is_quiet_when_the_retry_works() (
+	local output
+	graphify() { [[ "$1" == --version ]] && printf 'graphify 1.2.3\n'; }
+	uv() {
+		case "$*" in
+		'tool list') printf '%s\n' 'graphifyy v1.2.3' ;;
+		'tool upgrade graphifyy')
+			echo 'invalid peer certificate: UnknownIssuer' >&2
+			return 2
+			;;
+		'tool upgrade graphifyy --system-certs') return 0 ;;
+		*) return 97 ;;
+		esac
+	}
+	output="$(upgrade_graphify_cli 2>&1)" || return 1
+	[[ "$output" != *UnknownIssuer* && "$output" != *'Error during'* ]]
+)
+
 test_graphify_upgrade_failure_has_copyable_retry_command() (
 	local output calls="$TEST_HARNESS_ROOT/graphify-failure.calls"
 	: >"$calls"
@@ -771,6 +789,7 @@ expect_success 'Boost update reconciles only a Dotfiles-owned binary' test_boost
 expect_success 'Graphify update uses uv tool upgrade' test_graphify_upgrade_uses_uv_tool_upgrade
 expect_success 'Graphify update with nothing new is already current' test_graphify_upgrade_with_nothing_new_is_already_current
 expect_success 'Graphify update retries with system certificates after failure' test_graphify_upgrade_retries_with_system_certs_after_failure
+expect_success 'Graphify first-attempt error is quiet when the retry works' test_graphify_first_attempt_error_is_quiet_when_the_retry_works
 expect_success 'Graphify update failures include a copyable retry command' test_graphify_upgrade_failure_has_copyable_retry_command
 expect_success 'upgrade step marks failures in red with retry command' test_upgrade_step_marks_failures_in_red_with_retry_command
 expect_success 'upgrade step omits failure marker after success' test_upgrade_step_omits_failure_marker_after_success
