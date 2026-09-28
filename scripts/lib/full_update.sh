@@ -52,6 +52,12 @@ full_update_select_applied_components() {
 			continue
 		fi
 		result="${probe_results[$key]:-missing}"
+		if [[ "$result" == check ]]; then
+			# One more look, with more time: a probe that ran out of time at the
+			# start of a busy run (Boost's did, once) reinstalled a current tool.
+			result="$(COMP_PROBE_TIMEOUT_SECONDS=10 comp_probe "$key")"
+			result="${result%%|*}"
+		fi
 		case "$result" in
 		installed | configured)
 			COMP_ON["$key"]=1

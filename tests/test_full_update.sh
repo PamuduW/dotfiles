@@ -188,6 +188,7 @@ test_an_unverifiable_component_is_reinstalled_and_said_so() (
 		local -n out="$1"
 		out=([solid]=installed [unverified]=check [gone]=missing)
 	}
+	comp_probe() { printf 'check|still no verdict\n'; }
 	run_install() {
 		local key
 		for key in "${COMP_KEYS[@]}"; do
@@ -202,6 +203,35 @@ test_an_unverifiable_component_is_reinstalled_and_said_so() (
 	[[ "$output" == *'could not verify, reinstalling anyway: unverified'* ]] || return 1
 	# Only the guess is named, not everything that was installed.
 	[[ "$output" != *solid* ]]
+)
+
+test_a_probe_that_ran_out_of_time_is_asked_again_before_reinstalling() (
+	# Boost's probe timed out once at the start of a busy run, and a current
+	# Boost was reinstalled and named as unverified.
+	local installed="$TEST_HARNESS_ROOT/full-update-retry.installed"
+	local timeouts="$TEST_HARNESS_ROOT/full-update-retry.timeouts"
+	: >"$installed"
+	COMP_KEYS=(boost_cli)
+	declare -A COMP_ON=()
+	collect_component_probe_results() {
+		local -n out="$1"
+		out=([boost_cli]=check)
+	}
+	comp_probe() {
+		printf '%s\n' "${COMP_PROBE_TIMEOUT_SECONDS:-}" >"$timeouts"
+		printf 'installed|boost v1 (Dotfiles managed)\n'
+	}
+	run_install() {
+		[[ "${COMP_ON[boost_cli]}" -eq 1 ]] && printf 'boost_cli\n' >>"$installed"
+		return 0
+	}
+	local output
+	full_update_select_applied_components
+	[[ "${COMP_ON[boost_cli]}" -eq 0 ]] || return 1
+	[[ "$(<"$timeouts")" == 10 ]] || return 1
+	output="$(full_update_install_applied_components)" || return 1
+	[[ ! -s "$installed" ]] || return 1
+	[[ "$output" != *'could not verify'* ]]
 )
 
 test_components_needing_attention_do_not_stop_the_update() (
@@ -426,6 +456,7 @@ expect_success 'operator-input components are never installed by full-update' te
 expect_success 'full-update installs only components that probe as present' test_full_update_installs_only_components_that_probe_as_present
 expect_success 'full-update leaves version upkeep to the update steps' test_full_update_leaves_version_upkeep_to_the_update_steps
 expect_success 'an unverifiable component is reinstalled and said so' test_an_unverifiable_component_is_reinstalled_and_said_so
+expect_success 'a probe that ran out of time is asked again before reinstalling' test_a_probe_that_ran_out_of_time_is_asked_again_before_reinstalling
 expect_success 'components needing attention do not stop the update' test_components_needing_attention_do_not_stop_the_update
 expect_success 'a failed update step does not skip Agentbot' test_a_failed_update_step_does_not_skip_agentbot
 expect_success 'a failed update step is still reported without Agentbot' test_a_failed_update_step_is_reported_without_agentbot_too

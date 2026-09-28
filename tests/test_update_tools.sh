@@ -370,8 +370,10 @@ test_boost_update_reconciles_only_dotfiles_owned_binary() (
 
 test_graphify_upgrade_uses_uv_tool_upgrade() (
 	local output calls="$TEST_HARNESS_ROOT/graphify-upgrade.calls"
+	local release="$TEST_HARNESS_ROOT/graphify-upgrade.version"
 	: >"$calls"
-	graphify() { [[ "$1" == --version ]] && printf 'graphify 1.2.3\n'; }
+	printf 'graphify 1.2.3\n' >"$release"
+	graphify() { [[ "$1" == --version ]] && cat "$release"; }
 	agentbot() {
 		printf 'agentbot:%s\n' "$*" >>"$calls"
 		return 97
@@ -380,15 +382,35 @@ test_graphify_upgrade_uses_uv_tool_upgrade() (
 		printf 'uv:%s\n' "$*" >>"$calls"
 		case "$*" in
 		'tool list') printf '%s\n' 'graphifyy v1.2.3' ;;
+		'tool upgrade graphifyy') printf 'graphify 1.2.4\n' >"$release" ;;
+		*) return 97 ;;
+		esac
+	}
+	upgrade_result_set() { printf 'result:%s\n' "$1" >>"$calls"; }
+	output="$(upgrade_graphify_cli)" || return 1
+	grep -Fqx 'uv:tool upgrade graphifyy' "$calls" || return 1
+	! grep -Fq 'agentbot:' "$calls" || return 1
+	# A new release is an update, not "checked/no change".
+	grep -Fq '[OK] Graphify CLI updated (graphify 1.2.3 -> graphify 1.2.4)' <<<"$output" || return 1
+	grep -Fq "run 'agentbot update' to refresh its skill" <<<"$output" || return 1
+	grep -Fqx 'result:updated' "$calls"
+)
+
+test_graphify_upgrade_with_nothing_new_is_already_current() (
+	local output calls="$TEST_HARNESS_ROOT/graphify-current.calls"
+	: >"$calls"
+	graphify() { [[ "$1" == --version ]] && printf 'graphify 1.2.3\n'; }
+	uv() {
+		case "$*" in
+		'tool list') printf '%s\n' 'graphifyy v1.2.3' ;;
 		'tool upgrade graphifyy') return 0 ;;
 		*) return 97 ;;
 		esac
 	}
+	upgrade_result_set() { printf 'result:%s\n' "$1" >>"$calls"; }
 	output="$(upgrade_graphify_cli)" || return 1
-	grep -Fqx 'uv:tool upgrade graphifyy' "$calls" || return 1
-	! grep -Fq 'agentbot:' "$calls" || return 1
-	grep -Fq '[OK]' <<<"$output" || return 1
-	grep -Fq "run 'agentbot update' to refresh its skill" <<<"$output"
+	grep -Fq 'Graphify CLI already current (graphify 1.2.3)' <<<"$output" || return 1
+	grep -Fqx 'result:already-current' "$calls"
 )
 
 test_graphify_upgrade_retries_with_system_certs_after_failure() (
@@ -408,7 +430,7 @@ test_graphify_upgrade_retries_with_system_certs_after_failure() (
 	[[ "$(sed -n '2p' "$calls")" == 'uv:tool upgrade graphifyy' ]] || return 1
 	[[ "$(sed -n '3p' "$calls")" == 'uv:tool upgrade graphifyy --system-certs' ]] || return 1
 	[[ "$(wc -l <"$calls")" -eq 3 ]] || return 1
-	grep -Fq "run 'agentbot update' to refresh its skill" <<<"$output"
+	grep -Fq 'Graphify CLI already current' <<<"$output"
 )
 
 test_graphify_upgrade_failure_has_copyable_retry_command() (
@@ -747,6 +769,7 @@ expect_success 'Graphify update probe skips an absent CLI' test_graphify_probe_s
 expect_success 'Boost probe reports managed external and absent states' test_boost_probe_reports_managed_external_and_absent_states
 expect_success 'Boost update reconciles only a Dotfiles-owned binary' test_boost_update_reconciles_only_dotfiles_owned_binary
 expect_success 'Graphify update uses uv tool upgrade' test_graphify_upgrade_uses_uv_tool_upgrade
+expect_success 'Graphify update with nothing new is already current' test_graphify_upgrade_with_nothing_new_is_already_current
 expect_success 'Graphify update retries with system certificates after failure' test_graphify_upgrade_retries_with_system_certs_after_failure
 expect_success 'Graphify update failures include a copyable retry command' test_graphify_upgrade_failure_has_copyable_retry_command
 expect_success 'upgrade step marks failures in red with retry command' test_upgrade_step_marks_failures_in_red_with_retry_command
