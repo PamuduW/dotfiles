@@ -181,6 +181,17 @@ upgrade_boost_cli() {
 		if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set skipped; fi
 		return 0
 	fi
+	local before after
+	before="$(boost_installed_tag 2>/dev/null || true)"
 	boost_sync_latest_release || return $?
-	if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set checked-no-change; fi
+	after="$(boost_installed_tag 2>/dev/null || true)"
+	# The summary said "checked/no change" for a run that had just installed a
+	# new release. Its own lines already said which, so only the result moves.
+	if declare -F upgrade_result_set >/dev/null 2>&1; then
+		if [[ "$after" != "$before" ]]; then
+			upgrade_result_set updated
+		else
+			upgrade_result_set already-current
+		fi
+	fi
 }

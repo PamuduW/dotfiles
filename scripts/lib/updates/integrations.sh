@@ -38,7 +38,7 @@ check_cursor_cli() {
 }
 
 upgrade_cursor_cli() {
-	local executable='' update_rc=0 fallback_rc=0
+	local executable='' update_rc=0 fallback_rc=0 before after
 	# Through the resolver, which rejects Windows interop paths and covers the
 	# ~/.local/bin fallback. `cursor` is not a candidate at all: it is the
 	# editor launcher, and appendWindowsPath resolves it to the Windows app, so
@@ -55,10 +55,10 @@ upgrade_cursor_cli() {
 	# An "unauthenticated" error block above a step that went on to reinstall
 	# successfully reads as a broken run. The warning below carries the status,
 	# and a fallback that also fails prints its own output.
+	before="$(cursor_installed_version)"
 	"$executable" update >/dev/null 2>&1 || update_rc=$?
 	if [[ $update_rc -eq 0 ]]; then
-		log_ok "Cursor CLI checked ($(cursor_installed_version))"
-		upgrade_result_set checked-no-change
+		_upgrade_report_version_change 'Cursor CLI' "$before" "$(cursor_installed_version)"
 		return 0
 	fi
 	log_warn "Cursor CLI self-update failed (exit $update_rc); retrying with the official installer"
@@ -323,9 +323,10 @@ upgrade_claude_cli() {
 		upgrade_result_set skipped
 		return 0
 	fi
+	local before
+	before="$(claude_installed_version)"
 	_run_quiet_command 'claude update' "$executable" update || return $?
-	log_ok "Claude CLI checked ($(claude_installed_version))"
-	upgrade_result_set checked-no-change
+	_upgrade_report_version_change 'Claude CLI' "$before" "$(claude_installed_version)"
 }
 
 # --- lazygit ---

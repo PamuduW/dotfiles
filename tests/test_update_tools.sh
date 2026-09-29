@@ -596,6 +596,30 @@ test_cursor_update_falls_back_to_official_installer() (
 	! grep -Fq '>> FAILED' "$output"
 )
 
+test_a_self_update_is_reported_by_its_versions() (
+	# 2026-09-29: the summary said "checked/no change" for a run that had just
+	# moved the Cursor CLI and Boost to new releases.
+	local label='Cursor CLI' version_file="$TEST_HARNESS_ROOT/cursor-version"
+	printf '2026.09.26\n' >"$version_file"
+	export DOTFILES_NO_PROGRESS_ANIMATION=1
+	tool_resolve() { printf 'agent\n'; }
+	agent() { printf '2026.09.28\n' >"$version_file"; }
+	cursor_installed_version() { cat "$version_file"; }
+	_run_upgrade_step 'Cursor CLI' 'dotfiles update' upgrade_cursor_cli >/dev/null 2>&1 || return 1
+	[[ "${UPGRADE_STEP_RESULT[$label]:-}" == updated ]] || return 1
+	_run_upgrade_step 'Cursor CLI' 'dotfiles update' upgrade_cursor_cli >/dev/null 2>&1 || return 1
+	[[ "${UPGRADE_STEP_RESULT[$label]:-}" == already-current ]] || return 1
+
+	local tag_file="$TEST_HARNESS_ROOT/boost-tag"
+	printf 'v0.13.28\n' >"$tag_file"
+	boost_command() { printf '%s\n' "$HOME/.local/bin/boost"; }
+	boost_cli_is_dotfiles_owned() { return 0; }
+	boost_installed_tag() { cat "$tag_file"; }
+	boost_sync_latest_release() { printf 'v0.13.30\n' >"$tag_file"; }
+	_run_upgrade_step 'Boost CLI' 'dotfiles update' upgrade_boost_cli >/dev/null 2>&1 || return 1
+	[[ "${UPGRADE_STEP_RESULT['Boost CLI']:-}" == updated ]]
+)
+
 test_a_windows_cursor_is_never_executed() (
 	# Break caught: the update resolved `cursor` with a bare `command -v`, which
 	# under appendWindowsPath is the Windows editor, and then ran
@@ -797,6 +821,7 @@ expect_success 'Node.js upgrade stops when nvm install fails' test_node_upgrade_
 expect_success 'Go upgrade stops when asdf install fails' test_go_upgrade_stops_when_asdf_install_fails
 expect_success 'Go reads asdf from where the installer put it' test_go_reads_asdf_from_where_the_installer_put_it
 expect_success 'Cursor update falls back to the official installer after agent update failure' test_cursor_update_falls_back_to_official_installer
+expect_success 'a self-update is reported by its versions' test_a_self_update_is_reported_by_its_versions
 expect_success 'a Windows cursor is never executed' test_a_windows_cursor_is_never_executed
 expect_success 'the apt upgrade is quiet and reported as updated' test_the_apt_upgrade_is_quiet_and_reported_as_updated
 expect_success 'a failed apt upgrade still shows its output' test_a_failed_apt_upgrade_still_shows_its_output

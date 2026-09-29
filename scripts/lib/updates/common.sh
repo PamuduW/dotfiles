@@ -63,6 +63,20 @@ _upgrade_step_close() {
 	esac
 }
 
+# A self-updating tool reports no result of its own, so the versions either
+# side of its update decide it: the summary said "checked/no change" for runs
+# that had just moved Cursor or Claude to a new release.
+_upgrade_report_version_change() {
+	local label="$1" before="$2" after="$3"
+	if [[ "$after" != "$before" ]]; then
+		log_ok "$label updated ($before -> $after)"
+		upgrade_result_set updated
+	else
+		log_skip "$label already current ($after)"
+		upgrade_result_set already-current
+	fi
+}
+
 # The rule separates one component from the next, so the first thing a section
 # prints must not be one: the install screen opens on its first step, not on a
 # rule with nothing above it.
