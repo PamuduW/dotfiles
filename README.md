@@ -56,7 +56,11 @@ destination that cannot be used safely stops the run with a report rather than
 a second question. The one exception is your memory vault, which the script
 cannot guess: when Agentbot is installed and no vault is configured, it asks for
 the vault's Git URL or an existing folder (Enter skips), then sets it up with
-its commit and push checks.
+its commit and push checks. The run ends with one Agentbot Doctor. The
+component selectors shape this first install only: every later update keeps
+all components current. Backing out of Agentbot's selector skips its update
+and the memory step too, and a failed Agentbot phase makes the script exit
+non-zero.
 
 To read the script before running it, or on a machine that already has Git:
 
@@ -209,7 +213,14 @@ The command re-applies the components the probes report as already applied
 (leaving version upkeep to the update steps), updates every managed component,
 verifies the resolved installed checkouts, runs `agentbot full` (Agentbot's one
 update pass once installed), and finishes with both Doctors. It closes on a
-timing block naming each of its sections.
+timing block naming each of its sections. A component that needs attention
+at any step, install included, turns the final line into "needs attention".
+
+Only `dotfiles full-update` (and the bootstrap) reach this end state. The
+narrower menu entries do only their part: Dotfiles **Install** installs the
+components you pick, Dotfiles **Update** runs the update steps, Agentbot
+**Install** installs its selected components, and Agentbot **Update** runs its
+update pass; none of them runs the other product or the postflight Doctors.
 
 ### Start optional services
 
