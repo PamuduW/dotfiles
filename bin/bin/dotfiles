@@ -84,6 +84,7 @@ _dotfiles_load_update_modules() {
 		"${DOTFILES_DIR}/scripts/lib/installers/cli_tools.sh" \
 		"${DOTFILES_DIR}/scripts/lib/installers/graphify.sh" \
 		"${DOTFILES_DIR}/scripts/lib/installers/boost.sh" \
+		"${DOTFILES_DIR}/scripts/lib/installers/obsidian.sh" \
 		"${DOTFILES_DIR}/scripts/lib/action_log.sh" \
 		"${DOTFILES_DIR}/scripts/lib/update_components.sh" \
 		"${DOTFILES_DIR}/scripts/lib/update_workflow.sh"; do
@@ -312,16 +313,6 @@ cmd_menu() {
 	exec bash "$installer" "$@"
 }
 
-removed_command_guidance() {
-	case "$1" in
-	summary) _err 'Command removed; use dotfiles status.' ;;
-	upgrade) _err 'Command removed; use dotfiles update [--all].' ;;
-	self) _err 'Command removed; use dotfiles update (or dotfiles restow for link-only work).' ;;
-	*) return 1 ;;
-	esac
-	return 0
-}
-
 cmd_help() {
 	cat <<EOF
   Usage: dotfiles <command> [options]
@@ -357,7 +348,6 @@ main() {
 		dotfiles_load_command "$command" || return 1
 		"$handler" "$@"
 	else
-		if removed_command_guidance "$command"; then exit 1; fi
 		_err "Unknown command: $command"
 		_msg ""
 		cmd_help

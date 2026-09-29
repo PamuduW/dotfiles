@@ -58,7 +58,7 @@ reset_request() {
 	TEST_CURL_STDOUT='payload'
 	TEST_CURL_RC=0
 	export TEST_CURL_STDOUT TEST_CURL_RC
-	rm -rf -- "$XDG_CONFIG_HOME/agentbot" "$XDG_CONFIG_HOME/agent_bootstrap"
+	rm -rf -- "$XDG_CONFIG_HOME/agentbot"
 }
 
 stateless_token() {
@@ -319,6 +319,7 @@ test_complete_consumer_inventory() {
 		"$REPO_DIR/scripts/lib/installers/fonts.sh"
 		"$REPO_DIR/scripts/lib/installers/cli_tools.sh"
 		"$REPO_DIR/scripts/lib/installers/boost.sh"
+		"$REPO_DIR/scripts/lib/installers/obsidian.sh"
 	)
 	assert_sensitive_urls_use_boundary "${files[@]}" || return 1
 	local found
@@ -343,7 +344,6 @@ test_isolation_and_fake_network() {
 }
 
 test_harness_init
-test_harness_protect_original_path '.config/agent_bootstrap/github.env'
 test_harness_protect_original_path '.config/agentbot/github.env'
 TEST_CURL_AUTH_LOG="$TEST_HARNESS_ROOT/log/curl-auth.log"
 export TEST_CURL_AUTH_LOG

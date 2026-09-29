@@ -96,6 +96,9 @@ test_harness_init() {
 	ln -s -- _test_fake_command "$TEST_FAKE_BIN/git"
 	ln -s -- _test_fake_command "$TEST_FAKE_BIN/curl"
 	ln -s -- _test_fake_command "$TEST_FAKE_BIN/npx"
+	# Denied unless a test configures it: a path that reached the real sudo
+	# could prompt, or act as root on the host (Review 2, R2-13).
+	ln -s -- _test_fake_command "$TEST_FAKE_BIN/sudo"
 
 }
 

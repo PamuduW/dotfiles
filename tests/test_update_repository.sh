@@ -160,7 +160,7 @@ test_cmd_update_executes_outcome_contract() (
 	: >"$events"
 	TEST_GATE_OUTCOME=current
 	replies=yes
-	cmd_update --all >/dev/null || return 1
+	cmd_update >/dev/null || return 1
 	[[ "$(sed -n '4p' "$events")" == confirm:* && "$(sed -n '5p' "$events")" == downstream && "$(sed -n '6p' "$events")" == summary ]] || return 1
 
 	# --yes carries the caller's approval: downstream runs and no question is
@@ -179,7 +179,7 @@ test_cmd_update_executes_outcome_contract() (
 	replies=yes
 	set +e
 	local changed_output
-	changed_output="$(cmd_update --all 2>&1)"
+	changed_output="$(cmd_update 2>&1)"
 	local changed_rc=$?
 	set -e
 	[[ "$changed_rc" -eq 2 ]] || return 1
@@ -200,7 +200,7 @@ test_cmd_update_declined_pull_is_handled_without_failure() (
 		return 1
 	}
 	set +e
-	cmd_update --all >/dev/null 2>&1
+	cmd_update >/dev/null 2>&1
 	local declined_rc=$?
 	set -e
 	[[ "$declined_rc" -eq 0 && "$(<"$events")" == 'gate:shared repo' ]]

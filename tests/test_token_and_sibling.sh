@@ -9,7 +9,6 @@ REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
 # shellcheck disable=SC1091
 source "$TEST_DIR/lib/harness.sh"
 test_harness_init
-test_harness_protect_original_path ".config/agent_bootstrap/github.env"
 test_harness_protect_original_path ".config/agentbot/github.env"
 
 # shellcheck source=scripts/lib/github_token.sh
@@ -42,10 +41,9 @@ make_stateless_token() {
 }
 
 active_dir() { dirname -- "$(github_token_file)"; }
-legacy_file() { printf '%s\n' "$XDG_CONFIG_HOME/agent_bootstrap/github.env"; }
 
 reset_token_state() {
-	rm -rf -- "$XDG_CONFIG_HOME/agentbot" "$XDG_CONFIG_HOME/agent_bootstrap"
+	rm -rf -- "$XDG_CONFIG_HOME/agentbot"
 	unset GITHUB_TOKEN
 }
 
@@ -175,39 +173,6 @@ test_atomic_private_write_replacement_removal_and_unsafe_rejection() (
 	[[ "$(<"$external")" == protected ]] || return 1
 	! github_token_remove 2>>"$stderr" || return 1
 	[[ -L "$(github_token_file)" ]]
-)
-
-test_legacy_migration_matrix() (
-	reset_token_state
-	local one two stderr="$TEST_HARNESS_ROOT/migrate.err"
-	one="$(make_token one)"
-	two="$(make_token two)"
-	github_token_migrate_legacy 2>"$stderr" || return 1
-	[[ ! -e "$(github_token_file)" && ! -s "$stderr" ]] || return 1
-	write_raw_file "$(legacy_file)" "GITHUB_TOKEN=${one}\n"
-	github_token_migrate_legacy 2>"$stderr" || return 1
-	[[ -f "$(github_token_file)" && ! -e "$(legacy_file)" ]] || return 1
-	[[ "$(stat -c %a "$(github_token_file)")" == 600 ]] || return 1
-	reset_token_state
-	write_raw_file "$(github_token_file)" "GITHUB_TOKEN=${one}\n"
-	write_raw_file "$(legacy_file)" "GITHUB_TOKEN=${one}\n"
-	github_token_migrate_legacy 2>"$stderr" || return 1
-	[[ ! -e "$(legacy_file)" ]] || return 1
-	reset_token_state
-	write_raw_file "$(github_token_file)" "GITHUB_TOKEN=${one}\n"
-	write_raw_file "$(legacy_file)" "GITHUB_TOKEN=${two}\n"
-	github_token_migrate_legacy 2>"$stderr" || return 1
-	[[ -e "$(legacy_file)" ]] || return 1
-	[[ "$(<"$(github_token_file)")" == "GITHUB_TOKEN=$one" ]] || return 1
-	[[ "$(wc -l <"$stderr")" -eq 1 ]] || return 1
-	reset_token_state
-	write_raw_file "$(legacy_file)" "GITHUB_TOKEN=short\n"
-	github_token_migrate_legacy 2>"$stderr" || return 1
-	[[ -e "$(legacy_file)" && ! -e "$(github_token_file)" ]] || return 1
-	reset_token_state
-	write_raw_file "$(legacy_file)" "GITHUB_TOKEN=${one}\n" 644
-	github_token_migrate_legacy 2>"$stderr" || return 1
-	[[ -e "$(legacy_file)" && ! -e "$(github_token_file)" ]]
 )
 
 test_canary_never_leaks_outside_confirmed_reveal() (
@@ -387,15 +352,10 @@ test_invalid_saved_state_warns_once_per_menu_session() (
 	done
 )
 
-test_migration_and_export_consolidate_target_warning_per_attempt() (
+test_export_consolidates_target_warning_per_attempt() (
 	reset_token_state
-	local legacy_token stderr="$TEST_HARNESS_ROOT/consolidated.err"
-	legacy_token="$(make_token legacy_warning)"
-	write_raw_file "$(legacy_file)" "GITHUB_TOKEN=${legacy_token}\n"
+	local stderr="$TEST_HARNESS_ROOT/consolidated.err"
 	write_raw_file "$(github_token_file)" 'GITHUB_TOKEN=short\n'
-	github_token_migrate_legacy 2>"$stderr" || return 1
-	[[ "$(wc -l <"$stderr")" -eq 1 ]] || return 1
-	[[ -e "$(legacy_file)" ]] || return 1
 	unset GITHUB_TOKEN
 	github_token_export_if_valid 2>"$stderr" || return 1
 	[[ "$(wc -l <"$stderr")" -eq 1 ]] || return 1
@@ -433,7 +393,6 @@ expect_success 'stateless GitHub App installation tokens round-trip through stri
 expect_success 'wrong mode warns once and continues anonymously' test_wrong_mode_warns_once_and_continues_anonymously
 expect_success 'strict parser rejects malformed content without execution' test_strict_parser_rejects_malformed_content_without_execution
 expect_success 'atomic private write, replacement, removal, and unsafe rejection work' test_atomic_private_write_replacement_removal_and_unsafe_rejection
-expect_success 'legacy migration handles absent, valid, identical, conflict, and unsafe states' test_legacy_migration_matrix
 expect_success 'canary is absent outside confirmed reveal output' test_canary_never_leaks_outside_confirmed_reveal
 expect_success 'hidden entry does not write before save confirmation' test_hidden_entry_requires_save_confirmation
 expect_success 'menu save, entry cancel, remove confirm/cancel, and q preserve state' test_menu_save_cancel_remove_and_q_state_machine
@@ -444,9 +403,9 @@ expect_success 'token screen header, breadcrumb, path, and optional no-scope cop
 expect_success 'token screen separates the action prompt from the options' test_menu_presentation_separates_action_prompt
 expect_success 'token screen uses semantic colors for state and actions' test_menu_presentation_uses_semantic_colors
 expect_success 'invalid saved state warns once across menu redraw and Reveal per session' test_invalid_saved_state_warns_once_per_menu_session
-expect_success 'migration and export consolidate one bad-target warning per attempt' test_migration_and_export_consolidate_target_warning_per_attempt
+expect_success 'export consolidates one bad-target warning per attempt' test_export_consolidates_target_warning_per_attempt
 expect_success 'root github_token hook reaches screen without reorder or extra pause' test_root_hook_reaches_token_menu_without_reordering
-expect_success 'original-home legacy and active token paths remain unchanged' test_original_home_token_paths_remain_unchanged
+expect_success 'the original-home token path remains unchanged' test_original_home_token_paths_remain_unchanged
 expect_success 'the saved token can be checked against GitHub from the menu' test_saved_token_can_be_checked_from_the_menu
 
 finish_tests

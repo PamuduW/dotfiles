@@ -6,6 +6,9 @@ configure_docker_daemon() {
 	# defaults to the real path everywhere else.
 	local daemon_json="${DOCKER_DAEMON_JSON:-/etc/docker/daemon.json}"
 	local tmp_file backup_file merge_status
+	# Read by install_docker: the daemon restarts only when this run wrote the
+	# file. A restart on every full update stopped running containers daily.
+	DOCKER_DAEMON_CHANGED=0
 
 	command -v python3 >/dev/null 2>&1 || {
 		log_warn "Python 3 is required to safely merge /etc/docker/daemon.json; leaving it unchanged"
@@ -119,8 +122,15 @@ PY
 		log_warn "dockerd is unavailable; unable to validate the proposed daemon config before writing it"
 	fi
 
-	sudo install -m 0644 "$tmp_file" "$daemon_json"
+	# Checked here: this runs under `if !`, where errexit does not apply, so an
+	# unchecked failure went on to restart an unchanged daemon.
+	if ! sudo install -m 0644 "$tmp_file" "$daemon_json"; then
+		log_warn "Could not write $daemon_json; leaving the daemon config unchanged"
+		sudo rm -f "$tmp_file"
+		return 1
+	fi
 	sudo rm -f "$tmp_file"
+	DOCKER_DAEMON_CHANGED=1
 	log_ok "Docker daemon logging config safely written to $daemon_json"
 }
 
@@ -199,6 +209,10 @@ DOCKEREOF
 	if ! configure_docker_daemon; then
 		log_warn "Docker daemon configuration was not applied; refusing to restart Docker"
 		return 1
+	fi
+	if [[ "${DOCKER_DAEMON_CHANGED:-0}" != 1 ]]; then
+		log_skip "Docker daemon config unchanged; not restarting Docker"
+		return 0
 	fi
 	if ! restart_docker_service; then
 		log_warn "Docker restart failed after daemon config update"

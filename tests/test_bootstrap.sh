@@ -25,32 +25,6 @@ GIT_CONFIG_GLOBAL="$TEST_HARNESS_ROOT/empty.gitconfig"
 : >"$GIT_CONFIG_GLOBAL"
 export GIT_CONFIG_GLOBAL
 
-# The two installer generations this script has to cope with: one that predates
-# --install and one that offers it.
-_write_installer() {
-	local path="$1" generation="$2"
-	if [[ "$generation" == legacy ]]; then
-		cat >"$path" <<'EOF'
-#!/usr/bin/env bash
-if [[ "${1:-}" == --help ]]; then
-	printf 'Options:\n  --initial\n  --update\n'
-	exit 0
-fi
-printf 'legacy-install %s\n' "$*" >>"$BOOTSTRAP_TEST_LOG"
-EOF
-	else
-		cat >"$path" <<'EOF'
-#!/usr/bin/env bash
-if [[ "${1:-}" == --help ]]; then
-	printf 'Options:\n  --initial\n  --install\n  --update\n'
-	exit 0
-fi
-printf 'dotfiles-install %s\n' "$*" >>"$BOOTSTRAP_TEST_LOG"
-EOF
-	fi
-	chmod +x -- "$path"
-}
-
 # A bare repository standing in for a GitHub remote. Its working tree carries
 # only the entry points bootstrap hands off to.
 make_remote() {
@@ -63,11 +37,6 @@ make_remote() {
 	mkdir -p -- "$work/bin/bin"
 	cat >"$work/install.sh" <<EOF
 #!/usr/bin/env bash
-# A real checkout advertises its modes; bootstrap asks before using one.
-if [[ "\${1:-}" == --help ]]; then
-	printf 'Options:\n  --initial\n  --install\n  --update\n'
-	exit 0
-fi
 printf '$repo_name-install %s\n' "\$*" >>"\$BOOTSTRAP_TEST_LOG"
 # Seam for the restart and failure tests: exit with the code in the file, then
 # reset it so the next invocation succeeds. Each repository may have its own
@@ -88,7 +57,14 @@ EOF
 #!/usr/bin/env bash
 printf '$repo_name-cli %s\n' "\$*" >>"\$BOOTSTRAP_TEST_LOG"
 EOF
-	chmod +x -- "$work/install.sh" "$work/bin/bin/dotfiles"
+	# A launcher that logs its calls and reports no memory vault configured.
+	cat >"$work/bin/agentbot" <<EOF
+#!/usr/bin/env bash
+printf '$repo_name-cli %s\n' "\$*" >>"\$BOOTSTRAP_TEST_LOG"
+[[ "\$1 \$2" == 'memory status' ]] && exit 2
+exit 0
+EOF
+	chmod +x -- "$work/install.sh" "$work/bin/bin/dotfiles" "$work/bin/agentbot"
 	# Every git call is silenced: this function returns the bare path on stdout,
 	# and a single stray line of git output would be captured as part of it.
 	{
@@ -191,7 +167,12 @@ test_both_clones_installs_updates_then_runs_agentbot() (
 	# operator, and every pending apt and npm upgrade was reported and skipped.
 	log_has 'dotfiles-cli update --yes' || return 1
 	log_has 'agentbot-install install' || return 1
-	log_has 'agentbot-install update' || return 1
+	# The plan was the confirmation; without --yes, an update needing one was
+	# only previewed and still recorded as done (Review 2, R2-9).
+	log_has 'agentbot-install update --yes' || return 1
+	# One Doctor, after the memory step (Review 2, R2-11).
+	log_has 'agentbot-cli doctor' || return 1
+	(($(log_line 'agentbot-cli memory status') < $(log_line 'agentbot-cli doctor'))) || return 1
 	# Dotfiles must be fully done before Agentbot starts.
 	local update_at agentbot_at
 	update_at="$(log_line 'dotfiles-cli update')"
@@ -380,6 +361,24 @@ test_agentbot_runs_without_a_second_question() (
 	log_has 'agentbot-install update'
 )
 
+test_a_new_machine_is_offered_its_memory_vault() (
+	# One command sets everything up: the vault is the only thing it cannot
+	# guess, so it asks, once, and Enter skips.
+	setup_machine memory-vault
+	local answers
+	for answers in $'https://github.com/me/agent-memory.git\n' $'\n'; do
+		: >"$BOOTSTRAP_TEST_LOG"
+		rm -rf -- "$MACHINE/home/dotfiles" "$MACHINE/home/agentbot" "$MACHINE/home/dotfiles-shared"
+		BOOTSTRAP_ANSWERS_OVERRIDE="$answers" run_bootstrap 1 >/dev/null 2>&1 || return 1
+		case "$answers" in
+		*github*)
+			log_has "agentbot-cli memory setup --clone https://github.com/me/agent-memory.git --dest $MACHINE/home/agent-memory --yes" || return 1
+			;;
+		*) ! log_has 'memory setup' || return 1 ;;
+		esac
+	done
+)
+
 test_only_the_selection_is_asked() (
 	# One command, one question. Anything else is a prompt for something the
 	# operator has already answered.
@@ -423,6 +422,23 @@ test_a_failed_step_still_prints_a_summary() (
 	# The total is reported so the run answers "how long did that take".
 	[[ "$output" == *'Total '* ]] || return 1
 	[[ "$output" == *'cloned   Dotfiles'* ]]
+)
+
+test_a_failed_agentbot_phase_fails_the_run() (
+	# Review 2, R2-8: `run_agentbot && setup_memory_vault` hid the failure, so
+	# the run printed FAILED and still exited 0.
+	setup_machine agentbot-failed
+	local rc_file="$MACHINE/agentbot-rc"
+	printf '9\n' >"$rc_file"
+
+	local rc=0 output
+	output="$(BOOTSTRAP_ANSWERS_OVERRIDE='' run_bootstrap 1 \
+		BOOTSTRAP_TEST_RC_FILE_agentbot="$rc_file" 2>&1)" || rc=$?
+
+	[[ "$rc" -ne 0 ]] || return 1
+	[[ "$output" == *'FAILED   agentbot install'* ]] || return 1
+	[[ "$output" == *'Summary'* ]] || return 1
+	! log_has 'agentbot-cli memory'
 )
 
 test_component_failures_do_not_abandon_the_remaining_phases() (
@@ -477,11 +493,10 @@ test_agentbot_phase_sees_tools_dotfiles_just_installed() (
 	' _ "$BOOTSTRAP"
 )
 
-# One Agentbot checkout whose launcher either carries the install-menu
-# capability marker or does not, plus a logging install.sh, so the selector
-# branch and its fallback can both be driven directly.
+# One Agentbot checkout with a logging launcher and install.sh, so the
+# selector step can be driven directly.
 _agentbot_checkout() {
-	local root="$1" generation="$2"
+	local root="$1"
 	rm -rf -- "$root"
 	mkdir -p -- "$root/bin"
 	cat >"$root/install.sh" <<'EOF'
@@ -494,7 +509,6 @@ printf 'install.sh %s\n' "$*" >>"$BOOTSTRAP_TEST_LOG"
 EOF
 	{
 		printf '#!/usr/bin/env bash\n'
-		[[ "$generation" == menu ]] && printf '# capability: install-menu\n'
 		printf 'printf "launcher %%s\\n" "$*" >>"$BOOTSTRAP_TEST_LOG"\n'
 		printf 'exit "${BOOTSTRAP_TEST_LAUNCHER_RC:-0}"\n'
 	} >"$root/bin/agentbot"
@@ -528,20 +542,10 @@ test_the_install_step_opens_the_selector_not_the_whole_menu() (
 	local checkout="$TEST_HARNESS_ROOT/agentbot-menu"
 	BOOTSTRAP_TEST_LOG="$TEST_HARNESS_ROOT/agentbot-menu.log"
 	: >"$BOOTSTRAP_TEST_LOG"
-	_agentbot_checkout "$checkout" menu
+	_agentbot_checkout "$checkout"
 	_run_agentbot_step "$checkout" >/dev/null || return 1
 	grep -Fq 'launcher install --menu' "$BOOTSTRAP_TEST_LOG" || return 1
 	! grep -Eq '^launcher $|^launcher$' "$BOOTSTRAP_TEST_LOG"
-)
-
-test_a_launcher_without_the_selector_falls_back_to_a_plain_install() (
-	local checkout="$TEST_HARNESS_ROOT/agentbot-legacy"
-	BOOTSTRAP_TEST_LOG="$TEST_HARNESS_ROOT/agentbot-legacy.log"
-	: >"$BOOTSTRAP_TEST_LOG"
-	_agentbot_checkout "$checkout" legacy
-	_run_agentbot_step "$checkout" >/dev/null || return 1
-	grep -Fq 'install.sh install' "$BOOTSTRAP_TEST_LOG" || return 1
-	! grep -Fq 'launcher install --menu' "$BOOTSTRAP_TEST_LOG"
 )
 
 test_backing_out_of_the_selector_is_not_recorded_as_an_install() (
@@ -551,12 +555,13 @@ test_backing_out_of_the_selector_is_not_recorded_as_an_install() (
 	local checkout="$TEST_HARNESS_ROOT/agentbot-cancel" output
 	BOOTSTRAP_TEST_LOG="$TEST_HARNESS_ROOT/agentbot-cancel.log"
 	: >"$BOOTSTRAP_TEST_LOG"
-	_agentbot_checkout "$checkout" menu
+	_agentbot_checkout "$checkout"
 	output="$(_run_agentbot_step "$checkout" 4)" || return 1
 	grep -Fq 'cancelled at the selector' <<<"$output" || return 1
 	! grep -Eq '^ *[0-9]+m [0-9]{2}s +agentbot install$' <<<"$output" || return 1
-	# The update still runs: the checkout is there either way.
-	grep -Fq 'install.sh update' "$BOOTSTRAP_TEST_LOG"
+	# Nor the update: it would configure every component the operator just
+	# declined (Review 2, question 1).
+	! grep -Fq 'install.sh update' "$BOOTSTRAP_TEST_LOG"
 )
 
 test_the_summary_prints_exactly_once_before_the_shell_offer() (
@@ -578,88 +583,6 @@ test_a_non_interactive_run_does_not_exec_a_shell() (
 	output="$(BOOTSTRAP_ANSWERS_OVERRIDE=$'Y\nY' run_bootstrap 1 2>&1)" || return 1
 	[[ "$output" != *'Reloading the shell'* ]] || return 1
 	[[ "$output" == *'exec bash -l'* ]]
-)
-
-test_an_older_checkout_falls_back_to_the_mode_it_has() (
-	# Break caught: this script is always fetched fresh but drives a checkout of
-	# any age. It invoked --install on a checkout that predated the flag, whose
-	# argument parser rejected it before reaching the repository gate that would
-	# have updated it -- so the run could never recover on its own.
-	setup_machine legacy-mode
-	# A checkout that only knows --initial.
-	local legacy="$MACHINE/home/dotfiles"
-	run_bootstrap 2 >/dev/null 2>&1 || return 1
-	cat >"$legacy/install.sh" <<'EOF'
-#!/usr/bin/env bash
-if [[ "${1:-}" == --help ]]; then
-	printf 'Options:\n  --initial\n  --update\n'
-	exit 0
-fi
-case "${1:-}" in
---initial) printf 'dotfiles-install %s\n' "$*" >>"$BOOTSTRAP_TEST_LOG" ;;
-*)
-	printf 'Unknown option: %s\n' "$1" >&2
-	exit 1
-	;;
-esac
-EOF
-	chmod +x -- "$legacy/install.sh"
-	# Commit it: the adoption policy refuses a dirty checkout, and rightly so.
-	"$REAL_GIT" -C "$legacy" add -A >/dev/null 2>&1
-	"$REAL_GIT" -C "$legacy" -c user.name=T -c user.email=t@e.invalid \
-		commit -qm 'legacy installer' >/dev/null 2>&1
-	: >"$BOOTSTRAP_TEST_LOG"
-
-	local output
-	output="$(run_bootstrap 2 2>&1)" || return 1
-	[[ "$output" == *'predates direct component selection'* ]] || return 1
-	log_has 'dotfiles-install --initial' || return 1
-	! grep -q -- '--install' "$BOOTSTRAP_TEST_LOG"
-)
-
-test_a_checkout_behind_the_remote_advances_itself() (
-	# Break caught: the legacy fallback handed --initial to an old checkout on
-	# the assumption its repository gate would pull. On a real terminal that
-	# gate sits behind a menu, so the run parked there instead of recovering.
-	setup_machine behind-remote
-	local work="$MACHINE/legacy-work" remote="$MACHINE/remotes/legacy.git"
-	local checkout="$MACHINE/home/dotfiles"
-	rm -rf -- "$checkout"
-
-	# First commit knows only --initial; the second adds --install.
-	mkdir -p -- "$work/bin/bin"
-	printf '#!/usr/bin/env bash\nprintf "dotfiles-cli %%s\\n" "$*" >>"$BOOTSTRAP_TEST_LOG"\n' \
-		>"$work/bin/bin/dotfiles"
-	_write_installer "$work/install.sh" legacy
-	# The checkout must carry this script: a restart execs the copy in it.
-	cp -- "$REPO_DIR/bootstrap.sh" "$work/bootstrap.sh"
-	chmod +x -- "$work/install.sh" "$work/bin/bin/dotfiles" "$work/bootstrap.sh"
-	{
-		"$REAL_GIT" init -q -b main "$work" &&
-			"$REAL_GIT" -C "$work" config user.name T &&
-			"$REAL_GIT" -C "$work" config user.email t@e.invalid &&
-			"$REAL_GIT" -C "$work" add -A &&
-			"$REAL_GIT" -C "$work" commit -qm 'legacy installer' &&
-			"$REAL_GIT" clone -q --bare "$work" "$remote" &&
-			"$REAL_GIT" clone -q "$remote" "$checkout"
-	} >/dev/null 2>&1 || return 1
-
-	_write_installer "$work/install.sh" modern
-	{
-		"$REAL_GIT" -C "$work" commit -qam 'modern installer' &&
-			"$REAL_GIT" -C "$work" push -q "$remote" main
-	} >/dev/null 2>&1 || return 1
-
-	: >"$BOOTSTRAP_TEST_LOG"
-	DOTFILES_REMOTE="$remote"
-	local output
-	output="$(run_bootstrap 2 2>&1)" || return 1
-
-	[[ "$output" == *'predates direct component selection'* ]] || return 1
-	[[ "$output" == *'Restarting'* ]] || return 1
-	# It recovered on its own and then used the mode the newer checkout has.
-	log_has 'dotfiles-install --install' || return 1
-	! grep -q 'legacy-install' "$BOOTSTRAP_TEST_LOG"
 )
 
 test_each_repository_may_restart_once() (
@@ -693,7 +616,7 @@ test_one_repository_restarting_twice_is_still_a_loop() (
 	cat >"$checkout/install.sh" <<'EOF'
 #!/usr/bin/env bash
 if [[ "${1:-}" == --help ]]; then
-	printf 'Options:\n  --initial\n  --install\n  --update\n'
+	printf 'Options:\n  --install\n  --update\n'
 	exit 0
 fi
 printf 'dotfiles-install %s\n' "$*" >>"$BOOTSTRAP_TEST_LOG"
@@ -768,22 +691,21 @@ expect_success 'scripted answers drive the selection prompt' test_scripted_answe
 expect_success 'the plan is shown, not asked' test_the_plan_is_shown_not_asked
 expect_success 'Agentbot runs without a second question' test_agentbot_runs_without_a_second_question
 expect_success 'only the selection is asked' test_only_the_selection_is_asked
+expect_success 'a new machine is offered its memory vault' test_a_new_machine_is_offered_its_memory_vault
 expect_success 'the run reports a duration per phase and a total' test_the_run_reports_a_duration_per_phase_and_a_total
 expect_success 'the start clock survives a restart' test_the_start_clock_survives_a_restart
 expect_success 'a repository update restarts instead of failing' test_a_repository_update_restarts_instead_of_failing
 expect_success 'a failed step still prints a summary' test_a_failed_step_still_prints_a_summary
 expect_success 'component failures do not abandon the remaining phases' test_component_failures_do_not_abandon_the_remaining_phases
 expect_success 'the checkout update is pre-authorized' test_the_checkout_update_is_pre_authorized
-expect_success 'an older checkout falls back to the mode it has' test_an_older_checkout_falls_back_to_the_mode_it_has
-expect_success 'a checkout behind the remote advances itself' test_a_checkout_behind_the_remote_advances_itself
 expect_success 'each repository may restart once' test_each_repository_may_restart_once
 expect_success 'one repository restarting twice is still a loop' test_one_repository_restarting_twice_is_still_a_loop
 expect_success 'the Agentbot phase sees tools Dotfiles just installed' test_agentbot_phase_sees_tools_dotfiles_just_installed
 expect_success 'the install step opens the selector, not the whole menu' test_the_install_step_opens_the_selector_not_the_whole_menu
-expect_success 'a launcher without the selector falls back to a plain install' test_a_launcher_without_the_selector_falls_back_to_a_plain_install
 expect_success 'backing out of the selector is not recorded as an install' test_backing_out_of_the_selector_is_not_recorded_as_an_install
 expect_success 'the summary prints exactly once before the shell offer' test_the_summary_prints_exactly_once_before_the_shell_offer
 expect_success 'a non-interactive run does not exec a shell' test_a_non_interactive_run_does_not_exec_a_shell
+expect_success 'a failed Agentbot phase fails the run' test_a_failed_agentbot_phase_fails_the_run
 
 test_harness_cleanup
 finish_tests

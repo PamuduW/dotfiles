@@ -323,8 +323,14 @@ _apply_repository_update_step() {
 # The apt index refresh, before any component step. It is shared work rather
 # than one component's, so it gets its own rule and step lines.
 _run_apt_index_refresh() {
-	local rc=0
+	local rc=0 now
 	_upgrade_rule_between
+	now="${EPOCHSECONDS:-$(date +%s)}"
+	if [[ "${DOTFILES_APT_INDEX_REFRESHED_AT:-}" =~ ^[0-9]+$ ]] &&
+		((now - DOTFILES_APT_INDEX_REFRESHED_AT < 900)); then
+		log_skip 'apt package index already refreshed in this run'
+		return 0
+	fi
 	log_step 'Refresh apt package index'
 	_run_quiet_command 'apt-get update' sudo apt-get update -qq || rc=$?
 	if ((rc != 0)); then
@@ -345,8 +351,7 @@ _run_apt_index_refresh() {
 # continuing from a checkout that could not be updated is not safe.
 DOTFILES_UPDATE_PARTIAL_RC=4
 
-# One approved update runs every managed step, including the runtimes and fonts
-# that `--all` used to gate. See cmd_update for the compatibility note.
+# One approved update runs every managed step, including the runtimes and fonts.
 _run_update_downstream() {
 	local key label apply retry npm_target apt_refresh_rc=0
 	UPGRADE_STEP_RESULT=()
@@ -459,16 +464,13 @@ cmd_update() {
 		# Bootstrap uses this so a fresh machine finishes current instead of
 		# ending on a list of upgrades nobody applied.
 		--yes) unattended=true ;;
-		# Accepted for compatibility only: one approved update already runs every
-		# managed step, so --all selects nothing extra.
-		--all) ;;
 		-h | --help)
 			cmd_help
 			return 0
 			;;
 		*)
 			_err "Unknown option: $arg"
-			_msg 'Usage: dotfiles update [--all] [--dry-run] [--yes]'
+			_msg 'Usage: dotfiles update [--dry-run] [--yes]'
 			return 1
 			;;
 		esac

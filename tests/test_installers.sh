@@ -105,6 +105,30 @@ test_docker_daemon_config_is_written_one_way_only() (
 	[[ -z "$(find "$etc" -name 'daemon.json.bak.*' -print -quit)" ]]
 )
 
+test_a_failed_daemon_config_write_is_not_a_change() (
+	# Review 2, R2-12: the final `sudo install` was unchecked, so a failed write
+	# still set DOCKER_DAEMON_CHANGED, logged success, and restarted Docker.
+	local machine="$TEST_HARNESS_ROOT/docker-daemon-fail"
+	local fake_bin="$machine/bin" etc="$machine/etc-docker" output rc=0
+	mkdir -p -- "$fake_bin" "$etc"
+	printf '#!/usr/bin/env bash\n[[ "$1" == install ]] && exit 1\nexec "$@"\n' >"$fake_bin/sudo"
+	chmod +x -- "$fake_bin/sudo"
+
+	output="$(
+		export PATH="$fake_bin:$PATH"
+		export DOCKER_DAEMON_JSON="$etc/daemon.json"
+		DOCKER_DAEMON_CHANGED=0
+		log_warn() { :; }
+		log_step() { :; }
+		log_ok() { printf 'WROTE\n'; }
+		configure_docker_daemon || exit $?
+		printf 'changed=%s\n' "$DOCKER_DAEMON_CHANGED"
+	)" || rc=$?
+	[[ "$rc" -ne 0 ]] || return 1
+	[[ "$output" != *WROTE* ]] || return 1
+	[[ ! -e "$etc/daemon.json" ]]
+)
+
 test_git_identity_without_a_name_reports_instead_of_crashing() (
 	# Break caught: apply_git_config read SETUP_GIT_NAME unguarded, so a caller
 	# that never collected it killed the entire run with "unbound variable"
@@ -815,6 +839,7 @@ test_wsl_config_renderer_updates_only_the_requested_section() (
 check 'an unreachable docker does not accuse the container' test_an_unreachable_docker_does_not_accuse_the_container
 check 'force reinstalls what is already present' test_force_reinstalls_what_is_already_present
 check 'docker daemon config is written one way only' test_docker_daemon_config_is_written_one_way_only
+check 'a failed daemon config write is not a change' test_a_failed_daemon_config_write_is_not_a_change
 check 'git identity without a name reports instead of crashing' test_git_identity_without_a_name_reports_instead_of_crashing
 check 'Stow backup includes an existing dotfiles launcher' test_backup_includes_existing_dotfiles_launcher
 check 'Stow backup includes an existing codex-rc helper' test_backup_includes_existing_remote_control_helpers

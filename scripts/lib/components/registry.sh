@@ -217,6 +217,13 @@ comp_define monaspace_fonts \
 	--order 17 \
 	--desc $'Downloads GitHub Monaspace Nerd Fonts to ~/.local/share/fonts/.\nIncludes all five variants with Powerline glyphs and development icons.'
 
+comp_define obsidian \
+	--label 'Obsidian (desktop app via WSLg)' \
+	--plan 'Obsidian' \
+	--detail 'official .deb, SHA-256 verified' \
+	--order 18 \
+	--desc $'Installs the Obsidian desktop app from its official amd64 .deb after verifying\nthe SHA-256 digest GitHub publishes. It opens on the Windows desktop through\nWSLg; skipped when the session has no GUI display.'
+
 comp_define dotfiles \
 	--label 'Apply dotfiles (stow)' \
 	--plan 'Dotfiles' \

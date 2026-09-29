@@ -1,0 +1,30 @@
+# Keep the pinned Action SHAs current.
+#
+# This repository pins `uses:` to a commit SHA rather than a tag, because a tag
+# is mutable and a piped-in Action is a supply-chain hole. A pinned SHA is also
+# frozen: it never picks up the upstream fix. Dependabot is what closes that
+# gap -- it opens a pull request raising the pin, with the new version in the
+# comment, and a human decides.
+#
+# This is the only ecosystem configured, deliberately. Nothing else here pins a
+# version: Node tracks --lts, apt tracks the release, and Python declares a
+# floor rather than a pin. Version updates for those would be Dependabot
+# proposing to pin things this project has decided not to pin.
+#
+# Security updates -- Dependabot opening fix PRs on its own for a vulnerable
+# dependency -- stay off. Alerts are enabled; the response is a decision, not
+# an automatic branch.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: saturday
+      time: "04:30"
+      timezone: Asia/Colombo
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    labels:
+      - dependencies

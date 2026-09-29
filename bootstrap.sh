@@ -155,9 +155,7 @@ choose_targets() {
 
 # --- repository acquisition --------------------------------------------------
 
-# Accept every spelling of the same GitHub repository, including the name it
-# used before the rename: GitHub redirects the old URL, so an existing checkout
-# legitimately still carries it.
+# Accept every spelling of the same GitHub repository.
 remote_matches() {
 	local remote="$1" url="$2" path
 	path="${url#https://github.com/}"
@@ -169,19 +167,6 @@ remote_matches() {
 		"git@github.com:${path}" "git@github.com:${path}.git"
 		"ssh://git@github.com/${path}" "ssh://git@github.com/${path}.git"
 	)
-	# legacy repository name: accepted on purpose so a checkout made before the
-	# rename is adopted rather than rejected. GitHub still redirects it.
-	local legacy='agent_bootstrap'
-	local owner
-	case "$path" in
-	*/agentbot)
-		owner="${path%/agentbot}"
-		accepted+=(
-			"https://github.com/${owner}/${legacy}" "https://github.com/${owner}/${legacy}.git"
-			"git@github.com:${owner}/${legacy}" "git@github.com:${owner}/${legacy}.git"
-		)
-		;;
-	esac
 	local candidate
 	for candidate in "${accepted[@]}"; do
 		[[ "$remote" == "$candidate" ]] && return 0
@@ -318,58 +303,13 @@ DOTFILES_INSTALL_PARTIAL_RC=4
 # phase this script sequences after it.
 DOTFILES_UPDATE_PARTIAL_RC=4
 
-# This script is always fetched fresh, but it drives a checkout of any age, so
-# a flag it knows about may be one the checkout has never heard of. Ask before
-# using it. An older checkout takes --initial -- a flag current Dotfiles no
-# longer has, which is exactly why it is only ever offered to a checkout whose
-# own --help still advertises it. Its repository gate pulls the newer code and
-# restarts this script, and the second pass gets --install.
-# Dotfiles takes the same position for `agentbot full` in full_update.sh.
-dotfiles_install_mode() {
-	if "$DOTFILES_DIR/install.sh" --help 2>/dev/null | grep -Fq -- '--install'; then
-		printf '%s\n' '--install'
-	else
-		printf '%s\n' '--initial'
-	fi
-}
-
-# Fast-forward an adopted checkout. Returns 0 only when it actually moved.
-#
-# Adoption already established that this is a clean checkout of the expected
-# remote, so a fast-forward is the whole of the risk: it refuses anything that
-# is not a straight advance.
-fast_forward_checkout() {
-	local dir="$1" before after
-	before="$(git -C "$dir" rev-parse HEAD 2>/dev/null)" || return 1
-	GIT_TERMINAL_PROMPT=0 git -C "$dir" fetch --quiet origin 2>/dev/null || return 1
-	git -C "$dir" merge --ff-only --quiet FETCH_HEAD 2>/dev/null || return 1
-	after="$(git -C "$dir" rev-parse HEAD 2>/dev/null)" || return 1
-	[[ "$before" != "$after" ]]
-}
-
 run_dotfiles() {
-	local rc=0 mode
-	mode="$(dotfiles_install_mode)"
-	if [[ "$mode" == '--initial' ]]; then
-		# The checkout predates --install, and its own repository gate sits
-		# behind an interactive menu, so handing it --initial just parks the run
-		# on that menu. Advance the checkout here and restart into the script
-		# that matches it.
-		step 'Update Dotfiles checkout'
-		msg '  This checkout predates direct component selection.'
-		if fast_forward_checkout "$DOTFILES_DIR"; then
-			restart_after_repository_update Dotfiles
-			return 1
-		fi
-		msg '  Already current, so the setup menu is what this checkout offers.'
-	fi
+	local rc=0
 	step 'Install Dotfiles'
-	if [[ "$mode" == '--install' ]]; then
-		msg '  The component menu opens next. Nothing outside it is selected for you.'
-	fi
+	msg '  The component menu opens next. Nothing outside it is selected for you.'
 	# Pre-authorize the checkout update: the plan was already confirmed, and a
 	# moved checkout restarts this script rather than proceeding blindly.
-	DOTFILES_REPO_UPDATE_ASSUME_YES=1 "$DOTFILES_DIR/install.sh" "$mode" || rc=$?
+	DOTFILES_REPO_UPDATE_ASSUME_YES=1 "$DOTFILES_DIR/install.sh" --install || rc=$?
 	if ((rc == 2)); then
 		restart_after_repository_update Dotfiles
 		return 1
@@ -403,45 +343,40 @@ run_dotfiles() {
 	fi
 }
 
-# The selector is the launcher's screen, not the backend's, so `install.sh
-# --help` cannot answer whether it is there. The launcher carries a capability
-# marker for exactly this probe; a checkout that predates it falls back to the
-# non-interactive install, which is what this script did before the selector
-# existed.
+# The operator backed out of Agentbot's component selector.
 AGENTBOT_INSTALL_CANCELLED_RC=4
-agentbot_has_install_menu() {
-	grep -Fq '# capability: install-menu' "$AGENTBOT_DIR/bin/agentbot" 2>/dev/null
-}
+AGENTBOT_DECLINED=0
 
 run_agentbot() {
 	local rc=0
 	load_dotfiles_environment
 	agentbot_prerequisites || return 1
 	step 'Install Agentbot'
-	# Roadmap 4.1 gave Agentbot a component selector, so an operator who is
-	# watching gets the same choice Dotfiles offers rather than an
-	# all-or-nothing install. Feature-detected, because this script is always
-	# fetched fresh and may be driving a checkout that predates the selector --
-	# the same position it already takes for `--install` and `agentbot full`.
-	if interactive && agentbot_has_install_menu; then
+	# An operator who is watching gets Agentbot's component selector, the same
+	# choice Dotfiles offers, rather than an all-or-nothing install.
+	if interactive; then
 		# `install --menu`, not a bare launcher call: bare opens Agentbot's main
 		# menu, so this step handed the operator Check Status, Prune Skills and
 		# Quit instead of installing, and recorded whatever they did as
 		# "agentbot install".
-		AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/bin/agentbot" install --menu || rc=$?
+		# The Doctor table waits for the health check that ends the run.
+		AGENTBOT_INSTALL_SHOW_DOCTOR=0 AGENTBOT_INSTALL_CONFIRM=yes \
+			"$AGENTBOT_DIR/bin/agentbot" install --menu || rc=$?
 	else
-		AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" install || rc=$?
+		AGENTBOT_INSTALL_SHOW_DOCTOR=0 AGENTBOT_INSTALL_CONFIRM=yes \
+			"$AGENTBOT_DIR/install.sh" install || rc=$?
 	fi
 	if ((rc == 2)); then
 		restart_after_repository_update Agentbot
 		return 1
 	fi
-	# The operator backed out of the selector. Nothing installed, nothing
-	# broken, and the update below still has a checkout to work on.
+	# The operator backed out of the selector: nothing installed, nothing
+	# broken. The update would configure every component anyway, so it is
+	# skipped too, with the memory and health steps that follow it.
 	if ((rc == AGENTBOT_INSTALL_CANCELLED_RC)); then
-		record 'SKIPPED   agentbot install (cancelled at the selector)'
-		PHASE_STARTED="$SECONDS"
-		rc=0
+		record 'SKIPPED   agentbot install and update (cancelled at the selector)'
+		AGENTBOT_DECLINED=1
+		return 0
 	elif ((rc != 0)); then
 		record 'FAILED   agentbot install'
 		return 1
@@ -449,11 +384,46 @@ run_agentbot() {
 		record_phase 'agentbot install'
 	fi
 	step 'Update Agentbot'
-	AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" update || {
+	# --yes for the same reason as the Dotfiles update: the plan was the
+	# confirmation. Without it a plan needing one ended as a preview, recorded
+	# as done.
+	AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" update --yes || {
 		record 'FAILED   agentbot update'
 		return 1
 	}
 	record_phase 'agentbot update'
+}
+
+# The memory vault is the one piece a new machine cannot guess: it is the
+# user's private repository. Asked only when Agentbot is installed and no vault
+# is configured yet, as free text that Enter skips, so a run without memory
+# stays one question long. A failure is recorded and never fails the run.
+setup_memory_vault() {
+	local launcher="$AGENTBOT_DIR/bin/agentbot" source rc=0
+	[[ -x "$launcher" ]] || return 0
+	"$launcher" memory status >/dev/null 2>&1 || rc=$?
+	((rc == 2)) || return 0 # configured already, or not ours to fix here
+	step 'Memory vault'
+	ask '  Your memory vault: its Git URL, or a folder already on this machine (Enter to skip): ' ''
+	source="$ANSWER"
+	if [[ -z "$source" ]]; then
+		record 'SKIPPED   memory vault (later: agentbot menu, then Memory)'
+		return 0
+	fi
+	rc=0
+	case "$source" in
+	*://* | git@*:*)
+		ask "  Clone it into [$HOME/agent-memory]: " "$HOME/agent-memory"
+		"$launcher" memory setup --clone "$source" --dest "$ANSWER" --yes || rc=$?
+		;;
+	*) "$launcher" memory setup --path "$source" --yes || rc=$? ;;
+	esac
+	if ((rc == 0)); then
+		record_phase 'memory vault'
+	else
+		record 'FAILED   memory vault (retry: agentbot menu, then Memory)'
+	fi
+	return 0
 }
 
 # --- plan and summary --------------------------------------------------------
@@ -510,6 +480,18 @@ print_summary() {
 	fi
 }
 
+# One Doctor, shown once, after the memory vault: the update's own run is a
+# silent gate that rolls it back on errors. A finding here is reported, not a
+# failed setup: the steps themselves succeeded.
+agentbot_health_check() {
+	step 'Health check'
+	if "$AGENTBOT_DIR/bin/agentbot" doctor; then
+		record_phase 'agentbot doctor'
+	else
+		record 'CHECK     agentbot doctor (see the table above)'
+	fi
+}
+
 # The shell that ran this predates everything just installed: the stowed
 # .bashrc, ~/.local/bin, nvm, and the docker group are all invisible to it.
 # Offer a fresh login shell rather than leaving the operator to work out why
@@ -529,6 +511,7 @@ start_new_shell() {
 }
 
 main() {
+	local failed=0
 	# Report whatever happened, including on failure: a run that dies with no
 	# summary leaves the operator guessing which steps ran.
 	trap print_summary EXIT
@@ -559,7 +542,17 @@ main() {
 			msg ''
 			msg '  Dotfiles setup is complete.'
 		fi
-		run_agentbot
+		# Not `run_agentbot && ...`: a failure on the left of && neither stops
+		# the script nor reaches its exit status, so a failed Agentbot phase
+		# ended the run with status 0.
+		if run_agentbot; then
+			if ((AGENTBOT_DECLINED == 0)); then
+				setup_memory_vault
+				agentbot_health_check
+			fi
+		else
+			failed=1
+		fi
 	fi
 
 	# Print the summary here rather than leaving it to the trap: offer_new_shell
@@ -567,6 +560,10 @@ main() {
 	# path that fails before reaching this point.
 	print_summary
 	trap - EXIT
+	if ((failed == 1)); then
+		msg '  Fix the failed step above, then rerun this script.'
+		return 1
+	fi
 	start_new_shell
 }
 

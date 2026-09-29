@@ -67,19 +67,20 @@ shared_repo_status() {
 # --- Ordered update-step registry ---
 # Preview and apply both consume this registry. A step cannot appear in one
 # phase without declaring the handler used by the other phase.
-UPDATE_STEP_KEYS=(apt graphify boost cursor codex claude lazygit lazydocker node npm go monaspace shared repository)
+UPDATE_STEP_KEYS=(apt graphify boost cursor codex claude lazygit lazydocker node npm go monaspace obsidian shared repository)
 declare -gA UPDATE_STEP_LABEL=(
 	[apt]='apt packages' [graphify]='Graphify CLI' [boost]='Boost CLI'
 	[cursor]='Cursor CLI' [codex]='Codex CLI' [claude]='Claude CLI'
 	[lazygit]='lazygit' [lazydocker]='lazydocker'
 	[node]='Node.js (nvm)' [npm]='npm' [go]='Go (asdf)'
-	[monaspace]='Monaspace fonts' [shared]='shared repo' [repository]='dotfiles repo'
+	[monaspace]='Monaspace fonts' [obsidian]='Obsidian' [shared]='shared repo' [repository]='dotfiles repo'
 )
 declare -gA UPDATE_STEP_CHECK=(
 	[apt]=check_apt [graphify]=check_graphify_cli [boost]=check_boost_cli
 	[cursor]=check_cursor_cli [codex]=check_codex_cli [claude]=check_claude_cli
 	[lazygit]=check_lazygit [lazydocker]=check_lazydocker
 	[node]=check_node [npm]=check_npm [go]=check_go [monaspace]=check_monaspace
+	[obsidian]=check_obsidian
 	[shared]=shared_repo_status
 	[repository]=dotfiles_repo_status
 )
@@ -88,7 +89,7 @@ declare -gA UPDATE_STEP_APPLY=(
 	[cursor]=upgrade_cursor_cli [codex]=upgrade_codex_cli [claude]=upgrade_claude_cli
 	[lazygit]=upgrade_lazygit [lazydocker]=upgrade_lazydocker
 	[node]=upgrade_node [npm]=_apply_npm_update_step [go]=upgrade_go
-	[monaspace]=upgrade_monaspace
+	[monaspace]=upgrade_monaspace [obsidian]=upgrade_obsidian
 	[shared]=_apply_repository_update_step [repository]=_apply_repository_update_step
 )
 declare -gA UPDATE_STEP_RETRY=(
@@ -98,6 +99,7 @@ declare -gA UPDATE_STEP_RETRY=(
 	[lazygit]='dotfiles update' [lazydocker]='dotfiles update'
 	[node]='nvm install --lts' [npm]='nvm install-latest-npm'
 	[go]='asdf install golang latest' [monaspace]='dotfiles update'
+	[obsidian]='dotfiles update'
 	[shared]='dotfiles update' [repository]='dotfiles update'
 )
 

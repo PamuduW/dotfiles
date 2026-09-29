@@ -16,6 +16,22 @@ _dotfiles_approve_repo_update() {
 # an unbound SETUP_GIT_NAME. That is initial-setup work.
 FULL_UPDATE_NEVER_INSTALL=(git_identity)
 
+# Components the update phase keeps current by itself. Running their installer
+# first as well installed "Go latest", then checked Go again, every day. They
+# are reinstalled only when their probe cannot tell, or with --force.
+FULL_UPDATE_KEPT_BY_UPDATE_STEPS=(
+	go nodejs lazygit lazydocker cursor_cli codex_cli claude_cli
+	monaspace_fonts graphify_cli boost_cli obsidian
+)
+
+_full_update_kept_by_update_step() {
+	local key="$1" kept
+	for kept in "${FULL_UPDATE_KEPT_BY_UPDATE_STEPS[@]}"; do
+		[[ "$key" == "$kept" ]] && return 0
+	done
+	return 1
+}
+
 _full_update_needs_operator_input() {
 	local key="$1" excluded
 	for excluded in "${FULL_UPDATE_NEVER_INSTALL[@]}"; do
@@ -36,8 +52,19 @@ full_update_select_applied_components() {
 			continue
 		fi
 		result="${probe_results[$key]:-missing}"
+		if [[ "$result" == check ]]; then
+			# One more look, with more time: a probe that ran out of time at the
+			# start of a busy run (Boost's did, once) reinstalled a current tool.
+			result="$(COMP_PROBE_TIMEOUT_SECONDS=10 comp_probe "$key")"
+			result="${result%%|*}"
+		fi
 		case "$result" in
-		installed | configured) COMP_ON["$key"]=1 ;;
+		installed | configured)
+			COMP_ON["$key"]=1
+			if [[ "${DOTFILES_FORCE_REINSTALL:-0}" != 1 ]] && _full_update_kept_by_update_step "$key"; then
+				COMP_ON["$key"]=0
+			fi
+			;;
 		# `check` means the probe could not reach a verdict, not that the
 		# component is absent -- Portainer reads that way in any session that
 		# predates the docker group. Reinstalling is the safe direction, since
@@ -61,9 +88,11 @@ full_update_install_applied_components() {
 	full_update_select_applied_components || return 1
 	run_install || rc=$?
 	# The installer returns a distinct status for "finished, but components need
-	# attention". The update phases after this are independent, so report it and
-	# carry on rather than abandoning the rest of the machine.
+	# attention". The update phases after this are independent, so carry on
+	# rather than abandoning the rest of the machine, but keep it for the
+	# verdict: a later clean Doctor used to end this as "completed".
 	if ((rc == ${DOTFILES_INSTALL_PARTIAL_RC:-4})); then
+		FULL_UPDATE_DOTFILES_DEGRADED=true
 		return 0
 	fi
 	return "$rc"
@@ -214,51 +243,14 @@ full_update_restart_dotfiles() {
 }
 
 # Agentbot owns its install-then-update sequencing and restart budget via
-# `agentbot full`. Older checkouts need one legacy install run so their own
-# repository gate can introduce that command before Dotfiles delegates to it.
+# `agentbot full`.
 full_update_run_agentbot() {
-	local rc=0 capability_rc=0
+	local rc=0
 	command -v agentbot >/dev/null 2>&1 || {
 		_err "Agentbot is not installed or is not available on PATH."
 		return 127
 	}
 	rt_print_header 'Agentbot full' 'Dotfiles › Full update › Agentbot'
-	# The probe's output is captured rather than discarded. Exit 2 is the
-	# answer it asks for -- an older checkout without `agentbot full` -- but
-	# any other failure means Agentbot could not start at all, and throwing its
-	# stderr away printed this heading and nothing else. A shared checkout
-	# newer than that Agentbot did exactly that.
-	local capability_output=''
-	capability_output="$(agentbot help full 2>&1)" || capability_rc=$?
-	case "$capability_rc" in
-	0) ;;
-	2)
-		_msg 'Agentbot checkout is missing agentbot full; updating it once for compatibility.'
-		AGENTBOT_INSTALL_CONFIRM=yes agentbot install || rc=$?
-		case "$rc" in
-		0 | 2) ;;
-		*) return "$rc" ;;
-		esac
-
-		capability_rc=0
-		agentbot help full >/dev/null 2>&1 || capability_rc=$?
-		case "$capability_rc" in
-		0) ;;
-		2)
-			_err 'Agentbot still does not support agentbot full after its compatibility update.'
-			return 1
-			;;
-		*) return "$capability_rc" ;;
-		esac
-		;;
-	*)
-		_err "Agentbot could not run (exit ${capability_rc}):"
-		[[ -n "$capability_output" ]] && printf '%s\n' "$capability_output" >&2
-		return "$capability_rc"
-		;;
-	esac
-
-	rc=0
 	AGENTBOT_INSTALL_CONFIRM=yes agentbot full || rc=$?
 	case "$rc" in
 	0) return 0 ;;
@@ -293,7 +285,7 @@ full_update_postflight() {
 	# Said before the doctor verdicts below, because it is about a step that
 	# already failed rather than about what the health checks just found.
 	if [[ "${FULL_UPDATE_DOTFILES_DEGRADED:-false}" == true ]]; then
-		printf '\n  %sA Dotfiles update step failed; Agentbot still ran. The machine needs attention.%s\n' \
+		printf '\n  %sA Dotfiles install or update step needs attention; Agentbot still ran.%s\n' \
 			"${C_RED:-}" "${C_RESET:-}"
 		return 1
 	fi

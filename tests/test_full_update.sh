@@ -120,6 +120,32 @@ test_operator_input_components_are_never_installed_by_full_update() (
 	[[ "$(<"$installed")" == docker ]]
 )
 
+test_full_update_leaves_version_upkeep_to_the_update_steps() (
+	# Break caught: a full update ran each tool's installer ("install Go
+	# latest") and then its update step, every day. Present tools with an
+	# update step are updated, not reinstalled, unless --force asks for it.
+	local installed="$TEST_HARNESS_ROOT/full-update-kept.installed"
+	COMP_KEYS=(go docker dotfiles)
+	declare -A COMP_ON=()
+	collect_component_probe_results() {
+		local -n out="$1"
+		out=([go]=installed [docker]=installed [dotfiles]=configured)
+	}
+	run_install() {
+		local key
+		for key in "${COMP_KEYS[@]}"; do
+			[[ "${COMP_ON[$key]}" -eq 1 ]] && printf '%s\n' "$key" >>"$installed"
+		done
+		return 0
+	}
+	: >"$installed"
+	DOTFILES_FORCE_REINSTALL=0 full_update_install_applied_components >/dev/null || return 1
+	[[ "$(tr '\n' ' ' <"$installed")" == 'docker dotfiles ' ]] || return 1
+	: >"$installed"
+	DOTFILES_FORCE_REINSTALL=1 full_update_install_applied_components >/dev/null || return 1
+	[[ "$(tr '\n' ' ' <"$installed")" == 'go docker dotfiles ' ]]
+)
+
 test_full_update_installs_only_components_that_probe_as_present() (
 	# Roadmap item 2: full-update is install + update, so install-time work
 	# stops drifting. The selection is derived from probes and must never add a
@@ -162,6 +188,7 @@ test_an_unverifiable_component_is_reinstalled_and_said_so() (
 		local -n out="$1"
 		out=([solid]=installed [unverified]=check [gone]=missing)
 	}
+	comp_probe() { printf 'check|still no verdict\n'; }
 	run_install() {
 		local key
 		for key in "${COMP_KEYS[@]}"; do
@@ -176,6 +203,35 @@ test_an_unverifiable_component_is_reinstalled_and_said_so() (
 	[[ "$output" == *'could not verify, reinstalling anyway: unverified'* ]] || return 1
 	# Only the guess is named, not everything that was installed.
 	[[ "$output" != *solid* ]]
+)
+
+test_a_probe_that_ran_out_of_time_is_asked_again_before_reinstalling() (
+	# Boost's probe timed out once at the start of a busy run, and a current
+	# Boost was reinstalled and named as unverified.
+	local installed="$TEST_HARNESS_ROOT/full-update-retry.installed"
+	local timeouts="$TEST_HARNESS_ROOT/full-update-retry.timeouts"
+	: >"$installed"
+	COMP_KEYS=(boost_cli)
+	declare -A COMP_ON=()
+	collect_component_probe_results() {
+		local -n out="$1"
+		out=([boost_cli]=check)
+	}
+	comp_probe() {
+		printf '%s\n' "${COMP_PROBE_TIMEOUT_SECONDS:-}" >"$timeouts"
+		printf 'installed|boost v1 (Dotfiles managed)\n'
+	}
+	run_install() {
+		[[ "${COMP_ON[boost_cli]}" -eq 1 ]] && printf 'boost_cli\n' >>"$installed"
+		return 0
+	}
+	local output
+	full_update_select_applied_components
+	[[ "${COMP_ON[boost_cli]}" -eq 0 ]] || return 1
+	[[ "$(<"$timeouts")" == 10 ]] || return 1
+	output="$(full_update_install_applied_components)" || return 1
+	[[ ! -s "$installed" ]] || return 1
+	[[ "$output" != *'could not verify'* ]]
 )
 
 test_components_needing_attention_do_not_stop_the_update() (
@@ -203,7 +259,7 @@ test_a_failed_update_step_does_not_skip_agentbot() (
 	full_update_print_identity() { :; }
 	agentbot() {
 		printf 'agentbot:%s\n' "$*" >>"$events"
-		[[ "$*" == 'help full' || "$*" == 'full' || "$*" == doctor ]]
+		[[ "$*" == 'full' || "$*" == doctor ]]
 	}
 	cmd_doctor() { return 0; }
 
@@ -213,6 +269,24 @@ test_a_failed_update_step_does_not_skip_agentbot() (
 	[[ "$rc" -eq 1 ]] || return 1
 	[[ "$output" == *'Agentbot still ran'* ]] || return 1
 	[[ "$output" != *'Full system update completed.'* ]]
+)
+
+# Review 2, R2-10: the installer's "finished, some components need attention"
+# became 0 without a trace, so clean updates and Doctors ended the run as
+# "Full system update completed".
+test_a_partial_install_is_not_reported_as_completed() (
+	local output rc=0
+	full_update_select_applied_components() { :; }
+	run_install() { return "${DOTFILES_INSTALL_PARTIAL_RC:-4}"; }
+	_dotfiles_run_update() { "$4"; }
+	full_update_print_identity() { :; }
+	agentbot() { [[ "$*" == 'full' || "$*" == doctor ]]; }
+	cmd_doctor() { return 0; }
+
+	output="$(cmd_full_update 2>&1)" || rc=$?
+	[[ "$rc" -eq 1 ]] || return 1
+	[[ "$output" == *'needs attention'* ]] || return 1
+	[[ "$output" != *'Full system update completed'* ]]
 )
 
 # The Dotfiles-only machine takes the same position.
@@ -239,7 +313,7 @@ test_install_runs_between_the_repository_gate_and_downstream_updates() (
 		printf 'downstream\n' >>"$events"
 	}
 	full_update_install_applied_components() { printf 'install\n' >>"$events"; }
-	agentbot() { [[ "$*" == 'help full' || "$*" == 'full' || "$*" == doctor ]]; }
+	agentbot() { [[ "$*" == 'full' || "$*" == doctor ]]; }
 
 	cmd_full_update >/dev/null || return 1
 	[[ "$(<"$events")" == $'repo-gate\ninstall\ndownstream' ]]
@@ -258,56 +332,11 @@ test_success_runs_dotfiles_then_agentbot_full() (
 	}
 	agentbot() {
 		printf 'agentbot:%s:confirm=%s\n' "$*" "${AGENTBOT_INSTALL_CONFIRM:-unset}" >>"$events"
-		[[ "$*" == 'help full' || "$*" == 'full' || "$*" == doctor ]]
+		[[ "$*" == 'full' || "$*" == doctor ]]
 	}
 
 	cmd_full_update >/dev/null || return 1
-	[[ "$(<"$events")" == $'dotfiles:_dotfiles_approve_repo_update:true\nagentbot:help full:confirm=unset\nagentbot:full:confirm=yes\nagentbot:doctor:confirm=unset' ]]
-)
-
-test_legacy_agentbot_bootstraps_once_before_full() (
-	local events="$TEST_HARNESS_ROOT/full-update-legacy-agentbot.events"
-	local supports_full=false
-	: >"$events"
-	_dotfiles_run_update() { return 0; }
-	agentbot() {
-		printf 'agentbot:%s:confirm=%s\n' "$*" "${AGENTBOT_INSTALL_CONFIRM:-unset}" >>"$events"
-		case "$*" in
-		'help full')
-			[[ "$supports_full" == true ]] && return 0
-			return 2
-			;;
-		install)
-			supports_full=true
-			return 2
-			;;
-		full | doctor) return 0 ;;
-		esac
-		return 64
-	}
-
-	cmd_full_update >/dev/null || return 1
-	[[ "$(<"$events")" == $'agentbot:help full:confirm=unset\nagentbot:install:confirm=yes\nagentbot:help full:confirm=unset\nagentbot:full:confirm=yes\nagentbot:doctor:confirm=unset' ]]
-)
-
-test_agentbot_bootstrap_stops_if_full_is_still_unavailable() (
-	local events="$TEST_HARNESS_ROOT/full-update-incompatible-agentbot.events"
-	local output rc=0
-	: >"$events"
-	_dotfiles_run_update() { return 0; }
-	agentbot() {
-		printf 'agentbot:%s\n' "$*" >>"$events"
-		case "$*" in
-		'help full') return 2 ;;
-		install) return 0 ;;
-		esac
-		return 64
-	}
-
-	output="$(cmd_full_update 2>&1)" || rc=$?
-	[[ "$rc" -eq 1 ]] || return 1
-	[[ "$output" == *'still does not support agentbot full'* ]] || return 1
-	[[ "$(<"$events")" == $'agentbot:help full\nagentbot:install\nagentbot:help full' ]]
+	[[ "$(<"$events")" == $'dotfiles:_dotfiles_approve_repo_update:true\nagentbot:full:confirm=yes\nagentbot:doctor:confirm=unset' ]]
 )
 
 test_dotfiles_change_restarts_once_and_second_change_stops() (
@@ -333,10 +362,7 @@ test_dotfiles_change_restarts_once_and_second_change_stops() (
 test_agentbot_repository_change_stops_with_guidance() (
 	local output rc=0
 	_dotfiles_run_update() { return 0; }
-	agentbot() {
-		[[ "$*" == 'help full' ]] && return 0
-		return 2
-	}
+	agentbot() { return 2; }
 
 	output="$(cmd_full_update 2>&1)" || rc=$?
 	[[ "$rc" -eq 1 ]] || return 1
@@ -346,22 +372,10 @@ test_agentbot_repository_change_stops_with_guidance() (
 test_agentbot_failure_propagates_its_status() (
 	local rc=0
 	_dotfiles_run_update() { return 0; }
-	agentbot() {
-		[[ "$*" == 'help full' ]] && return 0
-		return 23
-	}
+	agentbot() { return 23; }
 
 	cmd_full_update >/dev/null 2>&1 || rc=$?
 	[[ "$rc" -eq 23 ]]
-)
-
-test_agentbot_capability_failure_propagates_its_status() (
-	local rc=0
-	_dotfiles_run_update() { return 0; }
-	agentbot() { return 42; }
-
-	cmd_full_update >/dev/null 2>&1 || rc=$?
-	[[ "$rc" -eq 42 ]]
 )
 
 test_missing_agentbot_is_reported_not_ignored() (
@@ -458,18 +472,18 @@ expect_success 'the force flag reaches the installers and survives a restart' te
 expect_success 'full-update loads everything its install phase needs' test_full_update_loads_everything_its_install_phase_needs
 expect_success 'operator-input components are never installed by full-update' test_operator_input_components_are_never_installed_by_full_update
 expect_success 'full-update installs only components that probe as present' test_full_update_installs_only_components_that_probe_as_present
+expect_success 'full-update leaves version upkeep to the update steps' test_full_update_leaves_version_upkeep_to_the_update_steps
 expect_success 'an unverifiable component is reinstalled and said so' test_an_unverifiable_component_is_reinstalled_and_said_so
+expect_success 'a probe that ran out of time is asked again before reinstalling' test_a_probe_that_ran_out_of_time_is_asked_again_before_reinstalling
 expect_success 'components needing attention do not stop the update' test_components_needing_attention_do_not_stop_the_update
 expect_success 'a failed update step does not skip Agentbot' test_a_failed_update_step_does_not_skip_agentbot
 expect_success 'a failed update step is still reported without Agentbot' test_a_failed_update_step_is_reported_without_agentbot_too
+expect_success 'a partial install is not reported as completed' test_a_partial_install_is_not_reported_as_completed
 expect_success 'install runs between the repository gate and downstream updates' test_install_runs_between_the_repository_gate_and_downstream_updates
 expect_success 'full-update runs Dotfiles, then one Agentbot full run' test_success_runs_dotfiles_then_agentbot_full
-expect_success 'a legacy Agentbot bootstraps once before full' test_legacy_agentbot_bootstraps_once_before_full
-expect_success 'an incompatible Agentbot stops after one bootstrap attempt' test_agentbot_bootstrap_stops_if_full_is_still_unavailable
 expect_success 'Dotfiles repository change restarts once and a second change stops' test_dotfiles_change_restarts_once_and_second_change_stops
 expect_success 'Agentbot repository change stops with rerun guidance' test_agentbot_repository_change_stops_with_guidance
 expect_success 'Agentbot failure status propagates unchanged' test_agentbot_failure_propagates_its_status
-expect_success 'Agentbot capability failure status propagates unchanged' test_agentbot_capability_failure_propagates_its_status
 expect_success 'a missing agentbot is reported, not silently skipped' test_missing_agentbot_is_reported_not_ignored
 test_full_update_module_set_is_closed_over_its_own_references() {
 	# L3: the full-update loader is a hand-maintained list. It already missed

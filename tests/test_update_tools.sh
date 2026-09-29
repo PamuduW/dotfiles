@@ -58,15 +58,14 @@ test_an_apt_refresh_failure_reports_partial_too() (
 	[[ "${UPGRADE_STEP_RESULT['apt packages']}" == "$UPGRADE_RESULT_FAILED" ]]
 )
 
-test_update_accepts_all_flag_as_a_compatibility_no_op() (
+test_update_rejects_the_retired_all_flag() (
 	local events="$TEST_HARNESS_ROOT/downstream-all-flag.events"
 	: >"$events"
 	_dotfiles_run_update() { printf 'run:%s:%s\n' "$1" "$2" >>"$events"; }
 
 	cmd_update >/dev/null || return 1
-	cmd_update --all >/dev/null || return 1
-	[[ "$(sed -n '1p' "$events")" == "$(sed -n '2p' "$events")" ]] || return 1
-	[[ "$(sed -n '1p' "$events")" == 'run:_dotfiles_confirm_repo_update:false' ]]
+	! cmd_update --all >/dev/null 2>&1 || return 1
+	[[ "$(<"$events")" == 'run:_dotfiles_confirm_repo_update:false' ]]
 )
 
 test_node_probe_uses_nvm_default_when_shell_path_is_stale() (
@@ -371,8 +370,10 @@ test_boost_update_reconciles_only_dotfiles_owned_binary() (
 
 test_graphify_upgrade_uses_uv_tool_upgrade() (
 	local output calls="$TEST_HARNESS_ROOT/graphify-upgrade.calls"
+	local release="$TEST_HARNESS_ROOT/graphify-upgrade.version"
 	: >"$calls"
-	graphify() { [[ "$1" == --version ]] && printf 'graphify 1.2.3\n'; }
+	printf 'graphify 1.2.3\n' >"$release"
+	graphify() { [[ "$1" == --version ]] && cat "$release"; }
 	agentbot() {
 		printf 'agentbot:%s\n' "$*" >>"$calls"
 		return 97
@@ -381,15 +382,35 @@ test_graphify_upgrade_uses_uv_tool_upgrade() (
 		printf 'uv:%s\n' "$*" >>"$calls"
 		case "$*" in
 		'tool list') printf '%s\n' 'graphifyy v1.2.3' ;;
+		'tool upgrade graphifyy') printf 'graphify 1.2.4\n' >"$release" ;;
+		*) return 97 ;;
+		esac
+	}
+	upgrade_result_set() { printf 'result:%s\n' "$1" >>"$calls"; }
+	output="$(upgrade_graphify_cli)" || return 1
+	grep -Fqx 'uv:tool upgrade graphifyy' "$calls" || return 1
+	! grep -Fq 'agentbot:' "$calls" || return 1
+	# A new release is an update, not "checked/no change".
+	grep -Fq '[OK] Graphify CLI updated (graphify 1.2.3 -> graphify 1.2.4)' <<<"$output" || return 1
+	grep -Fq "run 'agentbot update' to refresh its skill" <<<"$output" || return 1
+	grep -Fqx 'result:updated' "$calls"
+)
+
+test_graphify_upgrade_with_nothing_new_is_already_current() (
+	local output calls="$TEST_HARNESS_ROOT/graphify-current.calls"
+	: >"$calls"
+	graphify() { [[ "$1" == --version ]] && printf 'graphify 1.2.3\n'; }
+	uv() {
+		case "$*" in
+		'tool list') printf '%s\n' 'graphifyy v1.2.3' ;;
 		'tool upgrade graphifyy') return 0 ;;
 		*) return 97 ;;
 		esac
 	}
+	upgrade_result_set() { printf 'result:%s\n' "$1" >>"$calls"; }
 	output="$(upgrade_graphify_cli)" || return 1
-	grep -Fqx 'uv:tool upgrade graphifyy' "$calls" || return 1
-	! grep -Fq 'agentbot:' "$calls" || return 1
-	grep -Fq '[OK]' <<<"$output" || return 1
-	grep -Fq "run 'agentbot update' to refresh its skill" <<<"$output"
+	grep -Fq 'Graphify CLI already current (graphify 1.2.3)' <<<"$output" || return 1
+	grep -Fqx 'result:already-current' "$calls"
 )
 
 test_graphify_upgrade_retries_with_system_certs_after_failure() (
@@ -409,7 +430,25 @@ test_graphify_upgrade_retries_with_system_certs_after_failure() (
 	[[ "$(sed -n '2p' "$calls")" == 'uv:tool upgrade graphifyy' ]] || return 1
 	[[ "$(sed -n '3p' "$calls")" == 'uv:tool upgrade graphifyy --system-certs' ]] || return 1
 	[[ "$(wc -l <"$calls")" -eq 3 ]] || return 1
-	grep -Fq "run 'agentbot update' to refresh its skill" <<<"$output"
+	grep -Fq 'Graphify CLI already current' <<<"$output"
+)
+
+test_graphify_first_attempt_error_is_quiet_when_the_retry_works() (
+	local output
+	graphify() { [[ "$1" == --version ]] && printf 'graphify 1.2.3\n'; }
+	uv() {
+		case "$*" in
+		'tool list') printf '%s\n' 'graphifyy v1.2.3' ;;
+		'tool upgrade graphifyy')
+			echo 'invalid peer certificate: UnknownIssuer' >&2
+			return 2
+			;;
+		'tool upgrade graphifyy --system-certs') return 0 ;;
+		*) return 97 ;;
+		esac
+	}
+	output="$(upgrade_graphify_cli 2>&1)" || return 1
+	[[ "$output" != *UnknownIssuer* && "$output" != *'Error during'* ]]
 )
 
 test_graphify_upgrade_failure_has_copyable_retry_command() (
@@ -732,7 +771,7 @@ expect_success 'status and update share one tool resolver' test_status_and_updat
 expect_success 'downstream execution runs apt refresh first, then every managed step' test_downstream_executes_apt_first_then_every_managed_step
 expect_success 'a failed step reports partial rather than plain failure' test_a_failed_step_reports_partial_rather_than_plain_failure
 expect_success 'an apt refresh failure reports partial too' test_an_apt_refresh_failure_reports_partial_too
-expect_success 'update accepts --all as a compatibility no-op' test_update_accepts_all_flag_as_a_compatibility_no_op
+expect_success 'update rejects the retired --all flag' test_update_rejects_the_retired_all_flag
 expect_success 'Node.js probe follows nvm default instead of a stale shell PATH' test_node_probe_uses_nvm_default_when_shell_path_is_stale
 expect_success 'npm probe reports upgrade current and missing states' test_npm_probe_reports_upgrade_current_and_missing_states
 expect_success 'npm version verification accepts only safe equal or newer versions' test_npm_version_reached_requires_a_safe_equal_or_newer_version
@@ -748,7 +787,9 @@ expect_success 'Graphify update probe skips an absent CLI' test_graphify_probe_s
 expect_success 'Boost probe reports managed external and absent states' test_boost_probe_reports_managed_external_and_absent_states
 expect_success 'Boost update reconciles only a Dotfiles-owned binary' test_boost_update_reconciles_only_dotfiles_owned_binary
 expect_success 'Graphify update uses uv tool upgrade' test_graphify_upgrade_uses_uv_tool_upgrade
+expect_success 'Graphify update with nothing new is already current' test_graphify_upgrade_with_nothing_new_is_already_current
 expect_success 'Graphify update retries with system certificates after failure' test_graphify_upgrade_retries_with_system_certs_after_failure
+expect_success 'Graphify first-attempt error is quiet when the retry works' test_graphify_first_attempt_error_is_quiet_when_the_retry_works
 expect_success 'Graphify update failures include a copyable retry command' test_graphify_upgrade_failure_has_copyable_retry_command
 expect_success 'upgrade step marks failures in red with retry command' test_upgrade_step_marks_failures_in_red_with_retry_command
 expect_success 'upgrade step omits failure marker after success' test_upgrade_step_omits_failure_marker_after_success

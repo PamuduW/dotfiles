@@ -53,22 +53,6 @@ test_authoritative_command_metadata() {
 	[[ "${DOTFILES_COMMAND_CLASS[status]}" == read-only ]]
 }
 
-test_removed_commands_report_migration_guidance() {
-	local command output rc
-	for command in summary upgrade self; do
-		set +e
-		output="$("$REPO_DIR/bin/bin/dotfiles" "$command" 2>&1)"
-		rc=$?
-		set -e
-		[[ "$rc" -ne 0 ]] || return 1
-		case "$command" in
-		summary) [[ "$output" == *'dotfiles status'* ]] ;;
-		upgrade) [[ "$output" == *'dotfiles update [--all]'* ]] ;;
-		self) [[ "$output" == *'dotfiles update'* && "$output" == *'dotfiles restow'* ]] ;;
-		esac || return 1
-	done
-}
-
 test_help_commands_and_dispatch_share_metadata() {
 	declare -F dotfiles_command_print_table >/dev/null || return 1
 	local expected_table_file="$TEST_HARNESS_ROOT/commands.expected"
@@ -122,8 +106,7 @@ test_command_lib_documents_full_help_catalog() {
 	output="$(NO_COLOR=1 dotfiles_command_print_table 100)"
 	dotfiles_command_metadata_validate
 	for needle in \
-		'update [--all]' \
-		'--all' \
+		'update [--dry-run]' \
 		'Node.js, npm, Go, and Monaspace' \
 		'DOTFILES_COMPONENTS' \
 		'GITHUB_TOKEN' \
@@ -195,13 +178,13 @@ test_table_column_headers_are_bold_white() {
 	! grep -Fq $'\033[93m' <<<"$output"
 }
 
-test_component_registry_has_exact_20_with_boost() {
+test_component_registry_has_exact_21_with_obsidian() {
 	local expected=(
 		git_identity system_packages python graphify_cli boost_cli powershell go nodejs direnv docker portainer lazygit
-		lazydocker cursor_cli codex_cli claude_cli monaspace_fonts dotfiles
+		lazydocker cursor_cli codex_cli claude_cli monaspace_fonts obsidian dotfiles
 		wsl_conf git_credential
 	)
-	[[ "${#COMP_KEYS[@]}" -eq 20 && "${#COMP_LABELS[@]}" -eq 20 ]] || return 1
+	[[ "${#COMP_KEYS[@]}" -eq 21 && "${#COMP_LABELS[@]}" -eq 21 ]] || return 1
 	local i
 	for i in "${!expected[@]}"; do
 		[[ "${COMP_KEYS[$i]}" == "${expected[$i]}" ]] || return 1
@@ -254,7 +237,7 @@ test_codex_and_node_metadata_match_standalone_ownership() {
 test_install_defaults_enable_boost_and_exclude_identity_setup() {
 	local key
 	comp_registry_init
-	[[ "${#COMP_KEYS[@]}" -eq 20 ]] || return 1
+	[[ "${#COMP_KEYS[@]}" -eq 21 ]] || return 1
 	for key in "${COMP_KEYS[@]}"; do
 		case "$key" in
 		git_identity)
@@ -412,7 +395,6 @@ test_narrow_reports_remain_bounded() {
 expect_success 'command metadata exactly matches the ten-command dispatch contract' test_authoritative_command_metadata
 expect_success 'help, commands output, and dispatch consume authoritative metadata' test_help_commands_and_dispatch_share_metadata
 expect_success 'dispatch parity rejects missing or invalid command handlers' test_dispatch_parity_rejects_missing_or_invalid_handlers
-expect_success 'removed commands fail with migration guidance' test_removed_commands_report_migration_guidance
 expect_success 'report path shortening preserves the fixed detail width' test_report_path_shortening_preserves_exact_width
 expect_success 'Command lib renders all metadata once without side effects' test_command_lib_is_metadata_only
 expect_success 'Command lib documents the full command/config catalog' test_command_lib_documents_full_help_catalog
@@ -422,7 +404,7 @@ expect_success 'Command details use orange sections and yellow topics' test_comm
 expect_success 'Command lib colors mutating and read-only behavior cells' test_command_lib_colors_behavior_cells_when_enabled
 expect_success 'topic headers use the orange palette' test_topic_headers_use_orange
 expect_success 'table column headers remain bold white' test_table_column_headers_are_bold_white
-expect_success 'component registry exposes the exact 20 described component IDs' test_component_registry_has_exact_20_with_boost
+expect_success 'component registry exposes the exact 21 described component IDs' test_component_registry_has_exact_21_with_obsidian
 expect_success 'Boost component text does not claim a version pin' test_boost_description_does_not_claim_a_pin
 expect_success 'Codex and Node component metadata reflect standalone ownership' test_codex_and_node_metadata_match_standalone_ownership
 expect_success 'install defaults enable Boost and leave identity to the operator' test_install_defaults_enable_boost_and_exclude_identity_setup

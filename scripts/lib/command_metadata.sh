@@ -130,11 +130,11 @@ dotfiles_command_define 'menu' \
 
 dotfiles_command_define 'update' \
 	--handler 'cmd_update' \
-	--usage '[--all] [--dry-run]' \
+	--usage '[--dry-run]' \
 	--class 'mutating' \
 	--description 'Safely update the repo, then packages and tools.' \
-	--note 'One approval updates every managed component; --all is accepted but selects nothing extra.' \
-	--options $'--all|Accepted for compatibility; every managed update already runs without it.|no-op\n--dry-run|Show the update report, then stop before any downstream change.|off\n-h|Show command help and exit.|off\n--help|Show command help and exit.|off' \
+	--note 'One approval updates every managed component.' \
+	--options $'--dry-run|Show the update report, then stop before any downstream change.|off\n-h|Show command help and exit.|off\n--help|Show command help and exit.|off' \
 	--defaults 'One approval runs every managed update, including Node.js, npm, Go, and Monaspace.' \
 	--effects 'May pull the repository, refresh apt, and update all managed CLIs, runtimes, and fonts.' \
 	--example 'dotfiles update' \

@@ -374,6 +374,7 @@ test_update_preview_and_summary_share_one_snapshot() (
 		printf '%s\n' 'apt packages|system packages|none (cached)|refresh-required' 'dotfiles repo|main@abc123|none|current'
 	}
 	_dotfiles_confirm() { return 0; }
+	sudo_prime() { :; }
 	_run_update_downstream() {
 		UPGRADE_STEP_RESULT=(['apt packages']=checked-no-change)
 	}
@@ -382,11 +383,22 @@ test_update_preview_and_summary_share_one_snapshot() (
 	[[ "$(wc -l <"$calls")" -eq 1 ]]
 )
 
+test_the_apt_index_is_refreshed_once_per_run() (
+	local calls="$TEST_HARNESS_ROOT/apt-refresh.calls"
+	: >"$calls"
+	_run_quiet_command() { printf '%s\n' "$*" >>"$calls"; }
+	_upgrade_rule_between() { :; }
+	DOTFILES_APT_INDEX_REFRESHED_AT="${EPOCHSECONDS:-$(date +%s)}" _run_apt_index_refresh >/dev/null || return 1
+	[[ ! -s "$calls" ]] || return 1
+	DOTFILES_APT_INDEX_REFRESHED_AT=1 _run_apt_index_refresh >/dev/null || return 1
+	grep -q 'apt-get update' "$calls"
+)
+
 test_update_step_registry_has_stable_complete_pairs() (
 	local expected=(
 		'apt packages' 'Graphify CLI' 'Boost CLI' 'Cursor CLI' 'Codex CLI'
 		'Claude CLI' lazygit lazydocker 'Node.js (nvm)' npm
-		'Go (asdf)' 'Monaspace fonts' 'shared repo' 'dotfiles repo'
+		'Go (asdf)' 'Monaspace fonts' Obsidian 'shared repo' 'dotfiles repo'
 	)
 	update_step_registry_validate || return 1
 	[[ "${#UPDATE_STEP_KEYS[@]}" -eq "${#expected[@]}" ]] || return 1
@@ -522,18 +534,6 @@ test_retained_capability_coverage() {
 	declare -F cmd_restow >/dev/null 2>&1
 }
 
-test_removed_commands_have_guidance() {
-	local cmd output rc
-	for cmd in summary upgrade self; do
-		set +e
-		output="$("$REPO_DIR/bin/bin/dotfiles" "$cmd" 2>&1)"
-		rc=$?
-		set -e
-		[[ "$rc" -ne 0 ]] || return 1
-		case "$cmd" in summary) [[ "$output" == *'use dotfiles status'* ]] ;; upgrade) [[ "$output" == *'use dotfiles update [--all]'* ]] ;; self) [[ "$output" == *'use dotfiles update'* && "$output" == *restow* ]] ;; esac || return 1
-	done
-}
-
 test_exact_command_set_parity() {
 	source "$REPO_DIR/scripts/lib/command_metadata.sh"
 	local expected=(menu update full-update doctor status commands packages logs restow help) i
@@ -594,6 +594,7 @@ expect_success 'the update closes on what it spent' test_update_closes_on_what_i
 expect_success 'an upgrade step records its own wall clock' test_a_step_records_its_own_wall_clock
 expect_success 'update preview and summary share one captured snapshot' test_update_preview_and_summary_share_one_snapshot
 expect_success 'update registry has stable complete check and apply pairs' test_update_step_registry_has_stable_complete_pairs
+expect_success 'the apt index is refreshed once per run' test_the_apt_index_is_refreshed_once_per_run
 expect_success 'TUI runs shared update directly without a submenu' test_tui_runs_shared_update_without_submenu
 expect_success 'TUI propagates the changed-repository exit from the update child' test_tui_propagates_changed_repository_from_update_child
 expect_success 'stopped paths perform no apt tool network or stow work' test_stopped_paths_have_no_downstream
@@ -639,7 +640,6 @@ expect_success 'root status rollup has exactly one blank line before the summary
 expect_success 'Bash and Python rollups count every state alike' test_bash_and_python_rollups_count_alike
 expect_success 'CLI and TUI status use the same component-state collector' test_cli_and_tui_status_share_component_collector
 expect_success 'status update and restow retain removed command capabilities' test_retained_capability_coverage
-expect_success 'summary upgrade and self fail with migration guidance' test_removed_commands_have_guidance
 expect_success 'metadata help Command lib and dispatch share ten keys' test_exact_command_set_parity
 expect_success 'the report does not tell the run to run itself' test_the_report_does_not_tell_the_run_to_run_itself
 expect_success 'report title honours NO_COLOR with a palette loaded' test_report_title_honours_no_color_even_with_a_palette_loaded

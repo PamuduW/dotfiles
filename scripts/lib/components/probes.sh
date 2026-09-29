@@ -868,12 +868,12 @@ _comp_probe_go() {
 
 # Classification, separated from interrogation on purpose.
 #
-# ADR-0001's second amendment: three of the five component defects in
-# docs/history/bootstrap-clean-machine-testing.md were misreadings of an
-# interrogation that was itself correct, and defect 5 was this probe reading a
-# refused `docker ps` as "container not found". The reading is where the bugs
-# are, and a reading that takes its inputs as arguments can be tested against
-# every state without a docker to produce them.
+# ADR-0001's second amendment: three of the five component defects in the
+# workspace's archived `bootstrap-clean-machine-testing.md` record were
+# misreadings of an interrogation that was itself correct, and defect 5 was
+# this probe reading a refused `docker ps` as "container not found". The
+# reading is where the bugs are, and a reading that takes its inputs as
+# arguments can be tested against every state without a docker to produce them.
 #
 # Pure: no commands, no filesystem, no environment.
 _comp_classify_portainer() {
@@ -934,6 +934,22 @@ _comp_probe_monaspace_fonts() {
 	fi
 
 	comp_classify monaspace_fonts "$present" "$count" "$ver"
+}
+
+# Local state only: the installed .deb, or an obsidian on PATH that is not it.
+_comp_probe_obsidian() {
+	local ver='' path='' found=0 owned=0
+	ver="$(dpkg-query -W -f='${Status}\t${Version}\n' obsidian 2>/dev/null |
+		awk -F'\t' '$1 == "install ok installed" { print $2 }')"
+	if [[ -n "$ver" ]]; then
+		found=1
+		owned=1
+		path='/usr/bin/obsidian'
+	elif path="$(command -v obsidian 2>/dev/null)"; then
+		found=1
+	fi
+	comp_classify owned_cli obsidian 'obsidian' ' (deb)' ' (external)' \
+		"$found" 0 "$ver" "$path" "$owned"
 }
 
 # Pure: a link pointing somewhere else is as missing as no link at all, so the
