@@ -170,6 +170,9 @@ test_both_clones_installs_updates_then_runs_agentbot() (
 	# The plan was the confirmation; without --yes, an update needing one was
 	# only previewed and still recorded as done (Review 2, R2-9).
 	log_has 'agentbot-install update --yes' || return 1
+	# One Doctor, after the memory step (Review 2, R2-11).
+	log_has 'agentbot-cli doctor' || return 1
+	(($(log_line 'agentbot-cli memory status') < $(log_line 'agentbot-cli doctor'))) || return 1
 	# Dotfiles must be fully done before Agentbot starts.
 	local update_at agentbot_at
 	update_at="$(log_line 'dotfiles-cli update')"
@@ -556,8 +559,9 @@ test_backing_out_of_the_selector_is_not_recorded_as_an_install() (
 	output="$(_run_agentbot_step "$checkout" 4)" || return 1
 	grep -Fq 'cancelled at the selector' <<<"$output" || return 1
 	! grep -Eq '^ *[0-9]+m [0-9]{2}s +agentbot install$' <<<"$output" || return 1
-	# The update still runs: the checkout is there either way.
-	grep -Fq 'install.sh update' "$BOOTSTRAP_TEST_LOG"
+	# Nor the update: it would configure every component the operator just
+	# declined (Review 2, question 1).
+	! grep -Fq 'install.sh update' "$BOOTSTRAP_TEST_LOG"
 )
 
 test_the_summary_prints_exactly_once_before_the_shell_offer() (

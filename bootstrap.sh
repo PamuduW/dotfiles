@@ -345,6 +345,7 @@ run_dotfiles() {
 
 # The operator backed out of Agentbot's component selector.
 AGENTBOT_INSTALL_CANCELLED_RC=4
+AGENTBOT_DECLINED=0
 
 run_agentbot() {
 	local rc=0
@@ -358,20 +359,24 @@ run_agentbot() {
 		# menu, so this step handed the operator Check Status, Prune Skills and
 		# Quit instead of installing, and recorded whatever they did as
 		# "agentbot install".
-		AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/bin/agentbot" install --menu || rc=$?
+		# The Doctor table waits for the health check that ends the run.
+		AGENTBOT_INSTALL_SHOW_DOCTOR=0 AGENTBOT_INSTALL_CONFIRM=yes \
+			"$AGENTBOT_DIR/bin/agentbot" install --menu || rc=$?
 	else
-		AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" install || rc=$?
+		AGENTBOT_INSTALL_SHOW_DOCTOR=0 AGENTBOT_INSTALL_CONFIRM=yes \
+			"$AGENTBOT_DIR/install.sh" install || rc=$?
 	fi
 	if ((rc == 2)); then
 		restart_after_repository_update Agentbot
 		return 1
 	fi
-	# The operator backed out of the selector. Nothing installed, nothing
-	# broken, and the update below still has a checkout to work on.
+	# The operator backed out of the selector: nothing installed, nothing
+	# broken. The update would configure every component anyway, so it is
+	# skipped too, with the memory and health steps that follow it.
 	if ((rc == AGENTBOT_INSTALL_CANCELLED_RC)); then
-		record 'SKIPPED   agentbot install (cancelled at the selector)'
-		PHASE_STARTED="$SECONDS"
-		rc=0
+		record 'SKIPPED   agentbot install and update (cancelled at the selector)'
+		AGENTBOT_DECLINED=1
+		return 0
 	elif ((rc != 0)); then
 		record 'FAILED   agentbot install'
 		return 1
@@ -475,6 +480,18 @@ print_summary() {
 	fi
 }
 
+# One Doctor, shown once, after the memory vault: the update's own run is a
+# silent gate that rolls it back on errors. A finding here is reported, not a
+# failed setup: the steps themselves succeeded.
+agentbot_health_check() {
+	step 'Health check'
+	if "$AGENTBOT_DIR/bin/agentbot" doctor; then
+		record_phase 'agentbot doctor'
+	else
+		record 'CHECK     agentbot doctor (see the table above)'
+	fi
+}
+
 # The shell that ran this predates everything just installed: the stowed
 # .bashrc, ~/.local/bin, nvm, and the docker group are all invisible to it.
 # Offer a fresh login shell rather than leaving the operator to work out why
@@ -529,7 +546,10 @@ main() {
 		# the script nor reaches its exit status, so a failed Agentbot phase
 		# ended the run with status 0.
 		if run_agentbot; then
-			setup_memory_vault
+			if ((AGENTBOT_DECLINED == 0)); then
+				setup_memory_vault
+				agentbot_health_check
+			fi
 		else
 			failed=1
 		fi
