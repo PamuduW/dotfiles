@@ -166,3 +166,5 @@ unset -f __dotfiles_export_agentbot_token
 if [ -f ~/.bash_aliases ]; then
 	. ~/.bash_aliases
 fi
+
+export NODE_EXTRA_CA_CERTS="$HOME/node-extra-ca-certs-bundle.pem"
