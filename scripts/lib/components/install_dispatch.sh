@@ -138,10 +138,9 @@ _run_install_preamble() {
 # Exit status meaning "installed, but some components failed".
 DOTFILES_INSTALL_PARTIAL_RC=4
 
-# Both moved to scripts/lib/installers/logging.sh, where the update's load set
-# reaches them too. Kept as names because this file's callers use them.
+# Moved to scripts/lib/installers/logging.sh, where the update's load set
+# reaches it too. Kept as a name because this file's callers use it.
 _install_now_seconds() { timing_now_seconds; }
-_install_format_duration() { timing_format "$1"; }
 
 print_install_timing() {
 	print_timing_summary Install INSTALL_COMPONENT_SECONDS "$1"
