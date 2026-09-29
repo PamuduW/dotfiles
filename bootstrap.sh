@@ -379,7 +379,10 @@ run_agentbot() {
 		record_phase 'agentbot install'
 	fi
 	step 'Update Agentbot'
-	AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" update || {
+	# --yes for the same reason as the Dotfiles update: the plan was the
+	# confirmation. Without it a plan needing one ended as a preview, recorded
+	# as done.
+	AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" update --yes || {
 		record 'FAILED   agentbot update'
 		return 1
 	}
@@ -491,6 +494,7 @@ start_new_shell() {
 }
 
 main() {
+	local failed=0
 	# Report whatever happened, including on failure: a run that dies with no
 	# summary leaves the operator guessing which steps ran.
 	trap print_summary EXIT
@@ -521,7 +525,14 @@ main() {
 			msg ''
 			msg '  Dotfiles setup is complete.'
 		fi
-		run_agentbot && setup_memory_vault
+		# Not `run_agentbot && ...`: a failure on the left of && neither stops
+		# the script nor reaches its exit status, so a failed Agentbot phase
+		# ended the run with status 0.
+		if run_agentbot; then
+			setup_memory_vault
+		else
+			failed=1
+		fi
 	fi
 
 	# Print the summary here rather than leaving it to the trap: offer_new_shell
@@ -529,6 +540,10 @@ main() {
 	# path that fails before reaching this point.
 	print_summary
 	trap - EXIT
+	if ((failed == 1)); then
+		msg '  Fix the failed step above, then rerun this script.'
+		return 1
+	fi
 	start_new_shell
 }
 

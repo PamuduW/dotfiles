@@ -167,7 +167,9 @@ test_both_clones_installs_updates_then_runs_agentbot() (
 	# operator, and every pending apt and npm upgrade was reported and skipped.
 	log_has 'dotfiles-cli update --yes' || return 1
 	log_has 'agentbot-install install' || return 1
-	log_has 'agentbot-install update' || return 1
+	# The plan was the confirmation; without --yes, an update needing one was
+	# only previewed and still recorded as done (Review 2, R2-9).
+	log_has 'agentbot-install update --yes' || return 1
 	# Dotfiles must be fully done before Agentbot starts.
 	local update_at agentbot_at
 	update_at="$(log_line 'dotfiles-cli update')"
@@ -417,6 +419,23 @@ test_a_failed_step_still_prints_a_summary() (
 	# The total is reported so the run answers "how long did that take".
 	[[ "$output" == *'Total '* ]] || return 1
 	[[ "$output" == *'cloned   Dotfiles'* ]]
+)
+
+test_a_failed_agentbot_phase_fails_the_run() (
+	# Review 2, R2-8: `run_agentbot && setup_memory_vault` hid the failure, so
+	# the run printed FAILED and still exited 0.
+	setup_machine agentbot-failed
+	local rc_file="$MACHINE/agentbot-rc"
+	printf '9\n' >"$rc_file"
+
+	local rc=0 output
+	output="$(BOOTSTRAP_ANSWERS_OVERRIDE='' run_bootstrap 1 \
+		BOOTSTRAP_TEST_RC_FILE_agentbot="$rc_file" 2>&1)" || rc=$?
+
+	[[ "$rc" -ne 0 ]] || return 1
+	[[ "$output" == *'FAILED   agentbot install'* ]] || return 1
+	[[ "$output" == *'Summary'* ]] || return 1
+	! log_has 'agentbot-cli memory'
 )
 
 test_component_failures_do_not_abandon_the_remaining_phases() (
@@ -682,6 +701,7 @@ expect_success 'the install step opens the selector, not the whole menu' test_th
 expect_success 'backing out of the selector is not recorded as an install' test_backing_out_of_the_selector_is_not_recorded_as_an_install
 expect_success 'the summary prints exactly once before the shell offer' test_the_summary_prints_exactly_once_before_the_shell_offer
 expect_success 'a non-interactive run does not exec a shell' test_a_non_interactive_run_does_not_exec_a_shell
+expect_success 'a failed Agentbot phase fails the run' test_a_failed_agentbot_phase_fails_the_run
 
 test_harness_cleanup
 finish_tests
