@@ -271,6 +271,24 @@ test_a_failed_update_step_does_not_skip_agentbot() (
 	[[ "$output" != *'Full system update completed.'* ]]
 )
 
+# Review 2, R2-10: the installer's "finished, some components need attention"
+# became 0 without a trace, so clean updates and Doctors ended the run as
+# "Full system update completed".
+test_a_partial_install_is_not_reported_as_completed() (
+	local output rc=0
+	full_update_select_applied_components() { :; }
+	run_install() { return "${DOTFILES_INSTALL_PARTIAL_RC:-4}"; }
+	_dotfiles_run_update() { "$4"; }
+	full_update_print_identity() { :; }
+	agentbot() { [[ "$*" == 'full' || "$*" == doctor ]]; }
+	cmd_doctor() { return 0; }
+
+	output="$(cmd_full_update 2>&1)" || rc=$?
+	[[ "$rc" -eq 1 ]] || return 1
+	[[ "$output" == *'needs attention'* ]] || return 1
+	[[ "$output" != *'Full system update completed'* ]]
+)
+
 # The Dotfiles-only machine takes the same position.
 test_a_failed_update_step_is_reported_without_agentbot_too() (
 	local output rc=0
@@ -460,6 +478,7 @@ expect_success 'a probe that ran out of time is asked again before reinstalling'
 expect_success 'components needing attention do not stop the update' test_components_needing_attention_do_not_stop_the_update
 expect_success 'a failed update step does not skip Agentbot' test_a_failed_update_step_does_not_skip_agentbot
 expect_success 'a failed update step is still reported without Agentbot' test_a_failed_update_step_is_reported_without_agentbot_too
+expect_success 'a partial install is not reported as completed' test_a_partial_install_is_not_reported_as_completed
 expect_success 'install runs between the repository gate and downstream updates' test_install_runs_between_the_repository_gate_and_downstream_updates
 expect_success 'full-update runs Dotfiles, then one Agentbot full run' test_success_runs_dotfiles_then_agentbot_full
 expect_success 'Dotfiles repository change restarts once and a second change stops' test_dotfiles_change_restarts_once_and_second_change_stops

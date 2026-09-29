@@ -88,9 +88,11 @@ full_update_install_applied_components() {
 	full_update_select_applied_components || return 1
 	run_install || rc=$?
 	# The installer returns a distinct status for "finished, but components need
-	# attention". The update phases after this are independent, so report it and
-	# carry on rather than abandoning the rest of the machine.
+	# attention". The update phases after this are independent, so carry on
+	# rather than abandoning the rest of the machine, but keep it for the
+	# verdict: a later clean Doctor used to end this as "completed".
 	if ((rc == ${DOTFILES_INSTALL_PARTIAL_RC:-4})); then
+		FULL_UPDATE_DOTFILES_DEGRADED=true
 		return 0
 	fi
 	return "$rc"
@@ -283,7 +285,7 @@ full_update_postflight() {
 	# Said before the doctor verdicts below, because it is about a step that
 	# already failed rather than about what the health checks just found.
 	if [[ "${FULL_UPDATE_DOTFILES_DEGRADED:-false}" == true ]]; then
-		printf '\n  %sA Dotfiles update step failed; Agentbot still ran. The machine needs attention.%s\n' \
+		printf '\n  %sA Dotfiles install or update step needs attention; Agentbot still ran.%s\n' \
 			"${C_RED:-}" "${C_RESET:-}"
 		return 1
 	fi
