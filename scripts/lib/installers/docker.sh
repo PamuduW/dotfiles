@@ -122,7 +122,13 @@ PY
 		log_warn "dockerd is unavailable; unable to validate the proposed daemon config before writing it"
 	fi
 
-	sudo install -m 0644 "$tmp_file" "$daemon_json"
+	# Checked here: this runs under `if !`, where errexit does not apply, so an
+	# unchecked failure went on to restart an unchanged daemon.
+	if ! sudo install -m 0644 "$tmp_file" "$daemon_json"; then
+		log_warn "Could not write $daemon_json; leaving the daemon config unchanged"
+		sudo rm -f "$tmp_file"
+		return 1
+	fi
 	sudo rm -f "$tmp_file"
 	DOCKER_DAEMON_CHANGED=1
 	log_ok "Docker daemon logging config safely written to $daemon_json"
