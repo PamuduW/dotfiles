@@ -374,6 +374,7 @@ test_update_preview_and_summary_share_one_snapshot() (
 		printf '%s\n' 'apt packages|system packages|none (cached)|refresh-required' 'dotfiles repo|main@abc123|none|current'
 	}
 	_dotfiles_confirm() { return 0; }
+	sudo_prime() { :; }
 	_run_update_downstream() {
 		UPGRADE_STEP_RESULT=(['apt packages']=checked-no-change)
 	}

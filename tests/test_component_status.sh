@@ -228,7 +228,8 @@ test_status_is_local_read_only() {
 	local fake
 	test_harness_protect_original_path "$protected_relative"
 	for fake in sudo stow apt-get; do
-		ln -s -- _test_fake_command "$TEST_FAKE_BIN/$fake"
+		# sudo is already a harness fake; this only configures its reply.
+		[[ -L "$TEST_FAKE_BIN/$fake" ]] || ln -s -- _test_fake_command "$TEST_FAKE_BIN/$fake"
 		test_harness_configure_fake "$fake" 98 '' 'read-only status must not invoke this command'
 	done
 	test_harness_configure_fake git 0 $'## feat/test\n'
