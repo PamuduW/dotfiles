@@ -167,4 +167,7 @@ if [ -f ~/.bash_aliases ]; then
 	. ~/.bash_aliases
 fi
 
-export NODE_EXTRA_CA_CERTS="$HOME/node-extra-ca-certs-bundle.pem"
+# Node trusts an extra CA bundle only on machines that have one.
+if [ -f "$HOME/node-extra-ca-certs-bundle.pem" ]; then
+	export NODE_EXTRA_CA_CERTS="$HOME/node-extra-ca-certs-bundle.pem"
+fi
