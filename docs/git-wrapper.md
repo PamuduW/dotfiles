@@ -64,6 +64,12 @@ and checked submodule pushes. Windows GCM is used for HTTPS credentials when
 available; its absence does not erase an existing helper or block the submodule
 defaults.
 
+It also adds declared patterns to Git's global ignore file: the path in
+`core.excludesFile`, or `~/.config/git/ignore` when that is unset. Today the one
+pattern is `**/.boost/hook-meta/`, where Boost's Bash hook records each agent
+command in whatever directory the shell is in. Missing lines are appended and
+existing lines are kept, so the file is not stowed.
+
 ## Validation
 
 Run `bash tests/test_git_wrapper.sh`. The suite invokes the wrapper while using

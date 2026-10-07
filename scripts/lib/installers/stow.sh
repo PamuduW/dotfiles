@@ -86,6 +86,29 @@ configure_git_submodule_defaults() {
 	log_ok "Git submodule defaults: recurse, on-demand fetch, checked push, status summary"
 }
 
+configure_git_global_ignores() {
+	# Lines are added, never rewritten: the file also holds the operator's own
+	# patterns, so it is not stowed. Boost's Bash hook records every agent
+	# command under .boost/hook-meta/ in whatever directory the shell is in.
+	local file pattern added=0
+	local -a patterns=('**/.boost/hook-meta/')
+	file="$(git config --global --type=path --get core.excludesFile || true)"
+	[[ -n "$file" ]] || file="${XDG_CONFIG_HOME:-$HOME/.config}/git/ignore"
+	mkdir -p "$(dirname "$file")" || return 1
+	touch "$file" || return 1
+	for pattern in "${patterns[@]}"; do
+		grep -Fxq -- "$pattern" "$file" && continue
+		[[ ! -s "$file" || -z "$(tail -c1 "$file")" ]] || printf '\n' >>"$file"
+		printf '%s\n' "$pattern" >>"$file" || return 1
+		added=$((added + 1))
+	done
+	if ((added > 0)); then
+		log_ok "Git global ignores: added $added pattern(s) to $file"
+	else
+		log_skip "Git global ignores already present in $file"
+	fi
+}
+
 configure_git_settings() {
 	local gcm_path=''
 	# Moved here from the install preamble, which set it on every run whatever
@@ -94,6 +117,7 @@ configure_git_settings() {
 	# says it configures Git.
 	git config --global init.defaultBranch main || return 1
 	configure_git_submodule_defaults || return 1
+	configure_git_global_ignores || return 1
 	if gcm_path="$(find_windows_git_credential_manager)"; then
 		git config --global credential.helper "$gcm_path" || return 1
 		log_ok "Git credential helper: $gcm_path"
