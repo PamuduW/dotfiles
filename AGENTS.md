@@ -122,7 +122,9 @@ find scripts -name '*.sh' -print0 | xargs -0 -n1 bash -n   # shell syntax check
 - Component installs: registry in `scripts/lib/components/`; keep probes honest for status tables.
 - Keep the `git_credential` component key stable. Its displayed label is
   `Git config (credentials + submodules)`; it always applies the four
-  documented submodule defaults and configures Windows GCM only when found.
+  documented submodule defaults, appends the declared global ignore patterns
+  without rewriting the operator's lines, and configures Windows GCM only when
+  found.
   Missing GCM must not erase another helper or block submodule configuration.
 - Keep `bin/bin/git`, its Stow target/probe, and `tests/test_git_wrapper.sh`
   synchronized. Ordinary nested repositories stay untracked; only

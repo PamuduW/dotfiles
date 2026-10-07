@@ -18,7 +18,7 @@ source "$ROOT/scripts/lib/installers/stow.sh"
 source "$ROOT/scripts/lib/components/probes.sh"
 
 reset_git_config() {
-	rm -f -- "$HOME/.gitconfig"
+	rm -f -- "$HOME/.gitconfig" "$XDG_CONFIG_HOME/git/ignore"
 }
 
 test_submodule_defaults_are_configured_without_gcm() (
@@ -75,9 +75,36 @@ test_probe_distinguishes_complete_partial_and_incomplete_configuration() (
 	[[ "$(_comp_probe_git_credential)" == 'check|Git configuration incomplete' ]]
 )
 
+test_global_ignores_are_added_once_and_keep_existing_lines() (
+	reset_git_config
+	local ignore="$XDG_CONFIG_HOME/git/ignore"
+	mkdir -p "$(dirname "$ignore")"
+	printf '%s' '**/.claude/settings.local.json' >"$ignore"
+	find_windows_git_credential_manager() { return 1; }
+
+	configure_git_settings >/dev/null || return 1
+	configure_git_settings >/dev/null || return 1
+
+	[[ "$(cat "$ignore")" == $'**/.claude/settings.local.json\n**/.boost/hook-meta/' ]]
+)
+
+test_global_ignores_follow_core_excludes_file() (
+	reset_git_config
+	# shellcheck disable=SC2088  # Git expands the tilde itself; that is under test.
+	git config --global core.excludesFile '~/custom-ignore'
+	find_windows_git_credential_manager() { return 1; }
+
+	configure_git_settings >/dev/null || return 1
+
+	grep -Fxq '**/.boost/hook-meta/' "$HOME/custom-ignore" || return 1
+	[[ ! -e "$XDG_CONFIG_HOME/git/ignore" ]]
+)
+
 expect_success 'submodule defaults do not depend on Windows GCM' test_submodule_defaults_are_configured_without_gcm
 expect_success 'missing GCM preserves an existing credential helper' test_existing_helper_is_preserved_when_gcm_is_missing
 expect_success 'detected GCM is configured with all submodule defaults' test_detected_gcm_and_submodule_defaults_are_all_configured
 expect_success 'Git configuration probe distinguishes full and partial states' test_probe_distinguishes_complete_partial_and_incomplete_configuration
+expect_success 'global ignores are added once and keep existing lines' test_global_ignores_are_added_once_and_keep_existing_lines
+expect_success 'global ignores follow core.excludesFile' test_global_ignores_follow_core_excludes_file
 
 finish_tests
