@@ -1,6 +1,12 @@
 # shellcheck shell=bash
 # shellcheck disable=SC1090,SC1091
 
+# Boost's feature-flag refresh sends the Git email and the repository name to
+# JFrog whenever its cache expires, from any agent hook. Agentbot pins every
+# flag locally, so the remote values change nothing; turn the fetch off. Above
+# the interactive guard, so an editor's non-interactive WSL server gets it too.
+export BOOST_FEATURE_FLAGS_DISABLE=1
+
 # If not running interactively, don't do anything (avoid breaking scripts)
 case "$-" in
 *i*) ;;

@@ -41,6 +41,12 @@ not configure Graphify or Boost inside coding agents, manage Agentbot policy,
 accept Boost agreements, enable BoostGraph, or silently remove external Codex
 installations.
 
+The stowed `.bashrc` does export `BOOST_FEATURE_FLAGS_DISABLE=1`, for every
+shell, interactive or not. Boost's feature-flag refresh otherwise sends the Git
+email and the repository name to JFrog whenever its cache expires, from any
+agent hook (measured 2026-10-08). Agentbot pins every flag locally, so the
+remote values change nothing.
+
 Repository replacement preserves recoverable Git state before changing a
 dirty, ahead, or diverged checkout. It never runs `git clean` and leaves ignored
 files alone.
