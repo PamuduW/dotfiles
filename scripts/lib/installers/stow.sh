@@ -89,9 +89,11 @@ configure_git_submodule_defaults() {
 configure_git_global_ignores() {
 	# Lines are added, never rewritten: the file also holds the operator's own
 	# patterns, so it is not stowed. Boost's Bash hook records every agent
-	# command under .boost/hook-meta/ in whatever directory the shell is in.
+	# command under .boost/hook-meta/ in whatever directory the shell is in, and
+	# BoostGraph keeps each repository's index in .codegraph/, whose own
+	# .gitignore leaves itself untracked.
 	local file pattern added=0
-	local -a patterns=('**/.boost/hook-meta/')
+	local -a patterns=('**/.boost/hook-meta/' '**/.codegraph/')
 	file="$(git config --global --type=path --get core.excludesFile || true)"
 	[[ -n "$file" ]] || file="${XDG_CONFIG_HOME:-$HOME/.config}/git/ignore"
 	mkdir -p "$(dirname "$file")" || return 1

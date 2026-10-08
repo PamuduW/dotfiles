@@ -85,7 +85,7 @@ test_global_ignores_are_added_once_and_keep_existing_lines() (
 	configure_git_settings >/dev/null || return 1
 	configure_git_settings >/dev/null || return 1
 
-	[[ "$(cat "$ignore")" == $'**/.claude/settings.local.json\n**/.boost/hook-meta/' ]]
+	[[ "$(cat "$ignore")" == $'**/.claude/settings.local.json\n**/.boost/hook-meta/\n**/.codegraph/' ]]
 )
 
 test_global_ignores_follow_core_excludes_file() (
@@ -97,6 +97,7 @@ test_global_ignores_follow_core_excludes_file() (
 	configure_git_settings >/dev/null || return 1
 
 	grep -Fxq '**/.boost/hook-meta/' "$HOME/custom-ignore" || return 1
+	grep -Fxq '**/.codegraph/' "$HOME/custom-ignore" || return 1
 	[[ ! -e "$XDG_CONFIG_HOME/git/ignore" ]]
 )
 
