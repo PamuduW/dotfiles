@@ -56,11 +56,12 @@ destination that cannot be used safely stops the run with a report rather than
 a second question. The one exception is your memory vault, which the script
 cannot guess: when Agentbot is installed and no vault is configured, it asks for
 the vault's Git URL or an existing folder (Enter skips), then sets it up with
-its commit and push checks. The run ends with one Agentbot Doctor. The
-component selectors shape this first install only: every later update keeps
-all components current. Backing out of Agentbot's selector skips its update
-and the memory step too, and a failed Agentbot phase makes the script exit
-non-zero.
+its commit and push checks. The run ends with one Agentbot Doctor. What you
+choose in Agentbot's selector holds for the whole bootstrap: the Agentbot update
+that follows configures only those components and reports the rest. The
+selectors shape this first run only: a later `dotfiles full-update` keeps every
+component current. Backing out of Agentbot's selector skips its update and the
+memory step too, and a failed Agentbot phase makes the script exit non-zero.
 
 To read the script before running it, or on a machine that already has Git:
 

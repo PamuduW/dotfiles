@@ -348,10 +348,15 @@ AGENTBOT_INSTALL_CANCELLED_RC=4
 AGENTBOT_DECLINED=0
 
 run_agentbot() {
-	local rc=0
+	local rc=0 selection_file components='' update_rc=0
 	load_dotfiles_environment
 	agentbot_prerequisites || return 1
 	step 'Install Agentbot'
+	# The selector is Agentbot's, so its choice comes back through this file and
+	# goes to the update below; otherwise the update configures every component,
+	# including the ones the operator just deselected (Review 2, answer 1).
+	selection_file="$(mktemp)" || return 1
+	export AGENTBOT_INSTALL_SELECTION_FILE="$selection_file"
 	# An operator who is watching gets Agentbot's component selector, the same
 	# choice Dotfiles offers, rather than an all-or-nothing install.
 	if interactive; then
@@ -366,6 +371,11 @@ run_agentbot() {
 		AGENTBOT_INSTALL_SHOW_DOCTOR=0 AGENTBOT_INSTALL_CONFIRM=yes \
 			"$AGENTBOT_DIR/install.sh" install || rc=$?
 	fi
+	unset AGENTBOT_INSTALL_SELECTION_FILE
+	if [[ -s "$selection_file" ]]; then
+		components="$(paste -sd, "$selection_file")"
+	fi
+	rm -f -- "$selection_file"
 	if ((rc == 2)); then
 		restart_after_repository_update Agentbot
 		return 1
@@ -387,10 +397,18 @@ run_agentbot() {
 	# --yes for the same reason as the Dotfiles update: the plan was the
 	# confirmation. Without it a plan needing one ended as a preview, recorded
 	# as done.
-	AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" update --yes || {
+	# An Agentbot that predates the contract writes no file, and the update
+	# stays unscoped, as it always was.
+	if [[ -n "$components" ]]; then
+		AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" update --yes \
+			--components "$components" || update_rc=$?
+	else
+		AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" update --yes || update_rc=$?
+	fi
+	if ((update_rc != 0)); then
 		record 'FAILED   agentbot update'
 		return 1
-	}
+	fi
 	record_phase 'agentbot update'
 }
 
