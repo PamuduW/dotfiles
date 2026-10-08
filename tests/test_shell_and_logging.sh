@@ -47,6 +47,19 @@ test_bashrc_registers_prompt_hook_once() (
 	[[ "$count" == 1 ]]
 )
 
+test_bashrc_turns_off_boost_flag_fetching_for_every_shell() (
+	# Boost's flag refresh sends the Git email and repository name to JFrog
+	# whenever its cache expires, from any agent hook. Every flag is pinned
+	# locally, so the fetch changes nothing; it is turned off. Non-interactive
+	# shells (an editor's WSL server) must get it too, so it sits above the
+	# interactive guard.
+	local fake_home="$TEST_HARNESS_ROOT/bashrc-boost-home" output
+	mkdir -p "$fake_home"
+	output="$(HOME="$fake_home" PATH="/usr/bin:/bin" timeout 5 \
+		bash --noprofile --norc -c "source '$REPO_DIR/bash/.bashrc'; printf '%s' \"\${BOOST_FEATURE_FLAGS_DISABLE:-}\"" 2>/dev/null)"
+	[[ "$output" == 1 ]]
+)
+
 test_codex_shortcuts_use_exact_approval_contracts() (
 	local fake_home="$TEST_HARNESS_ROOT/shortcut-home"
 	local fake_bin="$TEST_HARNESS_ROOT/shortcut-bin"
@@ -110,6 +123,7 @@ check 'update-all calls dotfiles update' test_update_all_calls_supported_command
 check 'update-codex routes through the guarded Dotfiles update workflow' test_update_codex_routes_through_dotfiles_update
 check 'update-copilot alias is absent' test_update_copilot_alias_is_absent
 check '.bashrc registers the Dotfiles prompt hook only once' test_bashrc_registers_prompt_hook_once
+check '.bashrc turns off Boost flag fetching for every shell' test_bashrc_turns_off_boost_flag_fetching_for_every_shell
 check 'Codex shortcuts use exact safe and automatic-approval argv contracts' test_codex_shortcuts_use_exact_approval_contracts
 check 'action log retains only the newest logs and clears orphaned captures' test_action_log_retains_only_the_newest_logs
 

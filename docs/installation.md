@@ -70,7 +70,10 @@ Important boundaries:
 - Vendor scripts are downloaded and checked before execution.
 - GitHub-release installers verify the selected archive checksum.
 - Dotfiles installs Graphify and Boost binaries only; Agentbot owns their agent
-  integration.
+  integration. Graphify is installed without its optional `watchdog`
+  dependency, so `graphify watch` stops with "watchdog not installed"; keep a
+  repository's code graph current with `graphify hook install` (git hooks that
+  rebuild it after each commit, no LLM needed) or `graphify update .` instead.
 
 ## Files changed outside the repository
 

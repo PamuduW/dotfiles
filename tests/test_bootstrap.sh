@@ -510,6 +510,10 @@ EOF
 	{
 		printf '#!/usr/bin/env bash\n'
 		printf 'printf "launcher %%s\\n" "$*" >>"$BOOTSTRAP_TEST_LOG"\n'
+		# A real install hands back the operator's choice through this file.
+		printf 'if [[ -n "${BOOTSTRAP_TEST_SELECTION:-}" && -n "${AGENTBOT_INSTALL_SELECTION_FILE:-}" ]]; then\n'
+		printf '\tprintf "%%s" "$BOOTSTRAP_TEST_SELECTION" >"$AGENTBOT_INSTALL_SELECTION_FILE"\n'
+		printf 'fi\n'
 		printf 'exit "${BOOTSTRAP_TEST_LAUNCHER_RC:-0}"\n'
 	} >"$root/bin/agentbot"
 	chmod +x -- "$root/install.sh" "$root/bin/agentbot"
@@ -522,6 +526,7 @@ _run_agentbot_step() {
 	BOOTSTRAP_SOURCE_ONLY=1 \
 		BOOTSTRAP_TEST_LOG="$BOOTSTRAP_TEST_LOG" \
 		BOOTSTRAP_TEST_LAUNCHER_RC="$launcher_rc" \
+		BOOTSTRAP_TEST_SELECTION="${BOOTSTRAP_TEST_SELECTION:-}" \
 		AGENTBOT_DIR="$checkout" bash -c '
 		source "$1"
 		AGENTBOT_DIR="$2"
@@ -562,6 +567,28 @@ test_backing_out_of_the_selector_is_not_recorded_as_an_install() (
 	# Nor the update: it would configure every component the operator just
 	# declined (Review 2, question 1).
 	! grep -Fq 'install.sh update' "$BOOTSTRAP_TEST_LOG"
+)
+
+test_the_update_after_a_narrowed_install_keeps_the_selection() (
+	# Review 2, answer 1 (2026-10-08): the update after install configured every
+	# component, including the ones the operator had just deselected.
+	local checkout="$TEST_HARNESS_ROOT/agentbot-subset"
+	BOOTSTRAP_TEST_LOG="$TEST_HARNESS_ROOT/agentbot-subset.log"
+	: >"$BOOTSTRAP_TEST_LOG"
+	_agentbot_checkout "$checkout"
+	BOOTSTRAP_TEST_SELECTION=$'skills\nboost\n' _run_agentbot_step "$checkout" >/dev/null || return 1
+	grep -Fq 'install.sh update --yes --components skills,boost' "$BOOTSTRAP_TEST_LOG"
+)
+
+test_an_agentbot_that_records_no_selection_updates_everything() (
+	# An older Agentbot does not know the contract and writes nothing; the update
+	# then stays unscoped, exactly as before.
+	local checkout="$TEST_HARNESS_ROOT/agentbot-old"
+	BOOTSTRAP_TEST_LOG="$TEST_HARNESS_ROOT/agentbot-old.log"
+	: >"$BOOTSTRAP_TEST_LOG"
+	_agentbot_checkout "$checkout"
+	_run_agentbot_step "$checkout" >/dev/null || return 1
+	grep -Fxq 'install.sh update --yes' "$BOOTSTRAP_TEST_LOG"
 )
 
 test_the_summary_prints_exactly_once_before_the_shell_offer() (
@@ -703,6 +730,8 @@ expect_success 'one repository restarting twice is still a loop' test_one_reposi
 expect_success 'the Agentbot phase sees tools Dotfiles just installed' test_agentbot_phase_sees_tools_dotfiles_just_installed
 expect_success 'the install step opens the selector, not the whole menu' test_the_install_step_opens_the_selector_not_the_whole_menu
 expect_success 'backing out of the selector is not recorded as an install' test_backing_out_of_the_selector_is_not_recorded_as_an_install
+expect_success 'the update after a narrowed install keeps the selection' test_the_update_after_a_narrowed_install_keeps_the_selection
+expect_success 'an Agentbot that records no selection updates everything' test_an_agentbot_that_records_no_selection_updates_everything
 expect_success 'the summary prints exactly once before the shell offer' test_the_summary_prints_exactly_once_before_the_shell_offer
 expect_success 'a non-interactive run does not exec a shell' test_a_non_interactive_run_does_not_exec_a_shell
 expect_success 'a failed Agentbot phase fails the run' test_a_failed_agentbot_phase_fails_the_run
