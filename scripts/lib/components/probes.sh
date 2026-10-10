@@ -372,6 +372,7 @@ _COMP_VERSION_PROBES=(
 	'lazydocker|lazydocker|lazydocker|lazydocker|--version|[0-9]+\.[0-9]+\.[0-9]+||'
 	'cursor_cli|cursor/agent|cursor cli|agent cursor|--version|||'
 	'claude_cli|claude|claude cli|claude|--version|||'
+	'antigravity_cli|agy|antigravity cli|agy|--version|[0-9]+\.[0-9]+\.[0-9]+||'
 )
 
 # Resolution is shared with the update checks; see scripts/lib/tool_resolve.sh.

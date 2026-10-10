@@ -178,13 +178,13 @@ test_table_column_headers_are_bold_white() {
 	! grep -Fq $'\033[93m' <<<"$output"
 }
 
-test_component_registry_has_exact_21_with_obsidian() {
+test_component_registry_has_exact_22_with_antigravity() {
 	local expected=(
 		git_identity system_packages python graphify_cli boost_cli powershell go nodejs direnv docker portainer lazygit
-		lazydocker cursor_cli codex_cli claude_cli monaspace_fonts obsidian dotfiles
+		lazydocker cursor_cli codex_cli claude_cli antigravity_cli monaspace_fonts obsidian dotfiles
 		wsl_conf git_credential
 	)
-	[[ "${#COMP_KEYS[@]}" -eq 21 && "${#COMP_LABELS[@]}" -eq 21 ]] || return 1
+	[[ "${#COMP_KEYS[@]}" -eq 22 && "${#COMP_LABELS[@]}" -eq 22 ]] || return 1
 	local i
 	for i in "${!expected[@]}"; do
 		[[ "${COMP_KEYS[$i]}" == "${expected[$i]}" ]] || return 1
@@ -237,7 +237,7 @@ test_codex_and_node_metadata_match_standalone_ownership() {
 test_install_defaults_enable_boost_and_exclude_identity_setup() {
 	local key
 	comp_registry_init
-	[[ "${#COMP_KEYS[@]}" -eq 21 ]] || return 1
+	[[ "${#COMP_KEYS[@]}" -eq 22 ]] || return 1
 	for key in "${COMP_KEYS[@]}"; do
 		case "$key" in
 		git_identity)
@@ -404,7 +404,7 @@ expect_success 'Command details use orange sections and yellow topics' test_comm
 expect_success 'Command lib colors mutating and read-only behavior cells' test_command_lib_colors_behavior_cells_when_enabled
 expect_success 'topic headers use the orange palette' test_topic_headers_use_orange
 expect_success 'table column headers remain bold white' test_table_column_headers_are_bold_white
-expect_success 'component registry exposes the exact 21 described component IDs' test_component_registry_has_exact_21_with_obsidian
+expect_success 'component registry exposes the exact 22 described component IDs' test_component_registry_has_exact_22_with_antigravity
 expect_success 'Boost component text does not claim a version pin' test_boost_description_does_not_claim_a_pin
 expect_success 'Codex and Node component metadata reflect standalone ownership' test_codex_and_node_metadata_match_standalone_ownership
 expect_success 'install defaults enable Boost and leave identity to the operator' test_install_defaults_enable_boost_and_exclude_identity_setup

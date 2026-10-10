@@ -210,6 +210,13 @@ comp_define claude_cli \
 	--order 16 \
 	--desc $'Installs Anthropic Claude CLI from claude.ai.\nUpdate it later through the Dotfiles update workflow.'
 
+comp_define antigravity_cli \
+	--label 'Antigravity CLI' \
+	--plan 'Antigravity CLI' \
+	--detail 'antigravity.google release, SHA-512 verified' \
+	--order 16 \
+	--desc $'Installs Google Antigravity CLI (agy) to ~/.local/bin after verifying the\nSHA-512 digest in its release manifest. Shell profiles are left untouched.'
+
 comp_define monaspace_fonts \
 	--label 'Monaspace fonts (Nerd Fonts)' \
 	--plan 'Monaspace fonts' \

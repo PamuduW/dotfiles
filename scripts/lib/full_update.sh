@@ -20,7 +20,7 @@ FULL_UPDATE_NEVER_INSTALL=(git_identity)
 # first as well installed "Go latest", then checked Go again, every day. They
 # are reinstalled only when their probe cannot tell, or with --force.
 FULL_UPDATE_KEPT_BY_UPDATE_STEPS=(
-	go nodejs lazygit lazydocker cursor_cli codex_cli claude_cli
+	go nodejs lazygit lazydocker cursor_cli codex_cli claude_cli antigravity_cli
 	monaspace_fonts graphify_cli boost_cli obsidian
 )
 
