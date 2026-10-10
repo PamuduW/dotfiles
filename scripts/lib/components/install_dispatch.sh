@@ -89,6 +89,10 @@ _comp_install_claude_cli() {
 	install_claude_cli
 }
 
+_comp_install_antigravity_cli() {
+	install_antigravity_cli
+}
+
 _comp_install_monaspace_fonts() {
 	install_monaspace_fonts
 }

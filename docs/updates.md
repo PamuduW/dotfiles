@@ -46,7 +46,7 @@ stops is the one reported.
 
 The update report separates installed, available, and action. Remote checks run
 through bounded helpers so one stalled tool does not freeze the full report.
-Managed update modules cover apt, Graphify, Boost, Cursor, Codex, Claude,
+Managed update modules cover apt, Graphify, Boost, Cursor, Codex, Claude, Antigravity,
 lazygit, lazydocker, Node.js, npm, Go, Monaspace fonts, Obsidian, and repository state.
 
 Ownership checks prevent Dotfiles from replacing tools it cannot prove it
@@ -55,7 +55,10 @@ Boost updates only when Dotfiles' ownership marker matches the installed
 binary. That marker stays true because Boost's own background self-updater is
 off: Agentbot pins both `[update] auto_update` and the `boost-auto-update`
 feature flag to false, so nothing replaces the binary behind the marker. Codex updates only an active standalone installation. External or
-shadowed commands are preserved and reported.
+shadowed commands are preserved and reported. Antigravity compares
+`agy --version` with the version in its release manifest and updates through
+`agy update`; the CLI also updates itself in the background, so the row can
+move between runs without Dotfiles doing anything.
 
 ## Timing
 

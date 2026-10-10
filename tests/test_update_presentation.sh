@@ -397,7 +397,7 @@ test_the_apt_index_is_refreshed_once_per_run() (
 test_update_step_registry_has_stable_complete_pairs() (
 	local expected=(
 		'apt packages' 'Graphify CLI' 'Boost CLI' 'Cursor CLI' 'Codex CLI'
-		'Claude CLI' lazygit lazydocker 'Node.js (nvm)' npm
+		'Claude CLI' 'Antigravity CLI' lazygit lazydocker 'Node.js (nvm)' npm
 		'Go (asdf)' 'Monaspace fonts' Obsidian 'shared repo' 'dotfiles repo'
 	)
 	update_step_registry_validate || return 1

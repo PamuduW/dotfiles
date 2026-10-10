@@ -67,10 +67,11 @@ shared_repo_status() {
 # --- Ordered update-step registry ---
 # Preview and apply both consume this registry. A step cannot appear in one
 # phase without declaring the handler used by the other phase.
-UPDATE_STEP_KEYS=(apt graphify boost cursor codex claude lazygit lazydocker node npm go monaspace obsidian shared repository)
+UPDATE_STEP_KEYS=(apt graphify boost cursor codex claude antigravity lazygit lazydocker node npm go monaspace obsidian shared repository)
 declare -gA UPDATE_STEP_LABEL=(
 	[apt]='apt packages' [graphify]='Graphify CLI' [boost]='Boost CLI'
 	[cursor]='Cursor CLI' [codex]='Codex CLI' [claude]='Claude CLI'
+	[antigravity]='Antigravity CLI'
 	[lazygit]='lazygit' [lazydocker]='lazydocker'
 	[node]='Node.js (nvm)' [npm]='npm' [go]='Go (asdf)'
 	[monaspace]='Monaspace fonts' [obsidian]='Obsidian' [shared]='shared repo' [repository]='dotfiles repo'
@@ -78,6 +79,7 @@ declare -gA UPDATE_STEP_LABEL=(
 declare -gA UPDATE_STEP_CHECK=(
 	[apt]=check_apt [graphify]=check_graphify_cli [boost]=check_boost_cli
 	[cursor]=check_cursor_cli [codex]=check_codex_cli [claude]=check_claude_cli
+	[antigravity]=check_antigravity_cli
 	[lazygit]=check_lazygit [lazydocker]=check_lazydocker
 	[node]=check_node [npm]=check_npm [go]=check_go [monaspace]=check_monaspace
 	[obsidian]=check_obsidian
@@ -87,6 +89,7 @@ declare -gA UPDATE_STEP_CHECK=(
 declare -gA UPDATE_STEP_APPLY=(
 	[apt]=_apply_apt_update_step [graphify]=upgrade_graphify_cli [boost]=upgrade_boost_cli
 	[cursor]=upgrade_cursor_cli [codex]=upgrade_codex_cli [claude]=upgrade_claude_cli
+	[antigravity]=upgrade_antigravity_cli
 	[lazygit]=upgrade_lazygit [lazydocker]=upgrade_lazydocker
 	[node]=upgrade_node [npm]=_apply_npm_update_step [go]=upgrade_go
 	[monaspace]=upgrade_monaspace [obsidian]=upgrade_obsidian
@@ -95,7 +98,7 @@ declare -gA UPDATE_STEP_APPLY=(
 declare -gA UPDATE_STEP_RETRY=(
 	[apt]='sudo apt-get upgrade' [graphify]='uv tool upgrade graphifyy'
 	[boost]='dotfiles update' [cursor]='dotfiles update'
-	[codex]='dotfiles update' [claude]='claude update'
+	[codex]='dotfiles update' [claude]='claude update' [antigravity]='agy update'
 	[lazygit]='dotfiles update' [lazydocker]='dotfiles update'
 	[node]='nvm install --lts' [npm]='nvm install-latest-npm'
 	[go]='asdf install golang latest' [monaspace]='dotfiles update'
