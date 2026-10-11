@@ -167,7 +167,7 @@ The registry contains 22 components:
 | Base system | system packages, Python packages, PowerShell, WSL configuration |
 | Languages | Go through asdf, Node.js and npm through nvm, direnv |
 | Containers | Docker Engine, Portainer CE LTS, lazydocker |
-| Developer tools | Graphify CLI, Boost CLI, lazygit, Monaspace fonts |
+| Developer tools | Graphify CLI, Boost CLI, lazygit, Kubeconform, TFLint, zizmor, Monaspace fonts |
 | Agent CLIs | Cursor, standalone Codex, Claude, Antigravity |
 | Desktop apps (WSLg) | Obsidian |
 | Shell and Git | Stow packages, Git identity, Git credentials/submodule defaults |

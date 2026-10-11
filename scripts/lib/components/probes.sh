@@ -750,6 +750,29 @@ _comp_probe_boost_cli() {
 		"$found" "$rc" "$ver" "$boost_path" "$owned"
 }
 
+# Kubeconform, TFLint and zizmor: the Boost shape, from the shared row table.
+_comp_probe_release_cli() {
+	local key="$1" command_path='' ver='' rc=0 found=0 owned=0 binary
+	local timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
+	local -a version_argv=()
+
+	binary="$(release_cli_field "$key" binary)"
+	if command_path="$(release_cli_command "$key" 2>/dev/null)"; then
+		found=1
+		read -r -a version_argv <<<"$(release_cli_field "$key" version-args)"
+		_comp_probe_capture ver "$timeout_seconds" "$command_path" "${version_argv[@]}" || rc=$?
+		ver="${ver%%$'\n'*}"
+		release_cli_is_dotfiles_owned "$key" && owned=1
+	fi
+
+	comp_classify owned_cli "$binary" "$binary" ' (Dotfiles managed)' ' (external)' \
+		"$found" "$rc" "$ver" "$command_path" "$owned"
+}
+
+_comp_probe_kubeconform() { _comp_probe_release_cli kubeconform; }
+_comp_probe_tflint() { _comp_probe_release_cli tflint; }
+_comp_probe_zizmor() { _comp_probe_release_cli zizmor; }
+
 # Classification for Codex. Defect 6 in the clean-machine history was a
 # standalone install not yet on PATH being read as shadowed, which routed the
 # run into a migration with nothing to migrate. The state names carry that

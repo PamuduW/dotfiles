@@ -188,3 +188,86 @@ boost_installed_tag() {
 	[[ "$version" == v* ]] || version="v$version"
 	printf '%s\n' "$version"
 }
+
+# --- Release CLIs: single-binary tools installed from verified GitHub releases ---
+#
+# Kubeconform, TFLint and zizmor (roadmap item 9) share one lifecycle: the
+# latest GitHub release, verified against the SHA-256 digest GitHub publishes
+# for the asset, installed to ~/.local/bin with an ownership stamp, exactly as
+# Boost is. Only this table differs between them.
+#
+# Row format: key|label|repository|asset|archive|binary|version-args
+#   asset    {arch} is amd64/arm64, {triple} is x86_64/aarch64
+#   archive  tar (gzip) or zip
+RELEASE_CLI_TOOLS=(
+	'kubeconform|Kubeconform|yannh/kubeconform|kubeconform-linux-{arch}.tar.gz|tar|kubeconform|-v'
+	'tflint|TFLint|terraform-linters/tflint|tflint_linux_{arch}.zip|zip|tflint|--version'
+	'zizmor|zizmor|zizmorcore/zizmor|zizmor-{triple}-unknown-linux-gnu.tar.gz|tar|zizmor|--version'
+)
+
+# release_cli_field <key> <label|repository|asset|archive|binary|version-args>
+release_cli_field() {
+	local key="$1" field="$2" row index
+	case "$field" in
+	label) index=1 ;; repository) index=2 ;; asset) index=3 ;;
+	archive) index=4 ;; binary) index=5 ;; version-args) index=6 ;;
+	*) return 1 ;;
+	esac
+	for row in "${RELEASE_CLI_TOOLS[@]}"; do
+		[[ "${row%%|*}" == "$key" ]] || continue
+		IFS='|' read -r -a _release_cli_row <<<"$row"
+		printf '%s\n' "${_release_cli_row[$index]}"
+		return 0
+	done
+	return 1
+}
+
+release_cli_install_path() {
+	printf '%s\n' "$HOME/.local/bin/$(release_cli_field "$1" binary)"
+}
+
+release_cli_management_stamp() {
+	printf '%s\n' "$HOME/.local/share/dotfiles/$1.version"
+}
+
+release_cli_command() {
+	local binary
+	binary="$(release_cli_field "$1" binary)" || return 1
+	if command -v "$binary" >/dev/null 2>&1; then
+		command -v "$binary"
+	elif [[ -x "$HOME/.local/bin/$binary" ]]; then
+		printf '%s\n' "$HOME/.local/bin/$binary"
+	else
+		return 1
+	fi
+}
+
+# The version as v1.2.3, or nothing when the binary is missing or says no
+# version. Every one of the three prints its version on the first line.
+release_cli_installed_tag() {
+	local command_path version
+	local -a version_argv=()
+	command_path="$(release_cli_command "$1" 2>/dev/null)" || return 1
+	read -r -a version_argv <<<"$(release_cli_field "$1" version-args)"
+	version="$("$command_path" "${version_argv[@]}" 2>/dev/null | head -n1 || true)"
+	version="$(grep -Eo '[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?' <<<"$version" | head -n1)"
+	[[ -n "$version" ]] || return 1
+	printf 'v%s\n' "${version#v}"
+}
+
+release_cli_installed_version() {
+	release_cli_command "$1" >/dev/null 2>&1 || {
+		printf '%s\n' 'not installed'
+		return 0
+	}
+	release_cli_installed_tag "$1" 2>/dev/null || printf '%s\n' installed
+}
+
+release_cli_is_dotfiles_owned() {
+	local command_path stamp
+	command_path="$(release_cli_command "$1" 2>/dev/null)" || return 1
+	[[ "$command_path" == "$(release_cli_install_path "$1")" ]] || return 1
+	stamp="$(release_cli_management_stamp "$1")"
+	[[ -f "$stamp" && ! -L "$stamp" ]] || return 1
+	[[ "$(<"$stamp")" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]
+}
