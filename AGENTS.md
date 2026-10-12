@@ -4,80 +4,10 @@
 
 - **OS:** WSL2 Ubuntu
 - **Shell:** bash
-- **Primary agents:** Cursor, Claude Code, Codex, GitHub Copilot
+- **Primary agents:** Claude Code, Codex, Cursor CLI, Antigravity CLI (`agy`)
 
-Invoke skills in Agent chat by typing `/<skill-name>`.
-
-**Pick 2–4 skills per session by phase — do not load all at once.**
-
-Skills below describe the available project methodology and are maintained
-independently of this repository's installer.
-
-### Methodology
-
-| Skill | Description |
-|---|---|
-| `brainstorming` | Explore options and trade-offs before committing to a direction. |
-| `council` | Parallel subagent exploration and synthesis for multi-area codebase review. |
-| `grilling` | Stress-test a plan or design before building; matches Interaction Rules below. |
-| `recursive-decomposition` | Partition large inputs (10+ files, 50k+ tokens) via subagents and aggregation. |
-| `yagni` | Simplest solution that works; resist premature complexity. |
-| `karpathy-guidelines` | Think before coding; surgical changes only; verifiable success criteria. |
-| `best-practices-research` | Live web recon on current practices before non-trivial implementation. |
-| `literature-review` | Structured review of papers, docs, and prior art with citations. |
-
-### Architecture
-
-| Skill | Description |
-|---|---|
-| `architecture-decision-records` | Capture architectural decisions as lightweight ADRs with rationale. |
-| `domain-modeling` | Build and sharpen domain terminology and ubiquitous language. |
-| `codebase-design` | Deep-module vocabulary for interfaces, seams, and testability. |
-| `codebase-onboarding` | Structured onboarding guide for an unfamiliar codebase. |
-| `improve-codebase-architecture` | Scan for deepening opportunities; visual report and review. |
-| `decision-mapping` | Turn a loose idea into sequenced investigation tickets. |
-
-### Planning
-
-| Skill | Description |
-|---|---|
-| `writing-plans` | Turn requirements into phased, actionable implementation plans. |
-| `implement-plan` | Router: council + best-practices research, implement, then yagni pass. |
-| `prototype` | Throwaway prototype to flesh out design (CLI or UI variations). |
-| `to-prd` | Synthesize conversation into a PRD; publish to issue tracker when configured. |
-| `to-issues` | Break a plan or PRD into independently grabbable tracker issues. |
-| `triage` | Move issues through triage roles on the project issue tracker. |
-| `setup-matt-pocock-skills` | Scaffold tracker, triage labels, and domain docs for planning skills. |
-| `executing-plans` | Work through a plan incrementally with checkpoints. |
-| `subagent-driven-development` | Delegate implementation slices to focused subagents. |
-
-### Quality
-
-| Skill | Description |
-|---|---|
-| `tdd` | Test-driven development via public interfaces; red-green-refactor. |
-| `test-driven-development` | Red-green-refactor cycle; tests before implementation. |
-| `diagnosing-bugs` | Diagnosis loop for hard bugs and performance regressions. |
-| `owasp` | Security review against OWASP guidance. |
-| `explain-code` | Scannable code explanation with TL;DR and small examples. |
-
-### Docs / handoff
-
-| Skill | Description |
-|---|---|
-| `document` | Create or update durable repo documentation verified against code. |
-| `handoff` | Compact session handoff to `docs/handoffs/CURRENT.md` for continuation. |
-| `pitstop` | Action-first, compressed replies with numbered steps and lap restatement. |
-
-### Implementation / DevOps (load on demand)
-
-| Skill | Description |
-|---|---|
-| `kubernetes` / `k8s` | Cluster manifests, deployments, and operational patterns. |
-| `kubernetes-specialist` | Deep K8s troubleshooting, networking, and production hardening. |
-| `terraform` | IaC modules, state, and environment provisioning. |
-| `github-actions` / `gitlab-ci` | CI/CD pipelines, workflows, and release automation. |
-| `devops-engineer` | Cross-cutting infra, observability, and delivery practices. |
+Skills come from Agentbot's curated manifest (`agentbot/skills.sources.yaml`);
+the agent lists what is installed. Use the ones that fit the task.
 
 ### Interaction Rules (how AI must behave in this project)
 
@@ -102,7 +32,7 @@ This file is repository-local policy for the Dotfiles project.
 | `scripts/lib/` | TUI (`menu_simple`, `report_table`), component registry |
 | `scripts/menus/` | Main, initial setup, update, and library menus |
 | `bin/bin/git` | Guarded Git executable used by shells and editors |
-| `bin/bin/dotfiles` | `update`, `restow`, `menu` |
+| `bin/bin/dotfiles` | The `dotfiles` command (status, doctor, update, full-update, restow, menu; see README) |
 | `packages/packages.txt` | Apt components with `@tag` sections |
 | `bash/.bashrc` | Stowed shell config and prompt setup |
 
@@ -112,7 +42,8 @@ This file is repository-local policy for the Dotfiles project.
 ./install.sh                    # interactive boot menu
 dotfiles menu                   # same (after stow)
 dotfiles update
-find scripts -name '*.sh' -print0 | xargs -0 -n1 bash -n   # shell syntax check
+scripts/validate.sh             # the CI gate: syntax, ShellCheck, shfmt, tests
+bash tests/run.sh               # the tests alone
 ```
 
 **Conventions:**

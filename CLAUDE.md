@@ -1,3 +1,3 @@
-IMPORTANT: Read and follow all instructions in AGENTS.md before starting any task.
+Repository policy is in AGENTS.md, imported below.
 
 @AGENTS.md
