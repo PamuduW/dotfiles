@@ -264,6 +264,16 @@ from silently staging undeclared nested repositories as gitlinks. Git aliases
 that expand to `commit`, `add`, `clone`, or `sub add` use the same guards.
 See the [Git wrapper contract](docs/git-wrapper.md).
 
+## Setup reviews
+
+`reviews/` holds the reports `agentbot setup-review` files: an agent CLI
+reviews Dotfiles, Agentbot, the shared library and the skill sources
+read-only, and Agentbot commits `reviews/review_<stamp>_<scope>.md` with a line
+in `reviews/review_log.md` to the `development` branch. Paths and names in a
+report are replaced with placeholders such as `/home/{user}`. After reading a
+review, delete its file and mark its log line `reviewed`. The installer never
+reads or writes this folder.
+
 ## Documentation
 
 - [Technical documentation index](docs/README.md)
