@@ -407,7 +407,11 @@ test_token_verification_asks_github_before_saving() (
 			printf '%s\n' "$*" >>"$calls"
 			printf '200'
 		}
-		github_token_verify tok-accepted
+		# This stub sends no scopes header, which is a fine-grained token's
+		# answer: accepted, with its write access unknown (exit 4).
+		local verdict=0
+		github_token_verify tok-accepted || verdict=$?
+		[[ "$verdict" -eq 0 || "$verdict" -eq 4 ]]
 	) || return 1
 
 	# The token reaches the boundary as its first argument, never as a curl
@@ -497,16 +501,24 @@ test_token_verification_refuses_a_write_capable_scope() (
 	) || rc=$?
 	[[ "$rc" -eq 3 ]] || return 1
 
+	# A classic token with no scopes sends the header empty: it can read
+	# public data and nothing else.
+	rc=0
+	(
+		reply_with_scopes ''
+		github_token_verify tok-noscopes
+	) || rc=$?
+	[[ "$rc" -eq 0 ]] || return 1
+
 	# No header at all is what a fine-grained token produces: its permissions
-	# are not published this way. Unknown is not write-capable, and refusing on
-	# silence would reject the narrowest credential there is.
+	# are not published this way, so whether it can write is unknown. Exit 4
+	# leaves the decision to the operator rather than taking it for them.
 	rc=0
 	(
 		github_token_curl() { printf '200'; }
 		github_token_verify tok-finegrained || exit $?
-		[[ -z "$GITHUB_TOKEN_VERIFY_SCOPES" ]] || exit 9
 	) || rc=$?
-	[[ "$rc" -eq 0 ]] || return 1
+	[[ "$rc" -eq 4 ]] || return 1
 
 	# A rejection still outranks any scope reading.
 	rc=0

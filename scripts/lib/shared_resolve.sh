@@ -21,8 +21,9 @@
 # The CONTRACT revision this repository is written against. It is raised
 # whenever the pairing changes -- including when this side starts requiring a
 # file the shared checkout did not used to carry, which is a breaking
-# combination even though the shared side only gained something. The two must
-# match exactly; a mismatch is a loud stop, not a warning.
+# combination even though the shared side only gained something. The shared
+# checkout must declare at least this revision; an older one is a loud stop,
+# not a warning.
 DOTFILES_SHARED_CONTRACT_REQUIRED=3
 
 DOTFILES_SHARED_URL='https://github.com/PamuduW/dotfiles-shared'

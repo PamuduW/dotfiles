@@ -202,6 +202,23 @@ test_hidden_entry_requires_save_confirmation() (
 	! grep -Fq "$token" "$output"
 )
 
+test_unpublished_scopes_need_the_operator_to_confirm_read_only() (
+	# A fine-grained token publishes no scopes, so nothing proves it cannot
+	# write. It is saved only when the operator says it is read-only.
+	reset_token_state
+	local token output="$TEST_HARNESS_ROOT/fine-grained.menu"
+	token="$(make_token)"
+	github_token_verify() {
+		GITHUB_TOKEN_VERIFY_SCOPES=''
+		return 4
+	}
+	run_menu_script $'s\n'"${token}"$'\nn\nq\n' "$output" || return 1
+	grep -Fq 'does not say whether this token can write' "$output" || return 1
+	[[ ! -e "$(github_token_file)" ]] || return 1
+	run_menu_script $'s\n'"${token}"$'\ny\ny\nq\n' "$output" || return 1
+	[[ -f "$(github_token_file)" ]]
+)
+
 test_confirm_prompt_offers_only_the_keys_it_reads() (
 	# The hint read [y/N/q] while the case below it collapsed everything that
 	# is not y into no, so q did exactly what n did. Two keys are offered
@@ -271,7 +288,7 @@ test_saved_token_can_be_checked_from_the_menu() (
 	github_token_write "$saved" || return 1
 
 	local rc
-	for rc in 0 1 2 3; do
+	for rc in 0 1 2 3 4; do
 		# Scopes matching the verdict: a read-only set for the accepted case,
 		# a write scope for the one that refuses over it.
 		local scopes='read:org'
@@ -284,6 +301,7 @@ test_saved_token_can_be_checked_from_the_menu() (
 		# A token that was read-only when it was saved and has since been given
 		# a write scope is caught here or nowhere.
 		3) grep -Fq 'The saved token can write (repo)' "$output" || return 1 ;;
+		4) grep -Fq 'GitHub accepted the saved token but does not say whether it can write' "$output" || return 1 ;;
 		*) grep -Fq 'Could not reach GitHub to check the saved token.' "$output" || return 1 ;;
 		esac
 		# Only the render prints an outcome, so its presence is the proof it
@@ -395,6 +413,7 @@ expect_success 'strict parser rejects malformed content without execution' test_
 expect_success 'atomic private write, replacement, removal, and unsafe rejection work' test_atomic_private_write_replacement_removal_and_unsafe_rejection
 expect_success 'canary is absent outside confirmed reveal output' test_canary_never_leaks_outside_confirmed_reveal
 expect_success 'hidden entry does not write before save confirmation' test_hidden_entry_requires_save_confirmation
+expect_success 'a token with unpublished scopes is saved only when confirmed read-only' test_unpublished_scopes_need_the_operator_to_confirm_read_only
 expect_success 'menu save, entry cancel, remove confirm/cancel, and q preserve state' test_menu_save_cancel_remove_and_q_state_machine
 expect_success 'the confirm prompt offers only the keys it reads' test_confirm_prompt_offers_only_the_keys_it_reads
 expect_success 'the save hint names the fingerprint it will show' test_save_hint_names_what_will_be_shown

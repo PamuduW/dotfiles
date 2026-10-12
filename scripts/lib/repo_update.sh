@@ -25,7 +25,7 @@ source "$DOTFILES_SHARED_LIB/repo_update.sh"
 # Every command that touches this checkout gates the repositories it depends on
 # together, before any work: the shared library first, because either product
 # loads code from it, then this repository. Only the ones actually present are
-# checked, so "Dotfiles only" is gated on two and a full run on three.
+# checked: the shared library when it is configured, then this checkout.
 #
 # One gate rather than one per repository, and up front rather than when each
 # is first needed: the operator learns everything that will move before
@@ -72,7 +72,7 @@ _dotfiles_gate_one() {
 # Every command that touches this checkout gates the repositories it depends on
 # together, before any work: the shared library first, because either product
 # loads code from it, then this repository. Only the ones present are checked,
-# so "Dotfiles only" is gated on two and a full run on three.
+# so the shared library when it is configured, then this checkout.
 dotfiles_repo_gate() {
 	_DOTFILES_GATE_DECISION="$1"
 	_DOTFILES_GATE_RESULT="$2"

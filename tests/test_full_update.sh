@@ -669,6 +669,14 @@ test_a_failing_agentbot_keeps_its_status() (
 	[[ "$rc" -eq 7 ]]
 )
 
+test_full_update_never_approves_replacing_local_work() (
+	# Unattended, it may pull a behind checkout and carry on past an ahead one,
+	# but stashing and resetting local work needs the operator (docs/updates.md).
+	_dotfiles_approve_repo_update pull-behind 'Pull 1 commit(s) with --ff-only?' || return 1
+	_dotfiles_approve_repo_update continue-ahead 'Continue?' || return 1
+	! _dotfiles_approve_repo_update replace-local 'Back up local work and replace it?' 2>/dev/null
+)
+
 expect_success 'Agentbot reports its install and update separately' test_agentbot_reports_its_two_halves_separately
 expect_success 'an Agentbot that reports nothing is still one section' test_an_agentbot_that_reports_nothing_is_still_one_section
 expect_success 'a failing Agentbot keeps its status' test_a_failing_agentbot_keeps_its_status
@@ -682,5 +690,6 @@ expect_success 'Agentbot warning output maps to the postflight warning state' te
 expect_success 'the full-update module set is closed over its own references' test_full_update_module_set_is_closed_over_its_own_references
 expect_success 'full update without Agentbot is not a failure' test_full_update_without_agentbot_is_not_a_failure
 expect_success 'full update still fails when Agentbot is installed but unreachable' test_full_update_still_fails_when_agentbot_is_installed_but_unreachable
+expect_success 'full update never approves replacing local work' test_full_update_never_approves_replacing_local_work
 
 finish_tests
