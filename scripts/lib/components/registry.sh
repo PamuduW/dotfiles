@@ -181,6 +181,27 @@ comp_define lazygit \
 	--order 6 \
 	--desc $'Terminal UI for Git, downloaded from GitHub releases.\nUse it to review status, stage changes, and manage commits interactively.'
 
+comp_define kubeconform \
+	--label 'Kubeconform (Kubernetes schema check)' \
+	--plan 'Kubeconform' \
+	--detail 'latest verified release' \
+	--order 6 \
+	--desc $'Installs the latest Kubeconform release to ~/.local/bin after verifying the\nSHA-256 digest GitHub publishes. Checks manifests against Kubernetes schemas;\nit does not replace kubectl --dry-run=server.'
+
+comp_define tflint \
+	--label 'TFLint (Terraform linter)' \
+	--plan 'TFLint' \
+	--detail 'latest verified release' \
+	--order 6 \
+	--desc $'Installs the latest TFLint release to ~/.local/bin after verifying the SHA-256\ndigest GitHub publishes. Provider rule plugins and .tflint.hcl belong to each\nrepository; Dotfiles installs neither.'
+
+comp_define zizmor \
+	--label 'zizmor (GitHub Actions security)' \
+	--plan 'zizmor' \
+	--detail 'latest verified release' \
+	--order 6 \
+	--desc $'Installs the latest zizmor release to ~/.local/bin after verifying the SHA-256\ndigest GitHub publishes. Runs offline; no GitHub token is configured.'
+
 comp_define lazydocker \
 	--label 'lazydocker (docker TUI)' \
 	--plan 'lazydocker' \

@@ -46,7 +46,7 @@ stops is the one reported.
 
 The update report separates installed, available, and action. Remote checks run
 through bounded helpers so one stalled tool does not freeze the full report.
-Managed update modules cover apt, Graphify, Boost, Cursor, Codex, Claude, Antigravity,
+Managed update modules cover apt, Graphify, Boost, Kubeconform, TFLint, zizmor, Cursor, Codex, Claude, Antigravity,
 lazygit, lazydocker, Node.js, npm, Go, Monaspace fonts, Obsidian, and repository state.
 
 Ownership checks prevent Dotfiles from replacing tools it cannot prove it
@@ -54,7 +54,9 @@ owns. Graphify updates only when `uv tool list` attributes it to `graphifyy`.
 Boost updates only when Dotfiles' ownership marker matches the installed
 binary. That marker stays true because Boost's own background self-updater is
 off: Agentbot pins both `[update] auto_update` and the `boost-auto-update`
-feature flag to false, so nothing replaces the binary behind the marker. Codex updates only an active standalone installation. External or
+feature flag to false, so nothing replaces the binary behind the marker.
+Kubeconform, TFLint and zizmor follow the same marker rule and move to a newer
+release only when its digest verifies. Codex updates only an active standalone installation. External or
 shadowed commands are preserved and reported. Antigravity compares
 `agy --version` with the version in its release manifest and updates through
 `agy update`; the CLI also updates itself in the background, so the row can
@@ -85,7 +87,8 @@ unattended maintenance sequence:
    restarting once if either moves forward.
 2. Re-apply the components the probes report as already applied, except
    those an update step keeps current (Go, Node, lazygit, lazydocker, the
-   agent CLIs, fonts, Graphify, Boost, Obsidian), which step 3 updates.
+   agent CLIs, fonts, Graphify, Boost, Kubeconform, TFLint, zizmor, Obsidian),
+   which step 3 updates.
 3. Run the Dotfiles update workflow with approved application prompts.
 4. Print the resolved Dotfiles and Agentbot launchers/checkouts, and refuse an
    unexpected Agentbot checkout.

@@ -7,7 +7,8 @@
   channels rather than checksum-pinned artifacts.
 - GitHub-release installers for lazygit and lazydocker verify the selected
   archive against the release checksum manifest.
-- Boost installs a verified release asset and only the CLI binary.
+- Boost, Kubeconform, TFLint and zizmor install a release asset verified against
+  the SHA-256 digest GitHub publishes for it, and only the CLI binary.
 - Portainer follows the stable LTS tag and preserves custom container layouts.
 
 Remote metadata failures fail closed where ownership or integrity cannot be

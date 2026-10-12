@@ -30,6 +30,18 @@ _comp_install_boost_cli() {
 	install_boost_cli
 }
 
+_comp_install_kubeconform() {
+	install_release_cli kubeconform
+}
+
+_comp_install_tflint() {
+	install_release_cli tflint
+}
+
+_comp_install_zizmor() {
+	install_release_cli zizmor
+}
+
 _comp_install_powershell() {
 	install_powershell
 }

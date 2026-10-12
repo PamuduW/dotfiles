@@ -2,7 +2,7 @@
 
 ## Registry
 
-`scripts/lib/components/registry.sh` defines the 22 stable component keys,
+`scripts/lib/components/registry.sh` defines the 25 stable component keys,
 labels, plan details, descriptions, package tags, dependencies, and installation
 order. Keep those records synchronized with probes, install dispatch, update
 logic, Command lib, Package lib, and user documentation.
@@ -12,13 +12,28 @@ logic, Command lib, Package lib, and user documentation.
 | Identity and Git | `git_identity`, `git_credential` |
 | System and language runtimes | `system_packages`, `python`, `powershell`, `go`, `nodejs`, `direnv` |
 | Containers | `docker`, `portainer`, `lazydocker` |
-| Development tools | `graphify_cli`, `boost_cli`, `lazygit` |
+| Development tools | `graphify_cli`, `boost_cli`, `lazygit`, `kubeconform`, `tflint`, `zizmor` |
 | Agent CLIs | `cursor_cli`, `codex_cli`, `claude_cli`, `antigravity_cli` |
 | Desktop and shell | `monaspace_fonts`, `obsidian`, `dotfiles`, `wsl_conf` |
 
 Git identity is disabled by default. Other components
 start selected. Dependencies are enforced by the registry; Portainer and
 lazydocker depend on Docker, and Stow deployment depends on system packages.
+
+Kubeconform, TFLint and zizmor share one installer
+(`scripts/lib/installers/release_cli.sh`) and one row table
+(`RELEASE_CLI_TOOLS` in `scripts/lib/managed_tool_state.sh`). Each installs the
+latest GitHub release to `~/.local/bin` after checking the SHA-256 digest GitHub
+publishes for the asset, extracts only the binary, and writes an ownership
+stamp to `~/.local/share/dotfiles/<key>.version`, as Boost does. A copy
+Dotfiles did not install is reported as external and never replaced.
+
+Dotfiles owns only the executables. TFLint provider plugins and `.tflint.hcl`,
+zizmor configuration and any GitHub token for its online audits, and
+Kubernetes schema caches belong to the repository that uses them. zizmor runs
+offline; Kubeconform fetches schemas on demand unless pointed at local ones.
+Kubeconform checks schemas only and does not replace `kubectl
+--dry-run=server`.
 
 ## State flow
 

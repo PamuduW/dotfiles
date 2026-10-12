@@ -250,6 +250,38 @@ test_status_is_local_read_only() {
 	[[ ! -s "$TEST_URL_LOG" ]]
 }
 
+test_release_cli_probes_report_ownership_and_version() (
+	local fake_home="$TEST_HARNESS_ROOT/release-cli-home" output
+	mkdir -p "$fake_home/.local/bin" "$fake_home/.local/share/dotfiles"
+	HOME="$fake_home"
+	PATH="/usr/bin:/bin"
+	export HOME PATH
+
+	output="$(_comp_probe_tflint)"
+	[[ "$output" == 'missing|tflint not on PATH' ]] || return 1
+
+	printf '%s\n' '#!/usr/bin/env bash' 'printf "TFLint version 0.64.0\n+ ruleset.terraform (0.15.0-bundled)\n"' \
+		>"$fake_home/.local/bin/tflint"
+	chmod +x "$fake_home/.local/bin/tflint"
+	output="$(_comp_probe_tflint)"
+	[[ "$output" == 'installed|TFLint version 0.64.0 (external)' ]] || return 1
+
+	printf 'v0.64.0\n' >"$fake_home/.local/share/dotfiles/tflint.version"
+	output="$(_comp_probe_tflint)"
+	[[ "$output" == 'installed|TFLint version 0.64.0 (Dotfiles managed)' ]] || return 1
+
+	printf '%s\n' '#!/usr/bin/env bash' 'echo garbage' >"$fake_home/.local/bin/zizmor"
+	chmod +x "$fake_home/.local/bin/zizmor"
+	printf 'not-a-version\n' >"$fake_home/.local/share/dotfiles/zizmor.version"
+	output="$(_comp_probe_zizmor)"
+	[[ "$output" == 'installed|garbage (external)' ]] || return 1
+
+	printf '%s\n' '#!/usr/bin/env bash' 'exit 124' >"$fake_home/.local/bin/kubeconform"
+	chmod +x "$fake_home/.local/bin/kubeconform"
+	output="$(_comp_probe_kubeconform)"
+	[[ "$output" == 'check|kubeconform probe timed out' ]]
+)
+
 expect_success 'probe capture keeps only the first output line' test_probe_capture_keeps_only_first_line
 expect_success 'probe capture preserves command failure status' test_probe_capture_preserves_command_failure
 expect_success 'probe capture bounds a stalled command' test_probe_capture_bounds_stalled_command
@@ -308,5 +340,6 @@ test_generic_probe_reports_missing_timeout_and_version() (
 expect_success 'dotfiles status is local-only and reports freshness unchecked' test_status_is_local_read_only
 expect_success 'every version-probe table row has a probe and a registered component' test_generic_version_probes_cover_every_table_row
 expect_success 'generic probe reports missing, version, fallback, and timeout states' test_generic_probe_reports_missing_timeout_and_version
+expect_success 'release CLI probes report missing, external, managed, malformed and timeout states' test_release_cli_probes_report_ownership_and_version
 
 finish_tests
