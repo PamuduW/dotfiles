@@ -404,7 +404,14 @@ _dotfiles_run_update() {
 		repo_update_print_changed
 		return 2
 	fi
-	repo_update_is_declined repo_result && return 0
+	# An operator who said no chose to stop, which is not an error. An
+	# unattended run that declined (full-update never replaces local work on
+	# its own) did not do what it was asked: 3 tells its caller to stop rather
+	# than carry on and report the run complete.
+	if repo_update_is_declined repo_result; then
+		[[ "$unattended" == true ]] && return 3
+		return 0
+	fi
 	[[ "$repo_rc" -eq 0 ]] || return 1
 
 	if [[ -n "$post_repo_fn" ]]; then

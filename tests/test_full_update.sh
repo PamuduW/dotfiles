@@ -696,6 +696,18 @@ test_a_failing_agentbot_keeps_its_status() (
 	[[ "$rc" -eq 7 ]]
 )
 
+test_full_update_stops_when_local_work_blocks_the_update() (
+	local events="$TEST_HARNESS_ROOT/full-update-blocked.events" rc=0
+	: >"$events"
+	_dotfiles_run_update() { return 3; }
+	agentbot() { printf 'agentbot:%s\n' "$*" >>"$events"; }
+	full_update_run_agentbot() { printf 'agentbot-run\n' >>"$events"; }
+	cmd_full_update >"$TEST_HARNESS_ROOT/blocked.out" 2>&1 || rc=$?
+	[[ "$rc" -ne 0 ]] || return 1
+	[[ ! -s "$events" ]] || return 1
+	grep -q 'Local changes' "$TEST_HARNESS_ROOT/blocked.out"
+)
+
 test_full_update_never_approves_replacing_local_work() (
 	# Unattended, it may pull a behind checkout and carry on past an ahead one,
 	# but stashing and resetting local work needs the operator (docs/updates.md).
@@ -720,5 +732,6 @@ expect_success 'the full-update module set is closed over its own references' te
 expect_success 'full update without Agentbot is not a failure' test_full_update_without_agentbot_is_not_a_failure
 expect_success 'full update still fails when Agentbot is installed but unreachable' test_full_update_still_fails_when_agentbot_is_installed_but_unreachable
 expect_success 'full update never approves replacing local work' test_full_update_never_approves_replacing_local_work
+expect_success 'full update stops when local work blocks the update' test_full_update_stops_when_local_work_blocks_the_update
 
 finish_tests

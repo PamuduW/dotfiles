@@ -400,6 +400,11 @@ cmd_full_update() {
 		full_update_restart_dotfiles "${restart_args[@]}"
 		return $?
 		;;
+	3)
+		_err 'Local changes in the Dotfiles or shared checkout; full update stopped before changing anything.'
+		_err 'Commit, stash or push them, or run "dotfiles update" to choose what happens to them.'
+		return 1
+		;;
 	*) return "$dotfiles_rc" ;;
 	esac
 

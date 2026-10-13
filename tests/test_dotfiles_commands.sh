@@ -82,6 +82,28 @@ test_update_without_dry_run_still_prompts_and_runs() (
 	[[ "$(<"$events")" == $'report\nconfirm\ndownstream\nsummary' ]]
 )
 
+test_an_unattended_decline_is_not_a_success() (
+	# full-update declines replacing local work on its own. Returning 0 for
+	# that decline let full-update skip the Dotfiles work, carry on into
+	# Agentbot and report the run completed.
+	local events="$TEST_HARNESS_ROOT/decline.events" rc=0
+	: >"$events"
+	repo_update_run() {
+		local -n result_ref="$4"
+		result_ref=([outcome]=stopped [reason]=replace-declined [state]=ahead)
+		return 0
+	}
+	repo_update_is_declined() { return 0; }
+	_post_repo() { printf 'post\n' >>"$events"; }
+	_dotfiles_run_update _dotfiles_approve true false _post_repo >/dev/null 2>&1 || rc=$?
+	[[ "$rc" -eq 3 ]] || return 1
+	[[ ! -s "$events" ]] || return 1
+	# An operator who declined at the prompt chose to stop: still not an error.
+	rc=0
+	_dotfiles_run_update _dotfiles_confirm_repo_update false false _post_repo >/dev/null 2>&1 || rc=$?
+	[[ "$rc" -eq 0 && ! -s "$events" ]]
+)
+
 test_logs_lists_newest_first_and_prints_the_last() (
 	local log_dir="$TEST_HARNESS_ROOT/logs-repo/log"
 	mkdir -p "$log_dir"
@@ -149,6 +171,7 @@ expect_success 'doctor lists only components needing attention and exits nonzero
 expect_success 'doctor exits zero when everything is healthy' test_doctor_succeeds_when_everything_is_healthy
 expect_success 'update --dry-run reports then stops before any downstream work' test_update_dry_run_reports_then_stops
 expect_success 'update without --dry-run still confirms and runs downstream' test_update_without_dry_run_still_prompts_and_runs
+expect_success 'an unattended decline is not reported as success' test_an_unattended_decline_is_not_a_success
 expect_success 'logs lists newest first and --last prints the newest' test_logs_lists_newest_first_and_prints_the_last
 expect_success 'logs is quiet when empty and rejects unknown options' test_logs_is_quiet_with_no_logs_and_rejects_bad_options
 expect_success 'a short form resolves to its canonical command' test_alias_resolves_to_the_canonical_command
