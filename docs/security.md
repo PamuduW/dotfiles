@@ -9,6 +9,11 @@
   archive against the release checksum manifest.
 - Boost, Kubeconform, TFLint and zizmor install a release asset verified against
   the SHA-256 digest GitHub publishes for it, and only the CLI binary.
+- The Chrome headless shell has no published checksum. Its version and URL
+  come from Chrome for Testing's version list, the URL must be in Google's
+  `chrome-for-testing-public` bucket, every archive member must stay inside
+  the build directory, and the unpacked shell must report that version before
+  it replaces the installed one. Integrity beyond that rests on HTTPS.
 - Portainer follows the stable LTS tag and preserves custom container layouts.
 
 Remote metadata failures fail closed where ownership or integrity cannot be

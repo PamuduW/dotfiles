@@ -773,6 +773,21 @@ _comp_probe_kubeconform() { _comp_probe_release_cli kubeconform; }
 _comp_probe_tflint() { _comp_probe_release_cli tflint; }
 _comp_probe_zizmor() { _comp_probe_release_cli zizmor; }
 
+_comp_probe_chrome_headless() {
+	local command_path='' ver='' rc=0 found=0 owned=0
+	local timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
+
+	if command_path="$(chrome_headless_command 2>/dev/null)"; then
+		found=1
+		_comp_probe_capture ver "$timeout_seconds" "$command_path" --version || rc=$?
+		ver="${ver%%$'\n'*}"
+		chrome_headless_is_dotfiles_owned && owned=1
+	fi
+
+	comp_classify owned_cli chrome-headless-shell chrome-headless-shell ' (Dotfiles managed)' ' (external)' \
+		"$found" "$rc" "$ver" "$command_path" "$owned"
+}
+
 # Classification for Codex. Defect 6 in the clean-machine history was a
 # standalone install not yet on PATH being read as shadowed, which routed the
 # run into a migration with nothing to migrate. The state names carry that

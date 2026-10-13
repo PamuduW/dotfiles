@@ -282,6 +282,31 @@ test_release_cli_probes_report_ownership_and_version() (
 	[[ "$output" == 'check|kubeconform probe timed out' ]]
 )
 
+test_chrome_headless_probe_reports_ownership_through_its_link() (
+	local fake_home="$TEST_HARNESS_ROOT/chrome-headless-home" output build
+	rm -rf -- "$fake_home"
+	mkdir -p "$fake_home/.local/bin" "$fake_home/.local/share/dotfiles"
+	HOME="$fake_home"
+	PATH="/usr/bin:/bin"
+	export HOME PATH
+
+	output="$(_comp_probe_chrome_headless)"
+	[[ "$output" == 'missing|chrome-headless-shell not on PATH' ]] || return 1
+
+	build="$fake_home/.local/share/chrome-headless-shell"
+	mkdir -p "$build"
+	printf '%s\n' '#!/usr/bin/env bash' 'echo "Google Chrome for Testing 155.0.8059.39"' >"$build/chrome-headless-shell"
+	chmod +x "$build/chrome-headless-shell"
+	cp "$build/chrome-headless-shell" "$fake_home/.local/bin/chrome-headless-shell"
+	printf '155.0.8059.39\n' >"$fake_home/.local/share/dotfiles/chrome_headless.version"
+	output="$(_comp_probe_chrome_headless)"
+	[[ "$output" == 'installed|Google Chrome for Testing 155.0.8059.39 (external)' ]] || return 1
+
+	ln -sfn "$build/chrome-headless-shell" "$fake_home/.local/bin/chrome-headless-shell"
+	output="$(_comp_probe_chrome_headless)"
+	[[ "$output" == 'installed|Google Chrome for Testing 155.0.8059.39 (Dotfiles managed)' ]]
+)
+
 expect_success 'probe capture keeps only the first output line' test_probe_capture_keeps_only_first_line
 expect_success 'probe capture preserves command failure status' test_probe_capture_preserves_command_failure
 expect_success 'probe capture bounds a stalled command' test_probe_capture_bounds_stalled_command
@@ -341,5 +366,6 @@ expect_success 'dotfiles status is local-only and reports freshness unchecked' t
 expect_success 'every version-probe table row has a probe and a registered component' test_generic_version_probes_cover_every_table_row
 expect_success 'generic probe reports missing, version, fallback, and timeout states' test_generic_probe_reports_missing_timeout_and_version
 expect_success 'release CLI probes report missing, external, managed, malformed and timeout states' test_release_cli_probes_report_ownership_and_version
+expect_success 'Chrome headless shell probe reports missing, external and managed through its link' test_chrome_headless_probe_reports_ownership_through_its_link
 
 finish_tests

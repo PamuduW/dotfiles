@@ -271,3 +271,62 @@ release_cli_is_dotfiles_owned() {
 	[[ -f "$stamp" && ! -L "$stamp" ]] || return 1
 	[[ "$(<"$stamp")" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]
 }
+
+# --- Chrome headless shell: the browser Archify's browser gate drives ---
+#
+# Chrome for Testing's headless shell, the latest Stable build, unpacked into
+# its own directory with a link in ~/.local/bin and an ownership stamp. The
+# directory holds the whole build: the shell loads its libraries and resources
+# from beside itself.
+chrome_headless_root() {
+	printf '%s\n' "$HOME/.local/share/chrome-headless-shell"
+}
+
+chrome_headless_install_path() {
+	printf '%s\n' "$HOME/.local/bin/chrome-headless-shell"
+}
+
+chrome_headless_management_stamp() {
+	printf '%s\n' "$HOME/.local/share/dotfiles/chrome_headless.version"
+}
+
+chrome_headless_command() {
+	if command -v chrome-headless-shell >/dev/null 2>&1; then
+		command -v chrome-headless-shell
+	elif [[ -x "$(chrome_headless_install_path)" ]]; then
+		chrome_headless_install_path
+	else
+		return 1
+	fi
+}
+
+# The four-part Chrome version, or nothing when the shell is missing or does
+# not start (a missing system library fails here).
+chrome_headless_installed_tag() {
+	local command_path version
+	command_path="$(chrome_headless_command 2>/dev/null)" || return 1
+	version="$("$command_path" --version 2>/dev/null | head -n1 || true)"
+	version="$(grep -Eo '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' <<<"$version" | head -n1)"
+	[[ -n "$version" ]] || return 1
+	printf '%s\n' "$version"
+}
+
+chrome_headless_installed_version() {
+	chrome_headless_command >/dev/null 2>&1 || {
+		printf '%s\n' 'not installed'
+		return 0
+	}
+	chrome_headless_installed_tag 2>/dev/null || printf '%s\n' installed
+}
+
+chrome_headless_is_dotfiles_owned() {
+	local command_path target root stamp
+	command_path="$(chrome_headless_command 2>/dev/null)" || return 1
+	[[ "$command_path" == "$(chrome_headless_install_path)" && -L "$command_path" ]] || return 1
+	target="$(readlink -f -- "$command_path" 2>/dev/null)" || return 1
+	root="$(readlink -f -- "$(chrome_headless_root)" 2>/dev/null)" || return 1
+	[[ "$target" == "$root"/* ]] || return 1
+	stamp="$(chrome_headless_management_stamp)"
+	[[ -f "$stamp" && ! -L "$stamp" ]] || return 1
+	[[ "$(<"$stamp")" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
+}

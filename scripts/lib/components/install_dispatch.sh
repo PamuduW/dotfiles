@@ -42,6 +42,10 @@ _comp_install_zizmor() {
 	install_release_cli zizmor
 }
 
+_comp_install_chrome_headless() {
+	install_chrome_headless
+}
+
 _comp_install_powershell() {
 	install_powershell
 }

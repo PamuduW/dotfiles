@@ -26,6 +26,8 @@ source "$_INSTALL_LIB_DIR/graphify.sh"
 source "$_INSTALL_LIB_DIR/boost.sh"
 # shellcheck source=scripts/lib/installers/release_cli.sh
 source "$_INSTALL_LIB_DIR/release_cli.sh"
+# shellcheck source=scripts/lib/installers/chrome_headless.sh
+source "$_INSTALL_LIB_DIR/chrome_headless.sh"
 # shellcheck source=scripts/lib/installers/antigravity.sh
 source "$_INSTALL_LIB_DIR/antigravity.sh"
 # shellcheck source=scripts/lib/installers/fonts.sh

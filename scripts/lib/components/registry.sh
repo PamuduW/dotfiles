@@ -202,6 +202,13 @@ comp_define zizmor \
 	--order 6 \
 	--desc $'Installs the latest zizmor release to ~/.local/bin after verifying the SHA-256\ndigest GitHub publishes. Runs offline; no GitHub token is configured.'
 
+comp_define chrome_headless \
+	--label 'Chrome headless shell (Archify browser gate)' \
+	--plan 'Chrome headless shell' \
+	--detail 'latest Chrome for Testing Stable' \
+	--order 6 \
+	--desc $'Installs the latest Chrome for Testing headless shell to\n~/.local/share/chrome-headless-shell, linked from ~/.local/bin. The Archify\nskill drives it for its browser gate. Google publishes no checksum for it.'
+
 comp_define lazydocker \
 	--label 'lazydocker (docker TUI)' \
 	--plan 'lazydocker' \
