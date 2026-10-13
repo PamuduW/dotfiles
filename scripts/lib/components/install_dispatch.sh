@@ -187,9 +187,14 @@ run_install() {
 	# One masked prompt here rather than sudo's silent one at whichever
 	# component happens to need root first. The rest of the run uses sudo's
 	# credential cache and never prompts again.
+	# How long it waited is published, so a full update can show it as its own
+	# section instead of folding it into whichever section is a remainder.
+	local prompt_started
+	prompt_started="$(_install_now_seconds)"
 	if declare -F sudo_prime >/dev/null 2>&1; then
 		sudo_prime || true
 	fi
+	declare -g DOTFILES_PASSWORD_WAIT_SECONDS=$(($(_install_now_seconds) - prompt_started))
 
 	# Per-component wall-clock, so where a long install actually spends its time
 	# is a measurement rather than a guess.

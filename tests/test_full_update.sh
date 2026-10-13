@@ -622,6 +622,33 @@ test_the_install_section_falls_back_to_its_own_clock() (
 	[[ "${FULL_UPDATE_SECTION_SECONDS['Dotfiles install']}" =~ ^[0-9]+$ ]]
 )
 
+test_password_wait_is_its_own_section() (
+	# Time at the sudo prompt is the operator's, not the run's. It used to
+	# land in "Dotfiles update" as the remainder: 7m 30s on a run whose steps
+	# took 22 seconds.
+	FULL_UPDATE_SECTION_SECONDS=()
+	full_update_install_applied_components() {
+		DOTFILES_INSTALL_SECONDS=13
+		DOTFILES_PASSWORD_WAIT_SECONDS=417
+	}
+	_full_update_dotfiles_install || return 1
+	[[ "${FULL_UPDATE_SECTION_SECONDS['Waiting for password']}" == 417 ]] || return 1
+	_full_update_record_dotfiles_update "$(($(timing_now_seconds) - 452))"
+	# 452 elapsed - 13 install - 417 waiting
+	[[ "${FULL_UPDATE_SECTION_SECONDS['Dotfiles update']}" == 22 ]]
+)
+
+test_no_prompt_means_no_waiting_section() (
+	# A cached sudo credential asks nothing, and a zero-second section is noise.
+	FULL_UPDATE_SECTION_SECONDS=()
+	full_update_install_applied_components() {
+		DOTFILES_INSTALL_SECONDS=13
+		DOTFILES_PASSWORD_WAIT_SECONDS=0
+	}
+	_full_update_dotfiles_install || return 1
+	[[ -z "${FULL_UPDATE_SECTION_SECONDS['Waiting for password']+set}" ]]
+)
+
 test_a_section_keeps_the_status_it_wrapped() (
 	# The clock must not swallow a failure: a section that fails still fails,
 	# and is still recorded.
@@ -684,6 +711,8 @@ expect_success 'full update closes on what each section spent' test_full_update_
 expect_success 'the install section uses the figure the install published' test_the_install_section_uses_the_installs_own_clock
 expect_success 'the install section falls back to its own clock' test_the_install_section_falls_back_to_its_own_clock
 expect_success 'a timed section keeps the status it wrapped' test_a_section_keeps_the_status_it_wrapped
+expect_success 'time at the password prompt is its own section' test_password_wait_is_its_own_section
+expect_success 'no prompt means no waiting section' test_no_prompt_means_no_waiting_section
 expect_success 'full-update refuses an unexpected Agentbot checkout' test_full_update_refuses_unexpected_agentbot_checkout
 expect_success 'postflight distinguishes healthy warning and error outcomes' test_postflight_distinguishes_warnings_errors_and_health
 expect_success 'Agentbot warning output maps to the postflight warning state' test_agentbot_doctor_warning_output_maps_to_warning_state
