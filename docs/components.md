@@ -12,7 +12,7 @@ logic, Command lib, Package lib, and user documentation.
 | Identity and Git | `git_identity`, `git_credential` |
 | System and language runtimes | `system_packages`, `python`, `powershell`, `go`, `nodejs`, `direnv` |
 | Containers | `docker`, `portainer`, `lazydocker` |
-| Development tools | `graphify_cli`, `boost_cli`, `lazygit`, `kubeconform`, `tflint`, `zizmor` |
+| Development tools | `graphify_cli`, `boost_cli`, `lazygit`, `kubeconform`, `tflint`, `zizmor`, `chrome_headless` |
 | Agent CLIs | `cursor_cli`, `codex_cli`, `claude_cli`, `antigravity_cli` |
 | Desktop and shell | `monaspace_fonts`, `obsidian`, `dotfiles`, `wsl_conf` |
 
@@ -34,6 +34,16 @@ Kubernetes schema caches belong to the repository that uses them. zizmor runs
 offline; Kubeconform fetches schemas on demand unless pointed at local ones.
 Kubeconform checks schemas only and does not replace `kubectl
 --dry-run=server`.
+
+`chrome_headless` installs the latest Stable build of Chrome for Testing's
+headless shell (`scripts/lib/installers/chrome_headless.sh`), the browser the
+Archify skill drives for its browser gate. The whole build unpacks to
+`~/.local/share/chrome-headless-shell`, `~/.local/bin/chrome-headless-shell`
+links to it, and the stamp is `~/.local/share/dotfiles/chrome_headless.version`;
+ownership needs both the link into that directory and the stamp. The stowed
+`.bashrc` exports `ARCHIFY_CHROME` when the link exists, and
+`ARCHIFY_UPDATE_CHECK_DISABLED=1` so Archify does not check GitHub on every
+render. Agentbot installs the skill itself.
 
 ## State flow
 

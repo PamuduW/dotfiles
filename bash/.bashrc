@@ -7,6 +7,14 @@
 # the interactive guard, so an editor's non-interactive WSL server gets it too.
 export BOOST_FEATURE_FLAGS_DISABLE=1
 
+# The Archify skill's browser gate drives the Chrome headless shell Dotfiles
+# installs, and its finalize step otherwise checks GitHub for a newer Archify on
+# every render. Above the guard for the same reason as Boost's flag.
+export ARCHIFY_UPDATE_CHECK_DISABLED=1
+if [ -x "$HOME/.local/bin/chrome-headless-shell" ]; then
+	export ARCHIFY_CHROME="$HOME/.local/bin/chrome-headless-shell"
+fi
+
 # If not running interactively, don't do anything (avoid breaking scripts)
 case "$-" in
 *i*) ;;

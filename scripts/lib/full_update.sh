@@ -25,6 +25,7 @@ FULL_UPDATE_NEVER_INSTALL=(git_identity)
 FULL_UPDATE_KEPT_BY_UPDATE_STEPS=(
 	go nodejs lazygit lazydocker cursor_cli codex_cli claude_cli antigravity_cli
 	monaspace_fonts graphify_cli boost_cli obsidian kubeconform tflint zizmor
+	chrome_headless
 )
 
 _full_update_kept_by_update_step() {

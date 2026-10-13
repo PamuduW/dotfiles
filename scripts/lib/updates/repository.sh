@@ -67,10 +67,11 @@ shared_repo_status() {
 # --- Ordered update-step registry ---
 # Preview and apply both consume this registry. A step cannot appear in one
 # phase without declaring the handler used by the other phase.
-UPDATE_STEP_KEYS=(apt graphify boost kubeconform tflint zizmor cursor codex claude antigravity lazygit lazydocker node npm go monaspace obsidian shared repository)
+UPDATE_STEP_KEYS=(apt graphify boost kubeconform tflint zizmor chrome_headless cursor codex claude antigravity lazygit lazydocker node npm go monaspace obsidian shared repository)
 declare -gA UPDATE_STEP_LABEL=(
 	[apt]='apt packages' [graphify]='Graphify CLI' [boost]='Boost CLI'
 	[kubeconform]='Kubeconform' [tflint]='TFLint' [zizmor]='zizmor'
+	[chrome_headless]='Chrome headless shell'
 	[cursor]='Cursor CLI' [codex]='Codex CLI' [claude]='Claude CLI'
 	[antigravity]='Antigravity CLI'
 	[lazygit]='lazygit' [lazydocker]='lazydocker'
@@ -80,6 +81,7 @@ declare -gA UPDATE_STEP_LABEL=(
 declare -gA UPDATE_STEP_CHECK=(
 	[apt]=check_apt [graphify]=check_graphify_cli [boost]=check_boost_cli
 	[kubeconform]=check_kubeconform [tflint]=check_tflint [zizmor]=check_zizmor
+	[chrome_headless]=check_chrome_headless
 	[cursor]=check_cursor_cli [codex]=check_codex_cli [claude]=check_claude_cli
 	[antigravity]=check_antigravity_cli
 	[lazygit]=check_lazygit [lazydocker]=check_lazydocker
@@ -91,6 +93,7 @@ declare -gA UPDATE_STEP_CHECK=(
 declare -gA UPDATE_STEP_APPLY=(
 	[apt]=_apply_apt_update_step [graphify]=upgrade_graphify_cli [boost]=upgrade_boost_cli
 	[kubeconform]=upgrade_kubeconform [tflint]=upgrade_tflint [zizmor]=upgrade_zizmor
+	[chrome_headless]=upgrade_chrome_headless
 	[cursor]=upgrade_cursor_cli [codex]=upgrade_codex_cli [claude]=upgrade_claude_cli
 	[antigravity]=upgrade_antigravity_cli
 	[lazygit]=upgrade_lazygit [lazydocker]=upgrade_lazydocker
@@ -102,6 +105,7 @@ declare -gA UPDATE_STEP_RETRY=(
 	[apt]='sudo apt-get upgrade' [graphify]='uv tool upgrade graphifyy'
 	[boost]='dotfiles update' [cursor]='dotfiles update'
 	[kubeconform]='dotfiles update' [tflint]='dotfiles update' [zizmor]='dotfiles update'
+	[chrome_headless]='dotfiles update'
 	[codex]='dotfiles update' [claude]='claude update' [antigravity]='agy update'
 	[lazygit]='dotfiles update' [lazydocker]='dotfiles update'
 	[node]='nvm install --lts' [npm]='nvm install-latest-npm'

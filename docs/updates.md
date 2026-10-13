@@ -46,7 +46,7 @@ stops is the one reported.
 
 The update report separates installed, available, and action. Remote checks run
 through bounded helpers so one stalled tool does not freeze the full report.
-Managed update modules cover apt, Graphify, Boost, Kubeconform, TFLint, zizmor, Cursor, Codex, Claude, Antigravity,
+Managed update modules cover apt, Graphify, Boost, Kubeconform, TFLint, zizmor, Chrome headless shell, Cursor, Codex, Claude, Antigravity,
 lazygit, lazydocker, Node.js, npm, Go, Monaspace fonts, Obsidian, and repository state.
 
 Ownership checks prevent Dotfiles from replacing tools it cannot prove it
@@ -56,7 +56,9 @@ binary. That marker stays true because Boost's own background self-updater is
 off: Agentbot pins both `[update] auto_update` and the `boost-auto-update`
 feature flag to false, so nothing replaces the binary behind the marker.
 Kubeconform, TFLint and zizmor follow the same marker rule and move to a newer
-release only when its digest verifies. Codex updates only an active standalone installation. External or
+release only when its digest verifies. The Chrome headless shell follows the
+same marker rule and moves to Chrome for Testing's newest Stable build.
+Codex updates only an active standalone installation. External or
 shadowed commands are preserved and reported. Antigravity compares
 `agy --version` with the version in its release manifest and updates through
 `agy update`; the CLI also updates itself in the background, so the row can
@@ -90,7 +92,8 @@ unattended maintenance sequence:
    update`, where you approve it.
 2. Re-apply the components the probes report as already applied, except
    those an update step keeps current (Go, Node, lazygit, lazydocker, the
-   agent CLIs, fonts, Graphify, Boost, Kubeconform, TFLint, zizmor, Obsidian),
+   agent CLIs, fonts, Graphify, Boost, Kubeconform, TFLint, zizmor, the Chrome
+   headless shell, Obsidian),
    which step 3 updates.
 3. Run the Dotfiles update workflow with approved application prompts.
 4. Print the resolved Dotfiles and Agentbot launchers/checkouts, and refuse an
