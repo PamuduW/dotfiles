@@ -483,7 +483,8 @@ test_token_verification_refuses_a_write_capable_scope() (
 
 	# A write scope is exit 3 -- accepted by GitHub, refused by us.
 	local scope
-	for scope in 'repo' 'public_repo' 'gist' 'workflow' 'admin:public_key, read:org' 'write:packages'; do
+	# repo:status reads and writes commit statuses; it is not read-only.
+	for scope in 'repo' 'public_repo' 'gist' 'workflow' 'admin:public_key, read:org' 'write:packages' 'repo:status'; do
 		rc=0
 		(
 			reply_with_scopes "$scope"

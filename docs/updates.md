@@ -86,7 +86,8 @@ unattended maintenance sequence:
 1. Run the repository gate over the shared library and the Dotfiles checkout,
    restarting once if either moves forward. It pulls a clean checkout that is only
    behind, but one with uncommitted changes or commits not on origin stops the
-   run: replacing local work needs `dotfiles update`, where you approve it.
+   run, with an error and before Agentbot: replacing local work needs `dotfiles
+   update`, where you approve it.
 2. Re-apply the components the probes report as already applied, except
    those an update step keeps current (Go, Node, lazygit, lazydocker, the
    agent CLIs, fonts, Graphify, Boost, Kubeconform, TFLint, zizmor, Obsidian),
