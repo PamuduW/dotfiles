@@ -113,7 +113,9 @@ Each half also reports its own figure on screen, and the run uses that figure
 rather than its own clock where one is published. Wrapping the Dotfiles install
 from outside starts the clock before the `sudo` prompt, so the section
 disagreed with the "Install took" line a few rows above it by however long the
-operator spent typing a password.
+operator spent typing a password. The time at that prompt is shown as its own
+section, "Waiting for password", when there was a prompt at all; before, it was
+counted in "Dotfiles update", which is what is left of the elapsed time.
 
 `REPO_UPDATE_CALLER_RESTARTS=1` is set for the whole sequence: this run restarts
 itself when a checkout moves, so neither repository gate should tell the

@@ -27,9 +27,11 @@ jobs:
       # rather than special-casing the path.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           path: dotfiles
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: PamuduW/dotfiles-shared
           path: dotfiles-shared
       - name: Install shell tooling

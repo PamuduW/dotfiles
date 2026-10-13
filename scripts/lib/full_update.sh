@@ -129,6 +129,7 @@ _full_update_dotfiles_install() {
 	local rc=0 started
 	started="$(timing_now_seconds)"
 	DOTFILES_INSTALL_SECONDS=''
+	DOTFILES_PASSWORD_WAIT_SECONDS=''
 	full_update_install_applied_components || rc=$?
 	# The install's own figure when it published one. Wrapping it with a clock
 	# here starts before the sudo prompt, so the section disagreed with the
@@ -139,7 +140,23 @@ _full_update_dotfiles_install() {
 	else
 		FULL_UPDATE_SECTION_SECONDS['Dotfiles install']=$(($(timing_now_seconds) - started))
 	fi
+	# Time at the sudo prompt is the operator's. Without its own section it
+	# was the remainder's, so "Dotfiles update" read 7m 30s for 22s of work.
+	if [[ "${DOTFILES_PASSWORD_WAIT_SECONDS:-}" =~ ^[0-9]+$ ]] &&
+		((DOTFILES_PASSWORD_WAIT_SECONDS > 0)); then
+		FULL_UPDATE_SECTION_SECONDS['Waiting for password']="$DOTFILES_PASSWORD_WAIT_SECONDS"
+	fi
 	return "$rc"
+}
+
+# What is left of the Dotfiles half once the install and the password prompt
+# are taken out: the repository gate and the downstream upgrade.
+_full_update_record_dotfiles_update() {
+	local started="$1"
+	FULL_UPDATE_SECTION_SECONDS['Dotfiles update']=$(( \
+		$(timing_now_seconds) - started - \
+		${FULL_UPDATE_SECTION_SECONDS['Dotfiles install']:-0} - \
+		${FULL_UPDATE_SECTION_SECONDS['Waiting for password']:-0}))
 }
 
 # Agentbot's two halves, as Agentbot reports them.
@@ -360,9 +377,7 @@ cmd_full_update() {
 	dotfiles_started="$(timing_now_seconds)"
 	_dotfiles_run_update _dotfiles_approve_repo_update true false \
 		_full_update_dotfiles_install || dotfiles_rc=$?
-	FULL_UPDATE_SECTION_SECONDS['Dotfiles update']=$(( \
-		$(timing_now_seconds) - dotfiles_started - \
-		${FULL_UPDATE_SECTION_SECONDS['Dotfiles install']:-0}))
+	_full_update_record_dotfiles_update "$dotfiles_started"
 	case "$dotfiles_rc" in
 	0) ;;
 	# Downstream steps ran and some failed. Agentbot is a separate program with
