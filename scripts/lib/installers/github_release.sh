@@ -91,14 +91,9 @@ install_lazydocker_from_github() {
 		echo "  lazydocker checksum verification failed." >&2
 		return 1
 	fi
-	tar -C "$tmp" -xzf "$tmp/$tarball" || return $?
-
-	if [[ ! -f "$tmp/lazydocker" ]]; then
-		local binpath
-		binpath="$(find "$tmp" -maxdepth 3 -type f -name lazydocker | head -n1 || true)"
-		[[ -n "$binpath" ]] && cp "$binpath" "$tmp/lazydocker"
-	fi
-
+	# Only the binary, as lazygit does: nothing else in the archive is used, so
+	# no other member is written, wherever its path points.
+	tar -C "$tmp" -xzf "$tmp/$tarball" lazydocker || return $?
 	[[ -f "$tmp/lazydocker" ]] || {
 		echo "  lazydocker archive did not contain the expected executable." >&2
 		return 1

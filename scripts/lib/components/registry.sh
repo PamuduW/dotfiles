@@ -318,8 +318,7 @@ comp_registry_validate() {
 	# Every component needs a status probe and an install action, or it will
 	# silently report "probe failed" / do nothing when selected.
 	for key in "${COMP_KEYS[@]}"; do
-		if declare -F "_comp_probe_${key}" >/dev/null 2>&1 ||
-			declare -F comp_probe >/dev/null 2>&1; then
+		if declare -F "_comp_probe_${key}" >/dev/null 2>&1; then
 			:
 		else
 			printf 'component without a probe: %s\n' "$key" >&2

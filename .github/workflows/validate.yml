@@ -40,9 +40,10 @@ jobs:
 
   bootstrap:
     name: Fresh-machine bootstrap
-    # Weekly only: it installs a machine's worth of software, and it is the one
-    # check that exercises the published state of all three repositories the way
-    # an operator meets them -- curl the script, clone three repos, install.
+    # Scheduled or dispatched only: it installs a machine's worth of software,
+    # and it is the one check that exercises the published state of the
+    # repositories the way an operator meets them -- curl the script, clone the
+    # shared library and Dotfiles, install.
     #
     # Nothing else covers this path. It found a CONTRACT mismatch that every
     # unit suite passed straight through, because the suites resolve a checkout
@@ -73,7 +74,7 @@ jobs:
           echo "=== what the run printed ==="
           sudo sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g' /tmp/typescript | tail -40
 
-      - name: The three repositories landed, shared first
+      - name: The shared library and Dotfiles landed, shared first
         run: |
           set -eu
           for repo in dotfiles-shared dotfiles; do

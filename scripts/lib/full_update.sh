@@ -1,8 +1,11 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # COMP_ON is the registry's selection state, read by is_on.
 
+# Full-update runs unattended: it pulls a behind checkout and carries on past
+# an ahead one, but never stashes and resets local work. That needs the
+# operator (docs/updates.md), so the gate stops and says why.
 _dotfiles_approve_repo_update() {
-	return 0
+	[[ "$1" != replace-local ]]
 }
 
 # Roadmap item 2: full-update is install + update, so install-time work (bashrc
