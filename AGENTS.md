@@ -42,7 +42,7 @@ This file is repository-local policy for the Dotfiles project.
 ./install.sh                    # interactive boot menu
 dotfiles menu                   # same (after stow)
 dotfiles update
-scripts/validate.sh             # the CI gate: syntax, ShellCheck, shfmt, tests
+scripts/validate.sh             # the CI gate: syntax, ShellCheck, shfmt, zizmor, tests
 bash tests/run.sh               # the tests alone
 ```
 

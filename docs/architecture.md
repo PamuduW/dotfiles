@@ -44,8 +44,8 @@ do not own installation policy.
 ## The Python side
 
 Readings, layout and the repository check are Python, in the dotfiles-shared
-repository that this installer and the Agentbot CLI both resolve at runtime
-(ADR-0002 in the workspace repository records why it was extracted).
+repository that this installer and the Agentbot CLI both resolve at runtime, so
+the two products share one implementation instead of drifting copies.
 Bash gathers the raw facts and says what a report is for; Python decides what an
 answer means and how the columns line up.
 

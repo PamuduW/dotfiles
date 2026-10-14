@@ -15,8 +15,10 @@ Run:
 ```
 
 The gate checks Bash syntax, production ShellCheck, test-harness warnings,
-shfmt, JSON syntax, shared-library drift, diff whitespace, and every discovered
-shell test.
+shfmt, JSON syntax, `zizmor` over the workflows, shared-library drift, diff
+whitespace, and every discovered shell test. A missing optional tool is
+skipped with a note. CI runs the gate on every push to `main` and
+`development`, and daily with the fresh-machine bootstrap job.
 
 To apply repository formatting and then run the gate:
 

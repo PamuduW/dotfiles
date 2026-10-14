@@ -8,7 +8,7 @@ _dotfiles_approve_repo_update() {
 	[[ "$1" != replace-local ]]
 }
 
-# Roadmap item 2: full-update is install + update, so install-time work (bashrc
+# full-update is install + update, so install-time work (bashrc
 # hooks, stow links, config writes) stops drifting on a machine that was set up
 # once and only ever updated since.
 #

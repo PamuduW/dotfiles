@@ -460,40 +460,47 @@ test_package_counting_handles_renames_and_absences() (
 	# counted a renamed package as missing even though it was installed under
 	# its current name. The rename support then miscounted it a second way.
 	#
-	# Counting is a pure function of the wanted list and the installed set, so
-	# every combination is one call and no dpkg is involved.
+	# Counting is a pure function of the wanted list and the installed and
+	# available sets, so every combination is one call and no dpkg is involved.
+	# Every name is available here: only the missing count is under test.
 	local -a wanted
 	local -A installed
+	local -A available=([dnsutils]=1 ["bind9-dnsutils"]=1 [curl]=1 [a]=1 [b]=1 [c]=1)
+	missing() {
+		local counts
+		counts="$(_comp_package_gaps wanted installed available)"
+		printf '%s\n' "${counts%% *}"
+	}
 
 	# A rename where the fallback is what is actually installed.
 	wanted=('dnsutils|bind9-dnsutils' 'curl')
 	installed=(["bind9-dnsutils"]=1 [curl]=1)
-	[[ "$(_comp_missing_package_count wanted installed)" == 0 ]] || return 1
+	[[ "$(missing)" == 0 ]] || return 1
 
 	# The same entry where the preferred name is installed instead.
 	installed=([dnsutils]=1 [curl]=1)
-	[[ "$(_comp_missing_package_count wanted installed)" == 0 ]] || return 1
+	[[ "$(missing)" == 0 ]] || return 1
 
 	# Neither alternative present counts the entry once, not once per name.
 	installed=([curl]=1)
-	[[ "$(_comp_missing_package_count wanted installed)" == 1 ]] || return 1
+	[[ "$(missing)" == 1 ]] || return 1
 
 	# Both alternatives installed still counts the entry once.
 	installed=([dnsutils]=1 ["bind9-dnsutils"]=1 [curl]=1)
-	[[ "$(_comp_missing_package_count wanted installed)" == 0 ]] || return 1
+	[[ "$(missing)" == 0 ]] || return 1
 
 	# Nothing installed at all.
 	installed=()
-	[[ "$(_comp_missing_package_count wanted installed)" == 2 ]] || return 1
+	[[ "$(missing)" == 2 ]] || return 1
 
 	# An empty wanted list is not negative-missing.
 	wanted=()
-	[[ "$(_comp_missing_package_count wanted installed)" == 0 ]] || return 1
+	[[ "$(missing)" == 0 ]] || return 1
 
 	# A three-way rename chain.
 	wanted=('a|b|c')
 	installed=([c]=1)
-	[[ "$(_comp_missing_package_count wanted installed)" == 0 ]]
+	[[ "$(missing)" == 0 ]]
 )
 
 check 'package counting handles renames, absences and empty lists' test_package_counting_handles_renames_and_absences

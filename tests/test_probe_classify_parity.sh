@@ -81,35 +81,6 @@ test_codex_parity() {
 	((failures == before))
 }
 
-test_package_count_parity() {
-	local before=$failures
-	local -a wanted
-	local -A installed
-	local want got
-
-	wanted=('dnsutils|bind9-dnsutils' 'curl')
-	installed=(["bind9-dnsutils"]=1 [curl]=1)
-	want="$(_comp_missing_package_count wanted installed)"
-	got="$(py "pc.missing_package_count(['dnsutils|bind9-dnsutils','curl'], {'bind9-dnsutils','curl'})")"
-	compare 'packages rename-fallback' "$want" "$got"
-
-	installed=([curl]=1)
-	want="$(_comp_missing_package_count wanted installed)"
-	got="$(py "pc.missing_package_count(['dnsutils|bind9-dnsutils','curl'], {'curl'})")"
-	compare 'packages one-missing' "$want" "$got"
-
-	installed=()
-	want="$(_comp_missing_package_count wanted installed)"
-	got="$(py "pc.missing_package_count(['dnsutils|bind9-dnsutils','curl'], set())")"
-	compare 'packages none-installed' "$want" "$got"
-
-	wanted=()
-	want="$(_comp_missing_package_count wanted installed)"
-	got="$(py "pc.missing_package_count([], set())")"
-	compare 'packages empty-list' "$want" "$got"
-	((failures == before))
-}
-
 test_package_gap_parity() {
 	local before=$failures want got
 	local -a wanted
@@ -385,7 +356,6 @@ test_remaining_readings_parity() {
 
 check 'portainer classification agrees across 18 states' test_portainer_parity
 check 'codex classification agrees across every state and both statuses' test_codex_parity
-check 'package counting agrees on renames and absences' test_package_count_parity
 check 'apt classification agrees on every count pair' test_apt_classification_parity
 check 'package gaps agree on dropped, renamed and present packages' test_package_gap_parity
 check 'version classification agrees across its edges' test_version_parity
