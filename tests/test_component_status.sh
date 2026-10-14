@@ -307,6 +307,31 @@ test_chrome_headless_probe_reports_ownership_through_its_link() (
 	[[ "$output" == 'installed|Google Chrome for Testing 155.0.8059.39 (Dotfiles managed)' ]]
 )
 
+test_npm_cli_probe_reports_ownership_through_its_link() (
+	local fake_home="$TEST_HARNESS_ROOT/npm-cli-home" output prefix
+	rm -rf -- "$fake_home"
+	mkdir -p "$fake_home/.local/bin" "$fake_home/.local/share/dotfiles"
+	HOME="$fake_home"
+	PATH="/usr/bin:/bin"
+	export HOME PATH
+
+	output="$(_comp_probe_cspell)"
+	[[ "$output" == 'missing|cspell not on PATH' ]] || return 1
+
+	prefix="$fake_home/.local/share/dotfiles-npm/cspell/bin"
+	mkdir -p "$prefix"
+	printf '%s\n' '#!/usr/bin/env bash' 'echo 10.3.6' >"$prefix/cspell"
+	chmod +x "$prefix/cspell"
+	cp "$prefix/cspell" "$fake_home/.local/bin/cspell"
+	printf '10.3.6\n' >"$fake_home/.local/share/dotfiles/cspell.version"
+	output="$(_comp_probe_cspell)"
+	[[ "$output" == 'installed|10.3.6 (external)' ]] || return 1
+
+	ln -sfn "$prefix/cspell" "$fake_home/.local/bin/cspell"
+	output="$(_comp_probe_cspell)"
+	[[ "$output" == 'installed|10.3.6 (Dotfiles managed)' ]]
+)
+
 expect_success 'probe capture keeps only the first output line' test_probe_capture_keeps_only_first_line
 expect_success 'probe capture preserves command failure status' test_probe_capture_preserves_command_failure
 expect_success 'probe capture bounds a stalled command' test_probe_capture_bounds_stalled_command
@@ -367,5 +392,6 @@ expect_success 'every version-probe table row has a probe and a registered compo
 expect_success 'generic probe reports missing, version, fallback, and timeout states' test_generic_probe_reports_missing_timeout_and_version
 expect_success 'release CLI probes report missing, external, managed, malformed and timeout states' test_release_cli_probes_report_ownership_and_version
 expect_success 'Chrome headless shell probe reports missing, external and managed through its link' test_chrome_headless_probe_reports_ownership_through_its_link
+expect_success 'npm CLI probes report missing, external and managed through their link' test_npm_cli_probe_reports_ownership_through_its_link
 
 finish_tests

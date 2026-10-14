@@ -13,6 +13,7 @@ logic, Command lib, Package lib, and user documentation.
 | System and language runtimes | `system_packages`, `python`, `powershell`, `go`, `nodejs`, `direnv` |
 | Containers | `docker`, `portainer`, `lazydocker` |
 | Development tools | `graphify_cli`, `boost_cli`, `lazygit`, `kubeconform`, `tflint`, `zizmor`, `chrome_headless` |
+| Writing and documents | `vale`, `yt_dlp`, `markdownlint_cli2`, `cspell`, `mermaid_cli` |
 | Agent CLIs | `cursor_cli`, `codex_cli`, `claude_cli`, `antigravity_cli` |
 | Desktop and shell | `monaspace_fonts`, `obsidian`, `dotfiles`, `wsl_conf` |
 
@@ -20,7 +21,7 @@ Git identity is disabled by default. Other components
 start selected. Dependencies are enforced by the registry; Portainer and
 lazydocker depend on Docker, and Stow deployment depends on system packages.
 
-Kubeconform, TFLint and zizmor share one installer
+Kubeconform, TFLint, zizmor, Vale and yt-dlp share one installer
 (`scripts/lib/installers/release_cli.sh`) and one row table
 (`RELEASE_CLI_TOOLS` in `scripts/lib/managed_tool_state.sh`). Each installs the
 latest GitHub release to `~/.local/bin` after checking the SHA-256 digest GitHub
@@ -30,7 +31,9 @@ Dotfiles did not install is reported as external and never replaced.
 
 Dotfiles owns only the executables. TFLint provider plugins and `.tflint.hcl`,
 zizmor configuration and any GitHub token for its online audits, and
-Kubernetes schema caches belong to the repository that uses them. zizmor runs
+Kubernetes schema caches, Vale styles and `.vale.ini`, and yt-dlp
+configuration belong to the repository that uses them. yt-dlp's release asset
+is the binary itself, so nothing is extracted. zizmor runs
 offline; Kubeconform fetches schemas on demand unless pointed at local ones.
 Kubeconform checks schemas only and does not replace `kubectl
 --dry-run=server`.
@@ -44,6 +47,18 @@ ownership needs both the link into that directory and the stamp. The stowed
 `.bashrc` exports `ARCHIFY_CHROME` when the link exists, and
 `ARCHIFY_UPDATE_CHECK_DISABLED=1` so Archify does not check GitHub on every
 render. Agentbot installs the skill itself.
+
+markdownlint-cli2, CSpell and Mermaid CLI share the npm installer
+(`scripts/lib/installers/npm_cli.sh`) and its row table (`NPM_CLI_TOOLS` in
+`scripts/lib/managed_tool_state.sh`). Each is the latest npm release,
+installed with `--ignore-scripts` into its own prefix under
+`~/.local/share/dotfiles-npm/<key>`, so a Node version change does not remove
+it. `~/.local/bin/<command>` links to a wrapper in that prefix, and the stamp
+is `~/.local/share/dotfiles/<key>.version`. They depend on `nodejs`. Mermaid
+CLI's wrapper sets `PUPPETEER_EXECUTABLE_PATH` to the Chrome headless shell
+unless the caller set it, so Puppeteer's own Chrome is never downloaded; its
+npm dependencies alone are about 460 MB. Rules, dictionaries and Mermaid
+configuration belong to each repository.
 
 ## State flow
 

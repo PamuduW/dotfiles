@@ -191,18 +191,23 @@ boost_installed_tag() {
 
 # --- Release CLIs: single-binary tools installed from verified GitHub releases ---
 #
-# Kubeconform, TFLint and zizmor (roadmap item 9) share one lifecycle: the
+# Kubeconform, TFLint and zizmor (roadmap item 9), and Vale and yt-dlp (item
+# 11), share one lifecycle: the
 # latest GitHub release, verified against the SHA-256 digest GitHub publishes
 # for the asset, installed to ~/.local/bin with an ownership stamp, exactly as
 # Boost is. Only this table differs between them.
 #
 # Row format: key|label|repository|asset|archive|binary|version-args
-#   asset    {arch} is amd64/arm64, {triple} is x86_64/aarch64
-#   archive  tar (gzip) or zip
+#   asset    {arch} is amd64/arm64, {triple} is x86_64/aarch64, {arch_word} is
+#            64-bit/arm64, {aarch64_suffix} is empty/_aarch64, and {version}
+#            is the release tag without its v
+#   archive  tar (gzip), zip, or raw (the asset is the binary itself)
 RELEASE_CLI_TOOLS=(
 	'kubeconform|Kubeconform|yannh/kubeconform|kubeconform-linux-{arch}.tar.gz|tar|kubeconform|-v'
 	'tflint|TFLint|terraform-linters/tflint|tflint_linux_{arch}.zip|zip|tflint|--version'
 	'zizmor|zizmor|zizmorcore/zizmor|zizmor-{triple}-unknown-linux-gnu.tar.gz|tar|zizmor|--version'
+	'vale|Vale|errata-ai/vale|vale_{version}_Linux_{arch_word}.tar.gz|tar|vale|--version'
+	'yt_dlp|yt-dlp|yt-dlp/yt-dlp|yt-dlp_linux{aarch64_suffix}|raw|yt-dlp|--version'
 )
 
 # release_cli_field <key> <label|repository|asset|archive|binary|version-args>
@@ -243,7 +248,7 @@ release_cli_command() {
 }
 
 # The version as v1.2.3, or nothing when the binary is missing or says no
-# version. Every one of the three prints its version on the first line.
+# version. Every one of them prints its version on the first line.
 release_cli_installed_tag() {
 	local command_path version
 	local -a version_argv=()
@@ -329,4 +334,90 @@ chrome_headless_is_dotfiles_owned() {
 	stamp="$(chrome_headless_management_stamp)"
 	[[ -f "$stamp" && ! -L "$stamp" ]] || return 1
 	[[ "$(<"$stamp")" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
+}
+
+# --- npm CLIs: Node command-line tools, each in its own Dotfiles prefix ---
+#
+# markdownlint-cli2, CSpell and Mermaid CLI (roadmap item 11). Each is the
+# latest npm release, installed with its dependencies into its own prefix
+# under ~/.local/share/dotfiles-npm, with a wrapper there that ~/.local/bin
+# links to, and an ownership stamp. nvm's global folder is not used: it
+# changes with every Node version.
+#
+# Row format: key|label|package|binary
+NPM_CLI_TOOLS=(
+	'markdownlint_cli2|markdownlint-cli2|markdownlint-cli2|markdownlint-cli2'
+	'cspell|CSpell|cspell|cspell'
+	'mermaid_cli|Mermaid CLI|@mermaid-js/mermaid-cli|mmdc'
+)
+
+# npm_cli_field <key> <label|package|binary>
+npm_cli_field() {
+	local key="$1" field="$2" row index
+	case "$field" in
+	label) index=1 ;; package) index=2 ;; binary) index=3 ;;
+	*) return 1 ;;
+	esac
+	for row in "${NPM_CLI_TOOLS[@]}"; do
+		[[ "${row%%|*}" == "$key" ]] || continue
+		IFS='|' read -r -a _npm_cli_row <<<"$row"
+		printf '%s\n' "${_npm_cli_row[$index]}"
+		return 0
+	done
+	return 1
+}
+
+npm_cli_root() {
+	printf '%s\n' "$HOME/.local/share/dotfiles-npm/$1"
+}
+
+npm_cli_install_path() {
+	printf '%s\n' "$HOME/.local/bin/$(npm_cli_field "$1" binary)"
+}
+
+npm_cli_management_stamp() {
+	printf '%s\n' "$HOME/.local/share/dotfiles/$1.version"
+}
+
+npm_cli_command() {
+	local binary
+	binary="$(npm_cli_field "$1" binary)" || return 1
+	if command -v "$binary" >/dev/null 2>&1; then
+		command -v "$binary"
+	elif [[ -x "$HOME/.local/bin/$binary" ]]; then
+		printf '%s\n' "$HOME/.local/bin/$binary"
+	else
+		return 1
+	fi
+}
+
+# The version as 1.2.3, or nothing when the tool is missing or says no version.
+# Each prints its version on the first line.
+npm_cli_installed_tag() {
+	local command_path version
+	command_path="$(npm_cli_command "$1" 2>/dev/null)" || return 1
+	version="$("$command_path" --version 2>/dev/null | head -n1 || true)"
+	version="$(grep -Eo '[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?' <<<"$version" | head -n1)"
+	[[ -n "$version" ]] || return 1
+	printf '%s\n' "$version"
+}
+
+npm_cli_installed_version() {
+	npm_cli_command "$1" >/dev/null 2>&1 || {
+		printf '%s\n' 'not installed'
+		return 0
+	}
+	npm_cli_installed_tag "$1" 2>/dev/null || printf '%s\n' installed
+}
+
+npm_cli_is_dotfiles_owned() {
+	local command_path target root stamp
+	command_path="$(npm_cli_command "$1" 2>/dev/null)" || return 1
+	[[ "$command_path" == "$(npm_cli_install_path "$1")" && -L "$command_path" ]] || return 1
+	target="$(readlink -f -- "$command_path" 2>/dev/null)" || return 1
+	root="$(readlink -f -- "$(npm_cli_root "$1")" 2>/dev/null)" || return 1
+	[[ "$target" == "$root"/* ]] || return 1
+	stamp="$(npm_cli_management_stamp "$1")"
+	[[ -f "$stamp" && ! -L "$stamp" ]] || return 1
+	[[ "$(<"$stamp")" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]
 }

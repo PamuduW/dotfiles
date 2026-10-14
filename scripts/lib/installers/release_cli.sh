@@ -1,28 +1,36 @@
 # shellcheck shell=bash
-# Kubeconform, TFLint and zizmor: the latest GitHub release of each, verified
+# Kubeconform, TFLint, zizmor, Vale and yt-dlp: the latest GitHub release of
+# each, verified
 # against the SHA-256 digest GitHub publishes for the asset, installed to
 # ~/.local/bin. The rows are in RELEASE_CLI_TOOLS (managed_tool_state.sh).
 #
 # Dotfiles owns the executable and nothing else: no TFLint plugin or
-# .tflint.hcl, no zizmor token or configuration, no Kubernetes schema cache.
-# Those belong to the repository that uses the tool.
+# .tflint.hcl, no zizmor token or configuration, no Kubernetes schema cache, no
+# Vale styles or .vale.ini, no yt-dlp configuration. Those belong to the
+# repository that uses the tool.
 
 if ! declare -F release_cli_command >/dev/null 2>&1; then
 	# shellcheck source=scripts/lib/managed_tool_state.sh
 	source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/managed_tool_state.sh"
 fi
 
+# release_cli_asset_name <key> [tag]: without a tag, a {version} placeholder
+# is left for the release metadata to fill.
 release_cli_asset_name() {
-	local key="$1" asset arch triple
+	local key="$1" tag="${2:-}" asset arch triple arch_word suffix
 	asset="$(release_cli_field "$key" asset)" || return 1
 	[[ "$(uname -s)" == Linux ]] || return 1
 	case "$(uname -m)" in
-	x86_64 | amd64) arch=amd64 triple=x86_64 ;;
-	aarch64 | arm64) arch=arm64 triple=aarch64 ;;
+	x86_64 | amd64) arch=amd64 triple=x86_64 arch_word=64-bit suffix='' ;;
+	aarch64 | arm64) arch=arm64 triple=aarch64 arch_word=arm64 suffix=_aarch64 ;;
 	*) return 1 ;;
 	esac
 	asset="${asset//\{arch\}/$arch}"
-	printf '%s\n' "${asset//\{triple\}/$triple}"
+	asset="${asset//\{triple\}/$triple}"
+	asset="${asset//\{arch_word\}/$arch_word}"
+	asset="${asset//\{aarch64_suffix\}/$suffix}"
+	[[ -z "$tag" ]] || asset="${asset//\{version\}/${tag#v}}"
+	printf '%s\n' "$asset"
 }
 
 # Prints the latest tag and the asset's SHA-256 digest, one per line. Fails when
@@ -38,11 +46,11 @@ import json
 import re
 import sys
 
-asset_name = sys.argv[1]
 release = json.load(sys.stdin)
 tag = release.get("tag_name", "")
 if not re.fullmatch(r"v?[0-9]+\.[0-9]+\.[0-9]+(?:[+-][0-9A-Za-z.-]+)?", tag):
     raise SystemExit(1)
+asset_name = sys.argv[1].replace("{version}", tag.removeprefix("v"))
 for asset in release.get("assets", []):
     if asset.get("name") != asset_name:
         continue
@@ -61,6 +69,7 @@ _release_cli_members() {
 	case "$archive_type" in
 	tar) tar -tzf "$archive" ;;
 	zip) unzip -Z1 "$archive" ;;
+	raw) printf '%s\n' "$3" ;;
 	*) return 1 ;;
 	esac
 }
@@ -70,6 +79,7 @@ _release_cli_extract() {
 	case "$archive_type" in
 	tar) tar -xzf "$archive" -C "$destination" "$member" ;;
 	zip) unzip -q -o "$archive" "$member" -d "$destination" ;;
+	raw) cp -- "$archive" "$destination/$member" ;;
 	*) return 1 ;;
 	esac
 }
@@ -86,13 +96,16 @@ release_cli_install_release() {
 	read -r -a version_argv <<<"$(release_cli_field "$key" version-args)"
 	install_path="$(release_cli_install_path "$key")"
 	stamp="$(release_cli_management_stamp "$key")"
-	asset="$(release_cli_asset_name "$key")" || {
+	asset="$(release_cli_asset_name "$key" "$release_tag")" || {
 		echo "  ${label} supports only Linux amd64/arm64 in this installer." >&2
 		return 1
 	}
 	url="https://github.com/${repository}/releases/download/${release_tag}/${asset}"
 
-	for command_name in curl sha256sum install "$([[ "$archive_type" == zip ]] && echo unzip || echo tar)"; do
+	local extractor=tar
+	[[ "$archive_type" == zip ]] && extractor=unzip
+	[[ "$archive_type" == raw ]] && extractor='cp'
+	for command_name in curl sha256sum install "$extractor"; do
 		command -v "$command_name" >/dev/null 2>&1 || {
 			echo "  ${command_name} is required to install ${label}." >&2
 			return 1
@@ -102,6 +115,9 @@ release_cli_install_release() {
 	tmp="$(mktemp -d)" || return 1
 	trap '[[ -n "${tmp:-}" ]] && rm -rf -- "$tmp"' RETURN
 	archive="$tmp/$asset"
+	# A raw asset is the binary; it is downloaded beside the extraction target
+	# rather than as it, so the listing and extraction steps stay uniform.
+	[[ "$archive_type" == raw ]] && archive="$tmp/asset.raw"
 	log_step "Install ${label} ${release_tag}"
 	if ! github_curl -fsSL -o "$archive" "$url"; then
 		echo "  Failed to download ${asset}." >&2
@@ -115,7 +131,7 @@ release_cli_install_release() {
 
 	# Listed before anything is extracted, and only the binary is extracted:
 	# an added LICENSE is inert, a member that escapes the directory is not.
-	mapfile -t members < <(_release_cli_members "$archive_type" "$archive")
+	mapfile -t members < <(_release_cli_members "$archive_type" "$archive" "$binary")
 	if [[ "${#members[@]}" -eq 0 ]]; then
 		echo "  ${label} archive could not be listed; refusing extraction." >&2
 		return 1
@@ -252,6 +268,10 @@ upgrade_release_cli() {
 check_kubeconform() { check_release_cli kubeconform; }
 check_tflint() { check_release_cli tflint; }
 check_zizmor() { check_release_cli zizmor; }
+check_vale() { check_release_cli vale; }
+check_yt_dlp() { check_release_cli yt_dlp; }
 upgrade_kubeconform() { upgrade_release_cli kubeconform; }
 upgrade_tflint() { upgrade_release_cli tflint; }
 upgrade_zizmor() { upgrade_release_cli zizmor; }
+upgrade_vale() { upgrade_release_cli vale; }
+upgrade_yt_dlp() { upgrade_release_cli yt_dlp; }

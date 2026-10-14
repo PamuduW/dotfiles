@@ -276,9 +276,63 @@ test_unsupported_architecture_fails_closed() (
 	! install_release_cli tflint >/dev/null 2>&1
 )
 
+# Vale names its asset after the version; yt-dlp's asset is the binary itself.
+test_vale_asset_carries_the_release_version() (
+	reset_home
+	local dir="$TEST_HARNESS_ROOT/fixture-vale" archive
+	rm -rf -- "$dir"
+	mkdir -p "$dir"
+	printf '%s\n' '#!/usr/bin/env bash' "printf 'vale version 3.24.0\\n'" >"$dir/vale"
+	chmod +x "$dir/vale"
+	printf 'license\n' >"$dir/LICENSE"
+	archive="$TEST_HARNESS_ROOT/vale.tar.gz"
+	tar -czf "$archive" -C "$dir" vale LICENSE
+	serve vale 3.24.0 "$archive"
+
+	install_release_cli vale >/dev/null || return 1
+	grep -Fqx 'download:https://github.com/errata-ai/vale/releases/download/v3.24.0/vale_3.24.0_Linux_64-bit.tar.gz' \
+		"$TEST_URL_LOG" || return 1
+	[[ "$(release_cli_installed_tag vale)" == v3.24.0 && ! -e "$HOME/.local/bin/LICENSE" ]] || return 1
+
+	local output
+	github_api_release_json() {
+		printf '%s\n' '{"tag_name":"v3.24.0","assets":[{"name":"vale_3.24.0_Linux_64-bit.tar.gz","digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}'
+	}
+	unset -f release_cli_latest_release_metadata
+	source "$ROOT/scripts/lib/installers/release_cli.sh"
+	output="$(release_cli_latest_release_metadata vale)" || return 1
+	[[ "$output" == $'v3.24.0\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ]]
+)
+
+test_yt_dlp_raw_binary_installs_without_extraction() (
+	reset_home
+	local binary="$TEST_HARNESS_ROOT/yt-dlp_linux"
+	printf '%s\n' '#!/usr/bin/env bash' "printf '2026.08.19\\n'" >"$binary"
+	chmod +x "$binary"
+	serve yt_dlp 2026.08.19 "$binary"
+	# yt-dlp's tags have no v, unlike the other tools' tags that serve imitates.
+	release_cli_latest_release_metadata() { printf '%s\n%s\n' "$SERVED_VERSION" "$SERVED_DIGEST"; }
+
+	install_release_cli yt_dlp >/dev/null || return 1
+	grep -Fqx 'download:https://github.com/yt-dlp/yt-dlp/releases/download/2026.08.19/yt-dlp_linux' \
+		"$TEST_URL_LOG" || return 1
+	[[ -x "$HOME/.local/bin/yt-dlp" ]] || return 1
+	[[ "$(release_cli_installed_tag yt_dlp)" == v2026.08.19 ]] || return 1
+	release_cli_is_dotfiles_owned yt_dlp || return 1
+
+	uname() {
+		case "$1" in
+		-s) printf 'Linux\n' ;;
+		-m) printf 'aarch64\n' ;;
+		esac
+	}
+	[[ "$(release_cli_asset_name yt_dlp)" == yt-dlp_linux_aarch64 ]]
+)
+
 test_wrappers_route_to_each_tool() (
 	local name
-	for name in check_kubeconform check_tflint check_zizmor upgrade_kubeconform upgrade_tflint upgrade_zizmor; do
+	for name in check_kubeconform check_tflint check_zizmor check_vale check_yt_dlp \
+		upgrade_kubeconform upgrade_tflint upgrade_zizmor upgrade_vale upgrade_yt_dlp; do
 		declare -F "$name" >/dev/null || return 1
 	done
 )
@@ -297,6 +351,8 @@ expect_success 'update skips missing and external tools' test_update_skips_missi
 expect_success 'update check reports installed, available and action' test_update_check_reports_installed_available_and_action
 expect_success 'release metadata picks the asset for this architecture' test_metadata_picks_the_asset_for_this_architecture
 expect_success 'an unsupported architecture fails closed' test_unsupported_architecture_fails_closed
+expect_success 'Vale downloads the asset named after its release version' test_vale_asset_carries_the_release_version
+expect_success 'yt-dlp installs its raw release binary without extraction' test_yt_dlp_raw_binary_installs_without_extraction
 expect_success 'per-tool wrappers exist for the update registry' test_wrappers_route_to_each_tool
 
 finish_tests
