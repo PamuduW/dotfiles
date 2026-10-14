@@ -11,7 +11,7 @@
 # configuration, and no token handling. Its only direct sudo use is installing
 # git.
 #
-# Design: new_setup docs/designs/bootstrap/README.md
+# Documented in docs/installation.md.
 set -euo pipefail
 
 DOTFILES_URL="${BOOTSTRAP_DOTFILES_URL:-https://github.com/PamuduW/dotfiles}"

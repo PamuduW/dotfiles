@@ -607,35 +607,6 @@ _comp_package_gaps() {
 	printf '%s %s\n' "$missing" "$unavailable"
 }
 
-# Pure: how many entries have no installed alternative.
-#
-# Defect 9 lived here. Entries may be `preferred|fallback` renames, and querying
-# the raw entry counted a renamed package as missing even though it was
-# installed under its current name. An entry counts as present when *any* of its
-# alternatives is installed.
-#
-# Takes the package list and the installed set by name, so it can be tested
-# against any combination without a dpkg to produce one.
-_comp_missing_package_count() {
-	local packages_name="$1" installed_name="$2"
-	local -n _pkg_entries="$packages_name"
-	local -n _installed="$installed_name"
-	local entry alt installed_count=0 missing
-
-	for entry in "${_pkg_entries[@]}"; do
-		while IFS= read -r alt; do
-			if [[ -n "$alt" && -n "${_installed[$alt]+x}" ]]; then
-				installed_count=$((installed_count + 1))
-				break
-			fi
-		done < <(printf '%s\n' "${entry//|/$'\n'}")
-	done
-
-	missing=$((${#_pkg_entries[@]} - installed_count))
-	((missing < 0)) && missing=0
-	printf '%s\n' "$missing"
-}
-
 # Pure: how the two counts read. An empty set is skipped rather than clean --
 # nothing was checked. The complete-set wording arrives as an argument because
 # the two callers word it differently, and because a caller that has to branch

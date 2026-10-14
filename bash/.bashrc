@@ -20,7 +20,7 @@ fi
 # The operator chose this address on 2026-10-14, knowing this file is public.
 export CONTACT_EMAIL=pamuduwijesingha2k20@gmail.com
 
-# Trivy: no telemetry and no version check on any run (roadmap item 10.2).
+# Trivy: no telemetry and no version check on any run.
 export TRIVY_DISABLE_TELEMETRY=true
 export TRIVY_SKIP_VERSION_CHECK=true
 # Infracost: plugins change only when they are refreshed, not on every scan.

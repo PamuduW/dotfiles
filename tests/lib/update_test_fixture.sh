@@ -87,3 +87,5 @@ dotfiles_load_command full-update
 source "$DOTFILES_SHARED_LIB/tui/menu_runner.sh"
 source "$REPO_DIR/scripts/menus/initial_setup.sh"
 source "$REPO_DIR/scripts/menus/update.sh"
+# Action logs go to the test's own directory, never the repository's log/.
+LOG_DIR="$TEST_HARNESS_ROOT/action-log"

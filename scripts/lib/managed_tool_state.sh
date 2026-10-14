@@ -191,8 +191,8 @@ boost_installed_tag() {
 
 # --- Release CLIs: single-binary tools installed from verified GitHub releases ---
 #
-# Kubeconform, TFLint and zizmor (roadmap item 9), Vale and yt-dlp (item 11),
-# and Trivy and Infracost (item 12) share one lifecycle: the
+# Kubeconform, TFLint, zizmor, Vale, yt-dlp, Trivy and Infracost share one
+# lifecycle: the
 # latest GitHub release, verified against the SHA-256 digest GitHub publishes
 # for the asset, installed to ~/.local/bin with an ownership stamp, exactly as
 # Boost is. Only this table differs between them.
@@ -340,7 +340,7 @@ chrome_headless_is_dotfiles_owned() {
 
 # --- npm CLIs: Node command-line tools, each in its own Dotfiles prefix ---
 #
-# markdownlint-cli2, CSpell and Mermaid CLI (roadmap item 11). Each is the
+# markdownlint-cli2, CSpell and Mermaid CLI. Each is the
 # latest npm release, installed with its dependencies into its own prefix
 # under ~/.local/share/dotfiles-npm, with a wrapper there that ~/.local/bin
 # links to, and an ownership stamp. nvm's global folder is not used: it
