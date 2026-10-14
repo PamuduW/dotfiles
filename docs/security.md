@@ -7,8 +7,13 @@
   channels rather than checksum-pinned artifacts.
 - GitHub-release installers for lazygit and lazydocker verify the selected
   archive against the release checksum manifest.
-- Boost, Kubeconform, TFLint and zizmor install a release asset verified against
-  the SHA-256 digest GitHub publishes for it, and only the CLI binary.
+- Boost, Kubeconform, TFLint, zizmor, Vale and yt-dlp install a release asset
+  verified against the SHA-256 digest GitHub publishes for it, and only the
+  CLI binary.
+- markdownlint-cli2, CSpell and Mermaid CLI install from npm, which checks each
+  tarball against the registry's integrity hash. Their dependencies follow the
+  package's version ranges rather than a lockfile, and package install scripts
+  never run.
 - The Chrome headless shell has no published checksum. Its version and URL
   come from Chrome for Testing's version list, the URL must be in Google's
   `chrome-for-testing-public` bucket, every archive member must stay inside

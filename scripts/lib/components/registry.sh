@@ -209,6 +209,44 @@ comp_define chrome_headless \
 	--order 6 \
 	--desc $'Installs the latest Chrome for Testing headless shell to\n~/.local/share/chrome-headless-shell, linked from ~/.local/bin. The Archify\nskill drives it for its browser gate. Google publishes no checksum for it.'
 
+comp_define vale \
+	--label 'Vale (prose linter)' \
+	--plan 'Vale' \
+	--detail 'latest verified release' \
+	--order 6 \
+	--desc $'Installs the latest Vale release to ~/.local/bin after verifying the SHA-256\ndigest GitHub publishes. Styles and .vale.ini belong to each repository.'
+
+comp_define yt_dlp \
+	--label 'yt-dlp (captions and metadata)' \
+	--plan 'yt-dlp' \
+	--detail 'latest verified release' \
+	--order 6 \
+	--desc $'Installs the latest yt-dlp release binary to ~/.local/bin after verifying the\nSHA-256 digest GitHub publishes. For captions and metadata, not media downloads.'
+
+comp_define markdownlint_cli2 \
+	--label 'markdownlint-cli2 (Markdown linter)' \
+	--plan 'markdownlint-cli2' \
+	--detail 'latest npm release, own prefix' \
+	--depends 'nodejs' \
+	--order 13 \
+	--desc $'Installs the latest markdownlint-cli2 into ~/.local/share/dotfiles-npm,\nlinked from ~/.local/bin. Rules belong to each repository.'
+
+comp_define cspell \
+	--label 'CSpell (spell checker)' \
+	--plan 'CSpell' \
+	--detail 'latest npm release, own prefix' \
+	--depends 'nodejs' \
+	--order 13 \
+	--desc $'Installs the latest CSpell into ~/.local/share/dotfiles-npm, linked from\n~/.local/bin. Dictionaries and configuration belong to each repository.'
+
+comp_define mermaid_cli \
+	--label 'Mermaid CLI (mmdc)' \
+	--plan 'Mermaid CLI' \
+	--detail 'latest npm release, own prefix' \
+	--depends 'nodejs' \
+	--order 13 \
+	--desc $'Installs the latest Mermaid CLI into ~/.local/share/dotfiles-npm, linked from\n~/.local/bin. Renders through the Chrome headless shell component; no second\nChrome is downloaded. About 460 MB of npm dependencies.'
+
 comp_define lazydocker \
 	--label 'lazydocker (docker TUI)' \
 	--plan 'lazydocker' \

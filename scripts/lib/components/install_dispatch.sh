@@ -42,6 +42,26 @@ _comp_install_zizmor() {
 	install_release_cli zizmor
 }
 
+_comp_install_vale() {
+	install_release_cli vale
+}
+
+_comp_install_yt_dlp() {
+	install_release_cli yt_dlp
+}
+
+_comp_install_markdownlint_cli2() {
+	install_npm_cli markdownlint_cli2
+}
+
+_comp_install_cspell() {
+	install_npm_cli cspell
+}
+
+_comp_install_mermaid_cli() {
+	install_npm_cli mermaid_cli
+}
+
 _comp_install_chrome_headless() {
 	install_chrome_headless
 }

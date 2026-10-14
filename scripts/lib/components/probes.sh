@@ -772,6 +772,29 @@ _comp_probe_release_cli() {
 _comp_probe_kubeconform() { _comp_probe_release_cli kubeconform; }
 _comp_probe_tflint() { _comp_probe_release_cli tflint; }
 _comp_probe_zizmor() { _comp_probe_release_cli zizmor; }
+_comp_probe_vale() { _comp_probe_release_cli vale; }
+_comp_probe_yt_dlp() { _comp_probe_release_cli yt_dlp; }
+
+# markdownlint-cli2, CSpell and Mermaid CLI: the same shape, from their table.
+_comp_probe_npm_cli() {
+	local key="$1" command_path='' ver='' rc=0 found=0 owned=0 binary
+	local timeout_seconds="${COMP_PROBE_TIMEOUT_SECONDS:-3}"
+
+	binary="$(npm_cli_field "$key" binary)"
+	if command_path="$(npm_cli_command "$key" 2>/dev/null)"; then
+		found=1
+		_comp_probe_capture ver "$timeout_seconds" "$command_path" --version || rc=$?
+		ver="${ver%%$'\n'*}"
+		npm_cli_is_dotfiles_owned "$key" && owned=1
+	fi
+
+	comp_classify owned_cli "$binary" "$binary" ' (Dotfiles managed)' ' (external)' \
+		"$found" "$rc" "$ver" "$command_path" "$owned"
+}
+
+_comp_probe_markdownlint_cli2() { _comp_probe_npm_cli markdownlint_cli2; }
+_comp_probe_cspell() { _comp_probe_npm_cli cspell; }
+_comp_probe_mermaid_cli() { _comp_probe_npm_cli mermaid_cli; }
 
 _comp_probe_chrome_headless() {
 	local command_path='' ver='' rc=0 found=0 owned=0
