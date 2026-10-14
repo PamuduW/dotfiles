@@ -12,7 +12,7 @@ logic, Command lib, Package lib, and user documentation.
 | Identity and Git | `git_identity`, `git_credential` |
 | System and language runtimes | `system_packages`, `python`, `powershell`, `go`, `nodejs`, `direnv` |
 | Containers | `docker`, `portainer`, `lazydocker` |
-| Development tools | `graphify_cli`, `boost_cli`, `lazygit`, `kubeconform`, `tflint`, `zizmor`, `chrome_headless` |
+| Development tools | `graphify_cli`, `boost_cli`, `lazygit`, `kubeconform`, `tflint`, `zizmor`, `trivy`, `infracost`, `chrome_headless` |
 | Writing and documents | `vale`, `yt_dlp`, `markdownlint_cli2`, `cspell`, `mermaid_cli` |
 | Agent CLIs | `cursor_cli`, `codex_cli`, `claude_cli`, `antigravity_cli` |
 | Desktop and shell | `monaspace_fonts`, `obsidian`, `dotfiles`, `wsl_conf` |
@@ -21,7 +21,7 @@ Git identity is disabled by default. Other components
 start selected. Dependencies are enforced by the registry; Portainer and
 lazydocker depend on Docker, and Stow deployment depends on system packages.
 
-Kubeconform, TFLint, zizmor, Vale and yt-dlp share one installer
+Kubeconform, TFLint, zizmor, Vale, yt-dlp, Trivy and Infracost share one installer
 (`scripts/lib/installers/release_cli.sh`) and one row table
 (`RELEASE_CLI_TOOLS` in `scripts/lib/managed_tool_state.sh`). Each installs the
 latest GitHub release to `~/.local/bin` after checking the SHA-256 digest GitHub
@@ -33,7 +33,19 @@ Dotfiles owns only the executables. TFLint provider plugins and `.tflint.hcl`,
 zizmor configuration and any GitHub token for its online audits, and
 Kubernetes schema caches, Vale styles and `.vale.ini`, and yt-dlp
 configuration belong to the repository that uses them. yt-dlp's release asset
-is the binary itself, so nothing is extracted. zizmor runs
+is the binary itself, so nothing is extracted.
+
+Trivy runs with `TRIVY_DISABLE_TELEMETRY=true` and `TRIVY_SKIP_VERSION_CHECK=true`
+from the stowed `.bashrc`; its vulnerability database cache is about 1.6 GB in
+`~/.cache/trivy`, refreshed by a 127 MiB download when older than a day. No
+plugins, server mode or image scanning are set up. Infracost needs a login once
+per machine, by the operator (`infracost auth login`); `infracost setup`, which
+installs agent skills and IDE and CI integration, is never run. `.bashrc` sets
+`INFRACOST_CLI_PLUGIN_AUTO_UPDATE=false`, so its plugins (about 446 MB, fetched
+on first use) change only when refreshed, and
+`INFRACOST_CLI_CLAUDE_PATH=/nonexistent/claude`: otherwise every Infracost run,
+even `--version`, starts `claude plugin list` to look for Infracost's own agent
+plugin. Its CLI update check on each run has no setting. zizmor runs
 offline; Kubeconform fetches schemas on demand unless pointed at local ones.
 Kubeconform checks schemas only and does not replace `kubectl
 --dry-run=server`.

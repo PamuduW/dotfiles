@@ -191,16 +191,16 @@ boost_installed_tag() {
 
 # --- Release CLIs: single-binary tools installed from verified GitHub releases ---
 #
-# Kubeconform, TFLint and zizmor (roadmap item 9), and Vale and yt-dlp (item
-# 11), share one lifecycle: the
+# Kubeconform, TFLint and zizmor (roadmap item 9), Vale and yt-dlp (item 11),
+# and Trivy and Infracost (item 12) share one lifecycle: the
 # latest GitHub release, verified against the SHA-256 digest GitHub publishes
 # for the asset, installed to ~/.local/bin with an ownership stamp, exactly as
 # Boost is. Only this table differs between them.
 #
 # Row format: key|label|repository|asset|archive|binary|version-args
 #   asset    {arch} is amd64/arm64, {triple} is x86_64/aarch64, {arch_word} is
-#            64-bit/arm64, {aarch64_suffix} is empty/_aarch64, and {version}
-#            is the release tag without its v
+#            64-bit/arm64, {arch_bits} is 64bit/ARM64, {aarch64_suffix} is
+#            empty/_aarch64, and {version} is the release tag without its v
 #   archive  tar (gzip), zip, or raw (the asset is the binary itself)
 RELEASE_CLI_TOOLS=(
 	'kubeconform|Kubeconform|yannh/kubeconform|kubeconform-linux-{arch}.tar.gz|tar|kubeconform|-v'
@@ -208,6 +208,8 @@ RELEASE_CLI_TOOLS=(
 	'zizmor|zizmor|zizmorcore/zizmor|zizmor-{triple}-unknown-linux-gnu.tar.gz|tar|zizmor|--version'
 	'vale|Vale|errata-ai/vale|vale_{version}_Linux_{arch_word}.tar.gz|tar|vale|--version'
 	'yt_dlp|yt-dlp|yt-dlp/yt-dlp|yt-dlp_linux{aarch64_suffix}|raw|yt-dlp|--version'
+	'trivy|Trivy|aquasecurity/trivy|trivy_{version}_Linux-{arch_bits}.tar.gz|tar|trivy|--version'
+	'infracost|Infracost|infracost/cli|infracost-linux-{arch}.tar.gz|tar|infracost|--version'
 )
 
 # release_cli_field <key> <label|repository|asset|archive|binary|version-args>

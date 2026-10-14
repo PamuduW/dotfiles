@@ -326,13 +326,15 @@ test_yt_dlp_raw_binary_installs_without_extraction() (
 		-m) printf 'aarch64\n' ;;
 		esac
 	}
-	[[ "$(release_cli_asset_name yt_dlp)" == yt-dlp_linux_aarch64 ]]
+	[[ "$(release_cli_asset_name yt_dlp)" == yt-dlp_linux_aarch64 ]] || return 1
+	[[ "$(release_cli_asset_name trivy v0.76.0)" == trivy_0.76.0_Linux-ARM64.tar.gz ]] || return 1
+	[[ "$(release_cli_asset_name infracost)" == infracost-linux-arm64.tar.gz ]]
 )
 
 test_wrappers_route_to_each_tool() (
 	local name
-	for name in check_kubeconform check_tflint check_zizmor check_vale check_yt_dlp \
-		upgrade_kubeconform upgrade_tflint upgrade_zizmor upgrade_vale upgrade_yt_dlp; do
+	for name in check_kubeconform check_tflint check_zizmor check_vale check_yt_dlp check_trivy check_infracost \
+		upgrade_kubeconform upgrade_tflint upgrade_zizmor upgrade_vale upgrade_yt_dlp upgrade_trivy upgrade_infracost; do
 		declare -F "$name" >/dev/null || return 1
 	done
 )

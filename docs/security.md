@@ -7,9 +7,11 @@
   channels rather than checksum-pinned artifacts.
 - GitHub-release installers for lazygit and lazydocker verify the selected
   archive against the release checksum manifest.
-- Boost, Kubeconform, TFLint, zizmor, Vale and yt-dlp install a release asset
+- Boost, Kubeconform, TFLint, zizmor, Vale, yt-dlp, Trivy and Infracost install a release asset
   verified against the SHA-256 digest GitHub publishes for it, and only the
-  CLI binary.
+  CLI binary. Trivy also publishes Sigstore signatures; they are not checked
+  (the operator's decision, 2026-10-14), so a release built by a compromised
+  pipeline would still install.
 - markdownlint-cli2, CSpell and Mermaid CLI install from npm, which checks each
   tarball against the registry's integrity hash. Their dependencies follow the
   package's version ranges rather than a lockfile, and package install scripts
