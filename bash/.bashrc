@@ -15,6 +15,11 @@ if [ -x "$HOME/.local/bin/chrome-headless-shell" ]; then
 	export ARCHIFY_CHROME="$HOME/.local/bin/chrome-headless-shell"
 fi
 
+# The verify-citations skill stops without a contact email; Crossref, DBLP,
+# Semantic Scholar, arXiv and DataCite receive it in each request's User-Agent.
+# The operator chose this address on 2026-10-14, knowing this file is public.
+export CONTACT_EMAIL=pamuduwijesingha2k20@gmail.com
+
 # If not running interactively, don't do anything (avoid breaking scripts)
 case "$-" in
 *i*) ;;
