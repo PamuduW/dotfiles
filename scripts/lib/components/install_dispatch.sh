@@ -50,6 +50,14 @@ _comp_install_yt_dlp() {
 	install_release_cli yt_dlp
 }
 
+_comp_install_trivy() {
+	install_release_cli trivy
+}
+
+_comp_install_infracost() {
+	install_release_cli infracost
+}
+
 _comp_install_markdownlint_cli2() {
 	install_npm_cli markdownlint_cli2
 }

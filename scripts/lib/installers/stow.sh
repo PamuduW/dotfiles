@@ -90,8 +90,10 @@ configure_git_global_ignores() {
 	# Lines are added, never rewritten: the file also holds the operator's own
 	# patterns, so it is not stowed. Boost's Bash hook records every agent
 	# command under .boost/hook-meta/ in whatever directory the shell is in.
+	# VibeWise keeps notes about the learner in a project's .vibe-wise/, which
+	# must never be committed by accident.
 	local file pattern added=0
-	local -a patterns=('**/.boost/hook-meta/')
+	local -a patterns=('**/.boost/hook-meta/' '**/.vibe-wise/')
 	file="$(git config --global --type=path --get core.excludesFile || true)"
 	[[ -n "$file" ]] || file="${XDG_CONFIG_HOME:-$HOME/.config}/git/ignore"
 	mkdir -p "$(dirname "$file")" || return 1

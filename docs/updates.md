@@ -46,7 +46,8 @@ stops is the one reported.
 
 The update report separates installed, available, and action. Remote checks run
 through bounded helpers so one stalled tool does not freeze the full report.
-Managed update modules cover apt, Graphify, Boost, Kubeconform, TFLint, zizmor, Vale, yt-dlp, Chrome headless shell,
+Managed update modules cover apt, Graphify, Boost, Kubeconform, TFLint, zizmor, Vale, yt-dlp, Trivy, Infracost,
+Chrome headless shell,
 markdownlint-cli2, CSpell, Mermaid CLI, Cursor, Codex, Claude, Antigravity,
 lazygit, lazydocker, Node.js, npm, Go, Monaspace fonts, Obsidian, and repository state.
 
@@ -56,7 +57,7 @@ Boost updates only when Dotfiles' ownership marker matches the installed
 binary. That marker stays true because Boost's own background self-updater is
 off: Agentbot pins both `[update] auto_update` and the `boost-auto-update`
 feature flag to false, so nothing replaces the binary behind the marker.
-Kubeconform, TFLint, zizmor, Vale and yt-dlp follow the same marker rule and move to a newer
+Kubeconform, TFLint, zizmor, Vale, yt-dlp, Trivy and Infracost follow the same marker rule and move to a newer
 release only when its digest verifies. The Chrome headless shell follows the
 same marker rule and moves to Chrome for Testing's newest Stable build, and
 markdownlint-cli2, CSpell and Mermaid CLI to the newest npm release.
@@ -95,7 +96,7 @@ unattended maintenance sequence:
 2. Re-apply the components the probes report as already applied, except
    those an update step keeps current (Go, Node, lazygit, lazydocker, the
    agent CLIs, fonts, Graphify, Boost, Kubeconform, TFLint, zizmor, Vale,
-   yt-dlp, the Chrome headless shell, the npm CLIs, Obsidian),
+   yt-dlp, Trivy, Infracost, the Chrome headless shell, the npm CLIs, Obsidian),
    which step 3 updates.
 3. Run the Dotfiles update workflow with approved application prompts.
 4. Print the resolved Dotfiles and Agentbot launchers/checkouts, and refuse an

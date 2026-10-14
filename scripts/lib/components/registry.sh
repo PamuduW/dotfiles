@@ -223,6 +223,20 @@ comp_define yt_dlp \
 	--order 6 \
 	--desc $'Installs the latest yt-dlp release binary to ~/.local/bin after verifying the\nSHA-256 digest GitHub publishes. For captions and metadata, not media downloads.'
 
+comp_define trivy \
+	--label 'Trivy (security scanner)' \
+	--plan 'Trivy' \
+	--detail 'latest verified release' \
+	--order 6 \
+	--desc $'Installs the latest Trivy release to ~/.local/bin after verifying the SHA-256\ndigest GitHub publishes. Telemetry and the version check are off; its\nvulnerability database cache is about 1.6 GB in ~/.cache/trivy.'
+
+comp_define infracost \
+	--label 'Infracost (Terraform cost estimates)' \
+	--plan 'Infracost' \
+	--detail 'latest verified release' \
+	--order 6 \
+	--desc $'Installs the latest Infracost release to ~/.local/bin after verifying the\nSHA-256 digest GitHub publishes. Log in once per machine with\n`infracost auth login`; plugin auto-update is off and `infracost setup` is\nnever run.'
+
 comp_define markdownlint_cli2 \
 	--label 'markdownlint-cli2 (Markdown linter)' \
 	--plan 'markdownlint-cli2' \

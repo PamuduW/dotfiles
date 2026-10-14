@@ -67,11 +67,11 @@ shared_repo_status() {
 # --- Ordered update-step registry ---
 # Preview and apply both consume this registry. A step cannot appear in one
 # phase without declaring the handler used by the other phase.
-UPDATE_STEP_KEYS=(apt graphify boost kubeconform tflint zizmor vale yt_dlp chrome_headless markdownlint_cli2 cspell mermaid_cli cursor codex claude antigravity lazygit lazydocker node npm go monaspace obsidian shared repository)
+UPDATE_STEP_KEYS=(apt graphify boost kubeconform tflint zizmor vale yt_dlp trivy infracost chrome_headless markdownlint_cli2 cspell mermaid_cli cursor codex claude antigravity lazygit lazydocker node npm go monaspace obsidian shared repository)
 declare -gA UPDATE_STEP_LABEL=(
 	[apt]='apt packages' [graphify]='Graphify CLI' [boost]='Boost CLI'
 	[kubeconform]='Kubeconform' [tflint]='TFLint' [zizmor]='zizmor'
-	[vale]='Vale' [yt_dlp]='yt-dlp' [chrome_headless]='Chrome headless shell'
+	[vale]='Vale' [yt_dlp]='yt-dlp' [trivy]='Trivy' [infracost]='Infracost' [chrome_headless]='Chrome headless shell'
 	[markdownlint_cli2]='markdownlint-cli2' [cspell]='CSpell' [mermaid_cli]='Mermaid CLI'
 	[cursor]='Cursor CLI' [codex]='Codex CLI' [claude]='Claude CLI'
 	[antigravity]='Antigravity CLI'
@@ -82,7 +82,8 @@ declare -gA UPDATE_STEP_LABEL=(
 declare -gA UPDATE_STEP_CHECK=(
 	[apt]=check_apt [graphify]=check_graphify_cli [boost]=check_boost_cli
 	[kubeconform]=check_kubeconform [tflint]=check_tflint [zizmor]=check_zizmor
-	[vale]=check_vale [yt_dlp]=check_yt_dlp [chrome_headless]=check_chrome_headless
+	[vale]=check_vale [yt_dlp]=check_yt_dlp [trivy]=check_trivy [infracost]=check_infracost
+	[chrome_headless]=check_chrome_headless
 	[markdownlint_cli2]=check_markdownlint_cli2 [cspell]=check_cspell [mermaid_cli]=check_mermaid_cli
 	[cursor]=check_cursor_cli [codex]=check_codex_cli [claude]=check_claude_cli
 	[antigravity]=check_antigravity_cli
@@ -95,7 +96,8 @@ declare -gA UPDATE_STEP_CHECK=(
 declare -gA UPDATE_STEP_APPLY=(
 	[apt]=_apply_apt_update_step [graphify]=upgrade_graphify_cli [boost]=upgrade_boost_cli
 	[kubeconform]=upgrade_kubeconform [tflint]=upgrade_tflint [zizmor]=upgrade_zizmor
-	[vale]=upgrade_vale [yt_dlp]=upgrade_yt_dlp [chrome_headless]=upgrade_chrome_headless
+	[vale]=upgrade_vale [yt_dlp]=upgrade_yt_dlp [trivy]=upgrade_trivy [infracost]=upgrade_infracost
+	[chrome_headless]=upgrade_chrome_headless
 	[markdownlint_cli2]=upgrade_markdownlint_cli2 [cspell]=upgrade_cspell [mermaid_cli]=upgrade_mermaid_cli
 	[cursor]=upgrade_cursor_cli [codex]=upgrade_codex_cli [claude]=upgrade_claude_cli
 	[antigravity]=upgrade_antigravity_cli
@@ -108,7 +110,8 @@ declare -gA UPDATE_STEP_RETRY=(
 	[apt]='sudo apt-get upgrade' [graphify]='uv tool upgrade graphifyy'
 	[boost]='dotfiles update' [cursor]='dotfiles update'
 	[kubeconform]='dotfiles update' [tflint]='dotfiles update' [zizmor]='dotfiles update'
-	[vale]='dotfiles update' [yt_dlp]='dotfiles update' [chrome_headless]='dotfiles update'
+	[vale]='dotfiles update' [yt_dlp]='dotfiles update' [trivy]='dotfiles update' [infracost]='dotfiles update'
+	[chrome_headless]='dotfiles update'
 	[markdownlint_cli2]='dotfiles update' [cspell]='dotfiles update' [mermaid_cli]='dotfiles update'
 	[codex]='dotfiles update' [claude]='claude update' [antigravity]='agy update'
 	[lazygit]='dotfiles update' [lazydocker]='dotfiles update'

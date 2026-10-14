@@ -1,13 +1,14 @@
 # shellcheck shell=bash
-# Kubeconform, TFLint, zizmor, Vale and yt-dlp: the latest GitHub release of
-# each, verified
+# Kubeconform, TFLint, zizmor, Vale, yt-dlp, Trivy and Infracost: the latest
+# GitHub release of each, verified
 # against the SHA-256 digest GitHub publishes for the asset, installed to
 # ~/.local/bin. The rows are in RELEASE_CLI_TOOLS (managed_tool_state.sh).
 #
 # Dotfiles owns the executable and nothing else: no TFLint plugin or
 # .tflint.hcl, no zizmor token or configuration, no Kubernetes schema cache, no
-# Vale styles or .vale.ini, no yt-dlp configuration. Those belong to the
-# repository that uses the tool.
+# Vale styles or .vale.ini, no yt-dlp configuration, no Trivy plugins or
+# server, no Infracost login or `infracost setup`. Those belong to the
+# repository or the operator.
 
 if ! declare -F release_cli_command >/dev/null 2>&1; then
 	# shellcheck source=scripts/lib/managed_tool_state.sh
@@ -17,17 +18,18 @@ fi
 # release_cli_asset_name <key> [tag]: without a tag, a {version} placeholder
 # is left for the release metadata to fill.
 release_cli_asset_name() {
-	local key="$1" tag="${2:-}" asset arch triple arch_word suffix
+	local key="$1" tag="${2:-}" asset arch triple arch_word arch_bits suffix
 	asset="$(release_cli_field "$key" asset)" || return 1
 	[[ "$(uname -s)" == Linux ]] || return 1
 	case "$(uname -m)" in
-	x86_64 | amd64) arch=amd64 triple=x86_64 arch_word=64-bit suffix='' ;;
-	aarch64 | arm64) arch=arm64 triple=aarch64 arch_word=arm64 suffix=_aarch64 ;;
+	x86_64 | amd64) arch=amd64 triple=x86_64 arch_word=64-bit arch_bits=64bit suffix='' ;;
+	aarch64 | arm64) arch=arm64 triple=aarch64 arch_word=arm64 arch_bits=ARM64 suffix=_aarch64 ;;
 	*) return 1 ;;
 	esac
 	asset="${asset//\{arch\}/$arch}"
 	asset="${asset//\{triple\}/$triple}"
 	asset="${asset//\{arch_word\}/$arch_word}"
+	asset="${asset//\{arch_bits\}/$arch_bits}"
 	asset="${asset//\{aarch64_suffix\}/$suffix}"
 	[[ -z "$tag" ]] || asset="${asset//\{version\}/${tag#v}}"
 	printf '%s\n' "$asset"
@@ -270,8 +272,12 @@ check_tflint() { check_release_cli tflint; }
 check_zizmor() { check_release_cli zizmor; }
 check_vale() { check_release_cli vale; }
 check_yt_dlp() { check_release_cli yt_dlp; }
+check_trivy() { check_release_cli trivy; }
+check_infracost() { check_release_cli infracost; }
 upgrade_kubeconform() { upgrade_release_cli kubeconform; }
 upgrade_tflint() { upgrade_release_cli tflint; }
 upgrade_zizmor() { upgrade_release_cli zizmor; }
 upgrade_vale() { upgrade_release_cli vale; }
 upgrade_yt_dlp() { upgrade_release_cli yt_dlp; }
+upgrade_trivy() { upgrade_release_cli trivy; }
+upgrade_infracost() { upgrade_release_cli infracost; }

@@ -20,6 +20,16 @@ fi
 # The operator chose this address on 2026-10-14, knowing this file is public.
 export CONTACT_EMAIL=pamuduwijesingha2k20@gmail.com
 
+# Trivy: no telemetry and no version check on any run (roadmap item 10.2).
+export TRIVY_DISABLE_TELEMETRY=true
+export TRIVY_SKIP_VERSION_CHECK=true
+# Infracost: plugins change only when they are refreshed, not on every scan.
+# Every run otherwise starts `claude plugin list` to look for Infracost's own
+# agent plugin, which touches Claude Code's state; a path that does not exist
+# stops that (2.17.0; `/bin/false` does not, it falls back to `claude`).
+export INFRACOST_CLI_PLUGIN_AUTO_UPDATE=false
+export INFRACOST_CLI_CLAUDE_PATH=/nonexistent/claude
+
 # If not running interactively, don't do anything (avoid breaking scripts)
 case "$-" in
 *i*) ;;

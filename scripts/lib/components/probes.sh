@@ -774,6 +774,8 @@ _comp_probe_tflint() { _comp_probe_release_cli tflint; }
 _comp_probe_zizmor() { _comp_probe_release_cli zizmor; }
 _comp_probe_vale() { _comp_probe_release_cli vale; }
 _comp_probe_yt_dlp() { _comp_probe_release_cli yt_dlp; }
+_comp_probe_trivy() { _comp_probe_release_cli trivy; }
+_comp_probe_infracost() { _comp_probe_release_cli infracost; }
 
 # markdownlint-cli2, CSpell and Mermaid CLI: the same shape, from their table.
 _comp_probe_npm_cli() {
