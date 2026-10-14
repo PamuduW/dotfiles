@@ -71,6 +71,13 @@ if ((${#json_files[@]} > 0)); then
 	fi
 fi
 
+if command -v zizmor >/dev/null 2>&1; then
+	printf 'Checking workflow security...\n'
+	zizmor --offline --quiet "$REPO_DIR/.github/workflows"
+else
+	printf 'zizmor not installed; skipping workflow security check.\n' >&2
+fi
+
 printf 'Checking the shared contract...\n'
 "$REPO_DIR/tests/check_shared_contract.sh"
 
