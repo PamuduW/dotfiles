@@ -20,6 +20,22 @@ test_cleanup_runs_after_success() {
 	[[ -n "$root" && ! -e "$root" ]]
 }
 
+test_child_exit_preserves_the_owning_fixture() {
+	local root rc=0
+	root="$(bash -c '
+		set -euo pipefail
+		unset TEST_HARNESS_ROOT TEST_FAKE_BIN TEST_FAKE_CONFIG TEST_FAKE_SIBLINGS
+		unset TEST_COMMAND_LOG TEST_URL_LOG
+		source "$1"
+		test_harness_init
+		printf "%s" "$TEST_HARNESS_ROOT"
+		child_status=0
+		(trap test_harness_teardown EXIT; exit 19) || child_status=$?
+		[[ "$child_status" == 19 && -d "$TEST_HARNESS_ROOT" ]]
+	' _ "$TEST_DIR/lib/harness.sh")" || rc=$?
+	[[ "$rc" == 0 && -n "$root" && ! -e "$root" ]]
+}
+
 test_cleanup_runs_after_failure() {
 	local root rc
 	set +e
@@ -178,6 +194,7 @@ test_canary_is_redacted_everywhere() {
 
 test_harness_init
 expect_success 'cleanup runs after successful test process' test_cleanup_runs_after_success
+expect_success 'child exit preserves the owner fixture and its exit status' test_child_exit_preserves_the_owning_fixture
 expect_success 'cleanup runs after failing test process' test_cleanup_runs_after_failure
 expect_success 'init failure after root creation removes the root' test_init_failure_after_root_cleans_up
 expect_success 'unchanged protected original-home path passes teardown' test_protected_original_home_unchanged_passes

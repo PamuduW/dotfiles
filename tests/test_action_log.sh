@@ -31,6 +31,23 @@ raw_logs() {
 	find "$1/log" -maxdepth 1 -type f -name '*.log.raw' -print
 }
 
+test_a_child_owns_the_log_it_starts() (
+	local probe_dir="$TEST_HARNESS_ROOT/action-log-child-owner"
+	mkdir -p "$probe_dir"
+	timeout 10 bash -c '
+		set -euo pipefail
+		DOTFILES_DIR="$1"
+		source "$2/scripts/lib/action_log.sh"
+		output="$(start_action_log; printf "child output\n")"
+		[[ "$output" == "child output" ]]
+	' _ "$probe_dir" "$REPO_DIR" || return 1
+	[[ -z "$(raw_logs "$probe_dir")" ]] || return 1
+	local written
+	written="$(finished_logs "$probe_dir")"
+	[[ -n "$written" ]] || return 1
+	grep -Fqx 'child output' "$written"
+)
+
 test_overlapping_action_logs_keep_separate_complete_output() (
 	local probe_dir="$TEST_HARNESS_ROOT/action-log-overlap"
 	local fake_bin="$TEST_HARNESS_ROOT/action-log-date"
@@ -236,6 +253,7 @@ EOF
 	grep -Fqx 'the last line of the run' $written
 )
 
+expect_success 'a child finalizes the log it starts after the module was loaded by its parent' test_a_child_owns_the_log_it_starts
 expect_success 'a starting peer raw capture is not pruned' test_a_starting_peers_raw_capture_is_not_pruned
 expect_success 'overlapping action logs keep separate complete output' test_overlapping_action_logs_keep_separate_complete_output
 expect_success 'prune does not delete a live peer raw capture' test_prune_does_not_delete_a_live_peer_raw_capture
