@@ -8,7 +8,7 @@ fi
 # --- Cursor CLI ---
 cursor_installed_version() {
 	local binary raw
-	binary="$(tool_resolve 'agent cursor')" || {
+	binary="$(tool_resolve 'agent cursor-agent')" || {
 		echo "$NOT_INSTALLED"
 		return
 	}
@@ -20,7 +20,7 @@ cursor_installed_version() {
 }
 
 cursor_is_installed() {
-	tool_resolve 'agent cursor' >/dev/null 2>&1
+	tool_resolve 'agent cursor-agent' >/dev/null 2>&1
 }
 
 # Cursor publishes no queryable "latest" version, so this probe never reports an

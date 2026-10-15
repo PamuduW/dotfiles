@@ -21,6 +21,13 @@
   `chrome-for-testing-public` bucket, every archive member must stay inside
   the build directory, and the unpacked shell must report that version before
   it replaces the installed one. Integrity beyond that rests on HTTPS.
+- Monaspace fonts require the selected release asset's published GitHub SHA-256
+  digest before extraction. Missing digests and mismatches stop installation.
+  ZIP entries are checked before unpacking; absolute paths, traversal, Windows
+  paths, duplicate names, links and special file types are rejected. If both
+  activation and restoration fail, the previous fonts remain in the reported
+  backup directory for manual recovery. This verifies artifact integrity,
+  not the trustworthiness of the publisher's release pipeline.
 - Portainer follows the stable LTS tag and preserves custom container layouts.
 
 Remote metadata failures fail closed where ownership or integrity cannot be
@@ -41,7 +48,10 @@ Codex pairing values are terminal-only secrets.
 Most tool installers run as the user. Apt, PowerShell repository setup, Docker,
 Docker-group membership, `/etc/wsl.conf`, and selected system destinations use
 `sudo`. Docker commands first try the user's current access and fall back to
-`sudo docker` when required.
+`sudo docker` when required. When the run primes a new sudo authentication,
+its owning process invalidates that ticket on exit, including failure and
+handled HUP, INT and TERM signals. Authentication available before the run is
+left alone. Forced termination such as SIGKILL cannot run cleanup.
 
 Docker daemon JSON is merged rather than overwritten. Conflicting logging
 settings stop configuration and prevent a restart. Existing Git credential

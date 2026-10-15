@@ -19,6 +19,7 @@ _ACTION_LOG_LOCK_PID=''
 _ACTION_LOG_SAVED_OUT=''
 _ACTION_LOG_SAVED_ERR=''
 _ACTION_LOG_TEE_PID=''
+_ACTION_LOG_OWNER=$BASHPID
 
 # Turn a raw tee'd terminal capture into a readable log: carriage returns become
 # newlines, CSI and OSC escape sequences are dropped, trailing blanks trimmed.
@@ -193,6 +194,8 @@ _prune_action_logs() {
 
 start_action_log() {
 	[[ "$DOTFILES_LOG_ACTIVE" == true ]] && return 0
+	_ACTION_LOG_OWNER=$BASHPID
+	trap '_action_log_exit "$?"' EXIT
 	mkdir -p "$LOG_DIR"
 	_allocate_action_log_paths || return 1
 	if ! _action_log_start_lock; then
@@ -204,9 +207,50 @@ start_action_log() {
 	fi
 	DOTFILES_LOG_ACTIVE=true
 	_prune_action_logs
-	trap finalize_log_file EXIT
 	exec {_ACTION_LOG_SAVED_OUT}>&1
 	exec {_ACTION_LOG_SAVED_ERR}>&2
 	exec > >(tee -a "$RAW_LOG_FILE") 2>&1
 	_ACTION_LOG_TEE_PID=$!
 }
+
+# This module is loaded by both owning entrypoints, including commands that
+# never start a log. Keep cleanup installed across repeated menu actions.
+_action_log_exit() {
+	local status=$1
+	if declare -F sudo_prime_cleanup >/dev/null 2>&1; then
+		sudo_prime_cleanup || true
+	fi
+	if [[ "$_ACTION_LOG_OWNER" == "$BASHPID" ]]; then
+		finalize_log_file || true
+	fi
+	if [[ -n "$_ACTION_LOG_PREVIOUS_EXIT" ]]; then
+		# Restore the incoming status for the existing handler's first command.
+		if (exit "$status"); then
+			eval "$_ACTION_LOG_PREVIOUS_EXIT"
+		else
+			eval "$_ACTION_LOG_PREVIOUS_EXIT"
+		fi
+	fi
+	return "$status"
+}
+
+_ACTION_LOG_PREVIOUS_EXIT=$(trap -p EXIT)
+if [[ -n "$_ACTION_LOG_PREVIOUS_EXIT" ]]; then
+	# trap -p emits shell-quoted arguments; decode the handler without changing it.
+	# shellcheck disable=SC2317  # Invoked by eval with trap-generated arguments.
+	_action_log_decode_exit() { _ACTION_LOG_PREVIOUS_EXIT=$1; }
+	eval "_action_log_decode_exit ${_ACTION_LOG_PREVIOUS_EXIT#trap -- }"
+	unset -f _action_log_decode_exit
+fi
+trap '_action_log_exit "$?"' EXIT
+# Preserve any existing signal policy. Otherwise exit through the common cleanup.
+for _action_log_signal in HUP INT TERM; do
+	if [[ -z "$(trap -p "$_action_log_signal")" ]]; then
+		case "$_action_log_signal" in
+		HUP) trap 'exit 129' HUP ;;
+		INT) trap 'exit 130' INT ;;
+		TERM) trap 'exit 143' TERM ;;
+		esac
+	fi
+done
+unset _action_log_signal

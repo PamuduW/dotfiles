@@ -37,6 +37,8 @@ test_harness_cleanup() {
 
 test_harness_teardown() {
 	local original_status=$? protected_status=0
+	# Preserved EXIT traps can run in subshells; only the fixture owner cleans it.
+	[[ "${TEST_HARNESS_OWNER:-}" == "$BASHPID" ]] || return "$original_status"
 	trap - EXIT
 
 	if [[ -n "${TEST_HARNESS_ROOT:-}" && -d "$TEST_HARNESS_ROOT" ]]; then
@@ -61,6 +63,7 @@ test_harness_init() {
 	ORIGINAL_TMPDIR="${TMPDIR:-}"
 	temp_base="${TMPDIR:-/tmp}"
 	TEST_HARNESS_ROOT="$(mktemp -d "$temp_base/dotfiles-test-harness.XXXXXX")"
+	TEST_HARNESS_OWNER=$BASHPID
 	trap test_harness_teardown EXIT
 	if [[ "${TEST_HARNESS_FAIL_AFTER_ROOT:-}" == "1" ]]; then
 		printf 'injected harness init failure after root creation\n' >&2

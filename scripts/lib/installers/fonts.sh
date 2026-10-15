@@ -20,11 +20,18 @@ install_monaspace_fonts() {
 	command -v unzip >/dev/null 2>&1 || sudo apt-get -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=600 install -y unzip
 
 	log_step "Install Monaspace Nerd Fonts from GitHub"
-	local ver tmp stage_dir='' backup_dir='' otf_count=0 count otf
+	local ver tmp stage_dir='' backup_dir='' otf_count=0 count otf asset expected actual
 	ver="$(github_latest_release_version githubnext/monaspace)" || {
 		echo "  Could not determine Monaspace version." >&2
 		return 1
 	}
+
+	asset="monaspace-nerdfonts-v${ver}.zip"
+	expected="$(github_release_asset_sha256 githubnext/monaspace "$asset")" || {
+		echo "  Missing published SHA-256 for Monaspace archive." >&2
+		return 1
+	}
+	[[ "$expected" =~ ^[[:xdigit:]]{64}$ ]] || return 1
 
 	tmp="$(mktemp -d)"
 	trap 'rm -rf -- "${tmp:-}" "${stage_dir:-}" "${backup_dir:-}"' RETURN
@@ -33,18 +40,45 @@ install_monaspace_fonts() {
 		echo "  Monaspace download failed." >&2
 		return 1
 	fi
+	actual="$(sha256sum "$tmp/monaspace-nerdfonts.zip")" || return 1
+	if [[ "${actual%% *}" != "${expected,,}" ]]; then
+		echo "  Monaspace SHA-256 mismatch." >&2
+		return 1
+	fi
+	if ! python3 - "$tmp/monaspace-nerdfonts.zip" <<'PYZIP'; then
+import re
+import stat
+import sys
+import zipfile
+
+try:
+    with zipfile.ZipFile(sys.argv[1]) as archive:
+        seen = set()
+        for entry in archive.infolist():
+            name = entry.orig_filename
+            parts = name.rstrip("/").split("/")
+            mode = entry.external_attr >> 16
+            kind = stat.S_IFMT(mode)
+            if (not name or name.startswith("/") or "\\" in name
+                    or re.match(r"^[A-Za-z]:", name)
+                    or any(part in ("", ".", "..") for part in parts)
+                    or any(ord(char) < 32 for char in name)
+                    or kind not in (0, stat.S_IFREG, stat.S_IFDIR)
+                    or (kind == stat.S_IFDIR and not entry.is_dir())
+                    or (kind == stat.S_IFREG and entry.is_dir())
+                    or name.rstrip("/") in seen):
+                raise ValueError("unsafe archive member")
+            seen.add(name.rstrip("/"))
+except (OSError, ValueError, zipfile.BadZipFile) as error:
+    print(f"Rejected Monaspace archive: {error}", file=sys.stderr)
+    raise SystemExit(1)
+PYZIP
+		return 1
+	fi
 	if ! unzip -qo "$tmp/monaspace-nerdfonts.zip" -d "$tmp/monaspace"; then
 		echo "  Monaspace unzip failed." >&2
 		return 1
 	fi
-
-	local extracted_path
-	while IFS= read -r -d '' extracted_path; do
-		if [[ "$extracted_path" == *".."* ]]; then
-			echo "  Rejected suspicious path in Monaspace archive." >&2
-			return 1
-		fi
-	done < <(find "$tmp/monaspace" -print0)
 
 	mkdir -p "$font_parent"
 	stage_dir="$(mktemp -d "$font_parent/.monaspace.new.XXXXXX")"
@@ -69,7 +103,10 @@ install_monaspace_fonts() {
 	if ! mv "$stage_dir" "$font_dir"; then
 		echo "  Could not activate the new Monaspace installation; restoring the previous files." >&2
 		if [[ -n "$backup_dir" && -e "$backup_dir" ]]; then
-			mv "$backup_dir" "$font_dir" || true
+			if ! mv "$backup_dir" "$font_dir"; then
+				echo "  Restoration failed; previous Monaspace files retained at $backup_dir" >&2
+				backup_dir=''
+			fi
 		fi
 		return 1
 	fi
