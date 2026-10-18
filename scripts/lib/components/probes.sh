@@ -1056,7 +1056,7 @@ _comp_classify_git_credential() {
 	elif ((defaults_set)) && [[ "$protocol" == ssh ]]; then
 		printf 'configured|GitHub SSH protocol + recursive submodule defaults\n'
 	elif ((defaults_set)); then
-		printf 'check|submodule defaults set; credential helper not configured\n'
+		printf 'configured|recursive submodule defaults; HTTPS credential helper optional\n'
 	else
 		printf 'check|Git configuration incomplete\n'
 	fi
