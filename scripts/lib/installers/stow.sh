@@ -124,8 +124,7 @@ configure_git_settings() {
 		git config --global credential.helper "$gcm_path" || return 1
 		log_ok "Git credential helper: $gcm_path"
 	else
-		log_warn "Windows Git Credential Manager not found"
-		echo "    Submodule defaults were configured; the existing credential helper was unchanged."
+		log_skip "Windows Git Credential Manager not found; HTTPS credential helper is optional"
 	fi
 }
 

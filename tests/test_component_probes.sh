@@ -604,16 +604,14 @@ test_go_classification_falls_back_through_both_sources() (
 check 'go classification falls back through both sources' test_go_classification_falls_back_through_both_sources
 
 test_git_credential_classification_separates_partial_from_complete() (
-	# Five inputs, three outcomes. The middle outcome is the one worth pinning:
-	# every submodule default set but no credential helper is a different
-	# message from a partial configuration, and one value of five separates them.
+	# A credential helper is optional; the recursive submodule defaults are not.
 	local got
 
 	got="$(_comp_classify_git_credential 'store' true on-demand check true)"
 	[[ "$got" == 'configured|credential helper + recursive submodule defaults' ]] || return 1
 
 	got="$(_comp_classify_git_credential '' true on-demand check true)"
-	[[ "$got" == 'check|submodule defaults set; credential helper not configured' ]] || return 1
+	[[ "$got" == 'configured|recursive submodule defaults; HTTPS credential helper optional' ]] || return 1
 
 	# Any single default wrong drops to incomplete, helper or not.
 	got="$(_comp_classify_git_credential 'store' false on-demand check true)"

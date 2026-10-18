@@ -25,7 +25,9 @@ test_submodule_defaults_are_configured_without_gcm() (
 	reset_git_config
 	find_windows_git_credential_manager() { return 1; }
 
-	configure_git_settings >/dev/null || return 1
+	local output
+	output="$(configure_git_settings)" || return 1
+	[[ "$output" != *'[WARN]'* ]] || return 1
 
 	[[ "$(git config --global --get submodule.recurse)" == true ]] || return 1
 	[[ "$(git config --global --get fetch.recurseSubmodules)" == on-demand ]] || return 1
@@ -69,7 +71,7 @@ test_probe_distinguishes_complete_partial_and_incomplete_configuration() (
 	[[ "$(_comp_probe_git_credential)" == 'configured|credential helper + recursive submodule defaults' ]] || return 1
 
 	git config --global --unset-all credential.helper
-	[[ "$(_comp_probe_git_credential)" == 'check|submodule defaults set; credential helper not configured' ]] || return 1
+	[[ "$(_comp_probe_git_credential)" == 'configured|recursive submodule defaults; HTTPS credential helper optional' ]] || return 1
 
 	git config --global --unset-all status.submoduleSummary
 	[[ "$(_comp_probe_git_credential)" == 'check|Git configuration incomplete' ]]
@@ -106,7 +108,7 @@ SH
 		if [[ "$protocol" == ssh ]]; then
 			result='configured|GitHub SSH protocol + recursive submodule defaults'
 		else
-			result='check|submodule defaults set; credential helper not configured'
+			result='configured|recursive submodule defaults; HTTPS credential helper optional'
 		fi
 		[[ "$(_comp_probe_git_credential)" == "$result" ]] || return 1
 		[[ "$(python3 -c "import sys; sys.path.insert(0, sys.argv[1]); import probes; print(probes.git_credential())" "$DOTFILES_SHARED_LIB/python")" == "$result" ]] || return 1
