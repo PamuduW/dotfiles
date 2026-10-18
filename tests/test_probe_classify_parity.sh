@@ -217,6 +217,8 @@ test_batch_transport_parity() {
 	# newline rather than truncating the value.
 	requests+=("git_credential${fs}store"$'\x1e'"cache${fs}true${fs}on-demand${fs}check${fs}true")
 	wanted+=("$(_comp_classify_git_credential $'store\ncache' true on-demand check true)")
+	requests+=("git_credential${fs}${fs}true${fs}on-demand${fs}check${fs}true${fs}ssh")
+	wanted+=('configured|GitHub SSH protocol + recursive submodule defaults')
 
 	requests+=("apt${fs}1${fs}1${fs}apt packages${fs}2 apt packages${fs}2${fs}2${fs}dnsutils|bind9-dnsutils${fs}curl${fs}bind9-dnsutils${fs}curl")
 	wanted+=('installed|2 apt packages')

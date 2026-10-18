@@ -1042,12 +1042,10 @@ _comp_probe_wsl_conf() {
 	comp_classify wsl_conf "$present" "$systemd" "$append_windows_path"
 }
 
-# Classification for the Git credential and submodule defaults. Five inputs,
-# three outcomes, and the middle one is easy to lose: submodule defaults all set
-# but no credential helper is a different message from a partial configuration,
-# and only one of the five values distinguishes them.
+# SSH transport does not need an HTTPS helper. Submodule defaults are required
+# for either transport.
 _comp_classify_git_credential() {
-	local helper="$1" recurse="$2" fetch="$3" push="$4" summary="$5"
+	local helper="$1" recurse="$2" fetch="$3" push="$4" summary="$5" protocol="${6:-}"
 	local defaults_set=0
 
 	[[ "$recurse" == true && "$fetch" == on-demand &&
@@ -1055,6 +1053,8 @@ _comp_classify_git_credential() {
 
 	if ((defaults_set)) && [[ -n "$helper" ]]; then
 		printf 'configured|credential helper + recursive submodule defaults\n'
+	elif ((defaults_set)) && [[ "$protocol" == ssh ]]; then
+		printf 'configured|GitHub SSH protocol + recursive submodule defaults\n'
 	elif ((defaults_set)); then
 		printf 'check|submodule defaults set; credential helper not configured\n'
 	else
@@ -1063,13 +1063,16 @@ _comp_classify_git_credential() {
 }
 
 _comp_probe_git_credential() {
-	local helper recurse fetch push summary
+	local helper recurse fetch push summary protocol=''
 	helper="$(git config --global --get-all credential.helper 2>/dev/null || true)"
 	recurse="$(git config --global --get submodule.recurse 2>/dev/null || true)"
 	fetch="$(git config --global --get fetch.recurseSubmodules 2>/dev/null || true)"
 	push="$(git config --global --get push.recurseSubmodules 2>/dev/null || true)"
 	summary="$(git config --global --get status.submoduleSummary 2>/dev/null || true)"
-	comp_classify git_credential "$helper" "$recurse" "$fetch" "$push" "$summary"
+	if [[ -z "$helper" ]]; then
+		protocol="$(gh config get git_protocol --host github.com 2>/dev/null || true)"
+	fi
+	comp_classify git_credential "$helper" "$recurse" "$fetch" "$push" "$summary" "$protocol"
 }
 
 # What Doctor used to be. It was a second screen over the same probes as Check

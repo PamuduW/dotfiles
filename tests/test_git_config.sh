@@ -88,6 +88,35 @@ test_global_ignores_are_added_once_and_keep_existing_lines() (
 	[[ "$(cat "$ignore")" == $'**/.claude/settings.local.json\n**/.boost/hook-meta/\n**/.vibe-wise/' ]]
 )
 
+test_ssh_protocol_does_not_require_an_https_helper() (
+	reset_git_config
+	find_windows_git_credential_manager() { return 1; }
+	configure_git_settings >/dev/null || return 1
+	local fake_bin="$TEST_HARNESS_ROOT/ssh-gh-bin" protocol result
+	mkdir -p "$fake_bin"
+	cat >"$fake_bin/gh" <<'SH'
+#!/usr/bin/env bash
+[[ "$*" == 'config get git_protocol --host github.com' ]] || exit 1
+printf '%s\n' "$TEST_GH_PROTOCOL"
+SH
+	chmod +x "$fake_bin/gh"
+	export PATH="$fake_bin:$PATH"
+	for protocol in ssh https ''; do
+		export TEST_GH_PROTOCOL="$protocol"
+		if [[ "$protocol" == ssh ]]; then
+			result='configured|GitHub SSH protocol + recursive submodule defaults'
+		else
+			result='check|submodule defaults set; credential helper not configured'
+		fi
+		[[ "$(_comp_probe_git_credential)" == "$result" ]] || return 1
+		[[ "$(python3 -c "import sys; sys.path.insert(0, sys.argv[1]); import probes; print(probes.git_credential())" "$DOTFILES_SHARED_LIB/python")" == "$result" ]] || return 1
+	done
+	export TEST_GH_PROTOCOL=ssh
+	git config --global --unset-all status.submoduleSummary
+	[[ "$(_comp_probe_git_credential)" == 'check|Git configuration incomplete' ]] || return 1
+	[[ "$(python3 -c "import sys; sys.path.insert(0, sys.argv[1]); import probes; print(probes.git_credential())" "$DOTFILES_SHARED_LIB/python")" == 'check|Git configuration incomplete' ]]
+)
+
 test_global_ignores_follow_core_excludes_file() (
 	reset_git_config
 	# shellcheck disable=SC2088  # Git expands the tilde itself; that is under test.
@@ -107,5 +136,6 @@ expect_success 'detected GCM is configured with all submodule defaults' test_det
 expect_success 'Git configuration probe distinguishes full and partial states' test_probe_distinguishes_complete_partial_and_incomplete_configuration
 expect_success 'global ignores are added once and keep existing lines' test_global_ignores_are_added_once_and_keep_existing_lines
 expect_success 'global ignores follow core.excludesFile' test_global_ignores_follow_core_excludes_file
+expect_success 'SSH protocol needs no HTTPS helper in Bash and Python probes' test_ssh_protocol_does_not_require_an_https_helper
 
 finish_tests
