@@ -169,7 +169,7 @@ DOTFILES_COMPONENTS=system_packages,docker,portainer,dotfiles \
 
 ## Component summary
 
-The registry contains 22 components:
+The registry contains 33 components:
 
 | Area | Components |
 |---|---|
