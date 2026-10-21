@@ -68,6 +68,10 @@ selectors shape this first run only: a later `dotfiles full-update` keeps every
 component current. Backing out of Agentbot's selector skips its update and the
 memory step too, and a failed Agentbot phase makes the script exit non-zero.
 
+For a first-time memory setup, skip the bootstrap's vault prompt and follow
+[Set up Agentbot memory](#set-up-agentbot-memory) after installation. An empty
+GitHub repository needs initialization before it can be used as a vault.
+
 To read the script before running it, or on a machine that already has Git:
 
 ```bash
@@ -236,6 +240,53 @@ narrower menu entries do only their part: Dotfiles **Install** installs the
 components you pick, Dotfiles **Update** runs the update steps, Agentbot
 **Install** installs its selected components, and Agentbot **Update** runs its
 update pass; none of them runs the other product or the postflight Doctors.
+
+### Set up Agentbot memory
+
+For a new user's first laptop, create a new vault through Agentbot:
+
+1. Set the user's Git name and email, and make sure Git can authenticate to
+   their GitHub account.
+2. Create an empty private `agent-memory` repository in that account. Leave
+   the README, license, and `.gitignore` options unchecked. Do not clone it
+   manually.
+3. Open Agentbot's **Memory** menu and choose **7. Create a new vault**.
+4. Enter `/home/YOUR_WSL_USERNAME/agent-memory` as the local location and
+   `git@github.com:YOUR_GITHUB_USERNAME/agent-memory.git` as the remote URL.
+   Replace both usernames with the new user's values. An HTTPS URL also
+   works when Git authentication is configured.
+5. Review and confirm the preview. Agentbot creates the memory structure,
+   makes the first local commit, and configures this machine. Setup does not
+   push to GitHub.
+6. Push the first commit and check the vault:
+
+   ```bash
+   git -C "$HOME/agent-memory" push -u origin main
+   agentbot memory status
+   agentbot memory validate
+   ```
+
+Choose the Memory menu option that matches the current state:
+
+| Option | When to use it |
+|---|---|
+| **5. Use an existing checkout** | An initialized Agentbot memory vault is already cloned on this machine. |
+| **6. Clone a vault** | An initialized vault exists on GitHub, such as when setting up a second laptop. Agentbot clones and configures it. |
+| **7. Create a new vault** | Starting memory for the first time, with an optional remote repository for sync. |
+
+An empty GitHub repository is not yet an Agentbot vault. Options **5** and
+**6** do not initialize it. If you already cloned the empty repository,
+keep that checkout and choose another unused local location for **7**. The
+create option refuses a nonempty destination, including a folder containing
+only `.git`. Adjust the push command to match the location you choose.
+
+Keep the vault on the Linux filesystem under the user's home, outside other
+Git repositories. Use a location such as `~/agent-memory`, rather than `/`,
+the home directory itself, or a Windows drive under `/mnt/c`.
+
+Run `agentbot boot` inside each project repository that needs project memory.
+See the [Agentbot memory guide](https://github.com/PamuduW/agentbot#memory-vault)
+for CLI setup, sync, and proposal review.
 
 ### Start optional services
 
