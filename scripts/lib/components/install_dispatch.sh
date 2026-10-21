@@ -137,8 +137,8 @@ _comp_install_antigravity_cli() {
 	install_antigravity_cli
 }
 
-_comp_install_monaspace_fonts() {
-	install_monaspace_fonts
+_comp_install_ubuntu_sans_mono_fonts() {
+	install_ubuntu_sans_mono_fonts
 }
 
 _comp_install_obsidian() {

@@ -107,7 +107,7 @@ test_command_lib_documents_full_help_catalog() {
 	dotfiles_command_metadata_validate
 	for needle in \
 		'update [--dry-run]' \
-		'Node.js, npm, Go, and Monaspace' \
+		'Node.js, npm, Go, and Ubuntu Sans Mono' \
 		'DOTFILES_COMPONENTS' \
 		'GITHUB_TOKEN' \
 		'install.sh --install' \
@@ -182,7 +182,7 @@ test_component_registry_has_exact_33_with_release_clis() {
 	local expected=(
 		git_identity system_packages python graphify_cli boost_cli powershell go nodejs direnv docker portainer lazygit
 		kubeconform tflint zizmor chrome_headless vale yt_dlp trivy infracost markdownlint_cli2 cspell mermaid_cli
-		lazydocker cursor_cli codex_cli claude_cli antigravity_cli monaspace_fonts obsidian dotfiles
+		lazydocker cursor_cli codex_cli claude_cli antigravity_cli ubuntu_sans_mono_fonts obsidian dotfiles
 		wsl_conf git_credential
 	)
 	[[ "${#COMP_KEYS[@]}" -eq 33 && "${#COMP_LABELS[@]}" -eq 33 ]] || return 1

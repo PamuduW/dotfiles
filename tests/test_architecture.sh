@@ -92,7 +92,7 @@ test_dotfiles_cli_is_a_thin_adapter_over_update_modules() (
 	[[ -f "$REPO_DIR/scripts/lib/update_components.sh" ]]
 	[[ -f "$REPO_DIR/scripts/lib/update_workflow.sh" ]]
 	(("$(wc -l <"$REPO_DIR/bin/bin/dotfiles")" < 400))
-	! rg -n '^(install_lazygit_from_github|install_lazydocker_from_github|install_monaspace_fonts|_repo_update_change_count|_repo_update_history_detail)\(\)' \
+	! rg -n '^(install_lazygit_from_github|install_lazydocker_from_github|install_ubuntu_sans_mono_fonts|_repo_update_change_count|_repo_update_history_detail)\(\)' \
 		"$REPO_DIR/bin/bin/dotfiles"
 )
 

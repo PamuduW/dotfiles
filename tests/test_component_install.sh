@@ -176,7 +176,7 @@ test_failed_apt_index_still_reports_the_run() (
 		export DOTFILES_NO_PROGRESS_ANIMATION=1
 		# The four apt-backed components, plus two apt cannot touch, so both
 		# halves of the outcome are represented.
-		DOTFILES_COMPONENTS='system_packages,python,powershell,docker,monaspace_fonts,lazygit' \
+		DOTFILES_COMPONENTS='system_packages,python,powershell,docker,ubuntu_sans_mono_fonts,lazygit' \
 			apply_dotfiles_components_env >/dev/null 2>&1
 		sudo_prime() { :; }
 		_run_quiet_command() {

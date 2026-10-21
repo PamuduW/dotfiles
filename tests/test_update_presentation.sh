@@ -399,7 +399,7 @@ test_update_step_registry_has_stable_complete_pairs() (
 		'apt packages' 'Graphify CLI' 'Boost CLI' Kubeconform TFLint zizmor
 		Vale yt-dlp Trivy Infracost 'Chrome headless shell' markdownlint-cli2 CSpell 'Mermaid CLI' 'Cursor CLI' 'Codex CLI'
 		'Claude CLI' 'Antigravity CLI' lazygit lazydocker 'Node.js (nvm)' npm
-		'Go (asdf)' 'Monaspace fonts' Obsidian 'shared repo' 'dotfiles repo'
+		'Go (asdf)' 'Ubuntu Sans Mono fonts' Obsidian 'shared repo' 'dotfiles repo'
 	)
 	update_step_registry_validate || return 1
 	[[ "${#UPDATE_STEP_KEYS[@]}" -eq "${#expected[@]}" ]] || return 1

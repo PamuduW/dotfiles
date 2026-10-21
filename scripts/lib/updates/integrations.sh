@@ -435,10 +435,10 @@ upgrade_lazydocker() {
 	fi
 }
 
-# --- Monaspace fonts — opt-in ---
-monaspace_installed_version() {
-	local font_dir="$HOME/.local/share/fonts/monaspace"
-	if [[ -d "$font_dir" ]] && compgen -G "${font_dir}/*.otf" >/dev/null 2>&1; then
+# --- Ubuntu Sans Mono fonts — opt-in ---
+ubuntu_sans_mono_installed_version() {
+	local font_dir="$HOME/.local/share/fonts/ubuntu-sans-mono"
+	if [[ -d "$font_dir" ]] && compgen -G "${font_dir}/*.ttf" >/dev/null 2>&1; then
 		if [[ -f "${font_dir}/.version" ]]; then
 			cat "${font_dir}/.version"
 		else
@@ -449,14 +449,14 @@ monaspace_installed_version() {
 	fi
 }
 
-monaspace_latest_version() {
-	_github_latest_version githubnext/monaspace
+ubuntu_sans_mono_latest_version() {
+	_github_latest_version canonical/Ubuntu-Sans-Mono-fonts
 }
 
-check_monaspace() {
+check_ubuntu_sans_mono() {
 	local installed available action upgradable=0
-	installed="$(monaspace_installed_version)"
-	available="$(monaspace_latest_version 2>/dev/null || true)"
+	installed="$(ubuntu_sans_mono_installed_version)"
+	available="$(ubuntu_sans_mono_latest_version 2>/dev/null || true)"
 	[[ -n "$available" ]] || available="—"
 	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
 		action="$UPDATE_CHECK_SKIP"
@@ -466,29 +466,30 @@ check_monaspace() {
 	else
 		action="$UPDATE_CHECK_CURRENT"
 	fi
-	printf '%s|%s|%s|%s\n' "Monaspace fonts" "$installed" "$available" "$action"
+	printf '%s|%s|%s|%s\n' "Ubuntu Sans Mono fonts" "$installed" "$available" "$action"
 	[[ $upgradable -eq 1 ]]
 }
 
-upgrade_monaspace() {
+upgrade_ubuntu_sans_mono() {
 	local installed latest
-	installed="$(monaspace_installed_version)"
+	installed="$(ubuntu_sans_mono_installed_version)"
 	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
-		install_monaspace_fonts || return $?
+		install_ubuntu_sans_mono_fonts || return $?
 		upgrade_result_set updated
 		return 0
 	fi
-	latest="$(monaspace_latest_version 2>/dev/null || true)"
+	latest="$(ubuntu_sans_mono_latest_version 2>/dev/null || true)"
 	if [[ -z "$latest" ]]; then
-		log_warn "Could not check the Monaspace release (GitHub API); keeping ${installed}"
+		log_warn "Could not check the Ubuntu Sans Mono release (GitHub API); keeping ${installed}"
 		upgrade_result_set checked-no-change
 		return 0
 	fi
 	if [[ "$installed" == "$latest" ]]; then
-		log_skip "Monaspace fonts already up to date (${installed})"
+		install_ubuntu_sans_mono_windows "$HOME/.local/share/fonts/ubuntu-sans-mono" || return $?
+		log_skip "Ubuntu Sans Mono fonts already up to date (${installed})"
 		upgrade_result_set already-current
 		return 0
 	fi
-	install_monaspace_fonts --replace || return $?
+	install_ubuntu_sans_mono_fonts --replace || return $?
 	upgrade_result_set updated
 }

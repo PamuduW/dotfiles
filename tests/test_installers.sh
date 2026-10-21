@@ -755,8 +755,8 @@ test_portainer_custom_container_is_not_replaced() (
 	! grep -Eq '^(rm|create|stop) ' "$calls"
 )
 
-test_monaspace_upgrade_requests_a_replacement_install() (
-	[[ "$(declare -f upgrade_monaspace)" == *'install_monaspace_fonts --replace'* ]]
+test_ubuntu_sans_mono_upgrade_requests_a_replacement_install() (
+	[[ "$(declare -f upgrade_ubuntu_sans_mono)" == *'install_ubuntu_sans_mono_fonts --replace'* ]]
 )
 
 test_remote_shell_installers_are_downloaded_before_execution() (
@@ -864,7 +864,7 @@ check 'Portainer start failure restores and restarts the original' test_portaine
 check 'Portainer verify failure removes the partial replacement' test_portainer_verify_failure_removes_the_partial_replacement
 check 'Portainer interrupted backup is restored before retry' test_portainer_interrupted_backup_is_restored_before_retry
 check 'Portainer custom containers are not replaced' test_portainer_custom_container_is_not_replaced
-check 'Monaspace upgrades replace an older installed release' test_monaspace_upgrade_requests_a_replacement_install
+check 'Ubuntu Sans Mono upgrades replace an older installed release' test_ubuntu_sans_mono_upgrade_requests_a_replacement_install
 check 'remote shell installers are downloaded before execution' test_remote_shell_installers_are_downloaded_before_execution
 check 'remote shell installers reject insecure and empty payloads' test_remote_shell_installer_fails_closed
 check 'release checksums must identify the selected archive' test_release_manifest_must_name_the_selected_archive

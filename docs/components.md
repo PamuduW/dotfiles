@@ -15,7 +15,7 @@ logic, Command lib, Package lib, and user documentation.
 | Development tools | `graphify_cli`, `boost_cli`, `lazygit`, `kubeconform`, `tflint`, `zizmor`, `trivy`, `infracost`, `chrome_headless` |
 | Writing and documents | `vale`, `yt_dlp`, `markdownlint_cli2`, `cspell`, `mermaid_cli` |
 | Agent CLIs | `cursor_cli`, `codex_cli`, `claude_cli`, `antigravity_cli` |
-| Desktop and shell | `monaspace_fonts`, `obsidian`, `dotfiles`, `wsl_conf` |
+| Desktop and shell | `ubuntu_sans_mono_fonts`, `obsidian`, `dotfiles`, `wsl_conf` |
 
 Git identity is disabled by default. Other components
 start selected. Dependencies are enforced by the registry; Portainer and

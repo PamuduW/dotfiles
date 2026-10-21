@@ -67,7 +67,7 @@ shared_repo_status() {
 # --- Ordered update-step registry ---
 # Preview and apply both consume this registry. A step cannot appear in one
 # phase without declaring the handler used by the other phase.
-UPDATE_STEP_KEYS=(apt graphify boost kubeconform tflint zizmor vale yt_dlp trivy infracost chrome_headless markdownlint_cli2 cspell mermaid_cli cursor codex claude antigravity lazygit lazydocker node npm go monaspace obsidian shared repository)
+UPDATE_STEP_KEYS=(apt graphify boost kubeconform tflint zizmor vale yt_dlp trivy infracost chrome_headless markdownlint_cli2 cspell mermaid_cli cursor codex claude antigravity lazygit lazydocker node npm go ubuntu_sans_mono obsidian shared repository)
 declare -gA UPDATE_STEP_LABEL=(
 	[apt]='apt packages' [graphify]='Graphify CLI' [boost]='Boost CLI'
 	[kubeconform]='Kubeconform' [tflint]='TFLint' [zizmor]='zizmor'
@@ -77,7 +77,7 @@ declare -gA UPDATE_STEP_LABEL=(
 	[antigravity]='Antigravity CLI'
 	[lazygit]='lazygit' [lazydocker]='lazydocker'
 	[node]='Node.js (nvm)' [npm]='npm' [go]='Go (asdf)'
-	[monaspace]='Monaspace fonts' [obsidian]='Obsidian' [shared]='shared repo' [repository]='dotfiles repo'
+	[ubuntu_sans_mono]='Ubuntu Sans Mono fonts' [obsidian]='Obsidian' [shared]='shared repo' [repository]='dotfiles repo'
 )
 declare -gA UPDATE_STEP_CHECK=(
 	[apt]=check_apt [graphify]=check_graphify_cli [boost]=check_boost_cli
@@ -88,7 +88,7 @@ declare -gA UPDATE_STEP_CHECK=(
 	[cursor]=check_cursor_cli [codex]=check_codex_cli [claude]=check_claude_cli
 	[antigravity]=check_antigravity_cli
 	[lazygit]=check_lazygit [lazydocker]=check_lazydocker
-	[node]=check_node [npm]=check_npm [go]=check_go [monaspace]=check_monaspace
+	[node]=check_node [npm]=check_npm [go]=check_go [ubuntu_sans_mono]=check_ubuntu_sans_mono
 	[obsidian]=check_obsidian
 	[shared]=shared_repo_status
 	[repository]=dotfiles_repo_status
@@ -103,7 +103,7 @@ declare -gA UPDATE_STEP_APPLY=(
 	[antigravity]=upgrade_antigravity_cli
 	[lazygit]=upgrade_lazygit [lazydocker]=upgrade_lazydocker
 	[node]=upgrade_node [npm]=_apply_npm_update_step [go]=upgrade_go
-	[monaspace]=upgrade_monaspace [obsidian]=upgrade_obsidian
+	[ubuntu_sans_mono]=upgrade_ubuntu_sans_mono [obsidian]=upgrade_obsidian
 	[shared]=_apply_repository_update_step [repository]=_apply_repository_update_step
 )
 declare -gA UPDATE_STEP_RETRY=(
@@ -116,7 +116,7 @@ declare -gA UPDATE_STEP_RETRY=(
 	[codex]='dotfiles update' [claude]='claude update' [antigravity]='agy update'
 	[lazygit]='dotfiles update' [lazydocker]='dotfiles update'
 	[node]='nvm install --lts' [npm]='nvm install-latest-npm'
-	[go]='asdf install golang latest' [monaspace]='dotfiles update'
+	[go]='asdf install golang latest' [ubuntu_sans_mono]='dotfiles update'
 	[obsidian]='dotfiles update'
 	[shared]='dotfiles update' [repository]='dotfiles update'
 )

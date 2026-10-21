@@ -543,7 +543,7 @@ expect_success 'runtime canary is absent from output, logs, Git, snapshot, and d
 expect_success 'sampled curl process command line contains no secret or auth value' test_proc_cmdline_has_no_secret
 expect_success 'lazygit and lazydocker archives and checksums use the boundary' test_release_installers_routed
 expect_success 'standalone release installer sources boundary and stays anonymous without token helper' test_release_installer_standalone_source_stays_anonymous
-expect_success 'Monaspace and asdf release archives use the boundary' test_fonts_and_asdf_routed
+expect_success 'Ubuntu Sans Mono and asdf release archives use the boundary' test_fonts_and_asdf_routed
 expect_success 'global dotfiles release downloads use the boundary' test_global_dotfiles_routed
 expect_success 'all active GitHub API and release URLs have no direct-curl bypass' test_complete_consumer_inventory
 expect_success 'structural scanner rejects a direct curl bypass near github_curl' test_scanner_rejects_nearby_direct_curl_bypass
