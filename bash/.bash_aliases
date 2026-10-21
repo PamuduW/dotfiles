@@ -68,7 +68,29 @@ if [[ -f "$DOTFILES_DIR/scripts/lib/docker.sh" ]]; then
 fi
 
 dpot() {
-	run_docker start portainer && echo 'Portainer started at https://localhost:9443'
+	run_docker start portainer || return $?
+	local started_at logs token attempt
+	if started_at="$(run_docker inspect --format '{{.State.StartedAt}}' portainer 2>/dev/null)" && [[ -n "$started_at" ]]; then
+		for ((attempt = 0; attempt < 10; attempt++)); do
+			# Docker sends container stderr logs to stderr too; run_docker hides it.
+			if ! logs="$(docker logs --since "$started_at" --tail 200 portainer 2>&1)"; then
+				logs="$(sudo docker logs --since "$started_at" --tail 200 portainer 2>&1)" || break
+			fi
+			token="$(sed -nE 's/^[[:space:]]*setup_token=([^[:space:]]+)[[:space:]]*$/\1/p' <<<"$logs" | tail -n 1)"
+			if [[ -n "$token" ]]; then
+				printf 'Setup token: %s\n' "$token"
+				echo 'Portainer started at https://localhost:9443'
+				return 0
+			fi
+			if [[ "$logs" == *'starting HTTPS server'* ]]; then
+				echo 'Portainer started at https://localhost:9443'
+				return 0
+			fi
+			sleep 0.5
+		done
+	fi
+	echo 'If first-time setup asks for a token, check: docker logs portainer'
+	echo 'Portainer started at https://localhost:9443'
 }
 dpotstop() {
 	run_docker stop portainer && echo 'Portainer stopped'
