@@ -4,6 +4,10 @@ The root [README](../README.md) is the user-facing quick start. This directory
 documents the repository's implementation and operational contracts. Current
 scripts and tests are authoritative when prose drifts.
 
+For a new laptop, see [Set up Agentbot memory](../README.md#set-up-agentbot-memory)
+for the first-vault steps and the difference between creating, cloning, and
+using an existing vault checkout.
+
 | Document | Scope |
 |---|---|
 | [Architecture](architecture.md) | Entry points, loaders, modules, Stow packages, and ownership boundaries |
