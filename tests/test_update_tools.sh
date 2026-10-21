@@ -478,11 +478,24 @@ test_graphify_upgrade_failure_has_copyable_retry_command() (
 
 test_upgrade_step_marks_failures_in_red_with_retry_command() (
 	local output
-	C_BOLD='' C_YELLOW='' C_RED=$'\033[31m' C_RESET=$'\033[0m'
+	unset NO_COLOR
+	export FORCE_COLOR=1
+	colors_clear_palette
 	_failing_probe() { return 7; }
 
 	output="$(_run_upgrade_step 'probe' 'probe --retry' _failing_probe 2>&1)"
 	grep -Fq $'\033[31m>> FAILED (exit 7) — retry manually: probe --retry <<\033[0m' <<<"$output"
+)
+
+test_upgrade_step_respects_no_color_with_retry_command() (
+	local output
+	export NO_COLOR=1 FORCE_COLOR=1
+	colors_set_palette
+	_failing_probe() { return 7; }
+
+	output="$(_run_upgrade_step 'probe' 'probe --retry' _failing_probe 2>&1)"
+	grep -Fq '>> FAILED (exit 7) — retry manually: probe --retry <<' <<<"$output" || return 1
+	[[ "$output" != *$'\033['* ]]
 )
 
 test_upgrade_step_omits_failure_marker_after_success() (
@@ -822,6 +835,7 @@ expect_success 'Graphify update retries with system certificates after failure' 
 expect_success 'Graphify first-attempt error is quiet when the retry works' test_graphify_first_attempt_error_is_quiet_when_the_retry_works
 expect_success 'Graphify update failures include a copyable retry command' test_graphify_upgrade_failure_has_copyable_retry_command
 expect_success 'upgrade step marks failures in red with retry command' test_upgrade_step_marks_failures_in_red_with_retry_command
+expect_success 'upgrade step respects NO_COLOR and retains retry command' test_upgrade_step_respects_no_color_with_retry_command
 expect_success 'upgrade step omits failure marker after success' test_upgrade_step_omits_failure_marker_after_success
 expect_success 'Node.js upgrade stops when nvm install fails' test_node_upgrade_stops_when_nvm_install_fails
 expect_success 'Go upgrade stops when asdf install fails' test_go_upgrade_stops_when_asdf_install_fails

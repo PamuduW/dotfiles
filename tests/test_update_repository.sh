@@ -121,7 +121,7 @@ test_cmd_update_executes_outcome_contract() (
 	repo_update_run() {
 		local -n result_ref="$4"
 		printf 'gate:%s\n' "$2" >>"$events"
-		result_ref=([outcome]="${TEST_GATE_OUTCOME:?}")
+		result_ref=(["outcome"]="${TEST_GATE_OUTCOME:?}")
 		case "$TEST_GATE_OUTCOME" in
 		stopped) return 1 ;;
 		repository_changed) return 2 ;;
@@ -195,7 +195,7 @@ test_cmd_update_declined_pull_is_handled_without_failure() (
 	: >"$events"
 	repo_update_run() {
 		local -n result_ref="$4"
-		result_ref=([outcome]=stopped [reason]=behind-declined)
+		result_ref=(["outcome"]=stopped ["reason"]=behind-declined)
 		printf 'gate:%s\n' "$2" >>"$events"
 		return 1
 	}
@@ -210,9 +210,9 @@ test_cmd_update_reports_dirty_paths_and_remote_state_before_stopping() (
 	repo_update_run() {
 		local -n result_ref="$4"
 		result_ref=(
-			[dir]="$DOTFILES_DIR" [label]='dotfiles repo' [outcome]=stopped
-			[reason]=dirty [state]=behind [ahead]=0 [behind]=3 [dirty]=1
-			[upstream]=origin/main [changes]=$' M scripts/example.sh\n?? local-change'
+			["dir"]="$DOTFILES_DIR" ["label"]='dotfiles repo' ["outcome"]=stopped
+			["reason"]=dirty ["state"]=behind ["ahead"]=0 ["behind"]=3 ["dirty"]=1
+			["upstream"]=origin/main ["changes"]=$' M scripts/example.sh\n?? local-change'
 		)
 		repo_update_print_stopped "$4"
 		return 1

@@ -104,7 +104,7 @@ test_install_dispatch_gates_repository_before_menu() (
 	repo_update_run() {
 		printf 'gate:%s\n' "$1" >>"$calls"
 		local -n result_ref="$4"
-		result_ref=([outcome]=current)
+		result_ref=(["outcome"]=current)
 	}
 	run_initial_setup_flow() { printf 'setup\n' >>"$calls"; }
 	ui_clear() { :; }
@@ -124,7 +124,7 @@ test_install_dispatch_blocks_when_repository_is_not_ready() (
 	repo_update_run() {
 		printf 'gate:%s\n' "$1" >>"$calls"
 		local -n result_ref="$4"
-		result_ref=([outcome]=stopped)
+		result_ref=(["outcome"]=stopped)
 		return 1
 	}
 	run_initial_setup_flow() { printf 'setup\n' >>"$calls"; }
@@ -143,11 +143,11 @@ test_install_repo_gate_uses_repository_update_topic() (
 	C_BOLD=$'\033[1m' C_CYAN=$'\033[36m' C_YELLOW=$'\033[33m' C_RESET=$'\033[0m'
 	repo_update_preflight() {
 		local -n result_ref="$3"
-		result_ref=([safe]=1 [state]=behind [outcome]=stopped [reason]=behind [approved]=0 [dirty]=0 [changes]='' [upstream]=origin/main [dir]="$1" [label]="$2" [ahead]=0 [behind]=1)
+		result_ref=(["safe"]=1 ["state"]=behind ["outcome"]=stopped ["reason"]=behind ["approved"]=0 ["dirty"]=0 ["changes"]='' ["upstream"]=origin/main ["dir"]="$1" ["label"]="$2" ["ahead"]=0 ["behind"]=1)
 	}
 	repo_update_apply() {
 		local -n result_ref="$1"
-		result_ref[outcome]=current
+		result_ref["outcome"]=current
 	}
 	ui_confirm_yes_no() { return 0; }
 	output="$(_dotfiles_install_repo_gate 2>&1)" || return 1
@@ -161,15 +161,15 @@ test_install_repo_gate_returns_changed_repository_after_fast_forward() (
 	DOTFILES_DIR=/tmp/dotfiles-test-repo
 	repo_update_preflight() {
 		local -n result_ref="$3"
-		result_ref=([safe]=1 [state]=current [outcome]=current [reason]=current [approved]=0 [dirty]=0 [changes]='' [upstream]=origin/main [dir]="$1" [label]="$2" [ahead]=0 [behind]=0)
+		result_ref=(["safe"]=1 ["state"]=current ["outcome"]=current ["reason"]=current ["approved"]=0 ["dirty"]=0 ["changes"]='' ["upstream"]=origin/main ["dir"]="$1" ["label"]="$2" ["ahead"]=0 ["behind"]=0)
 	}
 	repo_update_request_approval() {
 		local -n result_ref="$1"
-		result_ref[approved]=1
+		result_ref["approved"]=1
 	}
 	repo_update_apply() {
 		local -n result_ref="$1"
-		result_ref[outcome]=repository_changed
+		result_ref["outcome"]=repository_changed
 	}
 	set +e
 	local output

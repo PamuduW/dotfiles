@@ -106,7 +106,7 @@ test_operator_input_components_are_never_installed_by_full_update() (
 	collect_component_probe_results() {
 		local -n out="$1"
 		# Both read as present; only the one needing input is excluded.
-		out=([git_identity]=configured [docker]=installed)
+		out=(["git_identity"]=configured ["docker"]=installed)
 	}
 	run_install() {
 		local key
@@ -129,7 +129,7 @@ test_full_update_leaves_version_upkeep_to_the_update_steps() (
 	declare -A COMP_ON=()
 	collect_component_probe_results() {
 		local -n out="$1"
-		out=([go]=installed [docker]=installed [dotfiles]=configured)
+		out=(["go"]=installed ["docker"]=installed ["dotfiles"]=configured)
 	}
 	run_install() {
 		local key
@@ -157,10 +157,10 @@ test_full_update_installs_only_components_that_probe_as_present() (
 	collect_component_probe_results() {
 		local -n out="$1"
 		out=(
-			[present_one]=installed
-			[configured_one]=configured
-			[absent_one]=missing
-			[skipped_one]=skipped
+			["present_one"]=installed
+			["configured_one"]=configured
+			["absent_one"]=missing
+			["skipped_one"]=skipped
 		)
 	}
 	run_install() {
@@ -186,7 +186,7 @@ test_an_unverifiable_component_is_reinstalled_and_said_so() (
 	declare -A COMP_ON=()
 	collect_component_probe_results() {
 		local -n out="$1"
-		out=([solid]=installed [unverified]=check [gone]=missing)
+		out=(["solid"]=installed ["unverified"]=check ["gone"]=missing)
 	}
 	comp_probe() { printf 'check|still no verdict\n'; }
 	run_install() {
@@ -215,7 +215,7 @@ test_a_probe_that_ran_out_of_time_is_asked_again_before_reinstalling() (
 	declare -A COMP_ON=()
 	collect_component_probe_results() {
 		local -n out="$1"
-		out=([boost_cli]=check)
+		out=(["boost_cli"]=check)
 	}
 	comp_probe() {
 		printf '%s\n' "${COMP_PROBE_TIMEOUT_SECONDS:-}" >"$timeouts"
@@ -241,7 +241,7 @@ test_components_needing_attention_do_not_stop_the_update() (
 	declare -A COMP_ON=()
 	collect_component_probe_results() {
 		local -n out="$1"
-		out=([one]=installed)
+		out=(["one"]=installed)
 	}
 	run_install() { return "${DOTFILES_INSTALL_PARTIAL_RC:-4}"; }
 

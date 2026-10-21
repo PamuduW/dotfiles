@@ -58,7 +58,7 @@ portainer_case() (
 		via_sudo=1 docker "$@"
 	}
 	sleep() { :; }
-	output="$(dpot 2>&1)" || rc=$?
+	output="$(dpot "${@:2}" 2>&1)" || rc=$?
 	if [[ "$scenario" == start-failure ]]; then
 		[[ "$rc" == 42 && "$(<"$calls")" == 'start portainer' ]] || return 1
 		[[ "$output" != *'Portainer started'* ]]
@@ -74,6 +74,35 @@ portainer_case() (
 	timeout) [[ "$output" != *'Setup token:'* && "$(wc -l <"$attempts")" == 10 && "$output" == *'docker logs portainer'* ]] ;;
 	esac
 )
+
+portainer_dispatch_case() (
+	local scenario="$1" output rc=0 calls="$TEST_HARNESS_ROOT/dispatch-calls"
+	shift
+	: >"$calls"
+	DOTFILES_DIR="$REPO_DIR"
+	source "$REPO_DIR/bash/.bash_aliases"
+	run_docker() {
+		printf '%s\n' "$*" >>"$calls"
+		[[ "$scenario" != failure ]] || return 43
+		[[ "$*" == 'stop portainer' ]] || return 99
+		printf 'portainer\n'
+	}
+	output="$("$@" 2>&1)" || rc=$?
+	case "$scenario" in
+	stop) [[ "$rc" == 0 && "$output" == $'portainer\nPortainer stopped' && "$(<"$calls")" == 'stop portainer' ]] ;;
+	failure) [[ "$rc" == 43 && "$output" != *'Portainer stopped'* && "$(<"$calls")" == 'stop portainer' ]] ;;
+	invalid) [[ "$rc" == 2 && "$output" == *'Usage:'* && ! -s "$calls" ]] ;;
+	esac
+)
+
+check 'dpot start explicitly starts Portainer' portainer_case initialized start
+check 'dpot stop stops without inspecting or reading logs' portainer_dispatch_case stop dpot stop
+check 'dpotstop retains the stop shortcut' portainer_dispatch_case stop dpotstop
+check 'dpot stop propagates Docker failure' portainer_dispatch_case failure dpot stop
+check 'dpotstop propagates Docker failure' portainer_dispatch_case failure dpotstop
+check 'dpot rejects unknown commands without calling Docker' portainer_dispatch_case invalid dpot restart
+check 'dpot rejects extra arguments without calling Docker' portainer_dispatch_case invalid dpot stop extra
+check 'dpot rejects empty arguments without calling Docker' portainer_dispatch_case invalid dpot ''
 
 check 'dpot shows the setup token from stderr before the URL without dumping logs' portainer_case token
 check 'dpot waits briefly for delayed startup logs' portainer_case delayed

@@ -253,6 +253,28 @@ EOF
 	grep -Fqx 'the last line of the run' $written
 )
 
+test_existing_exit_handler_preserves_arguments_and_status() (
+	local probe_dir="$TEST_HARNESS_ROOT/action-log-exit-handler" status=0
+	mkdir -p "$probe_dir"
+	cat >"$probe_dir/probe" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+DOTFILES_DIR="$1"
+module="$2/scripts/lib/action_log.sh"
+expected=("$@")
+trap 'status=$?; printf "%s\n" "$status" "literal quote: '\'' and dollar: $" >"$DOTFILES_DIR/exit-result"' EXIT
+before="$(trap -p EXIT)"
+source "$module"
+[[ "$#" == "${#expected[@]}" && "$1" == "${expected[0]}" && "$2" == "${expected[1]}" ]]
+[[ "$_ACTION_LOG_PREVIOUS_EXIT" == *'literal quote:'* ]]
+[[ "$(trap -p EXIT)" != "$before" ]]
+exit 7
+EOF
+	bash "$probe_dir/probe" "$probe_dir" "$REPO_DIR" || status=$?
+	[[ "$status" == 7 && "$(<"$probe_dir/exit-result")" == $'7\nliteral quote: \' and dollar: $' ]]
+)
+
+expect_success 'existing exit handler preserves quoted text, caller arguments and exit status' test_existing_exit_handler_preserves_arguments_and_status
 expect_success 'a child finalizes the log it starts after the module was loaded by its parent' test_a_child_owns_the_log_it_starts
 expect_success 'a starting peer raw capture is not pruned' test_a_starting_peers_raw_capture_is_not_pruned
 expect_success 'overlapping action logs keep separate complete output' test_overlapping_action_logs_keep_separate_complete_output

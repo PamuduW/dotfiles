@@ -169,7 +169,7 @@ DOTFILES_COMPONENTS=system_packages,docker,portainer,dotfiles \
 
 ## Component summary
 
-The registry contains 22 components:
+The registry contains 33 components:
 
 | Area | Components |
 |---|---|
@@ -309,9 +309,12 @@ for CLI setup, sync, and proposal review.
 Fresh or migrated Portainer containers are left stopped:
 
 ```bash
-dpot
-dpotstop
+dpot          # Start (also: dpot start)
+dpot stop     # Stop (also: dpotstop)
 ```
+
+Unknown commands and extra arguments are rejected. Docker start/stop failures
+return a non-zero status.
 
 `dpot` shows the setup token before the URL when it appears in Portainer's
 current startup logs. Paste it into the first-time setup screen. It waits up
