@@ -297,12 +297,12 @@ comp_define antigravity_cli \
 	--order 16 \
 	--desc $'Installs Google Antigravity CLI (agy) to ~/.local/bin after verifying the\nSHA-512 digest in its release manifest. Shell profiles are left untouched.'
 
-comp_define monaspace_fonts \
-	--label 'Monaspace fonts (Nerd Fonts)' \
-	--plan 'Monaspace fonts' \
-	--detail 'Monaspace Nerd Fonts -> ~/.local/share/fonts/' \
+comp_define ubuntu_sans_mono_fonts \
+	--label 'Ubuntu Sans Mono fonts' \
+	--plan 'Ubuntu Sans Mono fonts' \
+	--detail 'Ubuntu Sans Mono -> WSL + Windows user fonts' \
 	--order 17 \
-	--desc $'Downloads GitHub Monaspace Nerd Fonts to ~/.local/share/fonts/.\nIncludes all five variants with Powerline glyphs and development icons.'
+	--desc $'Downloads the latest official Ubuntu Sans Mono static fonts to ~/.local/share/fonts/.\nAlso installs for the current Windows user when WSL interop is available.'
 
 comp_define obsidian \
 	--label 'Obsidian (desktop app via WSLg)' \

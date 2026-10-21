@@ -217,7 +217,7 @@ collect_component_probe_results() {
 # these falls through to its Bash probe, which is why both still exist --
 # `python3` belongs to the optional `python` component, so a first setup that
 # deselects it prints its install summary with no interpreter.
-_COMP_PYTHON_PROBES=(monaspace_fonts dotfiles wsl_conf git_identity git_credential)
+_COMP_PYTHON_PROBES=(ubuntu_sans_mono_fonts dotfiles wsl_conf git_identity git_credential)
 # What the stream writes where such a probe's result will go.
 _COMP_PROBE_PENDING=$'\x02'
 
@@ -945,30 +945,30 @@ _comp_probe_portainer() {
 	comp_classify portainer 1 "$rc" "$name"
 }
 
-# Pure: a directory with no .otf in it is not an installation, so presence here
+# Pure: a directory with no .ttf in it is not an installation, so presence here
 # means the fonts, never the folder.
-_comp_classify_monaspace_fonts() {
+_comp_classify_ubuntu_sans_mono_fonts() {
 	local present="$1" count="$2" ver="$3"
 
 	if [[ "$present" != 1 ]]; then
-		printf 'missing|fonts not in ~/.local/share/fonts/monaspace\n'
+		printf 'missing|fonts not in ~/.local/share/fonts/ubuntu-sans-mono\n'
 	else
 		printf 'installed|%s (%s fonts)\n' "$ver" "$count"
 	fi
 }
 
-_comp_probe_monaspace_fonts() {
+_comp_probe_ubuntu_sans_mono_fonts() {
 	local font_dir count='' ver='' present=0
-	font_dir="$HOME/.local/share/fonts/monaspace"
+	font_dir="$HOME/.local/share/fonts/ubuntu-sans-mono"
 
-	if [[ -d "$font_dir" ]] && compgen -G "${font_dir}/*.otf" >/dev/null 2>&1; then
+	if [[ -d "$font_dir" ]] && compgen -G "${font_dir}/*.ttf" >/dev/null 2>&1; then
 		present=1
-		count="$(find "$font_dir" -maxdepth 1 -name '*.otf' 2>/dev/null | wc -l | tr -d ' ')"
+		count="$(find "$font_dir" -maxdepth 1 -name '*.ttf' 2>/dev/null | wc -l | tr -d ' ')"
 		ver="installed"
 		[[ -f "${font_dir}/.version" ]] && ver="$(cat "${font_dir}/.version")"
 	fi
 
-	comp_classify monaspace_fonts "$present" "$count" "$ver"
+	comp_classify ubuntu_sans_mono_fonts "$present" "$count" "$ver"
 }
 
 # Local state only: the installed .deb, or an obsidian on PATH that is not it.

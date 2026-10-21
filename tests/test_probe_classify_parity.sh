@@ -330,9 +330,9 @@ test_remaining_readings_parity() {
 	cases=('1|210|1.400' '1|0|installed' '0||')
 	for row in "${cases[@]}"; do
 		IFS='|' read -r present count ver <<<"$row"
-		want="$(_comp_classify_monaspace_fonts "$present" "$count" "$ver")"
-		got="$(py "pc.monaspace_fonts(present=bool($present), count='$count', version='$ver')")"
-		compare "monaspace [$row]" "$want" "$got"
+		want="$(_comp_classify_ubuntu_sans_mono_fonts "$present" "$count" "$ver")"
+		got="$(py "pc.ubuntu_sans_mono_fonts(present=bool($present), count='$count', version='$ver')")"
+		compare "ubuntu_sans_mono [$row]" "$want" "$got"
 	done
 
 	local missing

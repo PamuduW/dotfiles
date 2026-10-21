@@ -135,7 +135,7 @@ dotfiles_command_define 'update' \
 	--description 'Safely update the repo, then packages and tools.' \
 	--note 'One approval updates every managed component.' \
 	--options $'--dry-run|Show the update report, then stop before any downstream change.|off\n-h|Show command help and exit.|off\n--help|Show command help and exit.|off' \
-	--defaults 'One approval runs every managed update, including Node.js, npm, Go, and Monaspace.' \
+	--defaults 'Includes Node.js, npm, Go, and Ubuntu Sans Mono.' \
 	--effects 'May pull the repository, refresh apt, and update all managed CLIs, runtimes, and fonts.' \
 	--example 'dotfiles update' \
 	--related 'Use status for local inspection and restow for link-only repair.'

@@ -24,7 +24,7 @@
 # combination even though the shared side only gained something. The shared
 # checkout must declare at least this revision; an older one is a loud stop,
 # not a warning.
-DOTFILES_SHARED_CONTRACT_REQUIRED=4
+DOTFILES_SHARED_CONTRACT_REQUIRED=5
 
 DOTFILES_SHARED_URL='https://github.com/PamuduW/dotfiles-shared'
 

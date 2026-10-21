@@ -176,7 +176,7 @@ The registry contains 22 components:
 | Base system | system packages, Python packages, PowerShell, WSL configuration |
 | Languages | Go through asdf, Node.js and npm through nvm, direnv |
 | Containers | Docker Engine, Portainer CE LTS, lazydocker |
-| Developer tools | Graphify CLI, Boost CLI, lazygit, Kubeconform, TFLint, zizmor, Trivy, Infracost, Chrome headless shell, Monaspace fonts |
+| Developer tools | Graphify CLI, Boost CLI, lazygit, Kubeconform, TFLint, zizmor, Trivy, Infracost, Chrome headless shell, Ubuntu Sans Mono fonts |
 | Writing and documents | Vale, CSpell, markdownlint-cli2, Mermaid CLI, yt-dlp |
 | Agent CLIs | Cursor, standalone Codex, Claude, Antigravity |
 | Desktop apps (WSLg) | Obsidian |
@@ -198,6 +198,22 @@ repository, so the write would land in the checkout. `~/.bashrc` already puts
 
 The exact keys, dependencies, defaults, and descriptions are available through
 `dotfiles packages` and documented in [Component lifecycle](docs/components.md).
+
+The `ubuntu_sans_mono_fonts` component installs the latest official Canonical
+Ubuntu Sans Mono static TTFs in `~/.local/share/fonts/ubuntu-sans-mono`, with
+SHA-256 verification. In WSL it also installs and registers them for the current
+Windows user, so desktop VS Code and Windows Terminal can use them without
+administrator access. Restart those apps if the font is not immediately listed.
+If Windows interop is unavailable, WSL installation still works; install the
+font on Windows manually or rerun the component after enabling interop. Windows
+installation errors are reported and can be retried by rerunning the component.
+Windows updates use versioned filenames so loaded font files need not be
+overwritten. Previous Windows font files and extra WSL font files are retained.
+
+This replaces the former Monaspace component. Existing Monaspace files are left
+in place, but are no longer installed or updated. Ubuntu Sans Mono is the
+original, unpatched family and does not include Nerd Fonts icons. The Windows
+Terminal template uses it; importing that template remains a manual step.
 
 ## Codex CLI migration
 

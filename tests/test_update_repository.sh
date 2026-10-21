@@ -155,7 +155,7 @@ test_cmd_update_executes_outcome_contract() (
 	replies=yes
 	cmd_update >/dev/null || return 1
 	[[ "$(sed -n '3p' "$events")" == report && "$(sed -n '4p' "$events")" == confirm:* && "$(sed -n '5p' "$events")" == downstream && "$(sed -n '6p' "$events")" == summary ]] || return 1
-	! grep -Fq 'Include Node.js, npm, Go, and Monaspace fonts' "$events" || return 1
+	! grep -Fq 'Include Node.js, npm, Go, and Ubuntu Sans Mono fonts' "$events" || return 1
 
 	: >"$events"
 	TEST_GATE_OUTCOME=current

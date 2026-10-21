@@ -202,7 +202,7 @@ sudo nano /etc/wsl.conf
 # Repo-first update workflow (downstream changes require confirmation)
 dotfiles update
 
-# Include opt-in upgrades: Node.js (nvm), Go (asdf), Monaspace fonts
+# Include opt-in upgrades: Node.js (nvm), Go (asdf), Ubuntu Sans Mono fonts
 dotfiles update --all
 
 # Boot menu (initial setup / update / agents)

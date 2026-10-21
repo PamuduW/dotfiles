@@ -62,23 +62,23 @@ compare() {
 	failures=$((failures + 1))
 }
 
-test_monaspace_states() {
+test_ubuntu_sans_mono_states() {
 	local before=$failures home fonts case_name
 	for case_name in absent empty fonts-no-version fonts-with-version; do
 		home="$work/fonts-$case_name"
-		fonts="$home/.local/share/fonts/monaspace"
+		fonts="$home/.local/share/fonts/ubuntu-sans-mono"
 		mkdir -p "$home"
 		[[ "$case_name" == absent ]] || mkdir -p "$fonts"
 		case "$case_name" in
 		fonts-no-version | fonts-with-version)
-			: >"$fonts/Neon-Regular.otf"
-			: >"$fonts/Argon-Regular.otf"
+			: >"$fonts/Neon-Regular.ttf"
+			: >"$fonts/Argon-Regular.ttf"
 			;;
 		esac
 		[[ "$case_name" == fonts-with-version ]] && printf '1.400\n' >"$fonts/.version"
-		compare "monaspace $case_name" \
-			"$(HOME="$home" _comp_probe_monaspace_fonts)" \
-			"$(HOME="$home" py_probe monaspace_fonts)"
+		compare "ubuntu_sans_mono $case_name" \
+			"$(HOME="$home" _comp_probe_ubuntu_sans_mono_fonts)" \
+			"$(HOME="$home" py_probe ubuntu_sans_mono_fonts)"
 	done
 	((failures == before))
 }
@@ -188,7 +188,7 @@ test_git_states() {
 # not in, which is what every case above is for.
 test_this_machine() {
 	local before=$failures key
-	for key in monaspace_fonts wsl_conf; do
+	for key in ubuntu_sans_mono_fonts wsl_conf; do
 		compare "live $key" "$("_comp_probe_$key")" "$(py_probe "$key")"
 	done
 	for key in git_identity git_credential; do
@@ -200,7 +200,7 @@ test_this_machine() {
 	((failures == before))
 }
 
-check 'the fonts probe agrees on absent, empty, and versioned installs' test_monaspace_states
+check 'the fonts probe agrees on absent, empty, and versioned installs' test_ubuntu_sans_mono_states
 check 'the stow probe agrees on missing, wrong, and dangling links' test_stow_states
 check 'the wsl.conf probe agrees on every shape of that file' test_wsl_conf_states
 check 'the Git probes agree across identity and submodule defaults' test_git_states

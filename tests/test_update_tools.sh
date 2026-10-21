@@ -33,7 +33,7 @@ test_downstream_executes_apt_first_then_every_managed_step() (
 	grep -Fq 'step:Node.js (nvm)|' "$events" || return 1
 	grep -Fqx 'step:npm|npm install -g npm@12.0.2 --engine-strict --allow-remote=all|_apply_npm_update_step|' "$events" || return 1
 	grep -Fq 'step:Go (asdf)|' "$events" || return 1
-	grep -Fq 'step:Monaspace fonts|' "$events"
+	grep -Fq 'step:Ubuntu Sans Mono fonts|' "$events"
 )
 
 # A failed step is a report about one tool, not a dead run: full-update reads

@@ -21,7 +21,7 @@
   `chrome-for-testing-public` bucket, every archive member must stay inside
   the build directory, and the unpacked shell must report that version before
   it replaces the installed one. Integrity beyond that rests on HTTPS.
-- Monaspace fonts require the selected release asset's published GitHub SHA-256
+- Ubuntu Sans Mono fonts require the selected release asset's published GitHub SHA-256
   digest before extraction. Missing digests and mismatches stop installation.
   ZIP entries are checked before unpacking; absolute paths, traversal, Windows
   paths, duplicate names, links and special file types are rejected. If both
