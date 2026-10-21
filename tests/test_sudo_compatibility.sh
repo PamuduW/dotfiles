@@ -57,6 +57,37 @@ test_classic_sudo_allows_apt_refresh() (
 	[[ "$(<"$calls")" == refresh ]]
 )
 
+test_bootstrap_checks_sudo_before_installing_missing_git() (
+	BOOTSTRAP_SOURCE_ONLY=1 source "$REPO_DIR/bootstrap.sh"
+	local calls="$TEST_HARNESS_ROOT/bootstrap-sudo.calls" version='sudo-rs 0.2.13'
+	local git_present=0 rc=0 output
+	: >"$calls"
+	has() { [[ "$1" != git || "$git_present" == 1 ]]; }
+	sudo() {
+		printf '%s\n' "$*" >>"$calls"
+		if [[ "$*" == --version ]]; then printf '%s\n' "$version"; fi
+		return 0
+	}
+	output="$(ensure_git 2>&1)" || rc=$?
+	[[ "$rc" -ne 0 ]] || return 1
+	[[ "$(<"$calls")" == --version ]] || return 1
+	[[ "$output" == *'sudo update-alternatives --set sudo /usr/bin/sudo.ws'* ]] || return 1
+
+	: >"$calls"
+	version='Sudo version 1.9.17p2'
+	ensure_git >/dev/null 2>&1 || return 1
+	grep -Fxq 'apt-get update -qq' "$calls" || return 1
+	grep -Fq 'install -y git' "$calls" || return 1
+
+	# No APT work is needed when Git already exists, regardless of sudo.
+	: >"$calls"
+	version='sudo-rs 0.2.13'
+	git_present=1
+	ensure_git >/dev/null 2>&1 || return 1
+	[[ ! -s "$calls" ]]
+)
+
 check 'sudo-rs stops installation and apt updates before privileged work' test_sudo_rs_stops_before_install_or_apt_work
 check 'classic sudo still refreshes apt indexes' test_classic_sudo_allows_apt_refresh
+check 'fresh bootstrap checks sudo before installing Git and preserves the existing-Git path' test_bootstrap_checks_sudo_before_installing_missing_git
 finish_tests

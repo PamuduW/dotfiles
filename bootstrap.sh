@@ -9,7 +9,7 @@
 # both installers load from), then hand off to the installers
 # that already live in them. It contains no component logic, no agent
 # configuration, and delegates optional GitHub token setup to the shared token
-# screen. Its only direct sudo use is installing git.
+# screen. Its only direct system installation is Git.
 #
 # Documented in docs/installation.md.
 set -euo pipefail
@@ -210,6 +210,17 @@ obtain_repo() {
 
 ensure_git() {
 	has git && return 0
+	# Shared helpers have not been cloned yet, so guard this first APT call
+	# here as well as the downstream install and update entrypoints.
+	local sudo_version
+	sudo_version="$(sudo --version 2>/dev/null || true)"
+	if [[ "$sudo_version" == *sudo-rs* ]]; then
+		err 'sudo-rs can leave APT child processes stopped; cannot install Git.'
+		msg '  Check whether traditional sudo is available: sudo update-alternatives --list sudo'
+		msg '  If /usr/bin/sudo.ws is listed, select it manually, then rerun:'
+		msg '    sudo update-alternatives --set sudo /usr/bin/sudo.ws'
+		return 1
+	fi
 	step 'Install git'
 	sudo apt-get update -qq || {
 		err 'apt-get update failed; cannot install git'

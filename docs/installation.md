@@ -48,6 +48,8 @@ Before installation or APT updates, Dotfiles checks the active `sudo`
 implementation. If it detects `sudo-rs`, it stops that operation: this
 implementation can leave APT child processes stopped indefinitely when run
 through the installer. The check does not change system configuration.
+If bootstrap needs to install Git, it performs the same check before that
+initial APT operation, before any repositories have been cloned.
 
 On Ubuntu, check whether traditional `sudo` is available:
 
