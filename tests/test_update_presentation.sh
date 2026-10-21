@@ -301,7 +301,7 @@ test_update_topics_use_submenu_yellow() (
 
 	repo_update_run() {
 		local -n result_ref="$4"
-		result_ref=([outcome]=current)
+		result_ref=(["outcome"]=current)
 	}
 	print_report_table() { :; }
 	_dotfiles_confirm() { return 0; }
@@ -338,7 +338,7 @@ test_update_apply_uses_high_level_upgrade_heading_without_opt_in_plan() (
 	local output
 	repo_update_run() {
 		local -n result_ref="$4"
-		result_ref=([outcome]=current)
+		result_ref=(["outcome"]=current)
 	}
 	print_report_table() { :; }
 	_dotfiles_confirm() { return 0; }
@@ -367,7 +367,7 @@ test_update_preview_and_summary_share_one_snapshot() (
 	: >"$calls"
 	repo_update_run() {
 		local -n result_ref="$4"
-		result_ref=([outcome]=current [state]=current)
+		result_ref=(["outcome"]=current ["state"]=current)
 	}
 	_collect_check_rows() {
 		printf 'collect\n' >>"$calls"

@@ -237,9 +237,11 @@ _action_log_exit() {
 _ACTION_LOG_PREVIOUS_EXIT=$(trap -p EXIT)
 if [[ -n "$_ACTION_LOG_PREVIOUS_EXIT" ]]; then
 	# trap -p emits shell-quoted arguments; decode the handler without changing it.
-	# shellcheck disable=SC2317  # Invoked by eval with trap-generated arguments.
-	_action_log_decode_exit() { _ACTION_LOG_PREVIOUS_EXIT=$1; }
-	eval "_action_log_decode_exit ${_ACTION_LOG_PREVIOUS_EXIT#trap -- }"
+	_action_log_decode_exit() {
+		eval "set -- ${1#trap -- }"
+		_ACTION_LOG_PREVIOUS_EXIT=$1
+	}
+	_action_log_decode_exit "$_ACTION_LOG_PREVIOUS_EXIT"
 	unset -f _action_log_decode_exit
 fi
 trap '_action_log_exit "$?"' EXIT

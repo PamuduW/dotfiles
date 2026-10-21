@@ -68,6 +68,21 @@ if [[ -f "$DOTFILES_DIR/scripts/lib/docker.sh" ]]; then
 fi
 
 dpot() {
+	if (($# > 1)); then
+		printf 'Usage: dpot [start|stop]\n' >&2
+		return 2
+	fi
+	case "${1-start}" in
+	start) ;;
+	stop)
+		dpotstop
+		return $?
+		;;
+	*)
+		printf 'Usage: dpot [start|stop]\n' >&2
+		return 2
+		;;
+	esac
 	run_docker start portainer || return $?
 	local started_at logs token attempt
 	if started_at="$(run_docker inspect --format '{{.State.StartedAt}}' portainer 2>/dev/null)" && [[ -n "$started_at" ]]; then

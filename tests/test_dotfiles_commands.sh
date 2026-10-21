@@ -47,7 +47,7 @@ test_update_dry_run_reports_then_stops() (
 	: >"$events"
 	repo_update_run() {
 		local -n result_ref="$4"
-		result_ref=([outcome]=current [reason]=current [state]=current)
+		result_ref=(["outcome"]=current ["reason"]=current ["state"]=current)
 		return 0
 	}
 	repo_update_is_declined() { return 1; }
@@ -66,7 +66,7 @@ test_update_without_dry_run_still_prompts_and_runs() (
 	: >"$events"
 	repo_update_run() {
 		local -n result_ref="$4"
-		result_ref=([outcome]=current [reason]=current [state]=current)
+		result_ref=(["outcome"]=current ["reason"]=current ["state"]=current)
 		return 0
 	}
 	repo_update_is_declined() { return 1; }
@@ -90,7 +90,7 @@ test_an_unattended_decline_is_not_a_success() (
 	: >"$events"
 	repo_update_run() {
 		local -n result_ref="$4"
-		result_ref=([outcome]=stopped [reason]=replace-declined [state]=ahead)
+		result_ref=(["outcome"]=stopped ["reason"]=replace-declined ["state"]=ahead)
 		return 0
 	}
 	repo_update_is_declined() { return 0; }
