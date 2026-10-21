@@ -6,6 +6,27 @@ if ! declare -F read_packages_by_tags >/dev/null 2>&1; then
 	source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/package_metadata.sh"
 fi
 
+# sudo-rs can stop apt children indefinitely under captured installer output.
+# Check the active implementation without authentication or system changes.
+apt_check_sudo_compatibility() {
+	local version
+	version="$(sudo --version 2>/dev/null || true)"
+	[[ "$version" == *sudo-rs* ]] || return 0
+
+	cat >&2 <<'EOF'
+  Cannot start: sudo-rs is active and can leave APT child processes stopped,
+  causing installation or package updates to hang indefinitely.
+  To use traditional sudo, first check that sudo.ws is listed:
+    sudo update-alternatives --list sudo
+  If /usr/bin/sudo.ws is listed, select it manually:
+    sudo update-alternatives --set sudo /usr/bin/sudo.ws
+  Verify the active implementation, then rerun the command:
+    sudo --version
+  This check has not changed your sudo configuration.
+EOF
+	return 1
+}
+
 # Refresh only the source list a component just added.
 #
 # A bare `apt-get update` re-fetches every configured index, which on a fresh

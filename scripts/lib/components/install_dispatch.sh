@@ -209,6 +209,8 @@ _install_shell_notice() {
 }
 
 run_install() {
+	apt_check_sudo_compatibility || return $?
+
 	local key failures=0
 	declare -gA INSTALL_COMPONENT_RESULT=()
 

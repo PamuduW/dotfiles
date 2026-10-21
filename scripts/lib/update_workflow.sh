@@ -282,6 +282,7 @@ _update_apt_packages() {
 		upgrade_result_set skipped
 		return 0
 	}
+	apt_check_sudo_compatibility || return $?
 	local pending
 	pending="$(apt_upgradable_count)"
 	# Through the quiet wrapper, like the install path: a 140-package upgrade
@@ -323,6 +324,8 @@ _apply_repository_update_step() {
 # The apt index refresh, before any component step. It is shared work rather
 # than one component's, so it gets its own rule and step lines.
 _run_apt_index_refresh() {
+	apt_check_sudo_compatibility || return $?
+
 	local rc=0 now
 	_upgrade_rule_between
 	now="${EPOCHSECONDS:-$(date +%s)}"

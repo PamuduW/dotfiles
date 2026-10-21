@@ -20,6 +20,29 @@ plan before applying the selection.
 Git identity is prompted only when selected. Component dependencies remain
 enforced while toggling.
 
+Before installation or APT updates, Dotfiles checks the active `sudo`
+implementation. If it detects `sudo-rs`, it stops that operation: this
+implementation can leave APT child processes stopped indefinitely when run
+through the installer. The check does not change system configuration.
+
+On Ubuntu, check whether traditional `sudo` is available:
+
+```bash
+sudo update-alternatives --list sudo
+```
+
+If `/usr/bin/sudo.ws` is listed, select it manually, verify the active
+implementation, then rerun your Dotfiles command:
+
+```bash
+sudo update-alternatives --set sudo /usr/bin/sudo.ws
+sudo --version
+```
+
+The version output should identify `Sudo version`, rather than `sudo-rs`.
+If `sudo.ws` is not listed, install or configure traditional `sudo` using
+your distribution's instructions before retrying.
+
 A failed apt index refresh does not end the run. The components whose
 installers need the index are reported as not run, everything else is applied,
 and the summary and log location still reach the operator.
