@@ -8,8 +8,8 @@
 # git if it is missing, obtain the repositories (including the shared library
 # both installers load from), then hand off to the installers
 # that already live in them. It contains no component logic, no agent
-# configuration, and no token handling. Its only direct sudo use is installing
-# git.
+# configuration, and delegates optional GitHub token setup to the shared token
+# screen. Its only direct sudo use is installing git.
 #
 # Documented in docs/installation.md.
 set -euo pipefail
@@ -221,6 +221,45 @@ ensure_git() {
 	}
 	record 'installed git'
 }
+
+# Reuse the same private store and validation screen as Dotfiles and Agentbot.
+# Run before either installer makes release API requests; their existing
+# download helpers read the saved token immediately, including after a restart.
+prepare_github_token() (
+	local shared_lib="$SHARED_DIR/scripts/lib/shared" token="${GITHUB_TOKEN:-}"
+	# shellcheck source=/dev/null
+	source "$shared_lib/github_token.sh"
+	if github_token_is_valid "$token"; then
+		msg '  Using the GitHub token from the environment.'
+		return 0
+	fi
+	github_token_read token
+	if [[ -n "$token" ]]; then
+		msg '  Using the saved GitHub token.'
+		return 0
+	fi
+	if ! interactive; then
+		msg '  No GitHub token configured; downloads use the unauthenticated rate limit.'
+		return 0
+	fi
+
+	# shellcheck source=/dev/null
+	source "$shared_lib/tui/menu_render.sh"
+	# shellcheck source=/dev/null
+	source "$shared_lib/tui/ui.sh"
+	# shellcheck source=/dev/null
+	source "$shared_lib/github_token_menu.sh"
+	ui_init_colors
+	step 'Configure optional GitHub API access before installation'
+	msg '  Save a read-only token to raise GitHub API rate limits, or choose q to skip.'
+	GITHUB_TOKEN_MENU_ROOT=Bootstrap github_token_menu || return $?
+	github_token_read token
+	if [[ -n "$token" ]]; then
+		msg '  Saved GitHub token is ready for this run.'
+	else
+		msg '  No GitHub token saved; downloads use the unauthenticated rate limit.'
+	fi
+)
 
 # --- handoff -----------------------------------------------------------------
 
@@ -543,6 +582,7 @@ main() {
 	# Shared code first: whichever of the two runs next loads from it, so a
 	# failure here must stop before an installer dies on a missing checkout.
 	obtain_repo "$SHARED_URL" "$SHARED_DIR" 'Shared library'
+	prepare_github_token
 
 	if ((WANT_DOTFILES == 1)); then
 		obtain_repo "$DOTFILES_URL" "$DOTFILES_DIR" Dotfiles

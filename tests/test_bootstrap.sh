@@ -80,14 +80,15 @@ EOF
 }
 
 # The shared library is not an installable product, so it gets its own minimal
-# remote rather than make_remote's entry points: bootstrap only clones it, and
-# the resolvers accept a checkout by CONTRACT plus the renderer.
+# remote rather than make_remote's entry points. Include the token helper
+# bootstrap loads; the resolvers also need CONTRACT plus the renderer.
 make_shared_remote() {
 	local work="$1/work-shared"
 	local bare="$1/dotfiles-shared.git"
 	mkdir -p -- "$work/scripts/lib/shared/tui" "$work/tests/lib/shared"
 	printf '1\n' >"$work/CONTRACT"
 	: >"$work/scripts/lib/shared/tui/colors.sh"
+	cp -- "$DOTFILES_SHARED_LIB/github_token.sh" "$work/scripts/lib/shared/github_token.sh"
 	{
 		"$REAL_GIT" init -q -b main "$work" &&
 			"$REAL_GIT" -C "$work" config user.name 'Bootstrap Test' &&
@@ -379,9 +380,9 @@ test_a_new_machine_is_offered_its_memory_vault() (
 	done
 )
 
-test_only_the_selection_is_asked() (
-	# One command, one question. Anything else is a prompt for something the
-	# operator has already answered.
+test_setup_does_not_ask_for_redundant_installation_approval() (
+	# Token and memory setup can ask for missing information, but the selected
+	# installation must not ask for the same approval a second time.
 	setup_machine one-question
 	local output
 	output="$(run_bootstrap 1 2>&1)" || return 1
@@ -717,7 +718,7 @@ expect_success 'a piped run still reads the prompts' test_a_piped_run_still_read
 expect_success 'scripted answers drive the selection prompt' test_scripted_answers_drive_the_selection_prompt
 expect_success 'the plan is shown, not asked' test_the_plan_is_shown_not_asked
 expect_success 'Agentbot runs without a second question' test_agentbot_runs_without_a_second_question
-expect_success 'only the selection is asked' test_only_the_selection_is_asked
+expect_success 'setup does not ask for redundant installation approval' test_setup_does_not_ask_for_redundant_installation_approval
 expect_success 'a new machine is offered its memory vault' test_a_new_machine_is_offered_its_memory_vault
 expect_success 'the run reports a duration per phase and a total' test_the_run_reports_a_duration_per_phase_and_a_total
 expect_success 'the start clock survives a restart' test_the_start_clock_survives_a_restart

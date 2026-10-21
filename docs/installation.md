@@ -1,5 +1,29 @@
 # Installation
 
+## One-command setup
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/PamuduW/dotfiles/main/bootstrap.sh | bash
+```
+
+After cloning the shared library and before either installer starts, bootstrap
+checks for a valid `GITHUB_TOKEN` in the environment or in the existing private
+token store. It reuses either without prompting. If neither is available and a
+terminal is attached, it opens the same GitHub token screen used by Dotfiles.
+Choose **Save or replace**, enter a read-only token, confirm, then choose
+**Back** to continue. The screen reads the terminal even when the script arrives
+through a pipe.
+
+The screen validates the token and saves it to
+`${XDG_CONFIG_HOME:-$HOME/.config}/agentbot/github.env` with mode `600` in a
+private directory. The installers read that store for their first GitHub API
+download, so the new token is available in the same run and after a restart.
+It is not added to repository files or passed in curl arguments.
+
+Token setup is optional. Choosing **Back** without saving, or running without
+a terminal and without a configured token, continues with GitHub's
+unauthenticated rate limit. A GitLab token does not raise GitHub's limits.
+
 ## Interactive setup
 
 Clone the repository into the operational location and run its supported entry
