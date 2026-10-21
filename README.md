@@ -49,12 +49,17 @@ An existing destination is reused when it is a clean checkout of the same
 repository, and anything else stops the run with a report — nothing is ever
 deleted or moved.
 
-The selection above is the only question. Everything after it follows from it:
-the Dotfiles component selector and execution plan, then the Dotfiles update,
-then Agentbot's own component selector and plan, then the Agentbot update. A
-destination that cannot be used safely stops the run with a report rather than
-a second question. The one exception is your memory vault, which the script
-cannot guess: when Agentbot is installed and no vault is configured, it asks for
+Before installation, bootstrap reuses a valid saved or environment GitHub
+token. If neither is available, it opens the optional token screen: choose
+**Save or replace**, enter a read-only token, confirm, then choose **Back**.
+The token is saved outside the repositories and used by downloads in this same
+run. You can skip it, but unauthenticated downloads may hit GitHub rate limits.
+
+The selected setup then runs the Dotfiles component selector and execution
+plan, the Dotfiles update, Agentbot's component selector and plan, and the
+Agentbot update. A destination that cannot be used safely stops the run with a
+report. The script also offers your memory vault, which it cannot guess: when
+Agentbot is installed and no vault is configured, it asks for
 the vault's Git URL or an existing folder (Enter skips), then sets it up with
 its commit and push checks. The run ends with one Agentbot Doctor. What you
 choose in Agentbot's selector holds for the whole bootstrap: the Agentbot update

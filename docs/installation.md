@@ -1,5 +1,29 @@
 # Installation
 
+## One-command setup
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/PamuduW/dotfiles/main/bootstrap.sh | bash
+```
+
+After cloning the shared library and before either installer starts, bootstrap
+checks for a valid `GITHUB_TOKEN` in the environment or in the existing private
+token store. It reuses either without prompting. If neither is available and a
+terminal is attached, it opens the same GitHub token screen used by Dotfiles.
+Choose **Save or replace**, enter a read-only token, confirm, then choose
+**Back** to continue. The screen reads the terminal even when the script arrives
+through a pipe.
+
+The screen validates the token and saves it to
+`${XDG_CONFIG_HOME:-$HOME/.config}/agentbot/github.env` with mode `600` in a
+private directory. The installers read that store for their first GitHub API
+download, so the new token is available in the same run and after a restart.
+It is not added to repository files or passed in curl arguments.
+
+Token setup is optional. Choosing **Back** without saving, or running without
+a terminal and without a configured token, continues with GitHub's
+unauthenticated rate limit. A GitLab token does not raise GitHub's limits.
+
 ## Interactive setup
 
 Clone the repository into the operational location and run its supported entry
@@ -19,6 +43,31 @@ plan before applying the selection.
 
 Git identity is prompted only when selected. Component dependencies remain
 enforced while toggling.
+
+Before installation or APT updates, Dotfiles checks the active `sudo`
+implementation. If it detects `sudo-rs`, it stops that operation: this
+implementation can leave APT child processes stopped indefinitely when run
+through the installer. The check does not change system configuration.
+If bootstrap needs to install Git, it performs the same check before that
+initial APT operation, before any repositories have been cloned.
+
+On Ubuntu, check whether traditional `sudo` is available:
+
+```bash
+sudo update-alternatives --list sudo
+```
+
+If `/usr/bin/sudo.ws` is listed, select it manually, verify the active
+implementation, then rerun your Dotfiles command:
+
+```bash
+sudo update-alternatives --set sudo /usr/bin/sudo.ws
+sudo --version
+```
+
+The version output should identify `Sudo version`, rather than `sudo-rs`.
+If `sudo.ws` is not listed, install or configure traditional `sudo` using
+your distribution's instructions before retrying.
 
 A failed apt index refresh does not end the run. The components whose
 installers need the index are reported as not run, everything else is applied,

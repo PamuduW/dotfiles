@@ -12,7 +12,13 @@ source "$TEST_DIR/lib/update_test_fixture.sh"
 test_downstream_executes_apt_first_then_every_managed_step() (
 	local events="$TEST_HARNESS_ROOT/downstream.events"
 	: >"$events"
-	sudo() { printf 'sudo:%s\n' "$*" >>"$events"; }
+	sudo() {
+		if [[ "$*" == --version ]]; then
+			printf 'Sudo version 1.9.17p2\n'
+		else
+			printf 'sudo:%s\n' "$*" >>"$events"
+		fi
+	}
 	npm_available_version() { printf '12.0.2\n'; }
 	_run_upgrade_step() {
 		printf 'step:%s|%s|%s|%s\n' "$1" "$2" "$3" "${4:-}" >>"$events"
