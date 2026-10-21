@@ -297,6 +297,13 @@ dpot
 dpotstop
 ```
 
+`dpot` shows the setup token before the URL when it appears in Portainer's
+current startup logs. Paste it into the first-time setup screen. It waits up
+to five seconds for startup logs; if they are unavailable or still incomplete,
+it prints `docker logs portainer` as the fallback. It does not save the token.
+Portainer needs this one-time token only before an administrator is created;
+see the [setup token FAQ](https://docs.portainer.io/faqs/installing/setup-token).
+
 Codex Remote Control accepts explicit start/stop actions:
 
 ```bash
