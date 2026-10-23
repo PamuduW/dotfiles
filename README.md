@@ -301,6 +301,13 @@ Git repositories. Use a location such as `~/agent-memory`, rather than `/`,
 the home directory itself, or a Windows drive under `/mnt/c`.
 
 Run `agentbot boot` inside each project repository that needs project memory.
+With a configured vault, boot discovers the available agent CLIs, lets you
+choose clients, previews their memory hooks and MCP files, and configures them
+in that same command. Approve native workspace/tool trust in each client when
+prompted. All projects use the shared vault; no extra memory setup command is
+needed per project. Later `dotfiles fu` runs maintain the integrations already
+enrolled in registered workspaces. Rerun boot to add a client or set up a new
+workspace; updates do not silently enroll newly detected clients.
 See the [Agentbot memory guide](https://github.com/PamuduW/agentbot#memory-vault)
 for CLI setup, sync, and proposal review.
 
