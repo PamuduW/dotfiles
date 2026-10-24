@@ -417,28 +417,75 @@ install_powershell() {
 	fi
 }
 
-install_direnv() {
-	command -v curl >/dev/null 2>&1 || {
-		echo "  curl required for direnv install." >&2
+install_direnv() (
+	local arch asset json metadata latest expected installed='' tmp='' actual
+	local bin_path="$HOME/.local/bin/direnv"
+	for prerequisite in curl python3 sha256sum; do
+		command -v "$prerequisite" >/dev/null 2>&1 || {
+			log_warn "$prerequisite required for direnv install"
+			return 1
+		}
+	done
+	case "$(uname -m)" in
+	x86_64 | amd64) arch=amd64 ;;
+	aarch64 | arm64) arch=arm64 ;;
+	i386 | i686) arch=386 ;;
+	armv7l) arch=arm ;;
+	*)
+		log_warn "Unsupported architecture for direnv: $(uname -m)"
+		return 1
+		;;
+	esac
+	asset="direnv.linux-$arch"
+	json="$(github_api_release_json direnv/direnv)" || return 1
+	metadata="$(python3 -c '
+import json, re, sys
+release = json.load(sys.stdin)
+tag = release.get("tag_name", "")
+if not re.fullmatch(r"v?[0-9]+\.[0-9]+\.[0-9]+", tag):
+    raise SystemExit(1)
+for asset in release.get("assets", []):
+    digest = asset.get("digest", "")
+    if asset.get("name") == sys.argv[1] and re.fullmatch(r"sha256:[0-9a-fA-F]{64}", digest):
+        print(tag.removeprefix("v"), digest.removeprefix("sha256:").lower())
+        raise SystemExit(0)
+raise SystemExit(1)
+' "$asset" <<<"$json")" || {
+		log_warn "Could not verify the latest direnv release and digest; preserving the installed binary"
 		return 1
 	}
-
-	log_step "Install/update direnv"
-	mkdir -p "$HOME/.local/bin"
-	run_vendor_shell_installer 'https://direnv.net/install.sh' 'direnv' \
-		"bin_path=$HOME/.local/bin" || return $?
-
-	if [[ -x "$HOME/.local/bin/direnv" ]]; then
-		mkdir -p "$HOME/bin"
-		ln -sf "$HOME/.local/bin/direnv" "$HOME/bin/direnv"
-	fi
-
-	if command -v direnv >/dev/null 2>&1; then
-		log_ok "direnv installed: $(direnv version)"
+	read -r latest expected <<<"$metadata"
+	[[ ! -x "$bin_path" ]] || installed="$("$bin_path" version 2>/dev/null || true)"
+	if [[ "$installed" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] &&
+		[[ "$(printf '%s\n%s\n' "$installed" "$latest" | sort -V | tail -n1)" == "$installed" ]] &&
+		! force_reinstall_requested; then
+		log_skip "direnv already current at $installed"
 	else
-		log_warn "direnv installed to ~/.local/bin but is not on PATH yet"
+		log_step "Install direnv $latest"
+		mkdir -p "$HOME/.local/bin" || return $?
+		tmp="$(mktemp -d "$HOME/.local/bin/.direnv.XXXXXX")" || return 1
+		trap 'rm -rf -- "$tmp"' EXIT
+		github_curl -fsSL --proto '=https' --tlsv1.2 \
+			--connect-timeout 10 --max-time 180 \
+			--retry 2 --retry-all-errors --retry-delay 1 --retry-max-time 180 \
+			-o "$tmp/direnv" \
+			"https://github.com/direnv/direnv/releases/download/v${latest}/${asset}" || return $?
+		actual="$(sha256sum "$tmp/direnv" | awk '{print $1}')"
+		if [[ "$actual" != "$expected" ]]; then
+			log_warn "direnv SHA-256 verification failed; preserving the installed binary"
+			return 1
+		fi
+		chmod 0755 "$tmp/direnv" || return $?
+		if [[ "$("$tmp/direnv" version 2>/dev/null || true)" != "$latest" ]]; then
+			log_warn "Downloaded direnv did not report $latest; preserving the installed binary"
+			return 1
+		fi
+		mv -f -- "$tmp/direnv" "$bin_path" || return $?
+		log_ok "direnv installed: $latest"
 	fi
-}
+	mkdir -p "$HOME/bin" || return $?
+	ln -sf "$bin_path" "$HOME/bin/direnv" || return $?
+)
 
 ensure_direnv_hook_in_bashrc() {
 	log_skip "direnv hook lives in stowed .bashrc"

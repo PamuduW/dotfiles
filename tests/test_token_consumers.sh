@@ -291,11 +291,11 @@ test_release_installer_standalone_source_stays_anonymous() {
 	grep -Fqx 'https://github.com/jesseduffield/lazygit/releases/download/v1.2.3/lazygit_1.2.3_linux_x86_64.tar.gz' "$url_log"
 }
 
-test_fonts_and_asdf_routed() {
+test_fonts_and_cli_releases_routed() {
 	local fonts="$REPO_DIR/scripts/lib/installers/fonts.sh" cli="$REPO_DIR/scripts/lib/installers/cli_tools.sh"
 	[[ "$(grep -c 'github_curl -fsSL' "$fonts")" -eq 1 ]] || return 1
-	# Two: the Codex standalone installer and the PowerShell upstream fallback.
-	[[ "$(grep -c 'github_curl -fsSL' "$cli")" -eq 2 ]] || return 1
+	# asdf, the PowerShell upstream fallback, and direnv.
+	[[ "$(grep -c 'github_curl -fsSL' "$cli")" -eq 3 ]] || return 1
 	assert_sensitive_urls_use_boundary "$fonts" "$cli"
 }
 
@@ -333,7 +333,7 @@ test_complete_consumer_inventory() {
 
 test_excluded_downloads_unchanged() {
 	local file="$REPO_DIR/scripts/lib/installers/cli_tools.sh"
-	[[ "$(grep -c 'run_vendor_shell_installer' "$file")" -eq 5 ]] || return 1
+	[[ "$(grep -c 'run_vendor_shell_installer' "$file")" -eq 4 ]] || return 1
 	rg -qF "'https://chatgpt.com/codex/install.sh'" "$file" || return 1
 	! rg -q 'curl[^|]*\|[[:space:]]*(bash|sh)' "$file"
 }
@@ -543,7 +543,7 @@ expect_success 'runtime canary is absent from output, logs, Git, snapshot, and d
 expect_success 'sampled curl process command line contains no secret or auth value' test_proc_cmdline_has_no_secret
 expect_success 'lazygit and lazydocker archives and checksums use the boundary' test_release_installers_routed
 expect_success 'standalone release installer sources boundary and stays anonymous without token helper' test_release_installer_standalone_source_stays_anonymous
-expect_success 'Ubuntu Sans Mono and asdf release archives use the boundary' test_fonts_and_asdf_routed
+expect_success 'font and CLI release downloads use the GitHub boundary' test_fonts_and_cli_releases_routed
 expect_success 'global dotfiles release downloads use the boundary' test_global_dotfiles_routed
 expect_success 'all active GitHub API and release URLs have no direct-curl bypass' test_complete_consumer_inventory
 expect_success 'structural scanner rejects a direct curl bypass near github_curl' test_scanner_rejects_nearby_direct_curl_bypass

@@ -426,12 +426,16 @@ _comp_classify_version() {
 		printf 'check|%s probe timed out\n' "$timeout_label"
 		return 0
 	fi
+	if [[ "$rc" -ne 0 ]]; then
+		printf 'check|%s version query failed (exit %s)\n' "$timeout_label" "$rc"
+		return 0
+	fi
 
 	version="$raw"
 	if [[ -n "$extract" ]]; then
 		version="$(grep -oE "$extract" <<<"$raw" | head -n1 || true)"
 	fi
-	# An empty version still reports installed: the binary resolved and
+	# An empty successful version still reports installed: the binary resolved and
 	# answered, so falling back to its label beats claiming it is missing.
 	printf 'installed|%s%s\n' "$prefix" "${version:-$timeout_label}"
 }

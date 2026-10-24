@@ -394,4 +394,13 @@ expect_success 'release CLI probes report missing, external, managed, malformed 
 expect_success 'Chrome headless shell probe reports missing, external and managed through its link' test_chrome_headless_probe_reports_ownership_through_its_link
 expect_success 'npm CLI probes report missing, external and managed through their link' test_npm_cli_probe_reports_ownership_through_its_link
 
+test_crashed_direnv_is_not_healthy() (
+	local bin_dir="$TEST_HARNESS_ROOT/crashed-direnv-bin"
+	mkdir -p "$bin_dir"
+	printf '#!/bin/sh\nprintf "2.38.2\\n"\nexit 139\n' >"$bin_dir/direnv"
+	chmod +x "$bin_dir/direnv"
+	[[ "$(PATH="$bin_dir:/usr/bin:/bin" _comp_probe_direnv)" == 'check|direnv version query failed (exit 139)' ]]
+)
+expect_success 'a crashed direnv version query cannot report healthy' test_crashed_direnv_is_not_healthy
+
 finish_tests
