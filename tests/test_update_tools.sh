@@ -264,6 +264,7 @@ test_codex_update_application_preserves_ownership_and_result_truth() (
 	local output_file="$TEST_HARNESS_ROOT/codex-update.output"
 	local label='Codex CLI'
 	codex_cli_install_state() { printf '%s\n' "$fixture_state"; }
+	codex_available_version() { printf '%s\n' '—'; }
 	codex_installed_version() {
 		if [[ "$sync_calls" -eq 0 ]]; then printf '%s\n' "$before_version"; else printf '%s\n' "$after_version"; fi
 	}
@@ -302,6 +303,52 @@ test_codex_update_application_preserves_ownership_and_result_truth() (
 	output="$(<"$output_file")"
 	[[ "$rc" -eq 0 && "${UPGRADE_STEP_RESULT[$label]}" == failed ]] || return 1
 	[[ "$output" == *'retry manually: dotfiles update'* ]]
+)
+
+test_codex_current_release_skips_a_failing_installer() (
+	local fixture_installed fixture_available sync_calls=0 output="$TEST_HARNESS_ROOT/codex-current.output"
+	codex_cli_install_state() { printf 'standalone\n'; }
+	codex_installed_version() { printf 'codex-cli %s\n' "$fixture_installed"; }
+	codex_available_version() { printf '%s\n' "$fixture_available"; }
+	codex_sync_standalone() {
+		sync_calls=$((sync_calls + 1))
+		return 22
+	}
+	while IFS='|' read -r fixture_installed fixture_available; do
+		sync_calls=0
+		upgrade_codex_cli >"$output" 2>&1 || return 1
+		[[ "$sync_calls" -eq 0 && "$UPGRADE_STEP_ACTIVE_RESULT" == already-current ]] || return 1
+		grep -Fq 'already up to date' "$output" || return 1
+	done <<'EOF'
+0.164.0|0.164.0
+0.165.0|0.164.0
+0.165.0-alpha.1|0.164.0
+EOF
+)
+
+test_codex_verified_upgrade_checks_the_resulting_version() (
+	local fixture_after calls=0 rc=0 expected_rc output="$TEST_HARNESS_ROOT/codex-target.output"
+	codex_cli_install_state() { printf 'standalone\n'; }
+	codex_installed_version() {
+		if [[ "$calls" -eq 0 ]]; then printf 'codex-cli 0.164.0\n'; else printf '%s\n' "$fixture_after"; fi
+	}
+	codex_available_version() { printf '0.165.0\n'; }
+	codex_sync_standalone() { calls=$((calls + 1)); }
+	while IFS='|' read -r fixture_after expected_rc; do
+		calls=0 rc=0
+		upgrade_codex_cli >"$output" 2>&1 || rc=$?
+		[[ "$rc" -eq "$expected_rc" && "$calls" -eq 1 ]] || return 1
+		if [[ "$rc" -eq 0 ]]; then
+			[[ "$UPGRADE_STEP_ACTIVE_RESULT" == updated ]] || return 1
+		else
+			grep -Fq '0.165.0' "$output" || return 1
+		fi
+	done <<'EOF'
+codex-cli 0.164.0|1
+codex-cli 0.165.0|0
+codex-cli 0.166.0|0
+installed|1
+EOF
 )
 
 test_codex_retry_registry_uses_dotfiles_update() {
@@ -731,6 +778,7 @@ test_every_upgrade_step_says_something() (
 	result="$(
 		codex_cli_install_state() { printf 'standalone\n'; }
 		codex_installed_version() { printf 'codex-cli 0.153.4\n'; }
+		codex_available_version() { printf '%s\n' '—'; }
 		codex_sync_standalone() { printf 'VENDOR-NARRATION\n'; }
 		upgrade_codex_cli >"$output" 2>&1
 		printf '%s' "$UPGRADE_STEP_ACTIVE_RESULT"
@@ -824,6 +872,8 @@ expect_success 'npm failed post-check records a copyable failed step' test_npm_f
 expect_success 'unverifiable CLI probes label latest freshness unchecked' test_unverifiable_cli_probes_label_latest_unchecked
 expect_success 'Codex update probe reports standalone, absent, and external states' test_codex_probe_reports_ownership_and_release_states
 expect_success 'Codex update application records changed, unchanged, skipped, and failed outcomes' test_codex_update_application_preserves_ownership_and_result_truth
+expect_success 'current or newer Codex never runs a failing installer' test_codex_current_release_skips_a_failing_installer
+expect_success 'verified Codex upgrade must reach the available version' test_codex_verified_upgrade_checks_the_resulting_version
 expect_success 'Codex update retry uses the guarded Dotfiles workflow' test_codex_retry_registry_uses_dotfiles_update
 expect_success 'Graphify update probe distinguishes uv-owned and external installs' test_graphify_probe_reports_uv_owned_and_external_states
 expect_success 'Graphify update probe skips an absent CLI' test_graphify_probe_skips_when_not_installed

@@ -251,13 +251,27 @@ check_codex_cli() {
 }
 
 upgrade_codex_cli() {
-	local state before after active
+	local state before after active available before_number after_number comparison
 	state="$(codex_cli_install_state)" || state=absent
 	case "$state" in
 	standalone | standalone-not-on-path)
 		before="$(codex_installed_version)"
+		available="$(codex_available_version)" || available='—'
+		before_number="$(codex_version_number "$before" 2>/dev/null || true)"
+		if [[ -n "$before_number" ]] && comparison="$(codex_semver_compare "$before_number" "$available")" && ((comparison >= 0)); then
+			log_skip "Codex CLI already up to date ($before)"
+			upgrade_result_set already-current
+			return 0
+		fi
 		codex_sync_standalone || return $?
 		after="$(codex_installed_version)"
+		if codex_release_version_is_valid "$available"; then
+			after_number="$(codex_version_number "$after" 2>/dev/null || true)"
+			if ! comparison="$(codex_semver_compare "$after_number" "$available")" || ((comparison < 0)); then
+				log_warn "Codex CLI installer did not reach $available (reported: ${after:-unknown})"
+				return 1
+			fi
+		fi
 		# The vendor installer's own narration is captured, so this step has to
 		# say what happened or it prints a section heading and nothing under it,
 		# which reads as a step that died.

@@ -17,6 +17,19 @@ The component uses OpenAI's standalone installer and has no Node.js dependency.
 It preserves `~/.codex`, including configuration, authentication, sessions,
 skills, and local state.
 
+Updates compare the installed version with OpenAI's verified release channel
+before downloading the standalone installer. Equal or newer installed versions
+are reported as already current. If release metadata cannot be verified,
+Dotfiles still asks the official installer to refresh the installation and
+reports a download or installation failure honestly. A known upgrade must reach
+the advertised version before it is reported as successful.
+
+The documented installer endpoint returned HTTP 404 during verification on
+2026-10-24. This does not prevent an already-current Codex installation from
+passing the update check. Fresh installation and genuine upgrades still require
+the vendor download to work; no alternate URL or package-manager migration is
+chosen silently. See the [official CLI installation guide](https://learn.chatgpt.com/docs/cli).
+
 ## npm migration
 
 When every external Codex command is a verified NVM installation of
