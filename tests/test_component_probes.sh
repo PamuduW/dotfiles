@@ -554,9 +554,9 @@ test_version_classification_is_shared_by_every_version_probe() (
 	got="$(_comp_classify_version 'Go' 'go' /usr/bin/go 0 'unexpected output' 'go[0-9.]+' '')"
 	[[ "$got" == 'installed|go' ]] || return 1
 
-	# A non-zero status that is not a timeout is still an answer.
+	# A failed query cannot claim health even if it printed a version first.
 	got="$(_comp_classify_version 'Go' 'go' /usr/bin/go 1 'go1.23.4' '' '')"
-	[[ "$got" == 'installed|go1.23.4' ]]
+	[[ "$got" == 'check|go version query failed (exit 1)' ]]
 )
 
 check 'version classification is shared by every version probe' test_version_classification_is_shared_by_every_version_probe

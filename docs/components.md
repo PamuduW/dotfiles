@@ -72,6 +72,23 @@ unless the caller set it, so Puppeteer's own Chrome is never downloaded; its
 npm dependencies alone are about 460 MB. Rules, dictionaries and Mermaid
 configuration belong to each repository.
 
+## direnv
+
+The direnv installer checks the latest GitHub release before downloading its
+binary. A current or newer copy at `~/.local/bin/direnv` is retained unless
+forced reinstall was requested. The `~/bin/direnv` shortcut is maintained on
+both the skip and install paths.
+
+Fresh installs and upgrades use direnv's published Linux binary, verify its
+GitHub SHA-256 digest and exact version, then replace the installed executable
+with a rename on the same filesystem. Download, checksum and version failures
+preserve the working copy and report failure. Temporary files are removed.
+Downloads use a 10-second connection timeout, a 180-second limit per attempt,
+and up to two retries, including receive errors. The retry window is 180
+seconds; an attempt started within that window can finish after it. Release
+metadata must be available and verifiable; a failed check is not reported as
+already current. See [direnv's installation guide](https://direnv.net/docs/installation.html).
+
 ## State flow
 
 ```text
@@ -127,7 +144,9 @@ or changing a reading means changing both and adding its states there.
 
 An installer success is not enough for the summary. The orchestration records
 the installer result and checks the component probe so an existing artifact
-cannot hide a failed installer.
+cannot hide a failed installer. Generic version probes report nonzero command
+exits as needing attention, including a crashed executable. A command that
+succeeds with empty version output keeps the installed-label fallback.
 
 ## Package ownership
 
@@ -153,9 +172,12 @@ Unknown keys are warned about and are not silently converted into components.
 ## Install versus update
 
 Installers establish or reconcile component configuration. The update workflow
-checks and upgrades the tools it explicitly owns. Current `full-update` runs
-the update path; it does not yet rerun every previously selected installer.
-Adding that behavior is roadmap work, not a current guarantee.
+checks and upgrades the tools it explicitly owns. `full-update` first selects
+installed or configured components from local probes and reruns their
+installers, then runs the update path. Components covered by a dedicated
+update step skip the initial reinstall unless forced or their probe is
+inconclusive. Components requiring operator input, such as Git identity, are
+excluded. Missing components are not silently enrolled.
 
 ## Portainer
 

@@ -152,6 +152,22 @@ test_version_parity() {
 	((failures == before))
 }
 
+test_failed_version_queries_need_attention() {
+	local before=$failures rc raw want got
+	for rc in 1 126 139; do
+		for raw in '' '2.38.2'; do
+			want="check|direnv version query failed (exit $rc)"
+			got="$(_comp_classify_version direnv direnv /bin/direnv "$rc" "$raw" '' '')"
+			compare "failed Bash version rc=$rc" "$want" "$got"
+			got="$(py "pc.version(missing_label='direnv', timeout_label='direnv', binary='/bin/direnv', rc=$rc, raw='$raw', extract='', prefix='')")"
+			compare "failed Python version rc=$rc" "$want" "$got"
+		done
+	done
+	compare 'empty successful Bash version' 'installed|direnv' "$(_comp_classify_version direnv direnv /bin/direnv 0 '' '' '')"
+	compare 'empty successful Python version' 'installed|direnv' "$(py "pc.version(missing_label='direnv', timeout_label='direnv', binary='/bin/direnv', rc=0, raw='', extract='', prefix='')")"
+	((failures == before))
+}
+
 test_go_parity() {
 	local before=$failures want got row
 	local -a cases=(
@@ -361,6 +377,7 @@ check 'codex classification agrees across every state and both statuses' test_co
 check 'apt classification agrees on every count pair' test_apt_classification_parity
 check 'package gaps agree on dropped, renamed and present packages' test_package_gap_parity
 check 'version classification agrees across its edges' test_version_parity
+check 'failed version queries need attention in both classifiers' test_failed_version_queries_need_attention
 check 'go classification agrees across both sources' test_go_parity
 check 'git credential classification agrees' test_git_credential_parity
 check 'every remaining reading agrees across its states' test_remaining_readings_parity
