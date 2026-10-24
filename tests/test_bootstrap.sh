@@ -117,7 +117,13 @@ setup_machine() {
 #!/usr/bin/env bash
 printf 'sudo %s\n' "\$*" >>"$BOOTSTRAP_TEST_LOG"
 EOF
-	chmod +x -- "$dir/bin/sudo"
+	cat >"$dir/bin/ssh" <<EOF
+#!/usr/bin/env bash
+printf 'ssh %s\n' "\$*" >>"$BOOTSTRAP_TEST_LOG"
+printf "Hi fixture! You've successfully authenticated, but GitHub does not provide shell access.\\n" >&2
+exit 1
+EOF
+	chmod +x -- "$dir/bin/sudo" "$dir/bin/ssh"
 	export BOOTSTRAP_TEST_LOG
 }
 
@@ -367,17 +373,31 @@ test_a_new_machine_is_offered_its_memory_vault() (
 	# guess, so it asks, once, and Enter skips.
 	setup_machine memory-vault
 	local answers
-	for answers in $'https://github.com/me/agent-memory.git\n' $'\n'; do
+	for answers in $'https://github.com/me/agent-memory.git\n' $'git@github.com:me/agent-memory.git\n' $'\n'; do
 		: >"$BOOTSTRAP_TEST_LOG"
 		rm -rf -- "$MACHINE/home/dotfiles" "$MACHINE/home/agentbot" "$MACHINE/home/dotfiles-shared"
 		BOOTSTRAP_ANSWERS_OVERRIDE="$answers" run_bootstrap 1 >/dev/null 2>&1 || return 1
 		case "$answers" in
+		git@*)
+			log_has "agentbot-cli memory setup --clone git@github.com:me/agent-memory.git --dest $MACHINE/home/agent-memory --yes" || return 1
+			(($(log_line 'ssh -T') < $(log_line 'agentbot-cli memory setup'))) || return 1
+			;;
 		*github*)
 			log_has "agentbot-cli memory setup --clone https://github.com/me/agent-memory.git --dest $MACHINE/home/agent-memory --yes" || return 1
 			;;
 		*) ! log_has 'memory setup' || return 1 ;;
 		esac
 	done
+)
+
+test_memory_ssh_decline_skips_clone_and_continues_health_check() (
+	setup_machine memory-ssh-decline
+	local output
+	output="$(BOOTSTRAP_ANSWERS_OVERRIDE=$'git@github.com:me/agent-memory.git\n\nn' run_bootstrap 1 2>&1)" || return 1
+	[[ "$output" == *'SKIPPED   memory vault (GitHub SSH access is not ready)'* ]] || return 1
+	! log_has 'agentbot-cli memory setup' || return 1
+	! log_has 'ssh -T' || return 1
+	log_has 'agentbot-cli doctor'
 )
 
 test_setup_does_not_ask_for_redundant_installation_approval() (
@@ -720,6 +740,7 @@ expect_success 'the plan is shown, not asked' test_the_plan_is_shown_not_asked
 expect_success 'Agentbot runs without a second question' test_agentbot_runs_without_a_second_question
 expect_success 'setup does not ask for redundant installation approval' test_setup_does_not_ask_for_redundant_installation_approval
 expect_success 'a new machine is offered its memory vault' test_a_new_machine_is_offered_its_memory_vault
+expect_success 'declining SSH setup skips the memory clone and continues health checks' test_memory_ssh_decline_skips_clone_and_continues_health_check
 expect_success 'the run reports a duration per phase and a total' test_the_run_reports_a_duration_per_phase_and_a_total
 expect_success 'the start clock survives a restart' test_the_start_clock_survives_a_restart
 expect_success 'a repository update restarts instead of failing' test_a_repository_update_restarts_instead_of_failing

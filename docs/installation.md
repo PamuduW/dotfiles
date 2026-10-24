@@ -24,6 +24,54 @@ Token setup is optional. Choosing **Back** without saving, or running without
 a terminal and without a configured token, continues with GitHub's
 unauthenticated rate limit. A GitLab token does not raise GitHub's limits.
 
+### GitHub SSH for the memory vault
+
+When the memory URL uses `git@github.com:...` or `ssh://git@github.com/...`,
+bootstrap checks SSH authentication before starting the non-interactive clone.
+Local folders and HTTPS URLs do not run this SSH setup.
+
+On the first connection, bootstrap shows GitHub's published Ed25519 host
+fingerprint and asks before adding the matching public host key to
+`~/.ssh/known_hosts`. It uses the key published in
+[GitHub's fingerprint documentation](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints),
+rather than trusting a key returned by an unauthenticated network scan. Existing
+host entries are preserved. A host verification or network failure stops the
+memory step without creating an identity or weakening host verification.
+
+If GitHub already accepts this machine's SSH identity, setup continues. Otherwise,
+bootstrap offers to reuse a local SSH key, create a new Ed25519 key, or skip
+memory setup. It checks OpenSSH's configured `IdentityFile` paths as well as
+standard key filenames and local public-key companions. New keys use
+`~/.ssh/id_ed25519` when available, or an unused
+`id_ed25519_github_N` filename. Existing keys are never overwritten. OpenSSH
+reads key passphrases directly from the terminal, including during a piped install.
+
+Bootstrap reuses the current SSH agent, or starts one if needed, then runs
+`ssh-add` for the selected key. It prints only the public key and the GitHub
+settings URL. Add that key to the intended account as an **Authentication Key**,
+then press Enter to retry. The installer does not add keys to GitHub on your
+behalf. If authentication remains unavailable or you skip this step, no memory
+clone runs; the rest of setup and its health check continue.
+The selected identity is passed explicitly to both the authentication check and
+the memory clone, including when the existing SSH configuration uses
+`IdentitiesOnly yes`. Agentbot records it in the cloned vault's local
+`core.sshCommand` for later syncs and pushes, using the current `SSH_AUTH_SOCK`
+at runtime. This does not rewrite the user's global SSH configuration or pin
+a temporary agent socket path.
+
+An agent started by bootstrap is available to its child processes and the login
+shell it opens. It cannot change the environment of the parent shell. In another
+terminal, start an agent if needed and load the chosen key:
+
+```bash
+eval "$(ssh-agent -s)"
+ssh-add ~/.ssh/id_ed25519
+```
+
+Use the filename shown during setup if you selected a different key. The account
+must also have access to the private memory repository; SSH authentication alone
+does not grant repository access.
+
 ## Interactive setup
 
 Clone the repository into the operational location and run its supported entry

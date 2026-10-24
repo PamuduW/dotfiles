@@ -462,16 +462,203 @@ run_agentbot() {
 	record_phase 'agentbot update'
 }
 
+# --- GitHub SSH for memory ----------------------------------------------------
+
+memory_ssh_terminal() { "$@" </dev/tty; }
+
+memory_ssh_trust_github() {
+	local directory="$HOME/.ssh" known="$HOME/.ssh/known_hosts"
+	if [[ -L "$directory" || -L "$known" || (-e "$directory" && ! -O "$directory") || (-e "$known" && ! -O "$known") ]]; then
+		err 'SSH paths are symlinks or owned by another user; configure GitHub SSH manually.'
+		return 1
+	fi
+	if [[ -f "$known" ]] && ssh-keygen -F github.com -f "$known" >/dev/null; then
+		return 0
+	fi
+	# Published by GitHub over HTTPS, not learned from an unauthenticated scan:
+	# https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints
+	msg '  GitHub host fingerprint: SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU (Ed25519)'
+	ask '  Trust this published GitHub host key? [Y/n]: ' y
+	case "$ANSWER" in y | Y | yes | YES) ;; *) return 1 ;; esac
+	(
+		umask 077
+		mkdir -p -- "$directory"
+	) || return 1
+	chmod 700 "$directory" || return 1
+	# Append only: an existing host key or revocation is never removed.
+	(
+		umask 077
+		printf '\ngithub.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n' >>"$known"
+	) || return 1
+}
+
+# GitHub's successful greeting exits 1 because it provides no shell.
+# Return 2 for transport/host failures, so they never trigger key creation.
+memory_ssh_check() {
+	local output rc=0
+	local -a identity=()
+	if [[ -n "${MEMORY_SSH_IDENTITY:-}" ]]; then
+		identity=(-i "$MEMORY_SSH_IDENTITY" -o IdentitiesOnly=yes)
+		[[ -z "${SSH_AUTH_SOCK:-}" ]] || identity+=(-o IdentityAgent=SSH_AUTH_SOCK)
+	fi
+	output="$(LC_ALL=C ssh -T -o BatchMode=yes -o StrictHostKeyChecking=yes \
+		-o ConnectTimeout=10 -o ConnectionAttempts=1 "${identity[@]}" git@github.com 2>&1)" || rc=$?
+	if ((rc == 1)) && [[ "$output" == *"You've successfully authenticated"* ]]; then
+		msg "  $output"
+		return 0
+	fi
+	[[ "$output" == *'Permission denied (publickey)'* ]] && return 1
+	err "GitHub SSH connection failed: $output"
+	return 2
+}
+
+memory_ssh_load_key() {
+	local key="$1" rc=0 agent
+	ssh-add -l >/dev/null 2>&1 || rc=$?
+	if ((rc == 2)); then
+		# Read only the two assignments; do not evaluate a program's shell text.
+		agent="$(ssh-agent -s)" || return 1
+		SSH_AUTH_SOCK="$(printf '%s\n' "$agent" | sed -n 's/^SSH_AUTH_SOCK=\([^;]*\);.*/\1/p')"
+		SSH_AGENT_PID="$(printf '%s\n' "$agent" | sed -n 's/^SSH_AGENT_PID=\([0-9]*\);.*/\1/p')"
+		[[ -n "$SSH_AUTH_SOCK" && "$SSH_AGENT_PID" =~ ^[0-9]+$ ]] || return 1
+		export SSH_AUTH_SOCK SSH_AGENT_PID
+	elif ((rc != 0 && rc != 1)); then
+		return 1
+	fi
+	memory_ssh_terminal ssh-add "$key"
+}
+
+memory_ssh_public_key() {
+	local key="$1" kind material rest public
+	if [[ -f "$key.pub" && ! -L "$key.pub" ]]; then
+		IFS= read -r public <"$key.pub" || return 1
+	elif [[ ! -e "$key.pub" && ! -L "$key.pub" ]]; then
+		public="$(memory_ssh_terminal ssh-keygen -y -f "$key")" || return 1
+	else
+		return 1
+	fi
+	read -r kind material rest <<<"$public" || return 1
+	case "$kind" in ssh-ed25519 | ssh-rsa | ecdsa-sha2-nistp* | sk-ssh-ed25519@openssh.com | sk-ecdsa-sha2-nistp256@openssh.com) ;; *) return 1 ;; esac
+	[[ "$material" =~ ^[A-Za-z0-9+/=]+$ ]] || return 1
+	ssh-keygen -lf /dev/stdin <<<"$kind $material" >/dev/null || return 1
+	msg '  Add this PUBLIC key at https://github.com/settings/ssh/new (Authentication Key):'
+	printf '\n%s %s\n\n' "$kind" "$material"
+}
+
+prepare_memory_github_ssh() {
+	local command rc=0 key='' candidate field filename comment attempt suffix=0
+	MEMORY_SSH_IDENTITY=''
+	step 'GitHub SSH access'
+	for command in ssh ssh-keygen ssh-agent ssh-add; do
+		if ! has "$command"; then
+			err "Missing $command; install openssh-client and retry memory setup."
+			return 1
+		fi
+	done
+	if [[ -z "${BOOTSTRAP_ANSWERS+x}" ]] && ! interactive; then
+		# An unattended run can use working SSH, but must not silently trust a
+		# host, create an unencrypted identity, or wait for account registration.
+		memory_ssh_check
+		return $?
+	fi
+	memory_ssh_trust_github || return 1
+	memory_ssh_check || rc=$?
+	((rc == 0)) && return 0
+	((rc == 1)) || return 1
+	while read -r field candidate; do
+		[[ "$field" == identityfile ]] || continue
+		case "$candidate" in
+		\~/*) candidate="$HOME/${candidate:2}" ;;
+		'%d/'*) candidate="$HOME/${candidate#%d/}" ;;
+		esac
+		if [[ -f "$candidate" && ! -L "$candidate" && -O "$candidate" ]]; then
+			key="$candidate"
+			break
+		fi
+	done < <(ssh -G git@github.com 2>/dev/null)
+	for candidate in "$HOME/.ssh/id_ed25519" "$HOME/.ssh/id_ecdsa" "$HOME/.ssh/id_rsa" "$HOME"/.ssh/*.pub; do
+		[[ -z "$key" ]] || break
+		[[ "$candidate" == *.pub ]] && candidate="${candidate%.pub}"
+		if [[ -f "$candidate" && ! -L "$candidate" && -O "$candidate" ]]; then
+			key="$candidate"
+			break
+		fi
+	done
+	if [[ -n "$key" ]]; then
+		msg "  Existing SSH key: $key"
+		msg '  1) Reuse an existing key and add its public key to GitHub'
+		msg '  2) Create a new Ed25519 key'
+		msg '  3) Skip memory setup'
+		ask '  Choice [1]: ' 1
+		case "$ANSWER" in
+		1)
+			ask "  Private key to reuse [$key]: " "$key"
+			key="$ANSWER"
+			[[ -f "$key" && ! -L "$key" && -O "$key" ]] || return 1
+			;;
+		2) key='' ;;
+		*) return 1 ;;
+		esac
+	else
+		ask '  No local SSH key found. Create an Ed25519 key? [Y/n]: ' y
+		case "$ANSWER" in y | Y | yes | YES) ;; *) return 1 ;; esac
+	fi
+	if [[ -z "$key" ]]; then
+		filename=id_ed25519
+		while [[ -e "$HOME/.ssh/$filename" || -L "$HOME/.ssh/$filename" || -e "$HOME/.ssh/$filename.pub" || -L "$HOME/.ssh/$filename.pub" ]]; do
+			suffix=$((suffix + 1))
+			filename="id_ed25519_github_$suffix"
+		done
+		ask "  New key filename [$filename]: " "$filename"
+		filename="$ANSWER"
+		[[ "$filename" =~ ^[A-Za-z0-9_-][A-Za-z0-9._-]*$ ]] || return 1
+		key="$HOME/.ssh/$filename"
+		if [[ -e "$key" || -L "$key" || -e "$key.pub" || -L "$key.pub" ]]; then
+			err 'That key filename is already in use; existing keys are never overwritten.'
+			return 1
+		fi
+		comment="$(git config --get user.email 2>/dev/null || true)"
+		msg '  OpenSSH will ask for a passphrase. It is read directly from your terminal.'
+		memory_ssh_terminal ssh-keygen -t ed25519 -C "${comment:-github}" -f "$key" || return 1
+	fi
+	memory_ssh_load_key "$key" || return 1
+	MEMORY_SSH_IDENTITY="$key"
+	memory_ssh_public_key "$key" || {
+		err 'Could not obtain a valid public key; no private key is displayed.'
+		return 1
+	}
+	rc=0
+	memory_ssh_check || rc=$?
+	((rc == 0)) && return 0
+	((rc == 1)) || return 1
+	msg '  Keep the private key on this machine. Future terminals may need ssh-add again.'
+	msg '  In a future terminal without an agent, run:'
+	# shellcheck disable=SC2016  # Instructions for the user's future shell.
+	msg '    eval "$(ssh-agent -s)"'
+	printf '    ssh-add %q\n' "$key"
+	for attempt in 1 2 3; do
+		ask "  After adding the public key to GitHub ($attempt/3): Enter to retry, or type skip: " retry
+		[[ "$ANSWER" == retry ]] || return 1
+		rc=0
+		memory_ssh_check || rc=$?
+		((rc == 0)) && return 0
+		((rc == 1)) || return 1
+		msg '  GitHub has not accepted the key yet. Check the account and Authentication Key type.'
+	done
+	return 1
+}
+
 # The memory vault is the one piece a new machine cannot guess: it is the
 # user's private repository. Asked only when Agentbot is installed and no vault
 # is configured yet, as free text that Enter skips, so a run without memory
 # stays one question long. A failure is recorded and never fails the run.
 setup_memory_vault() {
-	local launcher="$AGENTBOT_DIR/bin/agentbot" source rc=0
+	local launcher="$AGENTBOT_DIR/bin/agentbot" source rc=0 MEMORY_SSH_IDENTITY=''
 	[[ -x "$launcher" ]] || return 0
 	"$launcher" memory status >/dev/null 2>&1 || rc=$?
 	((rc == 2)) || return 0 # configured already, or not ours to fix here
 	step 'Memory vault'
+	msg '  An empty Git repository will be initialized as a new vault; nothing is pushed.'
 	ask '  Your memory vault: its Git URL, or a folder already on this machine (Enter to skip): ' ''
 	source="$ANSWER"
 	if [[ -z "$source" ]]; then
@@ -482,7 +669,21 @@ setup_memory_vault() {
 	case "$source" in
 	*://* | git@*:*)
 		ask "  Clone it into [$HOME/agent-memory]: " "$HOME/agent-memory"
-		"$launcher" memory setup --clone "$source" --dest "$ANSWER" --yes || rc=$?
+		local destination="$ANSWER"
+		case "$source" in
+		git@github.com:* | ssh://git@github.com/* | ssh://git@github.com:22/*)
+			if ! prepare_memory_github_ssh; then
+				record 'SKIPPED   memory vault (GitHub SSH access is not ready)'
+				return 0
+			fi
+			;;
+		esac
+		if [[ -n "${MEMORY_SSH_IDENTITY:-}" ]]; then
+			"$launcher" memory setup --clone "$source" --dest "$destination" \
+				--ssh-key "$MEMORY_SSH_IDENTITY" --yes || rc=$?
+		else
+			"$launcher" memory setup --clone "$source" --dest "$destination" --yes || rc=$?
+		fi
 		;;
 	*) "$launcher" memory setup --path "$source" --yes || rc=$? ;;
 	esac
