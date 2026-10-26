@@ -36,6 +36,7 @@ jobs:
         with:
           persist-credentials: false
           repository: PamuduW/dotfiles-shared
+          ref: ${{ github.ref_name }}
           path: dotfiles-shared
       - name: Install shell tooling
         run: |
