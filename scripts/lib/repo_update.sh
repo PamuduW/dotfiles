@@ -54,16 +54,24 @@ _dotfiles_gate_one() {
 	local rc=0
 	case "$1" in
 	shared)
-		repo_update_run "$DOTFILES_SHARED_ROOT" 'shared repo' "$_DOTFILES_GATE_DECISION" \
-			DOTFILES_SHARED_REPO_RESULT 'PamuduW/dotfiles-shared' || rc=$?
+		if [[ -n "${_SOFTWARE_CATALOG_QUALIFICATION_CONTEXT:-}" ]]; then
+			repo_gate_frozen "$DOTFILES_SHARED_ROOT" dotfiles-shared DOTFILES_SHARED_REPO_RESULT 'shared repo' || rc=$?
+		else
+			repo_update_run "$DOTFILES_SHARED_ROOT" 'shared repo' "$_DOTFILES_GATE_DECISION" \
+				DOTFILES_SHARED_REPO_RESULT 'PamuduW/dotfiles-shared' || rc=$?
+		fi
 		# A stop here is the one the caller reports, so it is adopted before
 		# the gate returns and the Dotfiles repository is never reached.
 		((rc == 0 || rc == 2)) ||
 			repo_gate_adopt "$_DOTFILES_GATE_RESULT" DOTFILES_SHARED_REPO_RESULT
 		;;
 	own)
-		repo_update_run "$DOTFILES_DIR" 'dotfiles repo' "$_DOTFILES_GATE_DECISION" \
-			"$_DOTFILES_GATE_RESULT" 'PamuduW/dotfiles' || rc=$?
+		if [[ -n "${_SOFTWARE_CATALOG_QUALIFICATION_CONTEXT:-}" ]]; then
+			repo_gate_frozen "$DOTFILES_DIR" dotfiles "$_DOTFILES_GATE_RESULT" 'dotfiles repo' || rc=$?
+		else
+			repo_update_run "$DOTFILES_DIR" 'dotfiles repo' "$_DOTFILES_GATE_DECISION" \
+				"$_DOTFILES_GATE_RESULT" 'PamuduW/dotfiles' || rc=$?
+		fi
 		;;
 	esac
 	return "$rc"

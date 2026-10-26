@@ -1,4 +1,10 @@
 # shellcheck shell=bash
+# shellcheck source=scripts/lib/catalog_load.sh
+source "${BASH_SOURCE[0]%/*}/../catalog_load.sh"
+if ! declare -p DOCKER_VENDOR_PACKAGES >/dev/null 2>&1; then
+	# shellcheck source=scripts/lib/managed_tool_state.sh
+	source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/managed_tool_state.sh"
+fi
 # run_docker() is provided by scripts/lib/docker.sh (sourced via load.sh before installers).
 
 configure_docker_daemon() {
@@ -163,42 +169,21 @@ restart_docker_service() {
 }
 
 install_docker() {
-	if command -v docker >/dev/null 2>&1 &&
-		skip_unless_forced "Docker already installed ($(docker --version 2>/dev/null || echo 'unknown'))"; then
-		:
-	else
-		log_step "Install Docker Engine from official repo"
-		local docker_distro codename
-		# shellcheck disable=SC1091
-		. /etc/os-release
-		docker_distro="ubuntu"
-		[[ "${ID:-}" == "debian" ]] && docker_distro="debian"
-		codename="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
-
-		_run_quiet_command 'Docker prerequisites' \
-			sudo apt-get -qq -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=600 install -y ca-certificates curl || return $?
-		sudo install -m 0755 -d /etc/apt/keyrings || return $?
-		sudo curl -fsSL "https://download.docker.com/linux/${docker_distro}/gpg" -o /etc/apt/keyrings/docker.asc || return $?
-		sudo chmod a+r /etc/apt/keyrings/docker.asc || return $?
-
-		sudo tee /etc/apt/sources.list.d/docker.sources >/dev/null <<DOCKEREOF
-Types: deb
-URIs: https://download.docker.com/linux/${docker_distro}
-Suites: ${codename}
-Components: stable
-Signed-By: /etc/apt/keyrings/docker.asc
-DOCKEREOF
-		local sources_rc=$?
-		((sources_rc == 0)) || return "$sources_rc"
-
-		# Only the feed just added: the preamble refreshed everything else.
-		apt_refresh_source_list \
-			/etc/apt/sources.list.d/docker.sources \
-			/etc/apt/sources.list.d/docker.list || return $?
-		_run_quiet_command 'Docker Engine install' \
-			sudo apt-get -qq -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=600 install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin || return $?
-		log_ok "Docker Engine installed"
-	fi
+	dotfiles_catalog_begin || return $?
+	local package key installed
+	local -a keys=()
+	for package in "${DOCKER_VENDOR_PACKAGES[@]}"; do
+		key="docker.$package"
+		# Every independently versioned vendor package needs its own target.
+		dotfiles_catalog_get "$key" version >/dev/null || return 2
+		installed="$(dpkg-query -W -f='${Version}' "$package" 2>/dev/null || true)"
+		if [[ -n "$installed" && ! -f "$HOME/.local/share/dotfiles-catalog/$key.apt" ]]; then
+			log_warn "Docker has externally owned packages; preserving the installation and daemon configuration"
+			return 0
+		fi
+		keys+=("$key")
+	done
+	dotfiles_catalog_install_debs "${keys[@]}" || return $?
 
 	if ! groups "$USER" | grep -qw docker; then
 		sudo groupadd -f docker || return $?
@@ -239,8 +224,22 @@ _portainer_recover_interrupted() {
 	local backup
 	backup="$(_portainer_backup_name)"
 	_portainer_name_exists "$backup" || return 0
+	if ! _portainer_has_catalog_label "$backup"; then
+		log_warn "Cannot verify ownership of the Portainer backup; refusing automatic recovery"
+		return 1
+	fi
 	if _portainer_name_exists portainer; then
-		if _portainer_has_managed_layout; then
+		if ! _portainer_has_catalog_label portainer; then
+			log_warn "Cannot verify ownership of the Portainer container; refusing automatic recovery"
+			return 1
+		fi
+		local layout_rc=0
+		_portainer_has_managed_layout || layout_rc=$?
+		if ((layout_rc == 2)); then
+			log_warn "Cannot inspect the Portainer container; refusing automatic recovery"
+			return 1
+		fi
+		if ((layout_rc == 0)); then
 			_run_quiet_command "remove $backup" run_docker rm -f "$backup" || return $?
 			return 0
 		fi
@@ -316,6 +315,7 @@ _create_stopped_portainer() {
 		-p 8000:8000 \
 		-p 9443:9443 \
 		--name portainer \
+		--label "com.pamuduw.dotfiles.catalog=$SOFTWARE_CATALOG_DIGEST" \
 		--restart unless-stopped \
 		-v /var/run/docker.sock:/var/run/docker.sock \
 		-v portainer_data:/data \
@@ -326,7 +326,14 @@ _create_stopped_portainer() {
 # to be reported as the second, so a session that simply predates the docker
 # group was told its container had a custom layout -- a claim about the
 # container made without being able to look at it.
+_portainer_has_catalog_label() {
+	local catalog_label
+	catalog_label="$(run_docker inspect --format '{{index .Config.Labels "com.pamuduw.dotfiles.catalog"}}' "$1")" || return 2
+	[[ "$catalog_label" =~ ^[0-9a-f]{64}$ ]]
+}
+
 _portainer_has_managed_layout() {
+	_portainer_has_catalog_label portainer || return $?
 	local data_mount socket_mount port_8000 port_9443 restart_policy
 	data_mount="$(run_docker inspect --format '{{range .Mounts}}{{if eq .Destination "/data"}}{{.Type}}:{{.Name}}{{end}}{{end}}' portainer)" || return 2
 	socket_mount="$(run_docker inspect --format '{{range .Mounts}}{{if eq .Destination "/var/run/docker.sock"}}{{.Type}}:{{.Source}}{{end}}{{end}}' portainer)" || return 2
@@ -341,7 +348,12 @@ _portainer_has_managed_layout() {
 }
 
 install_portainer() {
-	local portainer_image="${PORTAINER_IMAGE:-portainer/portainer-ce:lts}"
+	dotfiles_catalog_begin || return $?
+	local package digest portainer_image
+	package="$(dotfiles_catalog_get portainer package)" || return 2
+	digest="$(dotfiles_catalog_get portainer digest)" || return 2
+	[[ "$package" =~ ^[a-z0-9./_-]+$ && "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || return 2
+	portainer_image="$package@$digest"
 	local target_image_id current_image_id
 
 	log_step "Refresh Portainer CE image"

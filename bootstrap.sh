@@ -318,6 +318,10 @@ agentbot_prerequisites() {
 # an adopted checkout catches up. Restart from the updated script rather than
 # reporting a failure the operator would have to interpret.
 restart_after_repository_update() {
+	local -a context_args=()
+	if [[ -n "${BOOTSTRAP_QUALIFICATION_CONTEXT:-}" ]]; then
+		context_args=(--qualification-context "$BOOTSTRAP_QUALIFICATION_CONTEXT")
+	fi
 	local what="$1"
 	# Tracked per repository, not once for the run: Dotfiles and Agentbot can
 	# each legitimately be behind, and a single flag made the second one look
@@ -339,7 +343,7 @@ restart_after_repository_update() {
 	BOOTSTRAP_RESTARTED="${BOOTSTRAP_RESTARTED:-} $what" \
 		BOOTSTRAP_SELECTION="$SELECTION" \
 		BOOTSTRAP_RUN_STARTED_EPOCH="$RUN_STARTED_EPOCH" \
-		exec "$DOTFILES_DIR/bootstrap.sh"
+		exec "$DOTFILES_DIR/bootstrap.sh" "${context_args[@]}"
 }
 
 # The Dotfiles installer returns 4 when it finished but some components need
@@ -354,12 +358,16 @@ DOTFILES_INSTALL_PARTIAL_RC=4
 DOTFILES_UPDATE_PARTIAL_RC=4
 
 run_dotfiles() {
+	local -a context_args=()
+	if [[ -n "${BOOTSTRAP_QUALIFICATION_CONTEXT:-}" ]]; then
+		context_args=(--qualification-context "$BOOTSTRAP_QUALIFICATION_CONTEXT")
+	fi
 	local rc=0
 	step 'Install Dotfiles'
 	msg '  The component menu opens next. Nothing outside it is selected for you.'
 	# Pre-authorize the checkout update: the plan was already confirmed, and a
 	# moved checkout restarts this script rather than proceeding blindly.
-	DOTFILES_REPO_UPDATE_ASSUME_YES=1 "$DOTFILES_DIR/install.sh" --install || rc=$?
+	DOTFILES_REPO_UPDATE_ASSUME_YES=1 "$DOTFILES_DIR/install.sh" "${context_args[@]}" --install || rc=$?
 	if ((rc == 2)); then
 		restart_after_repository_update Dotfiles
 		return 1
@@ -382,7 +390,7 @@ run_dotfiles() {
 	# second prompt to spend. Without it the update reported the pending apt and
 	# npm upgrades and applied none of them.
 	rc=0
-	"$DOTFILES_DIR/bin/bin/dotfiles" update --yes || rc=$?
+	"$DOTFILES_DIR/bin/bin/dotfiles" "${context_args[@]}" update --yes || rc=$?
 	if ((rc == DOTFILES_UPDATE_PARTIAL_RC)); then
 		record_phase 'dotfiles update (some steps need attention)'
 	elif ((rc != 0)); then
@@ -399,6 +407,10 @@ AGENTBOT_DECLINED=0
 
 run_agentbot() {
 	local rc=0 selection_file components='' update_rc=0
+	local -a context_args=()
+	if [[ -n "${BOOTSTRAP_QUALIFICATION_CONTEXT:-}" ]]; then
+		context_args=(--qualification-context "$BOOTSTRAP_QUALIFICATION_CONTEXT")
+	fi
 	load_dotfiles_environment
 	agentbot_prerequisites || return 1
 	step 'Install Agentbot'
@@ -416,10 +428,10 @@ run_agentbot() {
 		# "agentbot install".
 		# The Doctor table waits for the health check that ends the run.
 		AGENTBOT_INSTALL_SHOW_DOCTOR=0 AGENTBOT_INSTALL_CONFIRM=yes \
-			"$AGENTBOT_DIR/bin/agentbot" install --menu || rc=$?
+			"$AGENTBOT_DIR/bin/agentbot" "${context_args[@]}" install --menu || rc=$?
 	else
 		AGENTBOT_INSTALL_SHOW_DOCTOR=0 AGENTBOT_INSTALL_CONFIRM=yes \
-			"$AGENTBOT_DIR/install.sh" install || rc=$?
+			"$AGENTBOT_DIR/install.sh" "${context_args[@]}" install || rc=$?
 	fi
 	unset AGENTBOT_INSTALL_SELECTION_FILE
 	if [[ -s "$selection_file" ]]; then
@@ -450,10 +462,10 @@ run_agentbot() {
 	# An Agentbot that predates the contract writes no file, and the update
 	# stays unscoped, as it always was.
 	if [[ -n "$components" ]]; then
-		AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" update --yes \
+		AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" "${context_args[@]}" update --yes \
 			--components "$components" || update_rc=$?
 	else
-		AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" update --yes || update_rc=$?
+		AGENTBOT_INSTALL_CONFIRM=yes "$AGENTBOT_DIR/install.sh" "${context_args[@]}" update --yes || update_rc=$?
 	fi
 	if ((update_rc != 0)); then
 		record 'FAILED   agentbot update'
@@ -754,7 +766,11 @@ print_summary() {
 # failed setup: the steps themselves succeeded.
 agentbot_health_check() {
 	step 'Health check'
-	if "$AGENTBOT_DIR/bin/agentbot" doctor; then
+	local -a context_args=()
+	if [[ -n "${BOOTSTRAP_QUALIFICATION_CONTEXT:-}" ]]; then
+		context_args=(--qualification-context "$BOOTSTRAP_QUALIFICATION_CONTEXT")
+	fi
+	if "$AGENTBOT_DIR/bin/agentbot" "${context_args[@]}" doctor; then
 		record_phase 'agentbot doctor'
 	else
 		record 'CHECK     agentbot doctor (see the table above)'
@@ -779,7 +795,34 @@ start_new_shell() {
 	exec bash -l </dev/tty
 }
 
+freeze_software_catalog() {
+	# shellcheck source=/dev/null
+	source "$SHARED_DIR/scripts/lib/shared/software_catalog.sh"
+	if [[ -n "${BOOTSTRAP_QUALIFICATION_CONTEXT:-}" ]]; then
+		software_catalog_qualification_begin "$BOOTSTRAP_QUALIFICATION_CONTEXT" || return 2
+		[[ "$(realpath -- "$DOTFILES_DIR")" == "$(software_catalog_qualification_source dotfiles)" &&
+		"$(realpath -- "$AGENTBOT_DIR")" == "$(software_catalog_qualification_source agentbot)" ]] || return 2
+	fi
+	software_catalog_begin "$SHARED_DIR" || {
+		err "No approved software snapshot; qualify and approve the shared catalog first."
+		return 2
+	}
+}
+
 main() {
+	local BOOTSTRAP_QUALIFICATION_CONTEXT=''
+	if [[ "${1:-}" == --qualification-context ]]; then
+		[[ $# -ge 2 ]] || {
+			err 'Missing qualification context.'
+			return 64
+		}
+		BOOTSTRAP_QUALIFICATION_CONTEXT="$(realpath -- "$2")" || return 2
+		shift 2
+		if interactive; then
+			err 'Qualification bootstrap requires an isolated non-interactive runner.'
+			return 2
+		fi
+	fi
 	local failed=0
 	# Report whatever happened, including on failure: a run that dies with no
 	# summary leaves the operator guessing which steps ran.
@@ -794,6 +837,8 @@ main() {
 	# Shared code first: whichever of the two runs next loads from it, so a
 	# failure here must stop before an installer dies on a missing checkout.
 	obtain_repo "$SHARED_URL" "$SHARED_DIR" 'Shared library'
+	# Freeze the approved shared software revision before setup mutations.
+	freeze_software_catalog || return $?
 	prepare_github_token
 
 	if ((WANT_DOTFILES == 1)); then

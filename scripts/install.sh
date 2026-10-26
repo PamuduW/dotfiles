@@ -156,8 +156,17 @@ main() {
 	# cmd_full_update already refuses, and the same one applies here.
 	export DOTFILES_FORCE_REINSTALL=0
 
+	local qualification_context=''
 	while [[ $# -gt 0 ]]; do
 		case "$1" in
+		--qualification-context)
+			[[ $# -ge 2 ]] || {
+				printf 'Missing qualification context.\n' >&2
+				return 64
+			}
+			qualification_context="$(realpath -- "$2")" || return 2
+			shift 2
+			;;
 		--install)
 			mode="install"
 			shift
@@ -183,6 +192,10 @@ main() {
 			;;
 		esac
 	done
+	if [[ -n "$qualification_context" ]]; then
+		software_catalog_qualification_begin "$qualification_context" || return 2
+		[[ "$(realpath -- "$DOTFILES_DIR")" == "$(software_catalog_qualification_source dotfiles)" ]] || return 2
+	fi
 
 	if [[ -z "$mode" ]]; then
 		if [[ "$DOTFILES_INTERACTIVE_TTY" == true ]]; then

@@ -262,41 +262,76 @@ EOF
 	grep -Fq 'direct curl exists in sensitive function' "$error"
 }
 
-test_release_installers_routed() {
-	local file="$REPO_DIR/scripts/lib/installers/github_release.sh"
-	[[ "$(grep -c 'github_curl -fsSL' "$file")" -eq 4 ]] && assert_sensitive_urls_use_boundary "$file"
-}
+test_release_installers_routed() (
+	reset_request
+	source "$REPO_DIR/scripts/lib/software_catalog.sh"
+	local selected_url fixture_digest destination="$TEST_HARNESS_ROOT/catalog-download"
+	fixture_digest="$(printf '%s' "$TEST_CURL_STDOUT" | sha256sum)"
+	fixture_digest="sha256:${fixture_digest%% *}"
+	dotfiles_catalog_get() {
+		case "$2" in url) printf '%s\n' "$selected_url" ;; digest) printf '%s\n' "$fixture_digest" ;; *) return 1 ;; esac
+	}
+	GITHUB_TOKEN="runtime_token_$(date +%s%N)"
+	export GITHUB_TOKEN
+	for selected_url in \
+		https://github.com/example/tool/releases/download/v1.2.3/tool.tar.gz \
+		https://api.github.com/repos/example/tool/releases/assets/123; do
+		: >"$TEST_CURL_AUTH_LOG"
+		dotfiles_catalog_download fixture "$destination" || return 1
+		[[ "$(cat "$destination")" == payload ]] || return 1
+		grep -Fqx auth-present "$TEST_CURL_AUTH_LOG" || return 1
+		! grep -Fq -- "$GITHUB_TOKEN" "$TEST_COMMAND_LOG" "$TEST_URL_LOG" || return 1
+	done
+	selected_url=https://downloads.example.invalid/tool.tar.gz
+	: >"$TEST_CURL_AUTH_LOG"
+	dotfiles_catalog_download fixture "$destination" || return 1
+	grep -Fqx auth-absent "$TEST_CURL_AUTH_LOG"
+)
 
-test_release_installer_standalone_source_stays_anonymous() {
-	local url_log="$TEST_HARNESS_ROOT/log/standalone-release-urls.log"
-	HOME="$HOME" XDG_CONFIG_HOME="$XDG_CONFIG_HOME" URL_LOG="$url_log" bash -c '
+test_release_installer_standalone_source_stays_anonymous() (
+	reset_request
+	HOME="$TEST_HARNESS_ROOT/standalone-home" bash -c '
 		set -euo pipefail
+		PATH="$HOME/.local/bin:$TEST_FAKE_BIN:/usr/bin:/bin"
 		source "$1/scripts/lib/installers/github_release.sh"
-		github_latest_release_version() { printf "1.2.3\\n"; }
-		_linux_github_arch_suffix() { printf "x86_64\\n"; }
-		log_step() { :; }
-		log_ok() { :; }
-		curl() {
-			local output="" arg=""
-			while (($#)); do
-				arg="$1"; shift
-				[[ "$arg" == -o ]] && { output="$1"; shift; }
-			done
-			printf "%s\\n" "$arg" >>"$URL_LOG"
-			[[ -z "$output" ]] || : >"$output"
-		}
-		sha256sum() { return 1; }
-		install_lazygit_from_github >/dev/null 2>&1 || :
+		source "$1/tests/lib/catalog_fixture.sh"
+		printf "%s\n" $'"'"'lazygit\towner\tany\tdotfiles'"'"' \
+			$'"'"'lazygit\tkind\tany\tsoftware'"'"' $'"'"'lazygit\tversion\tany\t1.2.3'"'"' \
+			$'"'"'lazygit\tarchive\tany\traw'"'"' $'"'"'lazygit\tbinary\tany\tlazygit'"'"' \
+			$'"'"'lazygit\turl\tany\thttps://github.com/jesseduffield/lazygit/releases/download/v1.2.3/lazygit_1.2.3_linux_x86_64.tar.gz'"'"' \
+			$'"'"'lazygit\tdigest\tany\tsha256:'"'"'"$(printf "%064d" 0)" | catalog_fixture_seal "$TEST_HARNESS_ROOT/anonymous-catalog"
+		catalog_fixture_use "$TEST_HARNESS_ROOT/anonymous-catalog"
+		# The intentional checksum failure stops before candidate execution.
+		if install_lazygit_from_github >/dev/null 2>&1; then exit 1; fi
 	' _ "$REPO_DIR" || return 1
-	grep -Fqx 'https://github.com/jesseduffield/lazygit/releases/download/v1.2.3/lazygit_1.2.3_linux_x86_64.tar.gz' "$url_log"
-}
+	grep -Fqx auth-absent "$TEST_CURL_AUTH_LOG" || return 1
+	grep -Fqx 'https://github.com/jesseduffield/lazygit/releases/download/v1.2.3/lazygit_1.2.3_linux_x86_64.tar.gz' "$TEST_URL_LOG"
+)
 
-test_fonts_and_cli_releases_routed() {
-	local fonts="$REPO_DIR/scripts/lib/installers/fonts.sh" cli="$REPO_DIR/scripts/lib/installers/cli_tools.sh"
-	[[ "$(grep -c 'github_curl -fsSL' "$fonts")" -eq 1 ]] || return 1
-	# asdf, the PowerShell upstream fallback, and direnv.
-	[[ "$(grep -c 'github_curl -fsSL' "$cli")" -eq 3 ]] || return 1
-	assert_sensitive_urls_use_boundary "$fonts" "$cli"
+test_catalog_discovery_is_credential_free() {
+	python3 - "$DOTFILES_SHARED_LIB/python" <<'PYMETADATA'
+import os,sys
+from unittest.mock import MagicMock,patch
+sys.path.insert(0,sys.argv[1])
+from catalog_discovery import DiscoveryError,_PublisherRedirect,fetch_metadata
+url='https://api.github.com/repos/example/tool/releases/latest'
+response=MagicMock()
+response.__enter__.return_value=response
+response.url=url
+response.read.return_value=b'{"tag_name":"v1.2.3"}'
+opener=MagicMock()
+opener.open.return_value=response
+with patch.dict(os.environ,{'GITHUB_TOKEN':'synthetic-unused-metadata-token'}),patch('urllib.request.build_opener',return_value=opener):
+    assert fetch_metadata(url)=={'tag_name':'v1.2.3'}
+request=opener.open.call_args.args[0]
+assert request.get_header('Authorization') is None
+try:
+    _PublisherRedirect().redirect_request(request,None,302,'redirect',{},'https://untrusted.invalid/metadata')
+except DiscoveryError:
+    pass
+else:
+    raise AssertionError('metadata redirect escaped its publisher allowlist')
+PYMETADATA
 }
 
 test_global_dotfiles_routed() {
@@ -315,9 +350,7 @@ test_complete_consumer_inventory() {
 	local files=(
 		"$REPO_DIR/scripts/lib/github_api.sh"
 		"$DOTFILES_SHARED_LIB/github_token.sh"
-		"$REPO_DIR/scripts/lib/installers/github_release.sh"
-		"$REPO_DIR/scripts/lib/installers/fonts.sh"
-		"$REPO_DIR/scripts/lib/installers/cli_tools.sh"
+		"$REPO_DIR/scripts/lib/software_catalog.sh"
 		"$REPO_DIR/scripts/lib/installers/boost.sh"
 		"$REPO_DIR/scripts/lib/installers/release_cli.sh"
 		"$REPO_DIR/scripts/lib/installers/obsidian.sh"
@@ -328,15 +361,26 @@ test_complete_consumer_inventory() {
 	# talks to the GitHub API, and dropping it from the roots would let a
 	# direct-curl bypass land there unnoticed.
 	found="$(rg -l 'https://(api\.github\.com/|github\.com/.*/releases/download/)' "$REPO_DIR/scripts" "$REPO_DIR/bin" "$DOTFILES_SHARED_LIB" | sort)"
-	[[ "$found" == "$(printf '%s\n' "${files[@]}" | sort)" ]]
+	[[ "$found" == "$(printf '%s\n' "${files[@]}" "$DOTFILES_SHARED_LIB/python/catalog_discovery.py" | sort)" ]]
 }
 
-test_excluded_downloads_unchanged() {
-	local file="$REPO_DIR/scripts/lib/installers/cli_tools.sh"
-	[[ "$(grep -c 'run_vendor_shell_installer' "$file")" -eq 4 ]] || return 1
-	rg -qF "'https://chatgpt.com/codex/install.sh'" "$file" || return 1
-	! rg -q 'curl[^|]*\|[[:space:]]*(bash|sh)' "$file"
-}
+test_software_installers_do_not_fall_back_to_vendor_scripts() (
+	reset_request
+	source "$REPO_DIR/tests/lib/catalog_fixture.sh"
+	catalog_fixture_load
+	source "$REPO_DIR/scripts/lib/installers/cli_tools.sh"
+	source "$REPO_DIR/scripts/lib/installers/antigravity.sh"
+	source "$REPO_DIR/scripts/lib/installers/graphify.sh"
+	local invoked="$TEST_HARNESS_ROOT/vendor-fallback" installer
+	run_vendor_shell_installer() {
+		: >"$invoked"
+		return 0
+	}
+	for installer in install_node_via_nvm ensure_asdf_installed install_go_via_asdf install_cursor_cli install_codex_cli install_claude_cli install_antigravity_cli install_graphify_cli; do
+		if "$installer" >/dev/null 2>&1; then return 1; fi
+	done
+	[[ ! -e "$invoked" && ! -s "$TEST_COMMAND_LOG" ]]
+)
 
 test_isolation_and_fake_network() {
 	[[ "$(command -v curl)" == "$TEST_FAKE_BIN/curl" ]] || return 1
@@ -541,13 +585,13 @@ expect_success 'curl status and diagnostics propagate with defensive redaction' 
 expect_success 'no-newline curl stderr is preserved byte-for-byte except token redaction' test_no_newline_stderr_is_redacted_byte_exactly
 expect_success 'runtime canary is absent from output, logs, Git, snapshot, and diff' test_canary_absent_from_surfaces
 expect_success 'sampled curl process command line contains no secret or auth value' test_proc_cmdline_has_no_secret
-expect_success 'lazygit and lazydocker archives and checksums use the boundary' test_release_installers_routed
+expect_success 'catalog GitHub downloads use private authentication and third-party downloads stay anonymous' test_release_installers_routed
 expect_success 'standalone release installer sources boundary and stays anonymous without token helper' test_release_installer_standalone_source_stays_anonymous
-expect_success 'font and CLI release downloads use the GitHub boundary' test_fonts_and_cli_releases_routed
+expect_success 'catalog discovery stays credential-free and rejects foreign redirects' test_catalog_discovery_is_credential_free
 expect_success 'global dotfiles release downloads use the boundary' test_global_dotfiles_routed
 expect_success 'all active GitHub API and release URLs have no direct-curl bypass' test_complete_consumer_inventory
 expect_success 'structural scanner rejects a direct curl bypass near github_curl' test_scanner_rejects_nearby_direct_curl_bypass
-expect_success 'vendor shell installers use the downloaded-script boundary' test_excluded_downloads_unchanged
+expect_success 'unavailable software pins never fall back to vendor scripts' test_software_installers_do_not_fall_back_to_vendor_scripts
 expect_success 'tests remain isolated behind the fail-closed curl fake' test_isolation_and_fake_network
 expect_success 'a release lookup is fetched once per repository' test_release_lookup_is_fetched_once_per_repository
 expect_success 'saving asks GitHub before it writes the token' test_token_verification_asks_github_before_saving

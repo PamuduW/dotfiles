@@ -1,6 +1,6 @@
 # shellcheck shell=bash
-
-GRAPHIFY_UV_INSTALL_URL="https://astral.sh/uv/install.sh"
+# shellcheck source=scripts/lib/catalog_load.sh
+source "${BASH_SOURCE[0]%/*}/../catalog_load.sh"
 
 if ! declare -F graphify_command >/dev/null 2>&1; then
 	# shellcheck source=scripts/lib/managed_tool_state.sh
@@ -8,129 +8,20 @@ if ! declare -F graphify_command >/dev/null 2>&1; then
 fi
 
 check_graphify_cli() {
-	local installed action
-	installed="$(graphify_installed_version)"
-	if [[ "$installed" == "not installed" ]]; then
-		action=skip
-	elif graphify_cli_is_uv_owned; then
-		action=unknown
-	else
-		action=external
-	fi
-	printf '%s|%s|%s|%s\n' "Graphify CLI" "$installed" "—" "$action"
+	dotfiles_catalog_check "graphify_cli" "Graphify CLI"
 }
 
 upgrade_graphify_cli() {
-	local uv_cmd before after first status=0
-	if [[ "$(graphify_installed_version)" == "not installed" ]]; then
-		log_skip 'Graphify CLI not installed'
-		if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set skipped; fi
-		return 0
-	fi
-	if ! graphify_cli_is_uv_owned; then
-		log_skip 'Graphify CLI is externally managed; skipping the uv upgrade'
-		if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set skipped; fi
-		return 0
-	fi
-	uv_cmd="$(graphify_uv_command)" || return 1
-	before="$(graphify_installed_version)"
-	# On a network that re-signs HTTPS (a work laptop) the first attempt always
-	# fails and the retry with the system certificate store is the path that
-	# works, so the first error is shown only if the retry fails too.
-	first="$(mktemp)"
-	if ! "$uv_cmd" tool upgrade graphifyy >"$first" 2>&1; then
-		_run_quiet_command 'uv tool upgrade graphifyy --system-certs' \
-			"$uv_cmd" tool upgrade graphifyy --system-certs || status=$?
-		if ((status != 0)); then
-			echo "  The first attempt, without --system-certs:" >&2
-			sed 's/^/    /' "$first" >&2
-			rm -f -- "$first"
-			return "$status"
-		fi
-	fi
-	rm -f -- "$first"
-	after="$(graphify_installed_version)"
-	# The summary said "checked/no change" for a run that had just moved
-	# Graphify to a new release.
-	if [[ "$after" != "$before" ]]; then
-		log_ok "Graphify CLI updated (${before} -> ${after}); run 'agentbot update' to refresh its skill"
-		if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set updated; fi
-	else
-		log_skip "Graphify CLI already current (${after})"
-		if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set already-current; fi
+	dotfiles_catalog_upgrade "graphify_cli" || return $?
+	if [[ "${UPGRADE_STEP_ACTIVE_RESULT:-}" == updated ]]; then
+		printf "Graphify CLI changed; run 'agentbot update' to refresh its skill.\n"
 	fi
 }
 
 ensure_graphify_uv() {
-	local py_version py_major py_minor tmp
-	if graphify_uv_command >/dev/null 2>&1; then
-		return 0
-	fi
-
-	command -v curl >/dev/null 2>&1 || {
-		echo "  curl is required to install uv for Graphify." >&2
-		return 1
-	}
-	command -v python3 >/dev/null 2>&1 || {
-		echo "  python3 is required to install Graphify." >&2
-		return 1
-	}
-	py_version="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')" || {
-		echo "  Could not determine the installed Python version." >&2
-		return 1
-	}
-	py_major="${py_version%%.*}"
-	py_minor="${py_version#*.}"
-	if ((py_major < 3 || (py_major == 3 && py_minor < 10))); then
-		echo "  Graphify requires Python 3.10 or newer; found ${py_version}." >&2
-		return 1
-	fi
-
-	tmp="$(mktemp)"
-	if ! curl -LsSf "$GRAPHIFY_UV_INSTALL_URL" >"$tmp"; then
-		rm -f -- "$tmp"
-		echo "  Failed to download the official uv installer." >&2
-		return 1
-	fi
-	if ! _run_quiet_command 'uv installer' sh "$tmp"; then
-		rm -f -- "$tmp"
-		echo "  The official uv installer failed." >&2
-		return 1
-	fi
-	rm -f -- "$tmp"
-
-	graphify_uv_command >/dev/null 2>&1 || {
-		echo "  uv installed but is not available at ${HOME}/.local/bin/uv." >&2
-		return 1
-	}
+	dotfiles_catalog_install "uv"
 }
 
 install_graphify_cli() {
-	local graphify_cmd uv_cmd
-	if graphify_cmd="$(graphify_command 2>/dev/null)"; then
-		# An installation uv does not own is never touched, forced or not.
-		if ! graphify_cli_is_uv_owned; then
-			log_warn "Graphify CLI already exists outside uv; preserving external installation"
-			return 0
-		fi
-		# Under force this falls through and lets uv reinstall over its own
-		# copy. It must not return: doing so reported the component as failed.
-		if skip_unless_forced "Graphify CLI already installed via uv"; then
-			return 0
-		fi
-	fi
-
-	ensure_graphify_uv || return 1
-	uv_cmd="$(graphify_uv_command)" || return 1
-	log_step "Install Graphify CLI (graphifyy)"
-	if ! _run_quiet_command "Graphify CLI install" "$uv_cmd" tool install graphifyy; then
-		return 1
-	fi
-
-	if graphify_cmd="$(graphify_command 2>/dev/null)"; then
-		log_ok "Graphify CLI installed at ${graphify_cmd}"
-		return 0
-	fi
-	echo "  Graphify installed, but graphify is not on PATH. Add ${HOME}/.local/bin to PATH, then retry: uv tool install graphifyy" >&2
-	return 1
+	dotfiles_catalog_install "graphify_cli"
 }

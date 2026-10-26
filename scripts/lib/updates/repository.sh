@@ -107,16 +107,16 @@ declare -gA UPDATE_STEP_APPLY=(
 	[shared]=_apply_repository_update_step [repository]=_apply_repository_update_step
 )
 declare -gA UPDATE_STEP_RETRY=(
-	[apt]='sudo apt-get upgrade' [graphify]='uv tool upgrade graphifyy'
+	[apt]='sudo apt-get upgrade' [graphify]='dotfiles update'
 	[boost]='dotfiles update' [cursor]='dotfiles update'
 	[kubeconform]='dotfiles update' [tflint]='dotfiles update' [zizmor]='dotfiles update'
 	[vale]='dotfiles update' [yt_dlp]='dotfiles update' [trivy]='dotfiles update' [infracost]='dotfiles update'
 	[chrome_headless]='dotfiles update'
 	[markdownlint_cli2]='dotfiles update' [cspell]='dotfiles update' [mermaid_cli]='dotfiles update'
-	[codex]='dotfiles update' [claude]='claude update' [antigravity]='agy update'
+	[codex]='dotfiles update' [claude]='dotfiles update' [antigravity]='dotfiles update'
 	[lazygit]='dotfiles update' [lazydocker]='dotfiles update'
-	[node]='nvm install --lts' [npm]='nvm install-latest-npm'
-	[go]='asdf install golang latest' [ubuntu_sans_mono]='dotfiles update'
+	[node]='dotfiles update' [npm]='dotfiles update'
+	[go]='dotfiles update' [ubuntu_sans_mono]='dotfiles update'
 	[obsidian]='dotfiles update'
 	[shared]='dotfiles update' [repository]='dotfiles update'
 )

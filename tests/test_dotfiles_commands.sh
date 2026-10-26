@@ -9,6 +9,8 @@ REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
 source "$TEST_DIR/lib/harness.sh"
 test_harness_init
 test_harness_report_init
+source "$TEST_DIR/lib/catalog_fixture.sh"
+catalog_fixture_load
 DOTFILES_SOURCE_ONLY=1 source "$REPO_DIR/bin/bin/dotfiles" >/dev/null
 dotfiles_load_command full-update
 

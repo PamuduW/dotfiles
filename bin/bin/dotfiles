@@ -120,6 +120,7 @@ dotfiles_load_command() {
 			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/docker.sh" &&
 			_dotfiles_source_module "${DOTFILES_SHARED_LIB}/tui/menu_render.sh" &&
 			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/installers/load.sh" &&
+			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/catalog_runtimes.sh" &&
 			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/components/load.sh" &&
 			_dotfiles_source_module "${DOTFILES_DIR}/scripts/lib/full_update.sh"
 		;;
@@ -328,6 +329,15 @@ EOF
 }
 
 main() {
+	local _DOTFILES_QUALIFICATION_CONTEXT=''
+	if [[ "${1:-}" == --qualification-context ]]; then
+		[[ $# -ge 3 ]] || {
+			_err '--qualification-context requires a manifest and command'
+			return 64
+		}
+		_DOTFILES_QUALIFICATION_CONTEXT="$(realpath -- "$2")" || return 2
+		shift 2
+	fi
 	local command="${1:-}" handler
 	case "$command" in
 	-h | --help) command=help ;;
@@ -350,6 +360,14 @@ main() {
 	if [[ -n "$handler" ]]; then
 		shift
 		dotfiles_load_command "$command" || return 1
+		if [[ -n "$_DOTFILES_QUALIFICATION_CONTEXT" ]]; then
+			if ! declare -F dotfiles_catalog_begin >/dev/null; then
+				# shellcheck source=/dev/null
+				source "$DOTFILES_DIR/scripts/lib/software_catalog.sh"
+			fi
+			software_catalog_qualification_begin "$_DOTFILES_QUALIFICATION_CONTEXT" || return 2
+			[[ "$(realpath -- "$DOTFILES_DIR")" == "$(software_catalog_qualification_source dotfiles)" ]] || return 2
+		fi
 		"$handler" "$@"
 	else
 		_err "Unknown command: $command"

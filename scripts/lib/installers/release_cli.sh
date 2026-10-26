@@ -1,4 +1,6 @@
 # shellcheck shell=bash
+# shellcheck source=scripts/lib/catalog_load.sh
+source "${BASH_SOURCE[0]%/*}/../catalog_load.sh"
 # Kubeconform, TFLint, zizmor, Vale, yt-dlp, Trivy and Infracost: the latest
 # GitHub release of each, verified
 # against the SHA-256 digest GitHub publishes for the asset, installed to
@@ -18,15 +20,16 @@ fi
 # release_cli_asset_name <key> [tag]: without a tag, a {version} placeholder
 # is left for the release metadata to fill.
 release_cli_asset_name() {
-	local key="$1" tag="${2:-}" asset arch triple arch_word arch_bits suffix
+	local key="$1" tag="${2:-}" asset arch triple arch_word arch_bits suffix release_arch
 	asset="$(release_cli_field "$key" asset)" || return 1
 	[[ "$(uname -s)" == Linux ]] || return 1
 	case "$(uname -m)" in
-	x86_64 | amd64) arch=amd64 triple=x86_64 arch_word=64-bit arch_bits=64bit suffix='' ;;
-	aarch64 | arm64) arch=arm64 triple=aarch64 arch_word=arm64 arch_bits=ARM64 suffix=_aarch64 ;;
+	x86_64 | amd64) arch=amd64 release_arch=x86_64 triple=x86_64 arch_word=64-bit arch_bits=64bit suffix='' ;;
+	aarch64 | arm64) arch=arm64 release_arch=arm64 triple=aarch64 arch_word=arm64 arch_bits=ARM64 suffix=_aarch64 ;;
 	*) return 1 ;;
 	esac
 	asset="${asset//\{arch\}/$arch}"
+	asset="${asset//\{release_arch\}/$release_arch}"
 	asset="${asset//\{triple\}/$triple}"
 	asset="${asset//\{arch_word\}/$arch_word}"
 	asset="${asset//\{arch_bits\}/$arch_bits}"
@@ -177,93 +180,19 @@ release_cli_install_release() {
 # Installs the latest verified release unless the one installed is already as
 # new. With force, reinstalls it even then.
 release_cli_sync_latest_release() {
-	local key="$1" force="${2:-0}" label installed latest
-	local -a metadata=()
-	label="$(release_cli_field "$key" label)" || return 1
-	mapfile -t metadata < <(release_cli_latest_release_metadata "$key")
-	[[ "${#metadata[@]}" -eq 2 ]] || {
-		echo "  Could not verify the latest ${label} release and published digest; preserving the installed binary." >&2
-		return 1
-	}
-	latest="v${metadata[0]#v}"
-	installed="$(release_cli_installed_tag "$key" 2>/dev/null || true)"
-	if [[ "$force" != 1 && -n "$installed" ]] &&
-		[[ "$(printf '%s\n%s\n' "${installed#v}" "${latest#v}" | sort -V | tail -n1)" == "${installed#v}" ]]; then
-		log_skip "${label} already current at ${installed}"
-		return 0
-	fi
-	release_cli_install_release "$key" "${metadata[0]}" "${metadata[1]}"
+	dotfiles_catalog_install "$1" "${2:-0}"
 }
 
 install_release_cli() {
-	local key="$1" label existing
-	label="$(release_cli_field "$key" label)" || return 1
-	if existing="$(release_cli_command "$key" 2>/dev/null)"; then
-		# An installation Dotfiles does not own is never touched, forced or not.
-		if ! release_cli_is_dotfiles_owned "$key"; then
-			log_warn "${label} already exists outside Dotfiles ownership at ${existing}; preserving it"
-			return 0
-		fi
-		if skip_unless_forced "${label} already installed"; then
-			return 0
-		fi
-		release_cli_sync_latest_release "$key" 1
-		return
-	fi
-	release_cli_sync_latest_release "$key"
+	dotfiles_catalog_install "$1"
 }
 
 check_release_cli() {
-	local key="$1" label installed latest action available='—' upgradable=0
-	local -a metadata=()
-	label="$(release_cli_field "$key" label)" || return 1
-	installed="$(release_cli_installed_version "$key")"
-	if [[ "$installed" == 'not installed' ]]; then
-		action=skip
-	elif ! release_cli_is_dotfiles_owned "$key"; then
-		action=external
-	else
-		mapfile -t metadata < <(release_cli_latest_release_metadata "$key" 2>/dev/null)
-		if [[ "${#metadata[@]}" -eq 2 ]]; then
-			latest="v${metadata[0]#v}"
-			available="$latest"
-			if [[ "$(printf '%s\n%s\n' "${installed#v}" "${latest#v}" | sort -V | tail -n1)" != "${installed#v}" ]]; then
-				action=upgrade
-				upgradable=1
-			else
-				action=current
-			fi
-		else
-			action=unknown
-		fi
-	fi
-	printf '%s|%s|%s|%s\n' "$label" "$installed" "$available" "$action"
-	[[ $upgradable -eq 1 ]]
+	dotfiles_catalog_check "$1" "$(release_cli_field "$1" label)"
 }
 
 upgrade_release_cli() {
-	local key="$1" label before after
-	label="$(release_cli_field "$key" label)" || return 1
-	if ! release_cli_command "$key" >/dev/null 2>&1; then
-		log_skip "${label} not installed"
-		if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set skipped; fi
-		return 0
-	fi
-	if ! release_cli_is_dotfiles_owned "$key"; then
-		log_skip "${label} is externally managed; preserving it"
-		if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set skipped; fi
-		return 0
-	fi
-	before="$(release_cli_installed_tag "$key" 2>/dev/null || true)"
-	release_cli_sync_latest_release "$key" || return $?
-	after="$(release_cli_installed_tag "$key" 2>/dev/null || true)"
-	if declare -F upgrade_result_set >/dev/null 2>&1; then
-		if [[ "$after" != "$before" ]]; then
-			upgrade_result_set updated
-		else
-			upgrade_result_set already-current
-		fi
-	fi
+	dotfiles_catalog_upgrade "$1"
 }
 
 # The per-component names the registry, probes and update steps call.

@@ -126,7 +126,7 @@ print_report_table() {
 	local follow_up="${3:-advise}"
 	local -a rows=()
 	local row component installed available state display
-	local upgrade_count=0 remaining_count=0
+	local upgrade_count=0 remaining_count=0 blocked_count=0
 
 	_load_update_rows rows "$repo_result_name" "$snapshot_name"
 
@@ -136,6 +136,7 @@ print_report_table() {
 		case "$state" in
 		upgrade) ((++upgrade_count)) ;;
 		unknown | refresh-required) ((++remaining_count)) ;;
+		blocked) ((++blocked_count)) ;;
 		esac
 	done
 
@@ -180,9 +181,18 @@ print_report_table() {
 	else
 		remaining_phrase="${remaining_count} checks or refreshes remain"
 	fi
+	if ((blocked_count > 0)); then
+		local blocked_phrase="$blocked_count components blocked"
+		if ((blocked_count == 1)); then blocked_phrase='1 component blocked'; fi
+		if ((remaining_count > 0)); then
+			remaining_phrase+="; $blocked_phrase"
+		else
+			remaining_phrase="$blocked_phrase"
+		fi
+	fi
 
 	printf '\n  '
-	if [[ $upgrade_count -eq 0 && $remaining_count -eq 0 ]]; then
+	if [[ $upgrade_count -eq 0 && $remaining_count -eq 0 && $blocked_count -eq 0 ]]; then
 		printf '%s0 verified updates%s — everything verified current.\n' "$C_GREEN" "$C_RESET"
 	elif [[ $upgrade_count -eq 0 ]]; then
 		# White, not yellow. Yellow means "needs attention" everywhere else in
@@ -195,7 +205,7 @@ print_report_table() {
 		# shellcheck disable=SC2016  # Backticks are literal documentation formatting.
 		printf '%s%d verified update%s available' \
 			"$C_YELLOW" "$upgrade_count" "$([[ $upgrade_count -eq 1 ]] && echo '' || echo 's')"
-		if [[ $remaining_count -gt 0 ]]; then
+		if [[ $remaining_count -gt 0 || $blocked_count -gt 0 ]]; then
 			printf '; %s' "$remaining_phrase"
 		fi
 		if [[ "$follow_up" == apply ]]; then
@@ -277,6 +287,8 @@ _dotfiles_confirm_repo_update() {
 }
 
 _update_apt_packages() {
+	dotfiles_catalog_begin || return $?
+	dotfiles_catalog_apt_holds || return $?
 	command -v apt-get >/dev/null 2>&1 || {
 		log_skip 'apt-get not found'
 		upgrade_result_set skipped
@@ -356,7 +368,7 @@ DOTFILES_UPDATE_PARTIAL_RC=4
 
 # One approved update runs every managed step, including the runtimes and fonts.
 _run_update_downstream() {
-	local key label apply retry npm_target apt_refresh_rc=0
+	local key label apply retry apt_refresh_rc=0
 	UPGRADE_STEP_RESULT=()
 	UPGRADE_STEP_SECONDS=()
 	upgrade_section_begin
@@ -377,12 +389,6 @@ _run_update_downstream() {
 		label="${UPDATE_STEP_LABEL[$key]}"
 		apply="${UPDATE_STEP_APPLY[$key]}"
 		retry="${UPDATE_STEP_RETRY[$key]}"
-		if [[ "$key" == npm ]]; then
-			npm_target="$(npm_available_version)"
-			if npm_version_token_is_safe "$npm_target"; then
-				retry="npm install -g npm@${npm_target} --engine-strict --allow-remote=all"
-			fi
-		fi
 		_run_upgrade_step "$label" "$retry" "$apply"
 	done
 	# Closes the last component, so the summary does not start hard against it.
@@ -398,6 +404,7 @@ _run_update_downstream() {
 # the update phases follow. Bootstrap and full-update must apply things in the
 # same order or they converge on different machine state.
 _dotfiles_run_update() {
+	dotfiles_catalog_begin || return $?
 	local repository_decision_fn="$1" unattended="$2" dry_run="${3:-false}"
 	local post_repo_fn="${4:-}" repo_rc=0
 	local -A repo_result=()

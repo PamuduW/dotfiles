@@ -1,5 +1,13 @@
 # shellcheck shell=bash
 # Read-only local state shared by component probes and managed CLI installers.
+# Linted independently; avoid expanding the state module through every probe.
+# shellcheck source=/dev/null
+source "${BASH_SOURCE[0]%/*}/catalog_state.sh"
+
+# shellcheck disable=SC2034  # Canonical package domain consumed by Docker and inventory extraction.
+DOCKER_VENDOR_PACKAGES=(
+	docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+)
 
 codex_standalone_root() {
 	printf '%s\n' "${CODEX_HOME:-$HOME/.codex}/packages/standalone"
@@ -14,6 +22,7 @@ codex_active_command() {
 }
 
 codex_path_is_standalone_owned() {
+	if declare -F dotfiles_catalog_owned >/dev/null && dotfiles_catalog_owned codex_cli && [[ "$1" == "$(codex_visible_install_path)" ]]; then return 0; fi
 	local candidate="$1" candidate_path standalone_root
 	[[ -f "$candidate" && -x "$candidate" ]] || return 1
 	candidate_path="$(readlink -f -- "$candidate" 2>/dev/null)" || return 1
@@ -83,7 +92,17 @@ codex_nvm_command_is_managed_package() {
 	canonical_command="$(readlink -f -- "$command_path" 2>/dev/null)" || return 1
 	canonical_tree="$(readlink -f -- "$tree" 2>/dev/null)" || return 1
 	canonical_package="$(readlink -f -- "$package_dir" 2>/dev/null)" || return 1
-	[[ "$canonical_package" == "$canonical_tree"/* && "$canonical_command" == "$canonical_package"/* ]]
+	[[ "$canonical_package" == "$canonical_tree"/* && "$canonical_command" == "$canonical_package"/* ]] || return 1
+	python3 - "$package_dir/package.json" <<'PYPACKAGE'
+import json, re, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as stream:
+        package = json.load(stream)
+    assert isinstance(package, dict) and package.get("name") == "@openai/codex"
+    assert isinstance(package.get("version"), str) and re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?", package["version"])
+except (OSError, ValueError, AssertionError):
+    raise SystemExit(1)
+PYPACKAGE
 }
 
 codex_nvm_migration_inventory() {
@@ -126,6 +145,8 @@ graphify_command() {
 }
 
 graphify_cli_is_uv_owned() {
+	if declare -F dotfiles_catalog_owned >/dev/null && dotfiles_catalog_owned "graphify_cli"; then return 0; fi
+	if dotfiles_catalog_has_current graphify_cli; then return 1; fi
 	local uv_cmd tool_list
 	uv_cmd="$(graphify_uv_command)" || return 1
 	tool_list="$("$uv_cmd" tool list 2>/dev/null)" || return 1
@@ -171,6 +192,8 @@ boost_installed_version() {
 }
 
 boost_cli_is_dotfiles_owned() {
+	if declare -F dotfiles_catalog_owned >/dev/null && dotfiles_catalog_owned "boost_cli"; then return 0; fi
+	if dotfiles_catalog_has_current boost_cli; then return 1; fi
 	local command_path install_path stamp
 	command_path="$(boost_command 2>/dev/null)" || return 1
 	install_path="$(boost_install_path)"
@@ -201,12 +224,14 @@ boost_installed_tag() {
 #   asset    {arch} is amd64/arm64, {triple} is x86_64/aarch64, {arch_word} is
 #            64-bit/arm64, {arch_bits} is 64bit/ARM64, {aarch64_suffix} is
 #            empty/_aarch64, and {version} is the release tag without its v
+#            {release_arch} is x86_64/arm64.
 #   archive  tar (gzip), zip, or raw (the asset is the binary itself)
 RELEASE_CLI_TOOLS=(
+	'lazygit|LazyGit|jesseduffield/lazygit|lazygit_{version}_linux_{release_arch}.tar.gz|tar|lazygit|--version'
 	'kubeconform|Kubeconform|yannh/kubeconform|kubeconform-linux-{arch}.tar.gz|tar|kubeconform|-v'
 	'tflint|TFLint|terraform-linters/tflint|tflint_linux_{arch}.zip|zip|tflint|--version'
 	'zizmor|zizmor|zizmorcore/zizmor|zizmor-{triple}-unknown-linux-gnu.tar.gz|tar|zizmor|--version'
-	'vale|Vale|errata-ai/vale|vale_{version}_Linux_{arch_word}.tar.gz|tar|vale|--version'
+	'vale|Vale|vale-cli/vale|vale_{version}_Linux_{arch_word}.tar.gz|tar|vale|--version'
 	'yt_dlp|yt-dlp|yt-dlp/yt-dlp|yt-dlp_linux{aarch64_suffix}|raw|yt-dlp|--version'
 	'trivy|Trivy|aquasecurity/trivy|trivy_{version}_Linux-{arch_bits}.tar.gz|tar|trivy|--version'
 	'infracost|Infracost|infracost/cli|infracost-linux-{arch}.tar.gz|tar|infracost|--version'
@@ -271,6 +296,8 @@ release_cli_installed_version() {
 }
 
 release_cli_is_dotfiles_owned() {
+	if declare -F dotfiles_catalog_owned >/dev/null && dotfiles_catalog_owned "$1"; then return 0; fi
+	if dotfiles_catalog_has_current "$1"; then return 1; fi
 	local command_path stamp
 	command_path="$(release_cli_command "$1" 2>/dev/null)" || return 1
 	[[ "$command_path" == "$(release_cli_install_path "$1")" ]] || return 1
@@ -327,6 +354,7 @@ chrome_headless_installed_version() {
 }
 
 chrome_headless_is_dotfiles_owned() {
+	if declare -F dotfiles_catalog_owned >/dev/null && dotfiles_catalog_owned "chrome_headless"; then return 0; fi
 	local command_path target root stamp
 	command_path="$(chrome_headless_command 2>/dev/null)" || return 1
 	[[ "$command_path" == "$(chrome_headless_install_path)" && -L "$command_path" ]] || return 1
@@ -413,6 +441,7 @@ npm_cli_installed_version() {
 }
 
 npm_cli_is_dotfiles_owned() {
+	if declare -F dotfiles_catalog_owned >/dev/null && dotfiles_catalog_owned "$1"; then return 0; fi
 	local command_path target root stamp
 	command_path="$(npm_cli_command "$1" 2>/dev/null)" || return 1
 	[[ "$command_path" == "$(npm_cli_install_path "$1")" && -L "$command_path" ]] || return 1

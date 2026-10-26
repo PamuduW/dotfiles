@@ -1,4 +1,6 @@
 # shellcheck shell=bash
+# shellcheck source=scripts/lib/catalog_load.sh
+source "${BASH_SOURCE[0]%/*}/../catalog_load.sh"
 # --- Node.js (nvm) — opt-in ---
 node_installed_version() {
 	_load_nvm
@@ -18,41 +20,15 @@ node_installed_version() {
 }
 
 node_lts_version() {
-	_load_nvm
-	if command -v nvm >/dev/null 2>&1; then
-		nvm version-remote --lts 2>/dev/null | tr -d 'v' || echo "—"
-	else
-		echo "—"
-	fi
+	dotfiles_catalog_begin && dotfiles_catalog_get nodejs version
 }
 
 check_node() {
-	local installed available action upgradable=0
-	installed="$(node_installed_version)"
-	available="$(node_lts_version)"
-	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
-		action="$UPDATE_CHECK_SKIP"
-	elif [[ "$available" != "—" ]] && _version_gt "$available" "$installed"; then
-		action="$UPDATE_CHECK_UPGRADE"
-		upgradable=1
-	else
-		action="$UPDATE_CHECK_CURRENT"
-	fi
-	printf '%s|%s|%s|%s\n' "Node.js (nvm)" "$installed" "$available" "$action"
-	[[ $upgradable -eq 1 ]]
+	dotfiles_catalog_check nodejs "Node.js (nvm)"
 }
 
 upgrade_node() {
-	_load_nvm
-	if ! command -v nvm >/dev/null 2>&1; then
-		log_skip "nvm is not installed; skipping the Node.js upgrade"
-		upgrade_result_set skipped
-		return 0
-	fi
-	_run_quiet_command 'nvm install --lts' nvm install --lts || return $?
-	_run_quiet_command 'nvm alias default' nvm alias --no-colors default 'lts/*' || return $?
-	log_ok "Node.js on the LTS default ($(node_installed_version))"
-	upgrade_result_set checked-no-change
+	dotfiles_catalog_upgrade nodejs
 }
 
 # --- npm (nvm) — opt-in ---
@@ -66,28 +42,11 @@ npm_installed_version() {
 }
 
 npm_available_version() {
-	_load_nvm
-	if command -v npm >/dev/null 2>&1; then
-		npm view npm version 2>/dev/null || echo "—"
-	else
-		echo "—"
-	fi
+	dotfiles_catalog_begin && dotfiles_catalog_get npm version
 }
 
 check_npm() {
-	local installed available action upgradable=0
-	installed="$(npm_installed_version)"
-	available="$(npm_available_version)"
-	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
-		action="$UPDATE_CHECK_SKIP"
-	elif [[ "$available" != "—" ]] && _version_gt "$available" "$installed"; then
-		action="$UPDATE_CHECK_UPGRADE"
-		upgradable=1
-	else
-		action="$UPDATE_CHECK_CURRENT"
-	fi
-	printf '%s|%s|%s|%s\n' "npm" "$installed" "$available" "$action"
-	[[ $upgradable -eq 1 ]]
+	dotfiles_catalog_check npm "npm"
 }
 
 npm_version_token_is_safe() {
@@ -104,48 +63,7 @@ npm_version_reached() {
 }
 
 upgrade_npm() {
-	local target="${1:-}" nvm_rc=0 fallback_rc=0
-	_load_nvm
-	if ! command -v nvm >/dev/null 2>&1; then
-		log_skip "nvm is not installed; skipping the npm upgrade"
-		upgrade_result_set skipped
-		return 0
-	fi
-	if [[ "$(npm_installed_version)" == "$NOT_INSTALLED" ]]; then
-		log_skip "npm is not installed for the active Node version"
-		upgrade_result_set skipped
-		return 0
-	fi
-	if ! npm_version_token_is_safe "$target"; then
-		log_warn "npm target is unavailable or invalid; refusing an unpinned upgrade"
-		return 1
-	fi
-	if npm_version_reached "$target"; then
-		log_skip "npm is already at the target version $target"
-		upgrade_result_set already-current
-		return 0
-	fi
-
-	_run_quiet_command 'nvm install-latest-npm' nvm install-latest-npm || nvm_rc=$?
-	hash -r
-	if npm_version_reached "$target"; then
-		log_ok "npm verified at $(npm_installed_version)"
-		upgrade_result_set updated
-		return 0
-	fi
-
-	log_warn "nvm did not reach npm $target (exit $nvm_rc); trying the pinned fallback"
-	log_step "Install npm@$target directly"
-	_run_quiet_command "npm install -g npm@$target" \
-		npm install -g "npm@$target" --engine-strict --allow-remote=all || fallback_rc=$?
-	hash -r
-	if [[ $fallback_rc -ne 0 ]] || ! npm_version_reached "$target"; then
-		log_warn "npm remains at $(npm_installed_version); expected at least $target"
-		[[ $fallback_rc -ne 0 ]] && return "$fallback_rc"
-		return 1
-	fi
-	log_ok "npm verified at $(npm_installed_version)"
-	upgrade_result_set recovered
+	dotfiles_catalog_upgrade npm
 }
 
 # --- Go (asdf) — opt-in ---
@@ -184,38 +102,13 @@ go_installed_version() {
 }
 
 go_latest_version() {
-	if _asdf_available; then
-		asdf latest golang 2>/dev/null || echo "—"
-	else
-		echo "—"
-	fi
+	dotfiles_catalog_begin && dotfiles_catalog_get go version
 }
 
 check_go() {
-	local installed available action upgradable=0
-	installed="$(go_installed_version)"
-	available="$(go_latest_version)"
-	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
-		action="$UPDATE_CHECK_SKIP"
-	elif [[ "$available" != "—" ]] && _version_gt "$available" "$installed"; then
-		action="$UPDATE_CHECK_UPGRADE"
-		upgradable=1
-	else
-		action="$UPDATE_CHECK_CURRENT"
-	fi
-	printf '%s|%s|%s|%s\n' "Go (asdf)" "$installed" "$available" "$action"
-	[[ $upgradable -eq 1 ]]
+	dotfiles_catalog_check go "Go (asdf)"
 }
 
 upgrade_go() {
-	if ! _asdf_available; then
-		log_skip "asdf is not installed; skipping the Go upgrade"
-		upgrade_result_set skipped
-		return 0
-	fi
-	_run_quiet_command 'asdf install golang latest' asdf install golang latest || return $?
-	_run_quiet_command 'asdf set golang latest' asdf set -u golang latest || return $?
-	_run_quiet_command 'asdf reshim golang' asdf reshim golang || return $?
-	log_ok "Go on the latest asdf release ($(go_installed_version))"
-	upgrade_result_set checked-no-change
+	dotfiles_catalog_upgrade go
 }

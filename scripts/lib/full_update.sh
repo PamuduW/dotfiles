@@ -1,4 +1,6 @@
 # shellcheck shell=bash
+# shellcheck source=scripts/lib/catalog_load.sh
+source "${BASH_SOURCE[0]%/*}/catalog_load.sh"
 # shellcheck disable=SC2034  # COMP_ON is the registry's selection state, read by is_on.
 
 # Full-update runs unattended: it pulls a behind checkout and carries on past
@@ -44,6 +46,7 @@ _full_update_needs_operator_input() {
 	return 1
 }
 
+# shellcheck disable=SC2034  # COMP_ON is consumed by the component registry and installer.
 full_update_select_applied_components() {
 	local -A probe_results=()
 	local key result
@@ -260,7 +263,11 @@ full_update_print_identity() {
 }
 
 full_update_restart_dotfiles() {
-	exec "$DOTFILES_DIR/bin/bin/dotfiles" full-update "$@"
+	local -a context_args=()
+	if [[ -n "${_DOTFILES_QUALIFICATION_CONTEXT:-}" ]]; then
+		context_args=(--qualification-context "$_DOTFILES_QUALIFICATION_CONTEXT")
+	fi
+	exec "$DOTFILES_DIR/bin/bin/dotfiles" "${context_args[@]}" full-update "$@"
 }
 
 # Agentbot owns its install-then-update sequencing and restart budget via
@@ -272,7 +279,11 @@ full_update_run_agentbot() {
 		return 127
 	}
 	rt_print_header 'Agentbot full' 'Dotfiles › Full update › Agentbot'
-	AGENTBOT_INSTALL_CONFIRM=yes agentbot full || rc=$?
+	local -a context_args=()
+	if [[ -n "${_DOTFILES_QUALIFICATION_CONTEXT:-}" ]]; then
+		context_args=(--qualification-context "$_DOTFILES_QUALIFICATION_CONTEXT")
+	fi
+	AGENTBOT_INSTALL_CONFIRM=yes agentbot "${context_args[@]}" full || rc=$?
 	case "$rc" in
 	0) return 0 ;;
 	2)
@@ -290,7 +301,11 @@ full_update_dotfiles_doctor() {
 
 full_update_agentbot_doctor() {
 	local output rc=0
-	output="$(agentbot doctor 2>&1)" || rc=$?
+	local -a context_args=()
+	if [[ -n "${_DOTFILES_QUALIFICATION_CONTEXT:-}" ]]; then
+		context_args=(--qualification-context "$_DOTFILES_QUALIFICATION_CONTEXT")
+	fi
+	output="$(agentbot "${context_args[@]}" doctor 2>&1)" || rc=$?
 	printf '%s\n' "$output"
 	[[ $rc -eq 0 ]] || return 1
 	grep -Eq '(^|[^0-9])[1-9][0-9]* warning\(s\)' <<<"$output" && return 10
@@ -345,6 +360,7 @@ cmd_full_update() {
 			;;
 		esac
 	done
+	dotfiles_catalog_begin || return $?
 	if [[ "$DOTFILES_FORCE_REINSTALL" == 1 ]]; then
 		# The blank line the plan screen's own notice carries. It was supplied
 		# by the menu until that duplicate copy was removed, and the notice

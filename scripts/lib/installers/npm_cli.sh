@@ -1,4 +1,6 @@
 # shellcheck shell=bash
+# shellcheck source=scripts/lib/catalog_load.sh
+source "${BASH_SOURCE[0]%/*}/../catalog_load.sh"
 # markdownlint-cli2, CSpell and Mermaid CLI: the latest npm release of each,
 # installed with its dependencies into its own prefix under
 # ~/.local/share/dotfiles-npm. The rows are in NPM_CLI_TOOLS
@@ -101,85 +103,19 @@ npm_cli_install_release() {
 # Installs the latest release unless the one installed is already as new.
 # With force, reinstalls it even then.
 npm_cli_sync_latest() {
-	local key="$1" force="${2:-0}" label installed latest
-	label="$(npm_cli_field "$key" label)" || return 1
-	latest="$(npm_cli_latest_version "$key")" || {
-		echo "  Could not read the latest ${label} release from npm; preserving the installed one." >&2
-		return 1
-	}
-	installed="$(npm_cli_installed_tag "$key" 2>/dev/null || true)"
-	if [[ "$force" != 1 && -n "$installed" ]] &&
-		[[ "$(printf '%s\n%s\n' "$installed" "$latest" | sort -V | tail -n1)" == "$installed" ]]; then
-		log_skip "${label} already current at ${installed}"
-		return 0
-	fi
-	npm_cli_install_release "$key" "$latest"
+	dotfiles_catalog_install "$1"
 }
 
 install_npm_cli() {
-	local key="$1" label existing
-	label="$(npm_cli_field "$key" label)" || return 1
-	if existing="$(npm_cli_command "$key" 2>/dev/null)"; then
-		# An installation Dotfiles does not own is never touched, forced or not.
-		if ! npm_cli_is_dotfiles_owned "$key"; then
-			log_warn "${label} already exists outside Dotfiles ownership at ${existing}; preserving it"
-			return 0
-		fi
-		if skip_unless_forced "${label} already installed"; then
-			return 0
-		fi
-		npm_cli_sync_latest "$key" 1
-		return
-	fi
-	npm_cli_sync_latest "$key"
+	dotfiles_catalog_install "$1"
 }
 
 check_npm_cli() {
-	local key="$1" label installed latest action available='—' upgradable=0
-	label="$(npm_cli_field "$key" label)" || return 1
-	installed="$(npm_cli_installed_version "$key")"
-	if [[ "$installed" == 'not installed' ]]; then
-		action=skip
-	elif ! npm_cli_is_dotfiles_owned "$key"; then
-		action=external
-	elif latest="$(npm_cli_latest_version "$key" 2>/dev/null)"; then
-		available="$latest"
-		if [[ "$(printf '%s\n%s\n' "$installed" "$latest" | sort -V | tail -n1)" != "$installed" ]]; then
-			action=upgrade
-			upgradable=1
-		else
-			action=current
-		fi
-	else
-		action=unknown
-	fi
-	printf '%s|%s|%s|%s\n' "$label" "$installed" "$available" "$action"
-	[[ $upgradable -eq 1 ]]
+	dotfiles_catalog_check "$1" "$(npm_cli_field "$1" label)"
 }
 
 upgrade_npm_cli() {
-	local key="$1" label before after
-	label="$(npm_cli_field "$key" label)" || return 1
-	if ! npm_cli_command "$key" >/dev/null 2>&1; then
-		log_skip "${label} not installed"
-		if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set skipped; fi
-		return 0
-	fi
-	if ! npm_cli_is_dotfiles_owned "$key"; then
-		log_skip "${label} is externally managed; preserving it"
-		if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set skipped; fi
-		return 0
-	fi
-	before="$(npm_cli_installed_tag "$key" 2>/dev/null || true)"
-	npm_cli_sync_latest "$key" || return $?
-	after="$(npm_cli_installed_tag "$key" 2>/dev/null || true)"
-	if declare -F upgrade_result_set >/dev/null 2>&1; then
-		if [[ "$after" != "$before" ]]; then
-			upgrade_result_set updated
-		else
-			upgrade_result_set already-current
-		fi
-	fi
+	dotfiles_catalog_upgrade "$1"
 }
 
 # The per-component names the registry, probes and update steps call.

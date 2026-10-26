@@ -5,6 +5,7 @@ TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd -- "$TEST_DIR/.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
 source "$TEST_DIR/lib/harness.sh"
+source "$TEST_DIR/lib/catalog_fixture.sh"
 test_harness_init
 test_harness_report_init
 
@@ -47,6 +48,25 @@ stub_release_host() {
 	local version="$1" url="${2:-$FIXTURE_URL}" sha512="${3:-}"
 	[[ -n "$sha512" ]] || sha512="$(sha512sum "$FIXTURE_ARCHIVE" | awk '{print $1}')"
 	MANIFEST_JSON="$(fixture_manifest "$version" "$url" "$sha512")"
+	printf '%s\n' $'antigravity_cli\towner\tany\tdotfiles' \
+		$'antigravity_cli\tkind\tany\tsoftware' $'antigravity_cli\tversion\tany\t'"$version" \
+		$'antigravity_cli\tarchive\tany\ttar' $'antigravity_cli\tbinary\tany\tantigravity' \
+		$'antigravity_cli\turl\tany\t'"$url" \
+		$'antigravity_cli\tdigest\tany\tsha512:'"$sha512" | catalog_fixture_seal "$TEST_HARNESS_ROOT/catalog-agy"
+	catalog_fixture_use "$TEST_HARNESS_ROOT/catalog-agy"
+	curl() {
+		local out='' request=''
+		while (($#)); do
+			case "$1" in -o)
+				out="$2"
+				shift
+				;;
+			https://*) request="$1" ;; esac
+			shift
+		done
+		[[ "$request" == "$FIXTURE_URL" && -n "$out" ]] || return 97
+		cp -- "$FIXTURE_ARCHIVE" "$out"
+	}
 	antigravity_curl() {
 		local out=''
 		while [[ $# -gt 0 ]]; do
@@ -67,10 +87,12 @@ stub_release_host() {
 }
 
 reset_home() {
-	rm -rf -- "$HOME/.local/bin/agy" "$AGY_CALLS"
+	rm -rf -- "$HOME/.local/bin/agy" "$HOME/.local/share/dotfiles-catalog" "$AGY_CALLS"
 	printf '# sentinel bashrc\n' >"$HOME/.bashrc"
 	printf '# sentinel profile\n' >"$HOME/.profile"
 	PATH=/usr/bin:/bin
+	make_agy_archive 1.3.4
+	stub_release_host 1.3.4
 }
 
 test_fresh_install_places_verified_binary_and_leaves_profiles_alone() (
@@ -97,7 +119,7 @@ test_manifest_pointing_outside_the_release_bucket_is_refused() (
 	reset_home
 	make_agy_archive 1.3.4
 	stub_release_host 1.3.4 'https://example.com/cli_linux_x64.tar.gz'
-	! install_antigravity_cli >/dev/null 2>&1 || return 1
+	! antigravity_manifest_metadata linux_amd64 >/dev/null 2>&1 || return 1
 	[[ ! -e "$HOME/.local/bin/agy" ]]
 )
 
@@ -106,7 +128,7 @@ test_malformed_manifest_is_refused() (
 	make_agy_archive 1.3.4
 	stub_release_host 1.3.4
 	MANIFEST_JSON='<html>proxy error</html>'
-	! install_antigravity_cli >/dev/null 2>&1 || return 1
+	! antigravity_manifest_metadata linux_amd64 >/dev/null 2>&1 || return 1
 	[[ ! -e "$HOME/.local/bin/agy" ]]
 )
 
@@ -178,28 +200,40 @@ test_manifest_lookup_is_time_bounded() (
 	grep -Fqx -- --max-time "$args"
 )
 
-test_update_check_reads_installed_and_manifest_versions() (
-	local fixture_installed fixture_available expected
-	antigravity_installed_version() { printf '%s\n' "$fixture_installed"; }
-	antigravity_available_version() {
-		[[ "$fixture_available" != none ]] || return 1
-		printf '%s\n' "$fixture_available"
-	}
-	while IFS='|' read -r fixture_installed fixture_available expected; do
+test_update_check_reads_installed_and_approved_versions() (
+	local fixture_installed expected
+	while IFS='|' read -r fixture_installed expected; do
+		reset_home
+		if [[ "$fixture_installed" != 'not installed' ]]; then
+			local installed_pin="$fixture_installed"
+			[[ "$installed_pin" != installed ]] || installed_pin=1.3.3
+			make_agy_archive "$installed_pin"
+			stub_release_host "$installed_pin"
+			install_antigravity_cli >/dev/null || return 1
+			if [[ "$fixture_installed" == installed ]]; then
+				printf '%s\n' '#!/usr/bin/env bash' 'echo installed' >"$(dotfiles_catalog_root antigravity_cli)/current/payload/antigravity"
+			fi
+		fi
+		make_agy_archive 1.3.4
+		stub_release_host 1.3.4
 		[[ "$(check_antigravity_cli || true)" == "$expected" ]] || {
 			printf 'got %q\n' "$(check_antigravity_cli || true)" >&2
 			return 1
 		}
 	done <<'EOF'
-1.3.3|1.3.4|Antigravity CLI|1.3.3|1.3.4|upgrade
-1.3.4|1.3.4|Antigravity CLI|1.3.4|1.3.4|current
-1.3.5|1.3.4|Antigravity CLI|1.3.5|1.3.4|current
-1.3.4|none|Antigravity CLI|1.3.4|—|unknown
-installed|1.3.4|Antigravity CLI|installed|1.3.4|unknown
-not installed|1.3.4|Antigravity CLI|not installed|—|skip
+1.3.3|Antigravity CLI|1.3.3|1.3.4|upgrade
+1.3.4|Antigravity CLI|1.3.4|1.3.4|current
+1.3.5|Antigravity CLI|1.3.5|1.3.4|blocked
+installed|Antigravity CLI|installed|1.3.4|blocked
+not installed|Antigravity CLI|not installed|1.3.4|skip
 EOF
-	fixture_installed=1.3.3 fixture_available=1.3.4
-	check_antigravity_cli >/dev/null
+)
+
+test_unapproved_catalog_keeps_the_observed_installed_version() (
+	reset_home
+	install_antigravity_cli >/dev/null || return 1
+	TEST_APPROVED_CATALOG="$TEST_HARNESS_ROOT/missing-catalog"
+	[[ "$(check_antigravity_cli 2>/dev/null || true)" == 'Antigravity CLI|1.3.4|—|blocked' ]]
 )
 
 test_installed_version_ignores_startup_noise() (
@@ -212,18 +246,16 @@ test_installed_version_ignores_startup_noise() (
 	[[ "$(antigravity_installed_version)" == 1.3.3 ]]
 )
 
-test_upgrade_runs_the_cli_updater() (
+test_upgrade_installs_the_pin_without_running_the_cli_updater() (
 	reset_home
-	mkdir -p "$HOME/.local/bin"
-	local state="$TEST_HARNESS_ROOT/agy.version"
-	printf '1.3.3\n' >"$state"
-	printf '%s\n' '#!/usr/bin/env bash' \
-		"if [[ \"\$1\" == --version ]]; then cat '$state'; exit 0; fi" \
-		"printf '%s\\n' \"\$*\" >>'$AGY_CALLS'" \
-		"[[ \"\$1\" == update ]] && printf '1.3.4\\n' >'$state'" >"$HOME/.local/bin/agy"
-	chmod +x "$HOME/.local/bin/agy"
+	make_agy_archive 1.3.3
+	stub_release_host 1.3.3
+	install_antigravity_cli >/dev/null || return 1
+	make_agy_archive 1.3.4
+	stub_release_host 1.3.4
 	upgrade_antigravity_cli >/dev/null || return 1
-	[[ "$(<"$AGY_CALLS")" == update ]] || return 1
+	[[ "$("$HOME/.local/bin/agy" --version)" == 1.3.4 ]] || return 1
+	[[ ! -s "$AGY_CALLS" ]] || return 1
 	[[ "$UPGRADE_STEP_ACTIVE_RESULT" == updated ]]
 )
 
@@ -244,9 +276,10 @@ expect_success 'existing Antigravity binary is kept without force' test_existing
 expect_success 'unsupported Antigravity architecture fails closed' test_unsupported_architecture_fails_closed
 expect_success 'Antigravity downloads ask for compressed HTTPS responses' test_downloads_ask_for_compressed_responses
 expect_success 'Antigravity manifest lookup is time-bounded' test_manifest_lookup_is_time_bounded
-expect_success 'Antigravity update check reads installed and manifest versions' test_update_check_reads_installed_and_manifest_versions
+expect_success 'Antigravity update check reads installed and approved versions' test_update_check_reads_installed_and_approved_versions
+expect_success 'unapproved catalog retains the observed Antigravity version' test_unapproved_catalog_keeps_the_observed_installed_version
 expect_success 'Antigravity installed version ignores startup log noise' test_installed_version_ignores_startup_noise
-expect_success 'Antigravity upgrade runs the CLI updater' test_upgrade_runs_the_cli_updater
+expect_success 'Antigravity upgrade installs the pin without running its updater' test_upgrade_installs_the_pin_without_running_the_cli_updater
 expect_success 'Antigravity upgrade skips when the CLI is not installed' test_upgrade_skips_when_not_installed
 
 finish_tests

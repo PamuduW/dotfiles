@@ -5,6 +5,7 @@ TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd -- "$TEST_DIR/.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
 source "$TEST_DIR/lib/harness.sh"
+source "$TEST_DIR/lib/catalog_fixture.sh"
 test_harness_init
 test_harness_report_init
 
@@ -46,15 +47,17 @@ make_archive() {
 	rm -rf -- "$dir"
 	mkdir -p "$dir"
 	# shellcheck disable=SC2059  # The table holds the format.
-	line="$(printf "${FIXTURE_VERSION_LINE[$key]}" "$version")"
+	line="$(printf "${FIXTURE_VERSION_LINE[$key]:-$key %s}" "$version")"
 	printf '%s\n' '#!/usr/bin/env bash' "printf '%s\\n' '$line'" >"$dir/$binary"
 	chmod +x "$dir/$binary"
 	printf 'license\n' >"$dir/LICENSE"
-	archive="$TEST_HARNESS_ROOT/${FIXTURE_ASSET[$key]}"
+	archive="$TEST_HARNESS_ROOT/$(release_cli_asset_name "$key" "$version")"
 	rm -f -- "$archive"
 	local -a members=("$@")
 	((${#members[@]})) || members=("$binary" LICENSE)
-	if [[ "$(release_cli_field "$key" archive)" == zip ]]; then
+	if [[ "$(release_cli_field "$key" archive)" == raw ]]; then
+		cp -- "$dir/$binary" "$archive"
+	elif [[ "$(release_cli_field "$key" archive)" == zip ]]; then
 		(cd "$dir" && python3 -c '
 import sys, zipfile
 with zipfile.ZipFile(sys.argv[1], "w") as z:
@@ -76,6 +79,19 @@ with zipfile.ZipFile(sys.argv[1], "w") as z:
 serve() {
 	local key="$1" version="$2" archive="$3" digest="${4:-}"
 	[[ -n "$digest" ]] || digest="$(sha256sum "$archive" | awk '{print $1}')"
+	local repository asset tag="v$version" binary archive_type version_args
+	repository="$(release_cli_field "$key" repository)"
+	asset="$(release_cli_asset_name "$key" "$version")"
+	binary="$(release_cli_field "$key" binary)"
+	archive_type="$(release_cli_field "$key" archive)"
+	version_args="$(release_cli_field "$key" version-args)"
+	[[ "$key" != yt_dlp ]] || tag="$version"
+	printf '%s\n' "$key"$'\towner\tany\tdotfiles' "$key"$'\tkind\tany\tsoftware' \
+		"$key"$'\tversion\tany\t'"$version" "$key"$'\tarchive\tany\t'"$archive_type" \
+		"$key"$'\tbinary\tany\t'"$binary" "$key"$'\tdiscovery.version_arg\tany\t'"$version_args" \
+		"$key"$'\turl\tany\thttps://github.com/'"$repository/releases/download/$tag/$asset" \
+		"$key"$'\tdigest\tany\tsha256:'"$digest" | catalog_fixture_seal "$TEST_HARNESS_ROOT/catalog-release"
+	catalog_fixture_use "$TEST_HARNESS_ROOT/catalog-release"
 	SERVED_ARCHIVE="$archive"
 	release_cli_latest_release_metadata() { printf 'v%s\n%s\n' "$SERVED_VERSION" "$SERVED_DIGEST"; }
 	SERVED_VERSION="$version"
@@ -101,11 +117,16 @@ own() {
 }
 
 test_fresh_install_of_each_tool_installs_only_its_verified_binary() (
-	local key binary repository
-	for key in kubeconform tflint zizmor; do
+	local row key binary repository asset tag
+	((${#RELEASE_CLI_TOOLS[@]} > 0)) || return 1
+	for row in "${RELEASE_CLI_TOOLS[@]}"; do
+		key="${row%%|*}"
 		reset_home
 		binary="$(release_cli_field "$key" binary)"
 		repository="$(release_cli_field "$key" repository)"
+		asset="${FIXTURE_ASSET[$key]:-$(release_cli_asset_name "$key" 1.2.3)}"
+		tag=v1.2.3
+		[[ "$key" != yt_dlp ]] || tag=1.2.3
 		serve "$key" 1.2.3 "$(make_archive "$key" 1.2.3)"
 
 		install_release_cli "$key" >/dev/null || return 1
@@ -114,7 +135,7 @@ test_fresh_install_of_each_tool_installs_only_its_verified_binary() (
 		[[ "$(release_cli_installed_tag "$key")" == v1.2.3 ]] || return 1
 		[[ "$(<"$HOME/.local/share/dotfiles/$key.version")" == v1.2.3 ]] || return 1
 		[[ ! -e "$HOME/.local/bin/LICENSE" ]] || return 1
-		grep -Fqx "download:https://github.com/${repository}/releases/download/v1.2.3/${FIXTURE_ASSET[$key]}" \
+		grep -Fqx "download:https://github.com/${repository}/releases/download/${tag}/${asset}" \
 			"$TEST_URL_LOG" || return 1
 		release_cli_is_dotfiles_owned "$key" || return 1
 	done
@@ -128,8 +149,11 @@ test_checksum_mismatch_installs_nothing() (
 	[[ ! -e "$HOME/.local/bin/tflint" && ! -e "$HOME/.local/share/dotfiles/tflint.version" ]]
 )
 
-test_unverifiable_release_installs_nothing() (
+test_unavailable_approved_pin_installs_nothing() (
 	reset_home
+	catalog_fixture_seal "$TEST_HARNESS_ROOT/catalog-release" </dev/null
+	catalog_fixture_use "$TEST_HARNESS_ROOT/catalog-release"
+	TEST_APPROVED_CATALOG="$TEST_HARNESS_ROOT/missing-release-catalog"
 	release_cli_latest_release_metadata() { return 1; }
 	github_curl() { printf 'download\n' >>"$TEST_URL_LOG"; }
 
@@ -183,10 +207,12 @@ test_owned_binary_is_skipped_unless_forced() (
 	serve kubeconform 1.2.3 "$(make_archive kubeconform 1.2.3)"
 
 	install_release_cli kubeconform >/dev/null || return 1
+	[[ -L "$HOME/.local/bin/kubeconform" && -f "$HOME/.local/share/dotfiles-catalog/kubeconform/current/.catalog-receipt" ]] || return 1
+	: >"$TEST_URL_LOG"
+	install_release_cli kubeconform >/dev/null || return 1
 	[[ ! -s "$TEST_URL_LOG" ]] || return 1
 
-	force_reinstall_requested() { return 0; }
-	install_release_cli kubeconform >/dev/null || return 1
+	DOTFILES_FORCE_REINSTALL=1 install_release_cli kubeconform >/dev/null || return 1
 	grep -q '^download:' "$TEST_URL_LOG"
 )
 
@@ -205,9 +231,12 @@ test_update_advances_an_owned_binary_and_its_stamp() (
 	[[ "$(<"$TEST_HARNESS_ROOT/result")" == already-current ]]
 )
 
-test_update_without_a_digest_preserves_the_binary() (
+test_update_without_approved_pin_preserves_the_binary() (
 	reset_home
 	own tflint 1.2.3
+	catalog_fixture_seal "$TEST_HARNESS_ROOT/catalog-release" </dev/null
+	catalog_fixture_use "$TEST_HARNESS_ROOT/catalog-release"
+	TEST_APPROVED_CATALOG="$TEST_HARNESS_ROOT/missing-release-catalog"
 	release_cli_latest_release_metadata() { return 1; }
 
 	! upgrade_tflint >/dev/null 2>&1 || return 1
@@ -216,6 +245,7 @@ test_update_without_a_digest_preserves_the_binary() (
 
 test_update_skips_missing_and_external_tools() (
 	reset_home
+	serve kubeconform 1.2.3 "$(make_archive kubeconform 1.2.3)"
 	upgrade_result_set() { printf '%s\n' "$1" >>"$TEST_HARNESS_ROOT/results"; }
 	: >"$TEST_HARNESS_ROOT/results"
 	github_curl() { printf 'download\n' >>"$TEST_URL_LOG"; }
@@ -231,21 +261,28 @@ test_update_skips_missing_and_external_tools() (
 test_update_check_reports_installed_available_and_action() (
 	reset_home
 	local row
+	serve kubeconform 1.3.0 "$(make_archive kubeconform 1.3.0)"
 	row="$(check_kubeconform || true)"
-	[[ "$row" == 'Kubeconform|not installed|—|skip' ]] || return 1
+	[[ "$row" == 'Kubeconform|not installed|1.3.0|skip' ]] || return 1
 
 	own kubeconform 1.2.3
 	serve kubeconform 1.3.0 "$(make_archive kubeconform 1.3.0)"
 	row="$(check_kubeconform)" || return 1
-	[[ "$row" == 'Kubeconform|v1.2.3|v1.3.0|upgrade' ]] || return 1
+	[[ "$row" == 'Kubeconform|1.2.3|1.3.0|upgrade' ]] || return 1
 
-	SERVED_VERSION=1.2.3
+	serve kubeconform 1.2.3 "$(make_archive kubeconform 1.2.3)"
 	row="$(check_kubeconform || true)"
-	[[ "$row" == 'Kubeconform|v1.2.3|v1.2.3|current' ]] || return 1
+	[[ "$row" == 'Kubeconform|1.2.3|1.2.3|upgrade' ]] || return 1
+	install_release_cli kubeconform >/dev/null || return 1
+	row="$(check_kubeconform || true)"
+	[[ "$row" == 'Kubeconform|1.2.3|1.2.3|current' ]] || return 1
 
 	rm -f -- "$HOME/.local/share/dotfiles/kubeconform.version"
 	row="$(check_kubeconform || true)"
-	[[ "$row" == 'Kubeconform|v1.2.3|—|external' ]]
+	[[ "$row" == 'Kubeconform|1.2.3|1.2.3|current' ]] || return 1
+	rm -- "$(dotfiles_catalog_root kubeconform)/current/.catalog-receipt"
+	row="$(check_kubeconform || true)"
+	[[ "$row" == 'Kubeconform|external installation|1.2.3|external' ]]
 )
 
 test_metadata_picks_the_asset_for_this_architecture() (
@@ -266,6 +303,7 @@ test_metadata_picks_the_asset_for_this_architecture() (
 
 test_unsupported_architecture_fails_closed() (
 	reset_home
+	serve tflint 1.2.3 "$(make_archive tflint 1.2.3)"
 	uname() {
 		case "$1" in
 		-s) printf 'Linux\n' ;;
@@ -290,7 +328,7 @@ test_vale_asset_carries_the_release_version() (
 	serve vale 3.24.0 "$archive"
 
 	install_release_cli vale >/dev/null || return 1
-	grep -Fqx 'download:https://github.com/errata-ai/vale/releases/download/v3.24.0/vale_3.24.0_Linux_64-bit.tar.gz' \
+	grep -Fqx 'download:https://github.com/vale-cli/vale/releases/download/v3.24.0/vale_3.24.0_Linux_64-bit.tar.gz' \
 		"$TEST_URL_LOG" || return 1
 	[[ "$(release_cli_installed_tag vale)" == v3.24.0 && ! -e "$HOME/.local/bin/LICENSE" ]] || return 1
 
@@ -341,14 +379,14 @@ test_wrappers_route_to_each_tool() (
 
 expect_success 'each release CLI installs only its verified binary on a fresh machine' test_fresh_install_of_each_tool_installs_only_its_verified_binary
 expect_success 'a checksum mismatch installs nothing' test_checksum_mismatch_installs_nothing
-expect_success 'a release without a published digest installs nothing' test_unverifiable_release_installs_nothing
+expect_success 'an unavailable approved pin installs nothing' test_unavailable_approved_pin_installs_nothing
 expect_success 'an archive without the binary is refused' test_archive_without_the_binary_is_refused
 expect_success 'an archive member escaping the directory is refused (tar and zip)' test_archive_member_escaping_the_directory_is_refused
 expect_success 'a binary reporting another version is refused' test_binary_reporting_another_version_is_refused
 expect_success 'an external binary is preserved, forced or not' test_external_binary_is_preserved_even_when_forced
 expect_success 'an owned binary is skipped unless forced, then reinstalled' test_owned_binary_is_skipped_unless_forced
 expect_success 'update advances an owned binary and its stamp' test_update_advances_an_owned_binary_and_its_stamp
-expect_success 'update without a digest preserves the binary' test_update_without_a_digest_preserves_the_binary
+expect_success 'update without an approved pin preserves the binary' test_update_without_approved_pin_preserves_the_binary
 expect_success 'update skips missing and external tools' test_update_skips_missing_and_external_tools
 expect_success 'update check reports installed, available and action' test_update_check_reports_installed_available_and_action
 expect_success 'release metadata picks the asset for this architecture' test_metadata_picks_the_asset_for_this_architecture

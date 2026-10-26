@@ -1,4 +1,6 @@
 # shellcheck shell=bash
+# shellcheck source=scripts/lib/catalog_load.sh
+source "${BASH_SOURCE[0]%/*}/../catalog_load.sh"
 # Chrome for Testing's headless shell, the latest Stable build: the browser
 # Archify's browser gate drives (Agentbot installs the Archify skill; the
 # stowed .bashrc points ARCHIFY_CHROME here when the shell exists).
@@ -143,87 +145,17 @@ chrome_headless_install_release() {
 # Installs the latest Stable build unless the one installed is already as new.
 # With force, reinstalls it even then.
 chrome_headless_sync_latest() {
-	local force="${1:-0}" installed latest
-	local -a metadata=()
-	mapfile -t metadata < <(chrome_headless_latest_metadata)
-	[[ "${#metadata[@]}" -eq 2 ]] || {
-		echo "  Could not read the latest ${CHROME_HEADLESS_LABEL} build; preserving the installed one." >&2
-		return 1
-	}
-	latest="${metadata[0]}"
-	installed="$(chrome_headless_installed_tag 2>/dev/null || true)"
-	if [[ "$force" != 1 && -n "$installed" ]] &&
-		[[ "$(printf '%s\n%s\n' "$installed" "$latest" | sort -V | tail -n1)" == "$installed" ]]; then
-		log_skip "${CHROME_HEADLESS_LABEL} already current at ${installed}"
-		return 0
-	fi
-	chrome_headless_install_release "$latest" "${metadata[1]}"
+	dotfiles_catalog_install "chrome_headless"
 }
 
 install_chrome_headless() {
-	local existing
-	if existing="$(chrome_headless_command 2>/dev/null)"; then
-		# An installation Dotfiles does not own is never touched, forced or not.
-		if ! chrome_headless_is_dotfiles_owned; then
-			log_warn "${CHROME_HEADLESS_LABEL} already exists outside Dotfiles ownership at ${existing}; preserving it"
-			return 0
-		fi
-		if skip_unless_forced "${CHROME_HEADLESS_LABEL} already installed"; then
-			return 0
-		fi
-		chrome_headless_sync_latest 1
-		return
-	fi
-	chrome_headless_sync_latest
+	dotfiles_catalog_install "chrome_headless"
 }
 
 check_chrome_headless() {
-	local installed latest action available='—' upgradable=0
-	local -a metadata=()
-	installed="$(chrome_headless_installed_version)"
-	if [[ "$installed" == 'not installed' ]]; then
-		action=skip
-	elif ! chrome_headless_is_dotfiles_owned; then
-		action=external
-	else
-		mapfile -t metadata < <(chrome_headless_latest_metadata 2>/dev/null)
-		if [[ "${#metadata[@]}" -eq 2 ]]; then
-			latest="${metadata[0]}"
-			available="$latest"
-			if [[ "$(printf '%s\n%s\n' "$installed" "$latest" | sort -V | tail -n1)" != "$installed" ]]; then
-				action=upgrade
-				upgradable=1
-			else
-				action=current
-			fi
-		else
-			action=unknown
-		fi
-	fi
-	printf '%s|%s|%s|%s\n' "$CHROME_HEADLESS_LABEL" "$installed" "$available" "$action"
-	[[ $upgradable -eq 1 ]]
+	dotfiles_catalog_check "chrome_headless" "Chrome headless shell"
 }
 
 upgrade_chrome_headless() {
-	local before after
-	if ! chrome_headless_command >/dev/null 2>&1; then
-		log_skip "${CHROME_HEADLESS_LABEL} not installed"
-		if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set skipped; fi
-		return 0
-	fi
-	if ! chrome_headless_is_dotfiles_owned; then
-		log_skip "${CHROME_HEADLESS_LABEL} is externally managed; preserving it"
-		if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set skipped; fi
-		return 0
-	fi
-	before="$(chrome_headless_installed_tag 2>/dev/null || true)"
-	chrome_headless_sync_latest || return $?
-	after="$(chrome_headless_installed_tag 2>/dev/null || true)"
-	if declare -F upgrade_result_set >/dev/null 2>&1; then
-		if [[ "$after" != "$before" ]]; then
-			upgrade_result_set updated
-		else
-			upgrade_result_set already-current
-		fi
-	fi
+	dotfiles_catalog_upgrade "chrome_headless"
 }

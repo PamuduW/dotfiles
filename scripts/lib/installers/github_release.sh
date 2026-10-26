@@ -1,4 +1,6 @@
 # shellcheck shell=bash
+# shellcheck source=scripts/lib/catalog_load.sh
+source "${BASH_SOURCE[0]%/*}/../catalog_load.sh"
 
 if ! declare -F github_curl >/dev/null; then
 	_GITHUB_RELEASE_LIB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -7,99 +9,9 @@ if ! declare -F github_curl >/dev/null; then
 fi
 
 install_lazygit_from_github() {
-	command -v curl >/dev/null 2>&1 || {
-		echo "  curl required for lazygit install." >&2
-		return 1
-	}
-	command -v tar >/dev/null 2>&1 || {
-		echo "  tar required for lazygit install." >&2
-		return 1
-	}
-
-	log_step "Install lazygit from GitHub releases"
-	local ver tmp
-	ver="$(github_latest_release_version jesseduffield/lazygit)" || {
-		echo "  Could not determine lazygit version." >&2
-		return 1
-	}
-
-	tmp="$(mktemp -d)"
-	# shellcheck disable=SC2064  # Capture this invocation's temp path now for RETURN cleanup.
-	trap "rm -rf -- '$tmp'; trap - RETURN" RETURN
-	local arch_suffix tarball
-	arch_suffix="$(_linux_github_arch_suffix)" || return 1
-	tarball="lazygit_${ver}_linux_${arch_suffix}.tar.gz"
-	github_curl -fsSL -o "$tmp/$tarball" \
-		"https://github.com/jesseduffield/lazygit/releases/download/v${ver}/${tarball}" || return $?
-	github_curl -fsSL -o "$tmp/checksums.txt" \
-		"https://github.com/jesseduffield/lazygit/releases/download/v${ver}/checksums.txt" || return $?
-	awk -v file="$tarball" '$2 == file || $2 == "*" file { found=1 } END { exit !found }' "$tmp/checksums.txt" || {
-		echo "  lazygit checksum manifest does not contain $tarball." >&2
-		return 1
-	}
-	# The per-file "OK" is the checksum tool talking to itself; the run says
-	# what it installed in its own words. A failure still prints everything.
-	# shellcheck disable=SC2016  # $1 is the inner shell's argument, not ours.
-	if ! _run_quiet_command "checksum verification" \
-		bash -c 'cd "$1" && sha256sum --check --ignore-missing checksums.txt' _ "$tmp"; then
-		echo "  lazygit checksum verification failed." >&2
-		return 1
-	fi
-	tar -C "$tmp" -xzf "$tmp/$tarball" lazygit || return $?
-	sudo install -m 0755 "$tmp/lazygit" /usr/local/bin/lazygit || return $?
-	rm -rf "$tmp"
-	trap - RETURN
-	log_ok "lazygit v${ver} installed"
+	dotfiles_catalog_install "lazygit"
 }
 
 install_lazydocker_from_github() {
-	command -v curl >/dev/null 2>&1 || {
-		echo "  curl required for lazydocker install." >&2
-		return 1
-	}
-	command -v tar >/dev/null 2>&1 || {
-		echo "  tar required for lazydocker install." >&2
-		return 1
-	}
-
-	log_step "Install lazydocker from GitHub releases"
-	local ver tmp
-	ver="$(github_latest_release_version jesseduffield/lazydocker)" || {
-		echo "  Could not determine lazydocker version." >&2
-		return 1
-	}
-
-	tmp="$(mktemp -d)"
-	# shellcheck disable=SC2064  # Capture this invocation's temp path now for RETURN cleanup.
-	trap "rm -rf -- '$tmp'; trap - RETURN" RETURN
-	local arch_suffix tarball
-	arch_suffix="$(_linux_github_arch_suffix)" || return 1
-	tarball="lazydocker_${ver}_Linux_${arch_suffix}.tar.gz"
-	github_curl -fsSL -o "$tmp/$tarball" \
-		"https://github.com/jesseduffield/lazydocker/releases/download/v${ver}/${tarball}" || return $?
-	github_curl -fsSL -o "$tmp/checksums.txt" \
-		"https://github.com/jesseduffield/lazydocker/releases/download/v${ver}/checksums.txt" || return $?
-	awk -v file="$tarball" '$2 == file || $2 == "*" file { found=1 } END { exit !found }' "$tmp/checksums.txt" || {
-		echo "  lazydocker checksum manifest does not contain $tarball." >&2
-		return 1
-	}
-	# The per-file "OK" is the checksum tool talking to itself; the run says
-	# what it installed in its own words. A failure still prints everything.
-	# shellcheck disable=SC2016  # $1 is the inner shell's argument, not ours.
-	if ! _run_quiet_command "checksum verification" \
-		bash -c 'cd "$1" && sha256sum --check --ignore-missing checksums.txt' _ "$tmp"; then
-		echo "  lazydocker checksum verification failed." >&2
-		return 1
-	fi
-	# Only the binary, as lazygit does: nothing else in the archive is used, so
-	# no other member is written, wherever its path points.
-	tar -C "$tmp" -xzf "$tmp/$tarball" lazydocker || return $?
-	[[ -f "$tmp/lazydocker" ]] || {
-		echo "  lazydocker archive did not contain the expected executable." >&2
-		return 1
-	}
-	sudo install -m 0755 "$tmp/lazydocker" /usr/local/bin/lazydocker || return $?
-	rm -rf "$tmp"
-	trap - RETURN
-	log_ok "lazydocker v${ver} installed"
+	dotfiles_catalog_install "lazydocker"
 }

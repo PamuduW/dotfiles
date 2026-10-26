@@ -10,6 +10,7 @@ set -euo pipefail
 TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
 source "$TEST_DIR/lib/harness.sh"
+source "$TEST_DIR/lib/catalog_fixture.sh"
 test_harness_init
 # The harness shadows git with a logging double; bootstrap needs the real one.
 PATH="$ORIGINAL_PATH"
@@ -86,7 +87,9 @@ make_shared_remote() {
 	local work="$1/work-shared"
 	local bare="$1/dotfiles-shared.git"
 	mkdir -p -- "$work/scripts/lib/shared/tui" "$work/tests/lib/shared"
-	printf '1\n' >"$work/CONTRACT"
+	printf '6\n' >"$work/CONTRACT"
+	cp -- "$DOTFILES_SHARED_LIB/software_catalog.sh" "$work/scripts/lib/shared/software_catalog.sh"
+	catalog_fixture_seal "$work/catalog" </dev/null
 	: >"$work/scripts/lib/shared/tui/colors.sh"
 	cp -- "$DOTFILES_SHARED_LIB/github_token.sh" "$work/scripts/lib/shared/github_token.sh"
 	{
@@ -113,6 +116,20 @@ setup_machine() {
 	DOTFILES_REMOTE="$(make_remote dotfiles "$dir/remotes")"
 	AGENTBOT_REMOTE="$(make_remote agentbot "$dir/remotes")"
 	SHARED_REMOTE="$(make_shared_remote "$dir/remotes")"
+	GIT_CONFIG_GLOBAL="$dir/gitconfig"
+	export GIT_CONFIG_GLOBAL
+	BOOTSTRAP_TEST_SHARED_REMOTE="$SHARED_REMOTE"
+	export BOOTSTRAP_TEST_SHARED_REMOTE
+	cat >"$dir/bin/git" <<'FAKEGIT'
+#!/usr/bin/env bash
+if [[ "${1:-} ${2:-}" == 'clone https://github.com/PamuduW/dotfiles-shared' ]]; then
+	/usr/bin/git clone "$BOOTSTRAP_TEST_SHARED_REMOTE" "$3" || exit $?
+	/usr/bin/git -C "$3" remote set-url origin https://github.com/PamuduW/dotfiles-shared
+else
+	exec /usr/bin/git "$@"
+fi
+FAKEGIT
+	chmod +x "$dir/bin/git"
 	cat >"$dir/bin/sudo" <<EOF
 #!/usr/bin/env bash
 printf 'sudo %s\n' "\$*" >>"$BOOTSTRAP_TEST_LOG"
@@ -140,7 +157,7 @@ run_bootstrap() {
 		BOOTSTRAP_AGENTBOT_URL="$AGENTBOT_REMOTE" \
 		BOOTSTRAP_DOTFILES_DIR="$MACHINE/home/dotfiles" \
 		BOOTSTRAP_AGENTBOT_DIR="$MACHINE/home/agentbot" \
-		BOOTSTRAP_SHARED_URL="$SHARED_REMOTE" \
+		BOOTSTRAP_SHARED_URL="https://github.com/PamuduW/dotfiles-shared" \
 		BOOTSTRAP_SHARED_DIR="$MACHINE/home/dotfiles-shared" \
 		"$@" \
 		bash "$BOOTSTRAP" </dev/null
@@ -336,7 +353,7 @@ test_scripted_answers_drive_the_selection_prompt() (
 		BOOTSTRAP_AGENTBOT_URL="$AGENTBOT_REMOTE" \
 		BOOTSTRAP_DOTFILES_DIR="$MACHINE/home/dotfiles" \
 		BOOTSTRAP_AGENTBOT_DIR="$MACHINE/home/agentbot" \
-		BOOTSTRAP_SHARED_URL="$SHARED_REMOTE" \
+		BOOTSTRAP_SHARED_URL="https://github.com/PamuduW/dotfiles-shared" \
 		BOOTSTRAP_SHARED_DIR="$MACHINE/home/dotfiles-shared" \
 		bash "$BOOTSTRAP" </dev/null >/dev/null 2>&1 || return 1
 

@@ -9,12 +9,36 @@ test_harness_init
 test_harness_report_init
 source "$TEST_DIR/lib/dotfiles_env.sh"
 
+direnv_catalog_fixture() {
+	if [[ "$fixture_mode" == metadata ]]; then
+		TEST_APPROVED_CATALOG="$HOME/missing-catalog"
+		return
+	fi
+	{
+		printf '%s\n' $'direnv\towner\tany\tdotfiles' $'direnv\tkind\tany\tsoftware' \
+			$'direnv\tversion\tany\t'"$fixture_latest" $'direnv\tarchive\tany\traw' \
+			$'direnv\tbinary\tany\tdirenv' $'direnv\tdiscovery.version_arg\tany\tversion'
+		local arch
+		for arch in amd64 arm64; do
+			printf '%s\n' $'direnv\turl\tlinux-'"$arch"$'\thttps://github.com/direnv/direnv/releases/download/v'"$fixture_latest/direnv.linux-$arch"
+			[[ -z "$fixture_digest" ]] || printf '%s\n' $'direnv\tdigest\tlinux-'"$arch"$'\tsha256:'"$fixture_digest"
+		done
+	} | catalog_fixture_seal "$HOME/catalog"
+	catalog_fixture_use "$HOME/catalog"
+}
+
 setup_direnv_fixture() {
 	HOME="$TEST_HARNESS_ROOT/direnv-$BASHPID"
-	mkdir -p "$HOME/.local/bin"
+	rm -rf -- "$HOME"
+	local root="$HOME/.local/share/dotfiles-catalog/direnv"
+	mkdir -p "$HOME/.local/bin" "$root/releases/baseline"
 	local old_version="${1:-2.38.2}"
-	printf '#!/usr/bin/env bash\nprintf "%%s\\n" "%s"\n' "$old_version" >"$HOME/.local/bin/direnv"
+	printf '#!/usr/bin/env bash\nprintf "%%s\\n" "%s"\n' "$old_version" >"$root/releases/baseline/command"
+	printf '%s\n' "$old_version" "$(printf '%064d' 0)" "$(printf '%040d' 0)" >"$root/releases/baseline/.catalog-receipt"
+	ln -s "$root/releases/baseline" "$root/current"
+	ln -s "$root/current/command" "$HOME/.local/bin/direnv"
 	chmod +x "$HOME/.local/bin/direnv"
+	PATH="$HOME/.local/bin:$TEST_FAKE_BIN:/usr/bin:/bin"
 	fixture_payload="$HOME/payload"
 	printf '#!/usr/bin/env bash\nprintf "%%s\\n" "2.38.2"\n' >"$fixture_payload"
 	fixture_digest="$(sha256sum "$fixture_payload" | awk '{print $1}')"
@@ -50,6 +74,8 @@ setup_direnv_fixture() {
 		printf 'unexpected vendor installer\n' >&2
 		return 99
 	}
+	direnv_catalog_fixture
+	dotfiles_catalog_component_identity direnv >"$root/current/.catalog-target" || return 1
 }
 
 test_current_direnv_skips_download_and_repairs_shortcut() (
@@ -57,7 +83,11 @@ test_current_direnv_skips_download_and_repairs_shortcut() (
 	local current
 	for current in 2.38.2 2.39.0; do
 		printf '#!/usr/bin/env bash\nprintf "%%s\\n" "%s"\n' "$current" >"$HOME/.local/bin/direnv"
-		install_direnv >/dev/null || return 1
+		if [[ "$current" == 2.38.2 ]]; then
+			install_direnv >/dev/null || return 1
+		else
+			! install_direnv >/dev/null || return 1
+		fi
 		[[ ! -s "$fixture_downloads" ]] || return 1
 		[[ "$("$HOME/bin/direnv" version)" == "$current" ]] || return 1
 	done
@@ -101,6 +131,7 @@ test_failed_direnv_refresh_preserves_working_binary() (
 		missing-digest) fixture_digest='' ;;
 		invalid-tag) fixture_latest='../invalid' ;;
 		esac
+		direnv_catalog_fixture
 		rc=0
 		install_direnv >/dev/null 2>&1 || rc=$?
 		[[ "$rc" -ne 0 && "$(sha256sum "$HOME/.local/bin/direnv")" == "$before" ]] || return 1
@@ -108,6 +139,18 @@ test_failed_direnv_refresh_preserves_working_binary() (
 	done
 )
 
+test_external_direnv_shortcut_is_preserved() (
+	setup_direnv_fixture 2.37.1
+	mkdir -p "$HOME/bin"
+	printf 'user shortcut\n' >"$HOME/bin/direnv"
+	local before
+	before="$(sha256sum "$HOME/.local/bin/direnv")"
+	! install_direnv >/dev/null 2>&1 || return 1
+	[[ "$(cat "$HOME/bin/direnv")" == 'user shortcut' && ! -L "$HOME/bin/direnv" ]] || return 1
+	[[ "$(sha256sum "$HOME/.local/bin/direnv")" == "$before" && ! -s "$fixture_downloads" ]]
+)
+
+expect_success 'external direnv shortcut is preserved before runtime mutation' test_external_direnv_shortcut_is_preserved
 expect_success 'current or newer direnv skips downloads and maintains its shortcut' test_current_direnv_skips_download_and_repairs_shortcut
 expect_success 'direnv upgrades verify the binary and bound retry downloads' test_direnv_upgrade_is_verified_and_download_is_bounded
 expect_success 'forced and fresh direnv installs support the host architecture' test_forced_and_fresh_direnv_install

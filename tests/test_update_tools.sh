@@ -8,6 +8,125 @@ source "$TEST_DIR/lib/harness.sh"
 test_harness_init
 test_harness_report_init
 source "$TEST_DIR/lib/update_test_fixture.sh"
+source "$TEST_DIR/lib/runtime_failure_fixture.sh"
+
+# Status fixtures model already installed commands; adapter suites qualify the
+# full npm/Python/Codex layouts separately. Only Boost uses this raw download.
+update_tool_catalog_fixture() {
+	local fixture_key="$1" target_version="$2" installed_version="$3" ownership="${4:-managed}" root binary
+	HOME="$TEST_HARNESS_ROOT/update-$fixture_key-$BASHPID"
+	export HOME
+	rm -rf -- "$HOME"
+	mkdir -p "$HOME/.local/bin" "$HOME/.codex/app-server-daemon"
+	CODEX_HOME="$HOME/.codex" CODEX_INSTALL_DIR="$HOME/.local/bin"
+	export CODEX_HOME CODEX_INSTALL_DIR
+	printf '%s\n' '{"updater":{"autoUpdateEnabled":false}}' >"$HOME/.codex/app-server-daemon/settings.json"
+	PATH="$HOME/.local/bin:$TEST_FAKE_BIN:/usr/bin:/bin"
+	export PATH
+	binary="$(dotfiles_catalog_command_name "$fixture_key")"
+	TEST_UPDATE_ARTIFACT="$HOME/artifact"
+	TEST_UPDATE_CALLS="$HOME/calls"
+	: >"$TEST_UPDATE_CALLS"
+	printf '#!/usr/bin/env bash\necho "%s %s"\n' "$binary" "$target_version" >"$TEST_UPDATE_ARTIFACT"
+	local fixture_digest
+	fixture_digest="$(sha256sum "$TEST_UPDATE_ARTIFACT")"
+	printf '%s\n' "$fixture_key"$'\towner\tany\tdotfiles' "$fixture_key"$'\tkind\tany\tsoftware' \
+		"$fixture_key"$'\tversion\tany\t'"$target_version" "$fixture_key"$'\tarchive\tany\traw' \
+		"$fixture_key"$'\tbinary\tany\t'"$binary" "$fixture_key"$'\turl\tany\thttps://fixture.invalid/tool' \
+		"$fixture_key"$'\tdigest\tany\tsha256:'"${fixture_digest%% *}" | catalog_fixture_seal "$HOME/catalog"
+	catalog_fixture_use "$HOME/catalog"
+	TEST_UPDATE_MISSING_COMMAND=''
+	if [[ "$ownership" == managed ]]; then
+		root="$(dotfiles_catalog_root "$fixture_key")"
+		mkdir -p "$root/releases/baseline"
+		printf '#!/usr/bin/env bash\necho "%s %s"\n' "$binary" "$installed_version" >"$root/releases/baseline/command"
+		chmod +x "$root/releases/baseline/command"
+		printf '%s\n%s\n%s\n' "$installed_version" "$SOFTWARE_CATALOG_DIGEST" "$SOFTWARE_CATALOG_REVISION" >"$root/releases/baseline/.catalog-receipt"
+		ln -s "$root/releases/baseline" "$root/current"
+		ln -s "$root/current/command" "$HOME/.local/bin/$binary"
+		dotfiles_catalog_component_identity "$fixture_key" >"$root/current/.catalog-target" || return 1
+	elif [[ "$ownership" == external ]]; then
+		cp "$TEST_UPDATE_ARTIFACT" "$HOME/.local/bin/$binary"
+		chmod +x "$HOME/.local/bin/$binary"
+	else
+		TEST_UPDATE_MISSING_COMMAND="$binary"
+	fi
+	command() {
+		if [[ "$*" == "-v $TEST_UPDATE_MISSING_COMMAND" ]]; then return 1; fi
+		builtin command "$@"
+	}
+	curl() {
+		printf 'download\n' >>"$TEST_UPDATE_CALLS"
+		while (($#)); do
+			if [[ "$1" == -o ]]; then
+				cp "$TEST_UPDATE_ARTIFACT" "$2"
+				return
+			fi
+			shift
+		done
+		return 97
+	}
+	hash -r
+}
+
+update_codex_catalog_fixture() {
+	update_tool_catalog_fixture codex_cli "$1" "$2" "${3:-managed}"
+	export TEST_CODEX_UPDATE_MARKER="$HOME/uncontrolled-updater"
+	source "$TEST_DIR/lib/codex_catalog_fixture.sh"
+	make_codex_fixture "$1" yes "${4:-$1}"
+	if [[ "${3:-managed}" == managed ]]; then
+		dotfiles_catalog_component_identity codex_cli >"$(dotfiles_catalog_root codex_cli)/current/.catalog-target" || return 1
+	fi
+	curl() {
+		printf 'download\n' >>"$TEST_UPDATE_CALLS"
+		while (($#)); do
+			if [[ "$1" == -o ]]; then
+				cp "$TEST_HARNESS_ROOT/codex.tgz" "$2"
+				return
+			fi
+			shift
+		done
+		return 97
+	}
+}
+
+update_npm_catalog_fixture() {
+	local target="$1" installed="$2" reported="${3:-$1}" root digest
+	update_tool_catalog_fixture npm "$target" "$installed"
+	root="$(dotfiles_catalog_root npm)"
+	cp "$root/current/command" "$root/current/command-npx"
+	ln -s "$root/current/command-npx" "$HOME/.local/bin/npx"
+	mkdir -p "$HOME/npm-payload/package/bin"
+	printf '{"name":"npm","version":"%s","dependencies":{},"bundleDependencies":[]}\n' "$target" >"$HOME/npm-payload/package/package.json"
+	printf '#!/usr/bin/env bash\necho "%s"\n' "$reported" >"$HOME/npm-payload/package/bin/npm-cli.js"
+	cp "$HOME/npm-payload/package/bin/npm-cli.js" "$HOME/npm-payload/package/bin/npx-cli.js"
+	tar -czf "$HOME/npm.tgz" -C "$HOME/npm-payload" package
+	digest="$(sha256sum "$HOME/npm.tgz")"
+	printf '%s\n' $'npm\towner\tany\tdotfiles' $'npm\tkind\tany\tsoftware' \
+		$'npm\tversion\tany\t'"$target" $'npm\tarchive\tany\ttgz' \
+		$'npm\tbinary\tany\tpackage/bin/npm-cli.js' $'npm\turl\tany\thttps://fixture.invalid/npm.tgz' \
+		$'npm\tdigest\tany\tsha256:'"${digest%% *}" | catalog_fixture_seal "$HOME/catalog-npm"
+	catalog_fixture_use "$HOME/catalog-npm"
+	dotfiles_catalog_component_identity npm >"$root/current/.catalog-target" || return 1
+	curl() {
+		printf 'download\n' >>"$TEST_UPDATE_CALLS"
+		while (($#)); do
+			if [[ "$1" == -o ]]; then
+				cp "$HOME/npm.tgz" "$2"
+				[[ "${TEST_NPM_DOWNLOAD_FAILS:-0}" != 1 ]] || return 56
+				return
+			fi
+			shift
+		done
+		return 97
+	}
+	nvm() {
+		printf 'floating nvm:%s\n' "$*" >>"$TEST_UPDATE_CALLS"
+		return 97
+	}
+}
+
+source "$TEST_DIR/lib/graphify_catalog_fixture.sh"
 
 test_downstream_executes_apt_first_then_every_managed_step() (
 	local events="$TEST_HARNESS_ROOT/downstream.events"
@@ -31,7 +150,7 @@ test_downstream_executes_apt_first_then_every_managed_step() (
 	grep -Fq 'step:Graphify CLI|' "$events" || return 1
 	grep -Fq 'step:Boost CLI|' "$events" || return 1
 	grep -Fq 'step:Node.js (nvm)|' "$events" || return 1
-	grep -Fqx 'step:npm|npm install -g npm@12.0.2 --engine-strict --allow-remote=all|_apply_npm_update_step|' "$events" || return 1
+	grep -Fqx 'step:npm|dotfiles update|_apply_npm_update_step|' "$events" || return 1
 	grep -Fq 'step:Go (asdf)|' "$events" || return 1
 	grep -Fq 'step:Ubuntu Sans Mono fonts|' "$events"
 )
@@ -89,32 +208,17 @@ test_node_probe_uses_nvm_default_when_shell_path_is_stale() (
 )
 
 test_npm_probe_reports_upgrade_current_and_missing_states() (
-	local output npm_mode=upgrade
-	_load_nvm() { :; }
-	npm() {
-		case "$*" in
-		--version)
-			[[ "$npm_mode" == current ]] && printf '12.0.1\n' || printf '11.16.0\n'
-			;;
-		'view npm version') printf '12.0.1\n' ;;
-		*) return 97 ;;
-		esac
-	}
-
-	output="$(check_npm || true)"
-	[[ "$output" == 'npm|11.16.0|12.0.1|upgrade' ]] || return 1
-
-	npm_mode=current
-	output="$(check_npm || true)"
-	[[ "$output" == 'npm|12.0.1|12.0.1|current' ]] || return 1
-
-	unset -f npm
-	command() {
-		[[ "$*" == '-v npm' ]] && return 1
-		builtin command "$@"
-	}
-	output="$(check_npm || true)"
-	[[ "$output" == 'npm|not installed|—|skip' ]]
+	local installed ownership expected
+	while IFS='|' read -r installed ownership expected; do
+		update_tool_catalog_fixture npm 12.0.1 "$installed" "$ownership"
+		[[ "$(check_npm || true)" == "npm|$expected" ]] || return 1
+	done <<'CASES'
+11.16.0|managed|11.16.0|12.0.1|upgrade
+12.0.1|managed|12.0.1|12.0.1|current
+13.0.0|managed|13.0.0|12.0.1|blocked
+ignored|external|external installation|12.0.1|external
+ignored|absent|not installed|12.0.1|skip
+CASES
 )
 
 test_npm_version_reached_requires_a_safe_equal_or_newer_version() (
@@ -134,221 +238,143 @@ test_npm_version_reached_requires_a_safe_equal_or_newer_version() (
 )
 
 test_npm_upgrade_scenario_matrix() (
-	local scenario expected_result expected_fallback scenario_nvm_rc scenario_nvm_sets_version
-	local scenario_install_rc scenario_install_sets_version installed calls rc
-	local -a cases=(
-		'verified-nvm|success|no|0|yes|97|no'
-		'false-nvm-success|success|yes|0|no|0|yes'
-		'nvm-failure-recovery|success|yes|23|no|0|yes'
-		'fallback-command-failure|failure|yes|0|no|24|no'
-		'fallback-stale-version|failure|yes|0|no|0|no'
-	)
-
-	local scenario_row
-	for scenario_row in "${cases[@]}"; do
-		IFS='|' read -r scenario expected_result expected_fallback scenario_nvm_rc \
-			scenario_nvm_sets_version scenario_install_rc scenario_install_sets_version <<<"$scenario_row"
-		installed=12.0.1
-		calls="$TEST_HARNESS_ROOT/npm-${scenario}.calls"
-		: >"$calls"
-		_load_nvm() { :; }
-		nvm() {
-			printf 'nvm:%s\n' "$*" >>"$calls"
-			[[ "$scenario_nvm_sets_version" == yes ]] && installed=12.0.2
-			return "$scenario_nvm_rc"
-		}
-		npm() {
-			case "$*" in
-			--version) printf '%s\n' "$installed" ;;
-			'install -g npm@12.0.2 --engine-strict --allow-remote=all')
-				printf 'npm:%s\n' "$*" >>"$calls"
-				[[ "$scenario_install_sets_version" == yes ]] && installed=12.0.2
-				return "$scenario_install_rc"
-				;;
-			*) return 97 ;;
-			esac
-		}
-
-		if upgrade_npm 12.0.2; then rc=0; else rc=$?; fi
-		if [[ "$expected_result" == success ]]; then
-			[[ "$rc" -eq 0 ]] || {
-				printf 'scenario failed: %s\n' "$scenario"
-				return 1
-			}
+	local reported expected mode rc
+	while IFS='|' read -r reported expected mode; do
+		update_npm_catalog_fixture 12.0.2 12.0.1 "$reported"
+		unset TEST_NPM_DOWNLOAD_FAILS
+		case "$mode" in
+		download) TEST_NPM_DOWNLOAD_FAILS=1 ;;
+		digest) printf corrupt >>"$HOME/npm.tgz" ;;
+		esac
+		rc=0
+		upgrade_npm >"$HOME/output" 2>&1 || rc=$?
+		if [[ "$expected" == success ]]; then
+			[[ "$rc" == 0 && "$UPGRADE_STEP_ACTIVE_RESULT" == updated ]] || return 1
+			[[ "$("$HOME/.local/bin/npm" --version)" == 12.0.2 && "$("$HOME/.local/bin/npx" --version)" == 12.0.2 ]] || return 1
 		else
-			[[ "$rc" -ne 0 ]] || {
-				printf 'scenario unexpectedly passed: %s\n' "$scenario"
-				return 1
-			}
+			[[ "$rc" != 0 && "$("$HOME/.local/bin/npm" --version)" == 'npm 12.0.1' ]] || return 1
+			[[ "$mode" != download || "$rc" == 56 ]] || return 1
 		fi
-		grep -Fqx 'nvm:install-latest-npm' "$calls" || return 1
-		if [[ "$expected_fallback" == yes ]]; then
-			grep -Fqx 'npm:install -g npm@12.0.2 --engine-strict --allow-remote=all' "$calls" || return 1
-		else
-			! grep -Fq 'npm:install' "$calls" || return 1
-		fi
-	done
+		! grep -Fq 'floating nvm:' "$TEST_UPDATE_CALLS" || return 1
+	done <<'CASES'
+12.0.2|success|normal
+12.0.1|failure|normal
+12.1.0|failure|normal
+installed|failure|normal
+12.0.2|failure|download
+12.0.2|failure|digest
+CASES
 )
 
 test_npm_upgrade_skips_commands_when_already_current() (
-	local installed=12.0.2 calls="$TEST_HARNESS_ROOT/npm-current.calls"
-	: >"$calls"
-	_load_nvm() { :; }
-	nvm() {
-		printf 'nvm:%s\n' "$*" >>"$calls"
-		return 97
-	}
-	npm() {
-		case "$*" in
-		--version) printf '%s\n' "$installed" ;;
-		*)
-			printf 'npm:%s\n' "$*" >>"$calls"
-			return 97
-			;;
-		esac
-	}
-
-	upgrade_npm 12.0.2 || return 1
-	[[ ! -s "$calls" ]]
+	update_npm_catalog_fixture 12.0.2 12.0.2
+	upgrade_npm >"$HOME/output" 2>&1 || return 1
+	[[ "$UPGRADE_STEP_ACTIVE_RESULT" == already-current && ! -s "$TEST_UPDATE_CALLS" ]] || return 1
+	grep -Fq 12.0.2 "$HOME/output"
 )
 
 test_npm_failed_postcheck_sets_retryable_failed_step() (
-	local installed=12.0.1 output="$TEST_HARNESS_ROOT/npm-failed-step.output"
-	_load_nvm() { :; }
-	nvm() { return 0; }
-	npm() {
-		case "$*" in
-		--version) printf '%s\n' "$installed" ;;
-		'install -g npm@12.0.2 --engine-strict --allow-remote=all') return 0 ;;
-		*) return 97 ;;
-		esac
-	}
-	C_BOLD='' C_YELLOW='' C_RED=$'\033[31m' C_RESET=$'\033[0m'
-
-	_run_upgrade_step 'npm' 'npm install -g npm@12.0.2 --engine-strict --allow-remote=all' upgrade_npm 12.0.2 >"$output" 2>&1
+	update_npm_catalog_fixture 12.0.2 12.0.1 12.0.1
+	_run_upgrade_step npm "${UPDATE_STEP_RETRY[npm]}" upgrade_npm >"$HOME/output" 2>&1 || return 1
 	[[ "${UPGRADE_STEP_RESULT[npm]}" == failed ]] || return 1
-	grep -Fq 'retry manually: npm install -g npm@12.0.2 --engine-strict --allow-remote=all' "$output"
+	grep -Fq 'retry manually: dotfiles update' "$HOME/output" || return 1
+	[[ "$("$HOME/.local/bin/npm" --version)" == 'npm 12.0.1' ]]
 )
 
 test_unverifiable_cli_probes_label_latest_unchecked() (
-	local output
-	agent() { [[ "$1" == --version ]] && printf '2026.07.23-e383d2b\n'; }
-	claude() { [[ "$1" == --version ]] && printf '2.1.220 (Claude Code)\n'; }
-
-	output="$(check_cursor_cli || true)"
-	[[ "$output" == 'Cursor CLI|2026.07.23-e383d2b|—|unknown' ]] || return 1
-	output="$(check_claude_cli || true)"
-	[[ "$output" == 'Claude CLI|2.1.220 (Claude Code)|—|unknown' ]]
+	local key label binary output
+	while IFS='|' read -r key label; do
+		update_tool_catalog_fixture "$key" 2.0.0 ignored external
+		binary="$(dotfiles_catalog_command_name "$key")"
+		printf '#!/usr/bin/env bash\n: >%q\necho "2.0.0"\n' "$HOME/executed" >"$HOME/.local/bin/$binary"
+		catalog_fixture_seal "$HOME/empty-catalog" </dev/null
+		catalog_fixture_use "$HOME/empty-catalog"
+		case "$key" in
+		cursor_cli) output="$(check_cursor_cli || true)" ;;
+		claude_cli) output="$(check_claude_cli || true)" ;;
+		esac
+		[[ "$output" == "$label|external installation|—|blocked" && ! -e "$HOME/executed" ]] || return 1
+	done <<'CASES'
+cursor_cli|Cursor CLI
+claude_cli|Claude CLI
+CASES
 )
 
 test_codex_probe_reports_ownership_and_release_states() (
-	local fixture_state fixture_installed fixture_available expected
-	codex_cli_install_state() { printf '%s\n' "$fixture_state"; }
-	codex_installed_version() { printf '%s\n' "$fixture_installed"; }
-	codex_available_version() { printf '%s\n' "$fixture_available"; }
-
-	while IFS='|' read -r fixture_state fixture_installed fixture_available expected; do
-		[[ "$(check_codex_cli || true)" == "$expected" ]] || return 1
-	done <<'EOF'
-standalone|codex-cli 0.149.1|0.150.0|Codex CLI|codex-cli 0.149.1|0.150.0|upgrade
-standalone|codex-cli 0.150.0|0.150.0|Codex CLI|codex-cli 0.150.0|0.150.0|current
-standalone|codex-cli 0.150.0|—|Codex CLI|codex-cli 0.150.0|—|unknown
-absent|ignored|ignored|Codex CLI|not installed|—|skip
-external|ignored|ignored|Codex CLI|external installation|—|external
-standalone-shadowed|ignored|ignored|Codex CLI|standalone shadowed|—|external
-EOF
+	local installed ownership expected
+	while IFS='|' read -r installed ownership expected; do
+		update_tool_catalog_fixture codex_cli 0.150.0 "$installed" "$ownership"
+		[[ "$(check_codex_cli || true)" == "Codex CLI|$expected" ]] || return 1
+	done <<'CASES'
+0.149.1|managed|0.149.1|0.150.0|upgrade
+0.150.0|managed|0.150.0|0.150.0|current
+0.151.0|managed|0.151.0|0.150.0|blocked
+ignored|external|external installation|0.150.0|external
+ignored|absent|not installed|0.150.0|skip
+CASES
 )
 
 test_codex_update_application_preserves_ownership_and_result_truth() (
-	local fixture_state before_version after_version sync_rc=0 sync_calls=0 output rc
-	local output_file="$TEST_HARNESS_ROOT/codex-update.output"
-	local label='Codex CLI'
-	codex_cli_install_state() { printf '%s\n' "$fixture_state"; }
-	codex_available_version() { printf '%s\n' '—'; }
-	codex_installed_version() {
-		if [[ "$sync_calls" -eq 0 ]]; then printf '%s\n' "$before_version"; else printf '%s\n' "$after_version"; fi
-	}
-	codex_sync_standalone() {
-		sync_calls=$((sync_calls + 1))
-		return "$sync_rc"
-	}
-
-	fixture_state=standalone
-	before_version='codex-cli 0.149.1'
-	after_version='codex-cli 0.150.0'
-	upgrade_codex_cli >"$output_file" 2>&1 || return 1
-	[[ "$sync_calls" -eq 1 && "$UPGRADE_STEP_ACTIVE_RESULT" == updated ]] || return 1
-
-	sync_calls=0
-	before_version='codex-cli 0.150.0'
-	after_version="$before_version"
-	upgrade_codex_cli >"$output_file" 2>&1 || return 1
-	[[ "$sync_calls" -eq 1 && "$UPGRADE_STEP_ACTIVE_RESULT" == checked-no-change ]] || return 1
-
-	for fixture_state in absent external standalone-shadowed; do
-		sync_calls=0
-		upgrade_codex_cli >"$output_file" 2>&1 || return 1
-		output="$(<"$output_file")"
-		[[ "$sync_calls" -eq 0 && "$UPGRADE_STEP_ACTIVE_RESULT" == skipped ]] || return 1
-		if [[ "$fixture_state" != absent ]]; then
-			[[ "$output" == *'README.md#codex-cli-migration'* ]] || return 1
-		fi
+	update_codex_catalog_fixture 1.2.3 1.0.0
+	upgrade_codex_cli >/dev/null || return 1
+	[[ "$UPGRADE_STEP_ACTIVE_RESULT" == updated ]] || return 1
+	[[ "$("$HOME/.local/bin/codex" --version)" == 'codex-cli 1.2.3' ]] || return 1
+	: >"$TEST_UPDATE_CALLS"
+	upgrade_codex_cli >/dev/null || return 1
+	[[ "$UPGRADE_STEP_ACTIVE_RESULT" == already-current && ! -s "$TEST_UPDATE_CALLS" ]] || return 1
+	local ownership
+	for ownership in absent external; do
+		update_codex_catalog_fixture 1.2.3 1.0.0 "$ownership"
+		upgrade_codex_cli >/dev/null || return 1
+		[[ "$UPGRADE_STEP_ACTIVE_RESULT" == skipped && ! -s "$TEST_UPDATE_CALLS" ]] || return 1
 	done
-
-	fixture_state=standalone
-	sync_calls=0
-	sync_rc=33
-	rc=0
-	_run_upgrade_step 'Codex CLI' 'dotfiles update' upgrade_codex_cli >"$output_file" 2>&1 || rc=$?
-	output="$(<"$output_file")"
-	[[ "$rc" -eq 0 && "${UPGRADE_STEP_RESULT[$label]}" == failed ]] || return 1
-	[[ "$output" == *'retry manually: dotfiles update'* ]]
+	update_codex_catalog_fixture 1.2.3 1.0.0
+	printf corrupt >>"$TEST_HARNESS_ROOT/codex.tgz"
+	_run_upgrade_step 'Codex CLI' 'dotfiles update' upgrade_codex_cli >"$HOME/output" 2>&1 || return 1
+	[[ "${UPGRADE_STEP_RESULT['Codex CLI']}" == failed ]] || return 1
+	grep -Fq 'retry manually: dotfiles update' "$HOME/output" || return 1
+	[[ "$("$HOME/.local/bin/codex" --version)" == 'codex 1.0.0' ]]
 )
 
 test_codex_current_release_skips_a_failing_installer() (
-	local fixture_installed fixture_available sync_calls=0 output="$TEST_HARNESS_ROOT/codex-current.output"
-	codex_cli_install_state() { printf 'standalone\n'; }
-	codex_installed_version() { printf 'codex-cli %s\n' "$fixture_installed"; }
-	codex_available_version() { printf '%s\n' "$fixture_available"; }
-	codex_sync_standalone() {
-		sync_calls=$((sync_calls + 1))
-		return 22
-	}
-	while IFS='|' read -r fixture_installed fixture_available; do
-		sync_calls=0
-		upgrade_codex_cli >"$output" 2>&1 || return 1
-		[[ "$sync_calls" -eq 0 && "$UPGRADE_STEP_ACTIVE_RESULT" == already-current ]] || return 1
-		grep -Fq 'already up to date' "$output" || return 1
-	done <<'EOF'
-0.164.0|0.164.0
-0.165.0|0.164.0
-0.165.0-alpha.1|0.164.0
-EOF
+	local installed expected rc
+	while IFS='|' read -r installed expected; do
+		update_codex_catalog_fixture 1.2.3 "$installed"
+		rc=0
+		upgrade_codex_cli >"$HOME/output" 2>&1 || rc=$?
+		if [[ "$expected" == current ]]; then
+			[[ "$rc" == 0 && "$UPGRADE_STEP_ACTIVE_RESULT" == already-current ]] || return 1
+		else
+			[[ "$rc" != 0 ]] || return 1
+			grep -Fq 'review version drift' "$HOME/output" || return 1
+		fi
+		[[ ! -s "$TEST_UPDATE_CALLS" ]] || return 1
+		[[ "$("$HOME/.local/bin/codex" --version)" == "codex $installed" ]] || return 1
+	done <<'CASES'
+1.2.3|current
+1.2.4|blocked
+1.3.0-alpha.1|blocked
+CASES
 )
 
 test_codex_verified_upgrade_checks_the_resulting_version() (
-	local fixture_after calls=0 rc=0 expected_rc output="$TEST_HARNESS_ROOT/codex-target.output"
-	codex_cli_install_state() { printf 'standalone\n'; }
-	codex_installed_version() {
-		if [[ "$calls" -eq 0 ]]; then printf 'codex-cli 0.164.0\n'; else printf '%s\n' "$fixture_after"; fi
-	}
-	codex_available_version() { printf '0.165.0\n'; }
-	codex_sync_standalone() { calls=$((calls + 1)); }
-	while IFS='|' read -r fixture_after expected_rc; do
-		calls=0 rc=0
-		upgrade_codex_cli >"$output" 2>&1 || rc=$?
-		[[ "$rc" -eq "$expected_rc" && "$calls" -eq 1 ]] || return 1
-		if [[ "$rc" -eq 0 ]]; then
-			[[ "$UPGRADE_STEP_ACTIVE_RESULT" == updated ]] || return 1
+	local reported expected rc
+	while IFS='|' read -r reported expected; do
+		update_codex_catalog_fixture 1.2.3 1.0.0 managed "$reported"
+		rc=0
+		upgrade_codex_cli >"$HOME/output" 2>&1 || rc=$?
+		if [[ "$expected" == success ]]; then
+			[[ "$rc" == 0 && "$UPGRADE_STEP_ACTIVE_RESULT" == updated ]] || return 1
+			[[ "$("$HOME/.local/bin/codex" --version)" == 'codex-cli 1.2.3' ]] || return 1
 		else
-			grep -Fq '0.165.0' "$output" || return 1
+			[[ "$rc" != 0 && "$("$HOME/.local/bin/codex" --version)" == 'codex 1.0.0' ]] || return 1
 		fi
-	done <<'EOF'
-codex-cli 0.164.0|1
-codex-cli 0.165.0|0
-codex-cli 0.166.0|0
-installed|1
-EOF
+	done <<'CASES'
+1.0.0|failure
+1.2.3|success
+1.2.4|failure
+installed|failure
+CASES
 )
 
 test_codex_retry_registry_uses_dotfiles_update() {
@@ -356,171 +382,97 @@ test_codex_retry_registry_uses_dotfiles_update() {
 }
 
 test_graphify_probe_reports_uv_owned_and_external_states() (
-	local output
-	graphify() { [[ "$1" == --version ]] && printf 'graphify 1.2.3\n'; }
-	uv() {
-		case "$*" in
-		'tool list') printf '%s\n' 'graphifyy v1.2.3' ;;
-		*) return 97 ;;
-		esac
-	}
-	output="$(check_graphify_cli || true)"
-	[[ "$output" == 'Graphify CLI|graphify 1.2.3|—|unknown' ]] || return 1
-
-	uv() {
-		[[ "$*" == 'tool list' ]] && printf '%s\n' 'other-tool v1.0.0'
-	}
-	output="$(check_graphify_cli || true)"
-	[[ "$output" == 'Graphify CLI|graphify 1.2.3|—|external' ]]
+	update_tool_catalog_fixture graphify_cli 1.2.4 1.2.3
+	[[ "$(check_graphify_cli || true)" == 'Graphify CLI|1.2.3|1.2.4|upgrade' ]] || return 1
+	update_tool_catalog_fixture graphify_cli 1.2.4 ignored external
+	[[ "$(check_graphify_cli || true)" == 'Graphify CLI|external installation|1.2.4|external' ]]
 )
 
 test_graphify_probe_skips_when_not_installed() (
-	local output
-	graphify_command() { return 1; }
-	output="$(check_graphify_cli || true)"
-	[[ "$output" == 'Graphify CLI|not installed|—|skip' ]]
+	update_tool_catalog_fixture graphify_cli 1.2.4 ignored absent
+	[[ "$(check_graphify_cli || true)" == 'Graphify CLI|not installed|1.2.4|skip' ]]
 )
 
 test_boost_probe_reports_managed_external_and_absent_states() (
-	declare -F check_boost_cli >/dev/null || return 1
-	local output
-	boost_command() { printf '%s\n' "$HOME/.local/bin/boost"; }
-	boost_installed_version() { printf 'boost v0.12.6\n'; }
-	boost_cli_is_dotfiles_owned() { return 0; }
-	output="$(check_boost_cli || true)"
-	[[ "$output" == 'Boost CLI|boost v0.12.6|—|unknown' ]] || return 1
-
-	boost_cli_is_dotfiles_owned() { return 1; }
-	output="$(check_boost_cli || true)"
-	[[ "$output" == 'Boost CLI|boost v0.12.6|—|external' ]] || return 1
-
-	boost_command() { return 1; }
-	boost_installed_version() { printf 'not installed\n'; }
-	output="$(check_boost_cli || true)"
-	[[ "$output" == 'Boost CLI|not installed|—|skip' ]]
+	update_tool_catalog_fixture boost_cli 0.12.7 0.12.6
+	[[ "$(check_boost_cli || true)" == 'Boost CLI|0.12.6|0.12.7|upgrade' ]] || return 1
+	update_tool_catalog_fixture boost_cli 0.12.7 ignored external
+	[[ "$(check_boost_cli || true)" == 'Boost CLI|external installation|0.12.7|external' ]] || return 1
+	update_tool_catalog_fixture boost_cli 0.12.7 ignored absent
+	[[ "$(check_boost_cli || true)" == 'Boost CLI|not installed|0.12.7|skip' ]]
 )
 
 test_boost_update_reconciles_only_dotfiles_owned_binary() (
-	declare -F upgrade_boost_cli >/dev/null || return 1
-	local calls="$TEST_HARNESS_ROOT/boost-update.calls"
-	: >"$calls"
-	boost_command() { printf '%s\n' "$HOME/.local/bin/boost"; }
-	boost_installed_version() { printf 'boost v0.12.5\n'; }
-	boost_installed_tag() { printf 'v0.12.5\n'; }
-	boost_cli_is_dotfiles_owned() { return 0; }
-	boost_platform_arch() { printf 'amd64\n'; }
-	boost_latest_release_metadata() { printf 'v0.12.7\n%s\n' 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'; }
-	boost_install_release() { printf 'install:%s:%s\n' "$1" "$2" >>"$calls"; }
-
-	upgrade_boost_cli >/dev/null
-	[[ "$(<"$calls")" == 'install:v0.12.7:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' ]] || return 1
-
-	: >"$calls"
-	boost_cli_is_dotfiles_owned() { return 1; }
-	upgrade_boost_cli >/dev/null
-	[[ ! -s "$calls" ]]
+	update_tool_catalog_fixture boost_cli 0.12.7 0.12.5
+	upgrade_boost_cli >/dev/null || return 1
+	[[ "$("$HOME/.local/bin/boost" --version)" == 'boost 0.12.7' ]] || return 1
+	[[ "$UPGRADE_STEP_ACTIVE_RESULT" == updated ]] || return 1
+	grep -Fxq download "$TEST_UPDATE_CALLS" || return 1
+	update_tool_catalog_fixture boost_cli 0.12.7 ignored external
+	upgrade_boost_cli >/dev/null || return 1
+	[[ ! -s "$TEST_UPDATE_CALLS" && "$UPGRADE_STEP_ACTIVE_RESULT" == skipped ]]
 )
 
 test_graphify_upgrade_uses_uv_tool_upgrade() (
-	local output calls="$TEST_HARNESS_ROOT/graphify-upgrade.calls"
-	local release="$TEST_HARNESS_ROOT/graphify-upgrade.version"
-	: >"$calls"
-	printf 'graphify 1.2.3\n' >"$release"
-	graphify() { [[ "$1" == --version ]] && cat "$release"; }
-	agentbot() {
-		printf 'agentbot:%s\n' "$*" >>"$calls"
-		return 97
-	}
-	uv() {
-		printf 'uv:%s\n' "$*" >>"$calls"
-		case "$*" in
-		'tool list') printf '%s\n' 'graphifyy v1.2.3' ;;
-		'tool upgrade graphifyy') printf 'graphify 1.2.4\n' >"$release" ;;
-		*) return 97 ;;
-		esac
-	}
-	upgrade_result_set() { printf 'result:%s\n' "$1" >>"$calls"; }
+	graphify_reset
+	install_graphify_cli >/dev/null || return 1
+	graphify_fixture 1.2.4
+	: >"$TEST_COMMAND_LOG"
+	local output
 	output="$(upgrade_graphify_cli)" || return 1
-	grep -Fqx 'uv:tool upgrade graphifyy' "$calls" || return 1
-	! grep -Fq 'agentbot:' "$calls" || return 1
-	# A new release is an update, not "checked/no change".
-	grep -Fq '[OK] Graphify CLI updated (graphify 1.2.3 -> graphify 1.2.4)' <<<"$output" || return 1
-	grep -Fq "run 'agentbot update' to refresh its skill" <<<"$output" || return 1
-	grep -Fqx 'result:updated' "$calls"
+	grep -q '^uv:pip sync .*--require-hashes' "$TEST_COMMAND_LOG" || return 1
+	! grep -q '^uv:tool upgrade' "$TEST_COMMAND_LOG" || return 1
+	[[ "$("$HOME/.local/bin/graphify" --version)" == 'graphify 1.2.4' ]] || return 1
+	[[ "$output" == *'Updated from 1.2.3 to 1.2.4'* && "$output" == *"run 'agentbot update' to refresh its skill"* ]]
 )
 
 test_graphify_upgrade_with_nothing_new_is_already_current() (
-	local output calls="$TEST_HARNESS_ROOT/graphify-current.calls"
-	: >"$calls"
-	graphify() { [[ "$1" == --version ]] && printf 'graphify 1.2.3\n'; }
-	uv() {
-		case "$*" in
-		'tool list') printf '%s\n' 'graphifyy v1.2.3' ;;
-		'tool upgrade graphifyy') return 0 ;;
-		*) return 97 ;;
-		esac
-	}
-	upgrade_result_set() { printf 'result:%s\n' "$1" >>"$calls"; }
-	output="$(upgrade_graphify_cli)" || return 1
-	grep -Fq 'Graphify CLI already current (graphify 1.2.3)' <<<"$output" || return 1
-	grep -Fqx 'result:already-current' "$calls"
+	graphify_reset
+	install_graphify_cli >/dev/null || return 1
+	: >"$TEST_COMMAND_LOG"
+	upgrade_graphify_cli >"$HOME/graphify-output" || return 1
+	[[ "$UPGRADE_STEP_ACTIVE_RESULT" == already-current && ! -s "$TEST_COMMAND_LOG" ]] || return 1
+	grep -Fq 'Already current at 1.2.3' "$HOME/graphify-output"
 )
 
 test_graphify_upgrade_retries_with_system_certs_after_failure() (
-	local output calls="$TEST_HARNESS_ROOT/graphify-system-certs.calls"
-	: >"$calls"
-	graphify() { [[ "$1" == --version ]] && printf 'graphify 1.2.3\n'; }
-	uv() {
-		printf 'uv:%s\n' "$*" >>"$calls"
-		case "$*" in
-		'tool list') printf '%s\n' 'graphifyy v1.2.3' ;;
-		'tool upgrade graphifyy') return 23 ;;
-		'tool upgrade graphifyy --system-certs') return 0 ;;
-		*) return 97 ;;
-		esac
-	}
-	output="$(upgrade_graphify_cli)" || return 1
-	[[ "$(sed -n '2p' "$calls")" == 'uv:tool upgrade graphifyy' ]] || return 1
-	[[ "$(sed -n '3p' "$calls")" == 'uv:tool upgrade graphifyy --system-certs' ]] || return 1
-	[[ "$(wc -l <"$calls")" -eq 3 ]] || return 1
-	grep -Fq 'Graphify CLI already current' <<<"$output"
+	graphify_reset
+	install_graphify_cli >/dev/null || return 1
+	graphify_fixture 1.2.4
+	: >"$TEST_COMMAND_LOG"
+	export TEST_GRAPHIFY_CERT_RETRY=1
+	upgrade_graphify_cli >"$HOME/graphify-output" 2>&1 || return 1
+	[[ "$(grep -c '^uv:pip sync ' "$TEST_COMMAND_LOG")" == 2 ]] || return 1
+	grep -Fxq certs:false "$TEST_COMMAND_LOG" || return 1
+	grep -Fxq certs:true "$TEST_COMMAND_LOG" || return 1
+	[[ "$UPGRADE_STEP_ACTIVE_RESULT" == updated && "$("$HOME/.local/bin/graphify" --version)" == 'graphify 1.2.4' ]]
 )
 
 test_graphify_first_attempt_error_is_quiet_when_the_retry_works() (
+	graphify_reset
+	install_graphify_cli >/dev/null || return 1
+	graphify_fixture 1.2.4
+	export TEST_GRAPHIFY_CERT_RETRY=1
 	local output
-	graphify() { [[ "$1" == --version ]] && printf 'graphify 1.2.3\n'; }
-	uv() {
-		case "$*" in
-		'tool list') printf '%s\n' 'graphifyy v1.2.3' ;;
-		'tool upgrade graphifyy')
-			echo 'invalid peer certificate: UnknownIssuer' >&2
-			return 2
-			;;
-		'tool upgrade graphifyy --system-certs') return 0 ;;
-		*) return 97 ;;
-		esac
-	}
 	output="$(upgrade_graphify_cli 2>&1)" || return 1
-	[[ "$output" != *UnknownIssuer* && "$output" != *'Error during'* ]]
+	[[ "$output" != *UnknownIssuer* && "$output" != *'Error during'* ]] || return 1
+	[[ "$("$HOME/.local/bin/graphify" --version)" == 'graphify 1.2.4' ]]
 )
 
 test_graphify_upgrade_failure_has_copyable_retry_command() (
-	local output calls="$TEST_HARNESS_ROOT/graphify-failure.calls"
-	: >"$calls"
-	graphify() { [[ "$1" == --version ]] && printf 'graphify 1.2.3\n'; }
-	uv() {
-		printf 'uv:%s\n' "$*" >>"$calls"
-		case "$*" in
-		'tool list') printf '%s\n' 'graphifyy v1.2.3' ;;
-		'tool upgrade graphifyy') return 23 ;;
-		*) return 97 ;;
-		esac
-	}
-	C_RED=$'\033[31m' C_RESET=$'\033[0m'
-	output="$(_run_upgrade_step 'Graphify CLI' 'uv tool upgrade graphifyy' upgrade_graphify_cli 2>&1)"
-	grep -Fqx 'uv:tool upgrade graphifyy' "$calls"
-	grep -Fq 'retry manually: uv tool upgrade graphifyy' <<<"$output" || return 1
-	! grep -Fq "Agentbot's Graphify integration" <<<"$output"
+	graphify_reset
+	install_graphify_cli >/dev/null || return 1
+	local previous
+	previous="$(readlink "$(dotfiles_catalog_root graphify_cli)/current")" || return 1
+	graphify_fixture 1.2.4
+	: >"$TEST_COMMAND_LOG"
+	export TEST_GRAPHIFY_SYNC_FAILS=1
+	_run_upgrade_step 'Graphify CLI' "${UPDATE_STEP_RETRY[graphify]}" upgrade_graphify_cli >"$HOME/graphify-output" 2>&1 || return 1
+	[[ "${UPGRADE_STEP_RESULT['Graphify CLI']}" == failed ]] || return 1
+	[[ "$(grep -c '^uv:pip sync ' "$TEST_COMMAND_LOG")" == 2 ]] || return 1
+	grep -Fq 'retry manually: dotfiles update' "$HOME/graphify-output" || return 1
+	[[ "$(readlink "$(dotfiles_catalog_root graphify_cli)/current")" == "$previous" ]] || return 1
+	[[ "$("$HOME/.local/bin/graphify" --version)" == 'graphify 1.2.3' ]]
 )
 
 test_upgrade_step_marks_failures_in_red_with_retry_command() (
@@ -556,34 +508,21 @@ test_upgrade_step_omits_failure_marker_after_success() (
 )
 
 test_node_upgrade_stops_when_nvm_install_fails() (
-	local calls="$TEST_HARNESS_ROOT/node-upgrade.calls"
-	: >"$calls"
-	_load_nvm() { :; }
-	nvm() {
-		printf 'nvm:%s\n' "$*" >>"$calls"
-		[[ "$1" != install ]]
-	}
-
-	if upgrade_node; then
-		return 1
-	fi
-	grep -Fqx 'nvm:install --lts' "$calls" || return 1
-	! grep -Fq 'nvm:alias' "$calls"
+	runtime_failure_fixture node
+	local rc=0
+	upgrade_node >"$HOME/output" 2>&1 || rc=$?
+	[[ "$rc" == 27 && "$(cat "$TEST_RUNTIME_FAILURE_CALLS")" == 'source:nvm' ]] || return 1
+	[[ "$("$HOME/.local/bin/node" --version)" == 'node 24.0.0' ]] || return 1
+	[[ ! -e "$HOME/.local/share/dotfiles-catalog/nodejs.native" ]]
 )
 
 test_go_upgrade_stops_when_asdf_install_fails() (
-	local calls="$TEST_HARNESS_ROOT/go-upgrade.calls"
-	: >"$calls"
-	asdf() {
-		printf 'asdf:%s\n' "$*" >>"$calls"
-		[[ "$1" != install ]]
-	}
-
-	if upgrade_go; then
-		return 1
-	fi
-	grep -Fqx 'asdf:install golang latest' "$calls" || return 1
-	! grep -Eq '^asdf:(set|reshim)' "$calls"
+	runtime_failure_fixture go
+	local rc=0
+	upgrade_go >"$HOME/output" 2>&1 || rc=$?
+	[[ "$rc" == 27 && "$(cat "$TEST_RUNTIME_FAILURE_CALLS")" == 'download:https://fixture.invalid/asdf' ]] || return 1
+	[[ "$("$HOME/.local/bin/go" --version)" == 'go 1.2.2' ]] || return 1
+	[[ ! -e "$HOME/.local/share/dotfiles-catalog/go.native" ]]
 )
 
 test_go_reads_asdf_from_where_the_installer_put_it() (
@@ -627,63 +566,37 @@ EOF
 	[[ "$output" == 'not installed' ]]
 )
 
-test_cursor_update_falls_back_to_official_installer() (
-	local calls="$TEST_HARNESS_ROOT/cursor-update.calls" output="$TEST_HARNESS_ROOT/cursor-update.output" label='Cursor CLI'
-	: >"$calls"
-	C_RED=$'\033[31m' C_RESET=$'\033[0m'
-	export C_RED C_RESET
-	agent() {
-		printf 'agent:%s\n' "$*" >>"$calls"
-		return 7
-	}
-	curl() {
-		printf 'curl:%s\n' "$*" >>"$calls"
-		local output_file='' previous='' argument
-		for argument in "$@"; do
-			[[ "$previous" == -o ]] && output_file="$argument"
-			previous="$argument"
-		done
-		printf '%s\n' 'printf "official-installer\n"' >"$output_file"
-	}
-
-	export DOTFILES_NO_PROGRESS_ANIMATION=1
-	if ! _run_upgrade_step 'Cursor CLI' 'dotfiles update' upgrade_cursor_cli >"$output" 2>&1; then
+test_cursor_update_blocks_before_cli_execution() (
+	update_tool_catalog_fixture cursor_cli 2.0.0 1.0.0
+	printf '#!/usr/bin/env bash\n: >%q\necho "agent 1.0.0"\n' "$HOME/executed" >"$(dotfiles_catalog_root cursor_cli)/current/command"
+	local rc=0
+	upgrade_cursor_cli >"$HOME/output" 2>&1 || rc=$?
+	[[ "$rc" != 0 && ! -e "$HOME/executed" && ! -s "$TEST_UPDATE_CALLS" ]] || {
+		echo 'FAIL: blocked Cursor update executed the CLI or a floating fallback' >&2
 		return 1
-	fi
-	grep -Fqx 'agent:update' "$calls" || return 1
-	grep -Fq 'curl:-fsSL --proto =https --tlsv1.2 -o ' "$calls" || return 1
-	grep -Fq ' https://cursor.com/install' "$calls" || return 1
-	# The vendor installer's own narration is captured like every other install
-	# step's; the run says what it did on either side of it.
-	! grep -Fqx 'official-installer' "$output" || return 1
-	[[ "${UPGRADE_STEP_RESULT[$label]:-}" == recovered ]] || return 1
-	grep -Fq 'self-update failed (exit 7); retrying with the official installer' "$output" || return 1
-	grep -Fq 'Cursor CLI reinstalled' "$output" || return 1
-	! grep -Fq '>> FAILED' "$output"
+	}
+	grep -Fq 'no verified autonomous-update suppression' "$HOME/output"
+)
+
+test_cursor_status_blocks_before_executing_the_cli() (
+	update_tool_catalog_fixture cursor_cli 2.0.0 1.0.0
+	printf '#!/usr/bin/env bash\n: >%q\necho "agent 1.0.0"\n' "$HOME/executed" >"$(dotfiles_catalog_root cursor_cli)/current/command"
+	local output
+	output="$(check_cursor_cli || true)"
+	[[ "$output" == 'Cursor CLI|installed|2.0.0|blocked' && ! -e "$HOME/executed" ]] || {
+		echo 'FAIL: blocked Cursor status executed the CLI or claimed qualification' >&2
+		return 1
+	}
 )
 
 test_a_self_update_is_reported_by_its_versions() (
-	# 2026-09-29: the summary said "checked/no change" for a run that had just
-	# moved the Cursor CLI and Boost to new releases.
-	local label='Cursor CLI' version_file="$TEST_HARNESS_ROOT/cursor-version"
-	printf '2026.09.26\n' >"$version_file"
-	export DOTFILES_NO_PROGRESS_ANIMATION=1
-	tool_resolve() { printf 'agent\n'; }
-	agent() { printf '2026.09.28\n' >"$version_file"; }
-	cursor_installed_version() { cat "$version_file"; }
-	_run_upgrade_step 'Cursor CLI' 'dotfiles update' upgrade_cursor_cli >/dev/null 2>&1 || return 1
-	[[ "${UPGRADE_STEP_RESULT[$label]:-}" == updated ]] || return 1
-	_run_upgrade_step 'Cursor CLI' 'dotfiles update' upgrade_cursor_cli >/dev/null 2>&1 || return 1
-	[[ "${UPGRADE_STEP_RESULT[$label]:-}" == already-current ]] || return 1
-
-	local tag_file="$TEST_HARNESS_ROOT/boost-tag"
-	printf 'v0.13.28\n' >"$tag_file"
-	boost_command() { printf '%s\n' "$HOME/.local/bin/boost"; }
-	boost_cli_is_dotfiles_owned() { return 0; }
-	boost_installed_tag() { cat "$tag_file"; }
-	boost_sync_latest_release() { printf 'v0.13.30\n' >"$tag_file"; }
-	_run_upgrade_step 'Boost CLI' 'dotfiles update' upgrade_boost_cli >/dev/null 2>&1 || return 1
-	[[ "${UPGRADE_STEP_RESULT['Boost CLI']:-}" == updated ]]
+	update_tool_catalog_fixture boost_cli 0.13.30 0.13.28
+	local label='Boost CLI'
+	_run_upgrade_step "$label" 'dotfiles update' upgrade_boost_cli >/dev/null 2>&1 || return 1
+	[[ "${UPGRADE_STEP_RESULT[$label]}" == updated ]] || return 1
+	: >"$TEST_UPDATE_CALLS"
+	_run_upgrade_step "$label" 'dotfiles update' upgrade_boost_cli >/dev/null 2>&1 || return 1
+	[[ "${UPGRADE_STEP_RESULT[$label]}" == already-current && ! -s "$TEST_UPDATE_CALLS" ]]
 )
 
 test_a_windows_cursor_is_never_executed() (
@@ -717,7 +630,7 @@ test_a_windows_cursor_is_never_executed() (
 	# present the honest outcome is "not installed".
 	[[ ! -s "$calls" ]] || return 1
 	[[ "$result" == skipped ]] || return 1
-	grep -Fq 'Cursor CLI not installed' "$output"
+	grep -Fq 'Skipping absent or externally owned' "$output"
 )
 
 test_the_apt_upgrade_is_quiet_and_reported_as_updated() (
@@ -774,19 +687,36 @@ test_every_upgrade_step_says_something() (
 	local output="$machine/output"
 	mkdir -p -- "$machine"
 
-	local result
-	result="$(
-		codex_cli_install_state() { printf 'standalone\n'; }
-		codex_installed_version() { printf 'codex-cli 0.153.4\n'; }
-		codex_available_version() { printf '%s\n' '—'; }
-		codex_sync_standalone() { printf 'VENDOR-NARRATION\n'; }
-		upgrade_codex_cli >"$output" 2>&1
-		printf '%s' "$UPGRADE_STEP_ACTIVE_RESULT"
-	)" || return 1
-
-	[[ -s "$output" ]] || return 1
-	grep -Fq 'already up to date (codex-cli 0.153.4)' "$output" || return 1
-	[[ "$result" == checked-no-change ]] || return 1
+	export HOME="$machine/home" TEST_CODEX_UPDATE_MARKER="$machine/uncontrolled-updater"
+	PATH="$HOME/.local/bin:/usr/bin:/bin"
+	export PATH
+	source "$TEST_DIR/lib/codex_catalog_fixture.sh"
+	make_codex_fixture 1.2.3
+	curl() {
+		while (($#)); do
+			if [[ "$1" == -o ]]; then
+				cp "$TEST_HARNESS_ROOT/codex.tgz" "$2"
+				return
+			fi
+			shift
+		done
+		return 1
+	}
+	CODEX_HOME="$HOME/.codex" CODEX_INSTALL_DIR="$HOME/.local/bin"
+	export CODEX_HOME CODEX_INSTALL_DIR
+	install_codex_cli >"$output" 2>&1 || {
+		echo 'FAIL: narration fixture installation failed' >&2
+		cat "$output" >&2
+		return 1
+	}
+	[[ "$("$HOME/.local/bin/codex" --version)" == 'codex-cli 1.2.3' ]] || return 1
+	upgrade_codex_cli >"$output" 2>&1 || return 1
+	[[ -s "$output" ]] || {
+		echo 'FAIL: current approved Codex update is silent' >&2
+		return 1
+	}
+	[[ "$UPGRADE_STEP_ACTIVE_RESULT" == already-current ]] || return 1
+	grep -Fq '1.2.3' "$output" || return 1
 
 	# The apt step is silent precisely when it has the least to do, which is
 	# when an empty section is most likely to read as a failure.
@@ -866,20 +796,20 @@ expect_success 'update rejects the retired --all flag' test_update_rejects_the_r
 expect_success 'Node.js probe follows nvm default instead of a stale shell PATH' test_node_probe_uses_nvm_default_when_shell_path_is_stale
 expect_success 'npm probe reports upgrade current and missing states' test_npm_probe_reports_upgrade_current_and_missing_states
 expect_success 'npm version verification accepts only safe equal or newer versions' test_npm_version_reached_requires_a_safe_equal_or_newer_version
-expect_success 'npm upgrade scenario matrix preserves fallback and verification contracts' test_npm_upgrade_scenario_matrix
-expect_success 'npm upgrade skips NVM and npm install when already current' test_npm_upgrade_skips_commands_when_already_current
+expect_success 'npm upgrade verifies its exact bundled archive and preserves working commands on failure' test_npm_upgrade_scenario_matrix
+expect_success 'current approved npm skips downloads and floating manager updates' test_npm_upgrade_skips_commands_when_already_current
 expect_success 'npm failed post-check records a copyable failed step' test_npm_failed_postcheck_sets_retryable_failed_step
-expect_success 'unverifiable CLI probes label latest freshness unchecked' test_unverifiable_cli_probes_label_latest_unchecked
+expect_success 'missing approved CLI pins report blocked without executing external commands' test_unverifiable_cli_probes_label_latest_unchecked
 expect_success 'Codex update probe reports standalone, absent, and external states' test_codex_probe_reports_ownership_and_release_states
 expect_success 'Codex update application records changed, unchanged, skipped, and failed outcomes' test_codex_update_application_preserves_ownership_and_result_truth
-expect_success 'current or newer Codex never runs a failing installer' test_codex_current_release_skips_a_failing_installer
-expect_success 'verified Codex upgrade must reach the available version' test_codex_verified_upgrade_checks_the_resulting_version
+expect_success 'current Codex skips downloads and newer drift blocks replacement' test_codex_current_release_skips_a_failing_installer
+expect_success 'verified Codex upgrade must match the exact approved version' test_codex_verified_upgrade_checks_the_resulting_version
 expect_success 'Codex update retry uses the guarded Dotfiles workflow' test_codex_retry_registry_uses_dotfiles_update
 expect_success 'Graphify update probe distinguishes uv-owned and external installs' test_graphify_probe_reports_uv_owned_and_external_states
 expect_success 'Graphify update probe skips an absent CLI' test_graphify_probe_skips_when_not_installed
 expect_success 'Boost probe reports managed external and absent states' test_boost_probe_reports_managed_external_and_absent_states
 expect_success 'Boost update reconciles only a Dotfiles-owned binary' test_boost_update_reconciles_only_dotfiles_owned_binary
-expect_success 'Graphify update uses uv tool upgrade' test_graphify_upgrade_uses_uv_tool_upgrade
+expect_success 'Graphify update applies the frozen closure and reminds about skill refresh' test_graphify_upgrade_uses_uv_tool_upgrade
 expect_success 'Graphify update with nothing new is already current' test_graphify_upgrade_with_nothing_new_is_already_current
 expect_success 'Graphify update retries with system certificates after failure' test_graphify_upgrade_retries_with_system_certs_after_failure
 expect_success 'Graphify first-attempt error is quiet when the retry works' test_graphify_first_attempt_error_is_quiet_when_the_retry_works
@@ -887,11 +817,12 @@ expect_success 'Graphify update failures include a copyable retry command' test_
 expect_success 'upgrade step marks failures in red with retry command' test_upgrade_step_marks_failures_in_red_with_retry_command
 expect_success 'upgrade step respects NO_COLOR and retains retry command' test_upgrade_step_respects_no_color_with_retry_command
 expect_success 'upgrade step omits failure marker after success' test_upgrade_step_omits_failure_marker_after_success
-expect_success 'Node.js upgrade stops when nvm install fails' test_node_upgrade_stops_when_nvm_install_fails
-expect_success 'Go upgrade stops when asdf install fails' test_go_upgrade_stops_when_asdf_install_fails
+expect_success 'Node.js upgrade stops when its approved NVM source is unavailable' test_node_upgrade_stops_when_nvm_install_fails
+expect_success 'Go upgrade stops when its approved asdf artifact cannot download' test_go_upgrade_stops_when_asdf_install_fails
 expect_success 'Go reads asdf from where the installer put it' test_go_reads_asdf_from_where_the_installer_put_it
-expect_success 'Cursor update falls back to the official installer after agent update failure' test_cursor_update_falls_back_to_official_installer
-expect_success 'a self-update is reported by its versions' test_a_self_update_is_reported_by_its_versions
+expect_success 'Cursor update blocks before CLI execution or floating fallback' test_cursor_update_blocks_before_cli_execution
+expect_success 'Cursor status blocks before executing a managed CLI' test_cursor_status_blocks_before_executing_the_cli
+expect_success 'a catalog update is reported by observed before and after versions' test_a_self_update_is_reported_by_its_versions
 expect_success 'a Windows cursor is never executed' test_a_windows_cursor_is_never_executed
 expect_success 'the apt upgrade is quiet and reported as updated' test_the_apt_upgrade_is_quiet_and_reported_as_updated
 expect_success 'a failed apt upgrade still shows its output' test_a_failed_apt_upgrade_still_shows_its_output

@@ -1,4 +1,6 @@
 # shellcheck shell=bash
+# shellcheck source=scripts/lib/catalog_load.sh
+source "${BASH_SOURCE[0]%/*}/../catalog_load.sh"
 # Tool discovery and version reading are shared with the status probes.
 if ! declare -F tool_resolve >/dev/null 2>&1; then
 	# shellcheck source=scripts/lib/tool_resolve.sh
@@ -26,47 +28,11 @@ cursor_is_installed() {
 # Cursor publishes no queryable "latest" version, so this probe never reports an
 # upgrade and always returns nonzero (no upgrade available).
 check_cursor_cli() {
-	local installed action
-	installed="$(cursor_installed_version)"
-	if cursor_is_installed; then
-		action="$UPDATE_CHECK_UNKNOWN"
-	else
-		action="$UPDATE_CHECK_SKIP"
-	fi
-	printf '%s|%s|%s|%s\n' "Cursor CLI" "$installed" "—" "$action"
-	return 1
+	dotfiles_catalog_check cursor_cli "Cursor CLI"
 }
 
 upgrade_cursor_cli() {
-	local executable='' update_rc=0 fallback_rc=0 before after
-	# Through the resolver, which rejects Windows interop paths and covers the
-	# ~/.local/bin fallback. `cursor` is not a candidate at all: it is the
-	# editor launcher, and appendWindowsPath resolves it to the Windows app, so
-	# `"$executable" update` opened the Cursor IDE on the operator's desktop
-	# instead of updating the CLI.
-	executable="$(tool_resolve 'agent cursor-agent')" || executable=''
-	if [[ -z "$executable" ]]; then
-		log_skip "Cursor CLI not installed"
-		upgrade_result_set skipped
-		return 0
-	fi
-	# Discarded rather than quieted: this failure is one the step handles, and
-	# _run_quiet_command prints the whole captured output when a command fails.
-	# An "unauthenticated" error block above a step that went on to reinstall
-	# successfully reads as a broken run. The warning below carries the status,
-	# and a fallback that also fails prints its own output.
-	before="$(cursor_installed_version)"
-	"$executable" update >/dev/null 2>&1 || update_rc=$?
-	if [[ $update_rc -eq 0 ]]; then
-		_upgrade_report_version_change 'Cursor CLI' "$before" "$(cursor_installed_version)"
-		return 0
-	fi
-	log_warn "Cursor CLI self-update failed (exit $update_rc); retrying with the official installer"
-	log_step 'Reinstall Cursor CLI from the official installer'
-	run_vendor_shell_installer 'https://cursor.com/install' 'Cursor CLI' || fallback_rc=$?
-	[[ $fallback_rc -eq 0 ]] || return "$fallback_rc"
-	log_ok "Cursor CLI reinstalled ($(cursor_installed_version))"
-	upgrade_result_set recovered
+	dotfiles_catalog_upgrade cursor_cli
 }
 
 # --- Codex CLI ---
@@ -110,25 +76,7 @@ codex_latest_channel_json() {
 }
 
 codex_available_version() {
-	local json tag version
-	json="$(codex_latest_channel_json 2>/dev/null)" || {
-		printf '%s\n' '—'
-		return 0
-	}
-	tag="$(python3 -c 'import json, sys; print(json.load(sys.stdin).get("tag_name", ""))' <<<"$json" 2>/dev/null)" || {
-		printf '%s\n' '—'
-		return 0
-	}
-	[[ "$tag" == rust-v* ]] || {
-		printf '%s\n' '—'
-		return 0
-	}
-	version="${tag#rust-v}"
-	if codex_release_version_is_valid "$version"; then
-		printf '%s\n' "$version"
-	else
-		printf '%s\n' '—'
-	fi
+	dotfiles_catalog_begin && dotfiles_catalog_get codex_cli version
 }
 
 codex_semver_compare() {
@@ -204,99 +152,11 @@ codex_semver_compare() {
 }
 
 check_codex_cli() {
-	local state installed available installed_number comparison action upgradable=0
-	state="$(codex_cli_install_state)" || state=absent
-	case "$state" in
-	standalone | standalone-not-on-path)
-		installed="$(codex_installed_version)"
-		available="$(codex_available_version)"
-		installed_number="$(codex_version_number "$installed" 2>/dev/null || true)"
-		if [[ "$available" == '—' || -z "$installed_number" ]]; then
-			action="$UPDATE_CHECK_UNKNOWN"
-		elif comparison="$(codex_semver_compare "$installed_number" "$available")"; then
-			if ((comparison < 0)); then
-				action="$UPDATE_CHECK_UPGRADE"
-				upgradable=1
-			else
-				action="$UPDATE_CHECK_CURRENT"
-			fi
-		else
-			available='—'
-			action="$UPDATE_CHECK_UNKNOWN"
-		fi
-		;;
-	absent)
-		installed="$NOT_INSTALLED"
-		available='—'
-		action="$UPDATE_CHECK_SKIP"
-		;;
-	external)
-		installed='external installation'
-		available='—'
-		action="$UPDATE_CHECK_EXTERNAL"
-		;;
-	standalone-shadowed)
-		installed='standalone shadowed'
-		available='—'
-		action="$UPDATE_CHECK_EXTERNAL"
-		;;
-	*)
-		installed="$NOT_INSTALLED"
-		available='—'
-		action="$UPDATE_CHECK_SKIP"
-		;;
-	esac
-	printf '%s|%s|%s|%s\n' "Codex CLI" "$installed" "$available" "$action"
-	[[ $upgradable -eq 1 ]]
+	dotfiles_catalog_check codex_cli "Codex CLI"
 }
 
 upgrade_codex_cli() {
-	local state before after active available before_number after_number comparison
-	state="$(codex_cli_install_state)" || state=absent
-	case "$state" in
-	standalone | standalone-not-on-path)
-		before="$(codex_installed_version)"
-		available="$(codex_available_version)" || available='—'
-		before_number="$(codex_version_number "$before" 2>/dev/null || true)"
-		if [[ -n "$before_number" ]] && comparison="$(codex_semver_compare "$before_number" "$available")" && ((comparison >= 0)); then
-			log_skip "Codex CLI already up to date ($before)"
-			upgrade_result_set already-current
-			return 0
-		fi
-		codex_sync_standalone || return $?
-		after="$(codex_installed_version)"
-		if codex_release_version_is_valid "$available"; then
-			after_number="$(codex_version_number "$after" 2>/dev/null || true)"
-			if ! comparison="$(codex_semver_compare "$after_number" "$available")" || ((comparison < 0)); then
-				log_warn "Codex CLI installer did not reach $available (reported: ${after:-unknown})"
-				return 1
-			fi
-		fi
-		# The vendor installer's own narration is captured, so this step has to
-		# say what happened or it prints a section heading and nothing under it,
-		# which reads as a step that died.
-		if [[ "$before" != "$after" ]]; then
-			log_ok "Codex CLI updated to ${after:-unknown}"
-			upgrade_result_set updated
-		else
-			log_skip "Codex CLI already up to date (${after:-unknown})"
-			upgrade_result_set checked-no-change
-		fi
-		;;
-	absent)
-		log_skip "Codex CLI standalone is not installed"
-		upgrade_result_set skipped
-		;;
-	external | standalone-shadowed)
-		active="$(codex_active_command 2>/dev/null || true)"
-		log_skip "Codex CLI is externally managed or shadowed: ${active:-unknown} (see README.md#codex-cli-migration)"
-		upgrade_result_set skipped
-		;;
-	*)
-		log_skip "Codex CLI installation state is unknown"
-		upgrade_result_set skipped
-		;;
-	esac
+	dotfiles_catalog_upgrade codex_cli
 }
 
 # --- Claude CLI ---
@@ -314,33 +174,11 @@ claude_installed_version() {
 }
 
 check_claude_cli() {
-	local installed available action upgradable=0
-	installed="$(claude_installed_version)"
-	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
-		available="—"
-		action="$UPDATE_CHECK_SKIP"
-	else
-		available="—"
-		action="$UPDATE_CHECK_UNKNOWN"
-	fi
-	printf '%s|%s|%s|%s\n' "Claude CLI" "$installed" "$available" "$action"
-	[[ $upgradable -eq 1 ]]
+	dotfiles_catalog_check claude_cli "Claude CLI"
 }
 
 upgrade_claude_cli() {
-	local executable=''
-	# Same resolver, same reason: a Windows Claude on PATH would be updated
-	# instead of the Linux one, or launched.
-	executable="$(tool_resolve 'claude')" || executable=''
-	if [[ -z "$executable" ]]; then
-		log_skip "Claude CLI not installed"
-		upgrade_result_set skipped
-		return 0
-	fi
-	local before
-	before="$(claude_installed_version)"
-	_run_quiet_command 'claude update' "$executable" update || return $?
-	_upgrade_report_version_change 'Claude CLI' "$before" "$(claude_installed_version)"
+	dotfiles_catalog_upgrade claude_cli
 }
 
 # --- lazygit ---
@@ -359,41 +197,11 @@ lazygit_installed_version() {
 }
 
 check_lazygit() {
-	local installed latest available action upgradable=0
-	installed="$(lazygit_installed_version)"
-	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
-		available="—"
-		action="$UPDATE_CHECK_SKIP"
-	else
-		latest="$(_github_latest_version jesseduffield/lazygit || true)"
-		available="${latest:-—}"
-		if [[ -n "$latest" ]] && _version_gt "$latest" "$installed"; then
-			action="$UPDATE_CHECK_UPGRADE"
-			upgradable=1
-		else
-			action="$UPDATE_CHECK_CURRENT"
-		fi
-	fi
-	printf '%s|%s|%s|%s\n' "lazygit" "$installed" "$available" "$action"
-	[[ $upgradable -eq 1 ]]
+	dotfiles_catalog_check lazygit "lazygit"
 }
 
 upgrade_lazygit() {
-	if ! command -v lazygit >/dev/null 2>&1; then
-		log_skip "lazygit not installed"
-		upgrade_result_set skipped
-		return 0
-	fi
-	local installed latest
-	installed="$(lazygit_installed_version)"
-	latest="$(_github_latest_version jesseduffield/lazygit || true)"
-	if [[ -n "$latest" && -n "$installed" ]] && _version_gt "$latest" "$installed"; then
-		install_lazygit_from_github || return $?
-		upgrade_result_set updated
-	else
-		log_skip "lazygit already up to date (${installed})"
-		upgrade_result_set already-current
-	fi
+	dotfiles_catalog_upgrade lazygit
 }
 
 # --- lazydocker ---
@@ -412,41 +220,11 @@ lazydocker_installed_version() {
 }
 
 check_lazydocker() {
-	local installed latest available action upgradable=0
-	installed="$(lazydocker_installed_version)"
-	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
-		available="—"
-		action="$UPDATE_CHECK_SKIP"
-	else
-		latest="$(_github_latest_version jesseduffield/lazydocker || true)"
-		available="${latest:-—}"
-		if [[ -n "$latest" ]] && _version_gt "$latest" "$installed"; then
-			action="$UPDATE_CHECK_UPGRADE"
-			upgradable=1
-		else
-			action="$UPDATE_CHECK_CURRENT"
-		fi
-	fi
-	printf '%s|%s|%s|%s\n' "lazydocker" "$installed" "$available" "$action"
-	[[ $upgradable -eq 1 ]]
+	dotfiles_catalog_check lazydocker "lazydocker"
 }
 
 upgrade_lazydocker() {
-	if ! command -v lazydocker >/dev/null 2>&1; then
-		log_skip "lazydocker not installed"
-		upgrade_result_set skipped
-		return 0
-	fi
-	local installed latest
-	installed="$(lazydocker_installed_version)"
-	latest="$(_github_latest_version jesseduffield/lazydocker || true)"
-	if [[ -n "$latest" && -n "$installed" ]] && _version_gt "$latest" "$installed"; then
-		install_lazydocker_from_github || return $?
-		upgrade_result_set updated
-	else
-		log_skip "lazydocker already up to date (${installed})"
-		upgrade_result_set already-current
-	fi
+	dotfiles_catalog_upgrade lazydocker
 }
 
 # --- Ubuntu Sans Mono fonts — opt-in ---
@@ -464,46 +242,13 @@ ubuntu_sans_mono_installed_version() {
 }
 
 ubuntu_sans_mono_latest_version() {
-	_github_latest_version canonical/Ubuntu-Sans-Mono-fonts
+	dotfiles_catalog_begin && dotfiles_catalog_get ubuntu_sans_mono_fonts version
 }
 
 check_ubuntu_sans_mono() {
-	local installed available action upgradable=0
-	installed="$(ubuntu_sans_mono_installed_version)"
-	available="$(ubuntu_sans_mono_latest_version 2>/dev/null || true)"
-	[[ -n "$available" ]] || available="—"
-	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
-		action="$UPDATE_CHECK_SKIP"
-	elif [[ "$available" != "—" && "$installed" != "$available" ]]; then
-		action="$UPDATE_CHECK_UPGRADE"
-		upgradable=1
-	else
-		action="$UPDATE_CHECK_CURRENT"
-	fi
-	printf '%s|%s|%s|%s\n' "Ubuntu Sans Mono fonts" "$installed" "$available" "$action"
-	[[ $upgradable -eq 1 ]]
+	dotfiles_catalog_check ubuntu_sans_mono_fonts "Ubuntu Sans Mono fonts"
 }
 
 upgrade_ubuntu_sans_mono() {
-	local installed latest
-	installed="$(ubuntu_sans_mono_installed_version)"
-	if [[ "$installed" == "$NOT_INSTALLED" ]]; then
-		install_ubuntu_sans_mono_fonts || return $?
-		upgrade_result_set updated
-		return 0
-	fi
-	latest="$(ubuntu_sans_mono_latest_version 2>/dev/null || true)"
-	if [[ -z "$latest" ]]; then
-		log_warn "Could not check the Ubuntu Sans Mono release (GitHub API); keeping ${installed}"
-		upgrade_result_set checked-no-change
-		return 0
-	fi
-	if [[ "$installed" == "$latest" ]]; then
-		install_ubuntu_sans_mono_windows "$HOME/.local/share/fonts/ubuntu-sans-mono" || return $?
-		log_skip "Ubuntu Sans Mono fonts already up to date (${installed})"
-		upgrade_result_set already-current
-		return 0
-	fi
-	install_ubuntu_sans_mono_fonts --replace || return $?
-	upgrade_result_set updated
+	dotfiles_catalog_upgrade ubuntu_sans_mono_fonts
 }

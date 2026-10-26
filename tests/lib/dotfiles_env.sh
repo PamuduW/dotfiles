@@ -42,3 +42,9 @@ source "$REPO_DIR/scripts/lib/components/install_dispatch.sh"
 source "$REPO_DIR/scripts/menus/initial_setup.sh"
 source "$REPO_DIR/scripts/lib/update_components.sh"
 source "$REPO_DIR/scripts/lib/update_workflow.sh"
+
+# These orchestration fixtures use an approved empty catalog; tool adapters
+# receive their own explicit targets in installer suites.
+# shellcheck source=tests/lib/catalog_fixture.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/catalog_fixture.sh"
+catalog_fixture_load

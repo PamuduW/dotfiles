@@ -44,13 +44,20 @@ bash -n "${shell_files[@]}"
 
 if command -v shellcheck >/dev/null 2>&1; then
 	printf 'Running ShellCheck on production code...\n'
+	# Separate processes release each source graph before analyzing the next file.
 	# Bash namerefs to associative arrays trigger SC2178/SC2313 false positives.
 	# SC2034 stays enabled so new dead variables are caught; files that publish
 	# cross-module globals carry a local disable with a reason.
-	shellcheck -x -e SC1091,SC2178,SC2313 "${production_files[@]}"
+	lint_status=0
+	for shell_file in "${production_files[@]}"; do
+		shellcheck -x -e SC1091,SC2178,SC2313 "$shell_file" || lint_status=1
+	done
+	((lint_status == 0))
 	printf 'Running ShellCheck warning checks on test harnesses...\n'
 	# Test namerefs and source-time metadata arrays produce known false positives.
-	shellcheck -x -S warning -e SC1091,SC2034,SC2178,SC2313 "${test_files[@]}"
+	for shell_file in "${test_files[@]}"; do
+		shellcheck -x -S warning -e SC1091,SC2034,SC2178,SC2313 "$shell_file"
+	done
 else
 	printf 'ShellCheck not installed; skipping static analysis.\n' >&2
 fi

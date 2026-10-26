@@ -5,14 +5,30 @@ TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd -- "$TEST_DIR/.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
 source "$TEST_DIR/lib/harness.sh"
+source "$TEST_DIR/lib/catalog_fixture.sh"
 test_harness_init
 test_harness_report_init
+PATH="$HOME/.local/bin:$TEST_FAKE_BIN:/usr/bin:/bin"
 
 source "$ROOT/scripts/lib/installers/logging.sh"
 if [[ -f "$ROOT/scripts/lib/installers/boost.sh" ]]; then
 	# shellcheck source=scripts/lib/installers/boost.sh
 	source "$ROOT/scripts/lib/installers/boost.sh"
 fi
+
+boost_test_reset() {
+	rm -rf -- "$HOME/.local/bin/boost" "$HOME/.local/share/dotfiles-catalog/boost_cli" "$HOME/.local/share/dotfiles/boost-cli.version"
+}
+
+boost_catalog_fixture() {
+	local version="${1#v}" digest="$2"
+	printf '%s\n' $'boost_cli\towner\tany\tdotfiles' $'boost_cli\tkind\tany\tsoftware' \
+		$'boost_cli\tversion\tany\t'"$version" $'boost_cli\tarchive\tany\ttar' \
+		$'boost_cli\tbinary\tany\tboost' \
+		$'boost_cli\turl\tany\thttps://github.com/jfrog/boost/releases/download/v'"$version/boost-linux-amd64.tar.gz" \
+		$'boost_cli\tdigest\tany\tsha256:'"$digest" | catalog_fixture_seal "$TEST_HARNESS_ROOT/catalog-boost"
+	catalog_fixture_use "$TEST_HARNESS_ROOT/catalog-boost"
+}
 
 make_boost_archive() {
 	local version="${1:-0.12.6}" fixture_dir="$TEST_HARNESS_ROOT/boost-fixture"
@@ -88,18 +104,20 @@ test_archive_member_escaping_the_extraction_directory_is_refused() (
 	[[ ! -e "$HOME/.local/bin/boost" ]]
 )
 
-test_fresh_install_uses_latest_verified_release_and_only_installs_boost_binary() (
+test_fresh_install_uses_approved_release_and_only_installs_boost_binary() (
 	declare -F install_boost_cli >/dev/null || return 1
+	boost_test_reset
 	local calls="$TEST_HARNESS_ROOT/boost-install.calls" fixture_archive digest
 	: >"$calls"
 	make_boost_archive 0.12.7
 	fixture_archive="$TEST_HARNESS_ROOT/boost-linux-amd64.tar.gz"
 	digest="$(sha256sum "$fixture_archive" | awk '{print $1}')"
+	boost_catalog_fixture 0.12.7 "$digest"
 	boost_command() {
 		[[ -x "$HOME/.local/bin/boost" ]] || return 1
 		printf '%s\n' "$HOME/.local/bin/boost"
 	}
-	boost_latest_release_metadata() { printf 'v0.12.7\n%s\n' "$digest"; }
+	boost_latest_release_metadata() { printf 'v99.0.0\nunapproved\n'; }
 	github_curl() {
 		printf 'download:%s\n' "${*: -1}" >>"$calls"
 		cp "$fixture_archive" "$3"
@@ -114,8 +132,9 @@ test_fresh_install_uses_latest_verified_release_and_only_installs_boost_binary()
 	! grep -R -Fq 'boost init' "$HOME"
 )
 
-test_update_installs_latest_verified_release_and_advances_stamp() (
+test_update_installs_approved_release_and_advances_stamp() (
 	declare -F upgrade_boost_cli >/dev/null || return 1
+	boost_test_reset
 	local fixture_archive digest
 	mkdir -p "$HOME/.local/bin" "$HOME/.local/share/dotfiles"
 	printf '%s\n' '#!/usr/bin/env bash' 'printf "boost v0.12.6\\n"' >"$HOME/.local/bin/boost"
@@ -124,6 +143,7 @@ test_update_installs_latest_verified_release_and_advances_stamp() (
 	make_boost_archive 0.12.7
 	fixture_archive="$TEST_HARNESS_ROOT/boost-linux-amd64.tar.gz"
 	digest="$(sha256sum "$fixture_archive" | awk '{print $1}')"
+	boost_catalog_fixture 0.12.7 "$digest"
 	boost_command() { printf '%s\n' "$HOME/.local/bin/boost"; }
 	boost_latest_release_metadata() { printf 'v0.12.7\n%s\n' "$digest"; }
 	github_curl() { cp "$fixture_archive" "$3"; }
@@ -136,8 +156,11 @@ test_update_installs_latest_verified_release_and_advances_stamp() (
 	[[ "$("$HOME/.local/bin/boost" version)" == 'boost v0.12.7' ]]
 )
 
-test_update_without_published_digest_preserves_owned_binary() (
+test_update_without_approved_pin_preserves_owned_binary() (
 	declare -F upgrade_boost_cli >/dev/null || return 1
+	boost_test_reset
+	catalog_fixture_use "$TEST_HARNESS_ROOT/catalog-boost"
+	TEST_APPROVED_CATALOG="$TEST_HARNESS_ROOT/missing-boost-catalog"
 	mkdir -p "$HOME/.local/bin" "$HOME/.local/share/dotfiles"
 	printf '%s\n' '#!/usr/bin/env bash' 'printf "boost v0.12.6\\n"' >"$HOME/.local/bin/boost"
 	chmod +x "$HOME/.local/bin/boost"
@@ -168,8 +191,9 @@ test_latest_metadata_returns_matching_tag_and_asset_digest() (
 
 test_checksum_mismatch_refuses_installation() (
 	declare -F install_boost_cli >/dev/null || return 1
-	rm -f -- "$HOME/.local/bin/boost" "$HOME/.local/share/dotfiles/boost-cli.version"
+	boost_test_reset
 	make_boost_archive
+	boost_catalog_fixture 0.12.6 "$(printf '%064d' 0)"
 	boost_command() { return 1; }
 	boost_latest_release_metadata() { printf 'v0.12.7\n%064d\n' 0; }
 	github_curl() { cp "$TEST_HARNESS_ROOT/boost-linux-amd64.tar.gz" "$3"; }
@@ -180,11 +204,13 @@ test_checksum_mismatch_refuses_installation() (
 	[[ ! -e "$HOME/.local/bin/boost" ]]
 )
 
-test_fresh_install_without_verifiable_release_metadata_installs_nothing() (
+test_fresh_install_without_approved_pin_installs_nothing() (
 	declare -F install_boost_cli >/dev/null || return 1
 	local calls="$TEST_HARNESS_ROOT/boost-metadata-failure.calls"
 	: >"$calls"
-	rm -f -- "$HOME/.local/bin/boost" "$HOME/.local/share/dotfiles/boost-cli.version"
+	boost_test_reset
+	catalog_fixture_use "$TEST_HARNESS_ROOT/catalog-boost"
+	TEST_APPROVED_CATALOG="$TEST_HARNESS_ROOT/missing-boost-catalog"
 	boost_command() { return 1; }
 	boost_latest_release_metadata() {
 		printf 'metadata\n' >>"$calls"
@@ -195,12 +221,13 @@ test_fresh_install_without_verifiable_release_metadata_installs_nothing() (
 		return 1
 	fi
 	[[ ! -e "$HOME/.local/bin/boost" && ! -e "$HOME/.local/share/dotfiles/boost-cli.version" ]] || return 1
-	[[ "$(<"$calls")" == 'metadata' ]]
+	[[ ! -s "$calls" ]]
 )
 
 test_existing_unowned_binary_is_preserved() (
 	declare -F install_boost_cli >/dev/null || return 1
-	rm -f -- "$HOME/.local/share/dotfiles/boost-cli.version"
+	boost_test_reset
+	boost_catalog_fixture 0.12.7 "$(printf '%064d' 0)"
 	local calls="$TEST_HARNESS_ROOT/boost-unowned.calls"
 	: >"$calls"
 	mkdir -p "$HOME/.local/bin"
@@ -220,7 +247,8 @@ test_existing_unowned_binary_is_preserved() (
 
 test_unsupported_architecture_fails_closed() (
 	declare -F install_boost_cli >/dev/null || return 1
-	rm -f -- "$HOME/.local/bin/boost" "$HOME/.local/share/dotfiles/boost-cli.version"
+	boost_test_reset
+	boost_catalog_fixture 0.12.7 "$(printf '%064d' 0)"
 	boost_command() { return 1; }
 	uname() {
 		case "$1" in
@@ -233,13 +261,13 @@ test_unsupported_architecture_fails_closed() (
 	! install_boost_cli >/dev/null 2>&1
 )
 
-expect_success 'fresh Boost install uses the latest verified release and only installs the CLI binary' test_fresh_install_uses_latest_verified_release_and_only_installs_boost_binary
+expect_success 'fresh Boost install uses the approved release and only installs the CLI binary' test_fresh_install_uses_approved_release_and_only_installs_boost_binary
 expect_success 'Boost checksum mismatch refuses installation' test_checksum_mismatch_refuses_installation
-expect_success 'fresh Boost install fails closed when release metadata is unverifiable' test_fresh_install_without_verifiable_release_metadata_installs_nothing
+expect_success 'fresh Boost install fails closed when the approved pin is unavailable' test_fresh_install_without_approved_pin_installs_nothing
 expect_success 'existing unowned Boost binary is preserved' test_existing_unowned_binary_is_preserved
 expect_success 'unsupported Boost architecture fails closed' test_unsupported_architecture_fails_closed
-expect_success 'Boost update installs the latest verified release and advances ownership' test_update_installs_latest_verified_release_and_advances_stamp
-expect_success 'Boost update preserves the owned binary when release metadata is unverifiable' test_update_without_published_digest_preserves_owned_binary
+expect_success 'Boost update installs the approved release and advances ownership' test_update_installs_approved_release_and_advances_stamp
+expect_success 'Boost update preserves the owned binary when the approved pin is unavailable' test_update_without_approved_pin_preserves_owned_binary
 expect_success 'Boost update returns the matching release tag and asset digest' test_latest_metadata_returns_matching_tag_and_asset_digest
 expect_success 'extra Boost archive members do not block installation' test_extra_archive_members_do_not_block_installation
 expect_success 'Boost archive without the CLI binary is refused' test_archive_without_the_boost_binary_is_refused

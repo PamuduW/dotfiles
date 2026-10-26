@@ -89,3 +89,9 @@ source "$REPO_DIR/scripts/menus/initial_setup.sh"
 source "$REPO_DIR/scripts/menus/update.sh"
 # Action logs go to the test's own directory, never the repository's log/.
 LOG_DIR="$TEST_HARNESS_ROOT/action-log"
+
+# These orchestration fixtures use an approved empty catalog; tool adapters
+# receive their own explicit targets in installer suites.
+# shellcheck source=tests/lib/catalog_fixture.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/catalog_fixture.sh"
+catalog_fixture_load

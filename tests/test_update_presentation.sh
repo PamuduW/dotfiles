@@ -7,6 +7,8 @@ REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
 source "$TEST_DIR/lib/harness.sh"
 test_harness_init
 test_harness_report_init
+source "$TEST_DIR/lib/catalog_fixture.sh"
+catalog_fixture_load
 source "$TEST_DIR/lib/update_test_fixture.sh"
 
 test_update_report_uses_clear_title_spacing_and_aligned_action_rule() (
@@ -111,6 +113,16 @@ test_mixed_preview_separates_verified_updates_from_remaining_checks() (
 	! grep -Fq 'everything looks current' <<<"$output" || return 1
 	grep -Fq 'refresh on apply' <<<"$output" || return 1
 	grep -Fq 'latest unchecked' <<<"$output"
+)
+
+test_blocked_catalog_drift_prevents_an_all_clear_summary() (
+	_collect_check_rows() {
+		printf '%s\n' 'Kubeconform|9.9.9|1.2.3|blocked'
+	}
+	local output
+	output="$(NO_COLOR=1 print_report_table)"
+	[[ "$output" != *'everything verified current'* ]] || return 1
+	[[ "$output" == *'1 component blocked'* ]]
 )
 
 test_codex_preview_renders_external_and_unchecked_states() (
@@ -637,6 +649,7 @@ test_bash_and_python_rollups_count_alike() (
 	}
 )
 
+expect_success 'blocked catalog drift prevents an all-clear summary' test_blocked_catalog_drift_prevents_an_all_clear_summary
 expect_success 'root status rollup has exactly one blank line before the summary' test_root_status_rollup_has_one_blank_line
 expect_success 'Bash and Python rollups count every state alike' test_bash_and_python_rollups_count_alike
 expect_success 'CLI and TUI status use the same component-state collector' test_cli_and_tui_status_share_component_collector

@@ -1,4 +1,6 @@
 # shellcheck shell=bash
+# shellcheck source=scripts/lib/catalog_load.sh
+source "${BASH_SOURCE[0]%/*}/../catalog_load.sh"
 
 BOOST_RELEASE_REPOSITORY="jfrog/boost"
 
@@ -17,16 +19,7 @@ boost_platform_arch() {
 }
 
 check_boost_cli() {
-	local installed action
-	installed="$(boost_installed_version)"
-	if [[ "$installed" == 'not installed' ]]; then
-		action=skip
-	elif boost_cli_is_dotfiles_owned; then
-		action=unknown
-	else
-		action=external
-	fi
-	printf 'Boost CLI|%s|—|%s\n' "$installed" "$action"
+	dotfiles_catalog_check "boost_cli" "Boost CLI"
 }
 
 boost_install_release() {
@@ -112,12 +105,7 @@ boost_install_release() {
 }
 
 install_boost_cli() {
-	local existing
-	if existing="$(boost_command 2>/dev/null)" && ! boost_cli_is_dotfiles_owned; then
-		log_warn "Boost CLI already exists outside Dotfiles ownership at ${existing}; preserving it"
-		return 0
-	fi
-	boost_sync_latest_release
+	dotfiles_catalog_install "boost_cli"
 }
 
 boost_latest_release_metadata() {
@@ -147,51 +135,9 @@ raise SystemExit(1)
 }
 
 boost_sync_latest_release() {
-	local arch installed_tag latest_tag latest_digest
-	local -a metadata=()
-	arch="$(boost_platform_arch)" || {
-		echo '  Boost supports only Linux amd64/arm64 in this installer.' >&2
-		return 1
-	}
-	mapfile -t metadata < <(boost_latest_release_metadata "$arch")
-	[[ "${#metadata[@]}" -eq 2 ]] || {
-		echo '  Could not verify the latest Boost release and published digest; preserving the installed binary.' >&2
-		return 1
-	}
-	latest_tag="${metadata[0]}"
-	latest_digest="${metadata[1]}"
-	installed_tag="$(boost_installed_tag 2>/dev/null || true)"
-	if [[ -n "$installed_tag" ]] && [[ "$(printf '%s\n%s\n' "${installed_tag#v}" "${latest_tag#v}" | sort -V | tail -n1)" == "${installed_tag#v}" ]]; then
-		# [SKIP], not a bare line: every other "already satisfied" in the run
-		# says so in the legend's vocabulary, and this one sat outside it.
-		log_skip "Boost CLI already current at $installed_tag"
-		return 0
-	fi
-	boost_install_release "$latest_tag" "$latest_digest"
+	dotfiles_catalog_install "boost_cli"
 }
 
 upgrade_boost_cli() {
-	if ! boost_command >/dev/null 2>&1; then
-		log_skip 'Boost CLI not installed'
-		if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set skipped; fi
-		return 0
-	fi
-	if ! boost_cli_is_dotfiles_owned; then
-		log_skip 'Boost CLI is externally managed; preserving it'
-		if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set skipped; fi
-		return 0
-	fi
-	local before after
-	before="$(boost_installed_tag 2>/dev/null || true)"
-	boost_sync_latest_release || return $?
-	after="$(boost_installed_tag 2>/dev/null || true)"
-	# The summary said "checked/no change" for a run that had just installed a
-	# new release. Its own lines already said which, so only the result moves.
-	if declare -F upgrade_result_set >/dev/null 2>&1; then
-		if [[ "$after" != "$before" ]]; then
-			upgrade_result_set updated
-		else
-			upgrade_result_set already-current
-		fi
-	fi
+	dotfiles_catalog_upgrade "boost_cli"
 }

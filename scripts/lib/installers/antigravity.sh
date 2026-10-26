@@ -1,4 +1,6 @@
 # shellcheck shell=bash
+# shellcheck source=scripts/lib/catalog_load.sh
+source "${BASH_SOURCE[0]%/*}/../catalog_load.sh"
 
 # The vendor one-liner (antigravity.google/cli/install.sh) reads this manifest,
 # then runs `agy install`, which appends a PATH export to ~/.bashrc and
@@ -152,67 +154,19 @@ antigravity_install_release() {
 }
 
 install_antigravity_cli() {
-	local platform
-	local -a metadata=()
-	if tool_resolve agy >/dev/null 2>&1 &&
-		skip_unless_forced 'Antigravity CLI already installed'; then
-		return 0
-	fi
-	platform="$(antigravity_platform)" || {
-		echo '  The Antigravity CLI installer supports only Linux amd64/arm64.' >&2
-		return 1
-	}
-	mapfile -t metadata < <(antigravity_manifest_metadata "$platform")
-	[[ "${#metadata[@]}" -eq 3 ]] || {
-		echo '  Could not read a valid Antigravity CLI release manifest.' >&2
-		return 1
-	}
-	antigravity_install_release "${metadata[0]}" "${metadata[1]}" "${metadata[2]}"
+	dotfiles_catalog_install "antigravity_cli"
 }
 
 antigravity_available_version() {
-	local platform
-	local -a metadata=()
-	platform="$(antigravity_platform)" || return 1
-	mapfile -t metadata < <(antigravity_manifest_metadata "$platform")
-	[[ "${#metadata[@]}" -eq 3 ]] || return 1
-	printf '%s\n' "${metadata[0]}"
+	dotfiles_catalog_begin && dotfiles_catalog_get antigravity_cli version
 }
 
 check_antigravity_cli() {
-	local installed available action upgradable=0
-	installed="$(antigravity_installed_version)"
-	if [[ "$installed" == 'not installed' ]]; then
-		available='—'
-		action=skip
-	else
-		available="$(antigravity_available_version || true)"
-		if [[ -z "$available" || ! "$installed" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-			available="${available:-—}"
-			action=unknown
-		elif [[ "$installed" != "$available" &&
-			"$(printf '%s\n%s\n' "$installed" "$available" | sort -V | tail -n1)" == "$available" ]]; then
-			action=upgrade
-			upgradable=1
-		else
-			action=current
-		fi
-	fi
-	printf 'Antigravity CLI|%s|%s|%s\n' "$installed" "$available" "$action"
-	[[ $upgradable -eq 1 ]]
+	dotfiles_catalog_check "antigravity_cli" "Antigravity CLI"
 }
 
 # The CLI also updates itself in the background; `agy update` is the same
 # updater run on demand.
 upgrade_antigravity_cli() {
-	local executable before
-	executable="$(tool_resolve agy)" || executable=''
-	if [[ -z "$executable" ]]; then
-		log_skip 'Antigravity CLI not installed'
-		if declare -F upgrade_result_set >/dev/null 2>&1; then upgrade_result_set skipped; fi
-		return 0
-	fi
-	before="$(antigravity_installed_version)"
-	_run_quiet_command 'agy update' "$executable" update || return $?
-	_upgrade_report_version_change 'Antigravity CLI' "$before" "$(antigravity_installed_version)"
+	dotfiles_catalog_upgrade "antigravity_cli"
 }

@@ -130,6 +130,7 @@ test_main_prepares_the_token_before_either_installer() (
 	print_plan() { :; }
 	ensure_git() { :; }
 	obtain_repo() { printf '%s\n' "$3" >>"$events"; }
+	freeze_software_catalog() { printf 'catalog\n' >>"$events"; }
 	prepare_github_token() { printf 'token\n' >>"$events"; }
 	run_dotfiles() { printf 'dotfiles-install\n' >>"$events"; }
 	run_agentbot() {
@@ -139,12 +140,13 @@ test_main_prepares_the_token_before_either_installer() (
 	print_summary() { :; }
 	start_new_shell() { :; }
 	main >/dev/null || return 1
-	local shared token dotfiles agentbot
+	local shared catalog token dotfiles agentbot
 	shared="$(grep -n '^Shared library$' "$events" | cut -d: -f1)"
+	catalog="$(grep -n '^catalog$' "$events" | cut -d: -f1)"
 	token="$(grep -n '^token$' "$events" | cut -d: -f1)"
 	dotfiles="$(grep -n '^dotfiles-install$' "$events" | cut -d: -f1)"
 	agentbot="$(grep -n '^agentbot-install$' "$events" | cut -d: -f1)"
-	[[ -n "$token" && "$shared" -lt "$token" && "$token" -lt "$dotfiles" && "$token" -lt "$agentbot" ]]
+	[[ -n "$token" && "$shared" -lt "$catalog" && "$catalog" -lt "$token" && "$token" -lt "$dotfiles" && "$token" -lt "$agentbot" ]]
 )
 
 check 'bootstrap saves a hidden token before the first authenticated install and update' test_new_token_authenticates_the_first_install_in_the_same_run

@@ -4,6 +4,7 @@ set -euo pipefail
 TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
 source "$TEST_DIR/lib/harness.sh"
+source "$TEST_DIR/lib/catalog_fixture.sh"
 test_harness_init
 test_harness_report_init
 source "$REPO_DIR/scripts/lib/installers/fonts.sh"
@@ -51,6 +52,12 @@ windows_retry_when_wsl_installed() (
 	export HOME="$TEST_HARNESS_ROOT/already-installed"
 	mkdir -p "$HOME/.local/share/fonts/ubuntu-sans-mono"
 	: >"$HOME/.local/share/fonts/ubuntu-sans-mono/UbuntuSansMono-Regular.ttf"
+	printf '1.0\n' >"$HOME/.local/share/fonts/ubuntu-sans-mono/.version"
+	printf '%064d\n' 0 >"$HOME/.local/share/fonts/ubuntu-sans-mono/.catalog-receipt"
+	printf '%s\n' $'ubuntu_sans_mono_fonts\towner\tany\tdotfiles' \
+		$'ubuntu_sans_mono_fonts\tkind\tany\tsoftware' $'ubuntu_sans_mono_fonts\tversion\tany\t1.0' \
+		$'ubuntu_sans_mono_fonts\tarchive\tany\tzip' | catalog_fixture_seal "$TEST_HARNESS_ROOT/catalog-font-retry"
+	catalog_fixture_use "$TEST_HARNESS_ROOT/catalog-font-retry"
 	skip_unless_forced() { return 0; }
 	install_ubuntu_sans_mono_windows() { return 7; }
 	install_ubuntu_sans_mono_fonts || rc=$?

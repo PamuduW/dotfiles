@@ -7,6 +7,8 @@ REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
 source "$TEST_DIR/lib/harness.sh"
 test_harness_init
 test_harness_report_init
+source "$TEST_DIR/lib/catalog_fixture.sh"
+catalog_fixture_load
 
 DOTFILES_DIR="$REPO_DIR"
 _msg() { printf '%s\n' "$*"; }

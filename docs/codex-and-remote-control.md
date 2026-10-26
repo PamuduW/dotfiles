@@ -2,10 +2,10 @@
 
 ## Standalone Codex ownership
 
-Dotfiles owns Codex only when the visible `~/.local/bin/codex` link resolves
-into `~/.codex/packages/standalone/` and that standalone command is active on
-`PATH`. Status distinguishes absent, standalone, standalone shadowed, and
-external states.
+Dotfiles recognizes its catalog receipt and visible `~/.local/bin/codex`
+link. It also recognizes the earlier standalone layout under
+`~/.codex/packages/standalone/` for migration. Status distinguishes absent,
+standalone, standalone shadowed, and external commands.
 
 Install explicitly with:
 
@@ -13,22 +13,22 @@ Install explicitly with:
 DOTFILES_COMPONENTS=codex_cli ./install.sh --install
 ```
 
-The component uses OpenAI's standalone installer and has no Node.js dependency.
-It preserves `~/.codex`, including configuration, authentication, sessions,
-skills, and local state.
+The component installs the complete bundle selected by the approved software
+catalog, including its helpers and resources. It verifies the archive digest,
+package identity and exact version before publishing the command. It has no
+Node.js dependency. Normal installs and updates do not run the floating vendor
+installer or select an upstream latest release.
 
-Updates compare the installed version with OpenAI's verified release channel
-before downloading the standalone installer. Equal or newer installed versions
-are reported as already current. If release metadata cannot be verified,
-Dotfiles still asks the official installer to refresh the installation and
-reports a download or installation failure honestly. A known upgrade must reach
-the advertised version before it is reported as successful.
+Catalog-managed releases live under `~/.local/share/dotfiles-catalog/codex_cli/`.
+The installer preserves `~/.codex/config.toml`, authentication, sessions and
+skills. Before executing Codex it disables the daemon updater through
+`app-server-daemon/settings.json` under `CODEX_HOME` (default `~/.codex`). It
+preserves other settings and refuses malformed or unsafe settings files.
 
-The documented installer endpoint returned HTTP 404 during verification on
-2026-10-24. This does not prevent an already-current Codex installation from
-passing the update check. Fresh installation and genuine upgrades still require
-the vendor download to work; no alternate URL or package-manager migration is
-chosen silently. See the [official CLI installation guide](https://learn.chatgpt.com/docs/cli).
+Updates select the approved catalog version. Missing approval, invalid bundle
+bytes or an unverifiable newer installation blocks replacement. The catalog
+seed remains unqualified until the required platform tests pass; these local
+changes do not provide an approved release catalog yet.
 
 ## npm migration
 
@@ -42,13 +42,16 @@ DOTFILES_MIGRATE_NPM_CODEX=1 \
 ./install.sh --install
 ```
 
-Migration fails closed for unrelated commands, unverifiable package paths,
-missing npm, uninstall failures, or remaining commands/package directories.
-`dotfiles update` never implicitly authorizes npm removal.
+After consent, migration verifies the complete approved bundle before moving
+any npm files. It moves each verified NVM command and `@openai/codex` package
+into a temporary directory under the NVM root. It keeps them there until
+standalone publication succeeds, then removes the backups. It does not run npm
+removal scripts or remove other global packages.
 
-The completed machine-specific migration procedure is retained in the parent
-workspace's historical documentation. This repository's shipped behavior and
-tests are the current operational contract.
+An unverified command or package, a failed move, or failed publication stops
+migration. Failure restores the original npm commands and packages. If rollback
+itself fails, the error identifies the retained recovery directory.
+`dotfiles update` never implicitly authorizes npm removal.
 
 ## Codex Remote Control
 

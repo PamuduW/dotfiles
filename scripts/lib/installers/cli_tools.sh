@@ -1,192 +1,35 @@
 # shellcheck shell=bash
+# shellcheck source=scripts/lib/catalog_load.sh
+source "${BASH_SOURCE[0]%/*}/../catalog_load.sh"
 
 install_node_via_nvm() {
-	local NVM_DIR="${HOME}/.nvm"
-	local NVM_MIN_NODE="24"
-
-	if command -v node >/dev/null 2>&1; then
-		local current_major
-		current_major="$(node --version | grep -oP '^v\K[0-9]+')"
-		if [[ "$current_major" -ge "$NVM_MIN_NODE" ]] &&
-			skip_unless_forced "Node.js v$(node --version | tr -d 'v') already installed"; then
-			return 0
-		fi
+	if ! declare -F dotfiles_catalog_node_install >/dev/null; then
+		# shellcheck source=/dev/null
+		source "$_DOTFILES_CATALOG_LIB/catalog_runtimes.sh"
 	fi
-
-	if [[ ! -d "$NVM_DIR" ]]; then
-		log_step "Install nvm"
-		local wsl_clean_path
-		wsl_clean_path="$(echo "$PATH" | tr ':' '\n' | grep -v '^/mnt/' | tr '\n' ':' | sed 's/:$//')"
-		run_vendor_shell_installer \
-			'https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh' 'nvm' \
-			"PROFILE=/dev/null" "PATH=$wsl_clean_path" || return $?
-		log_ok "nvm installed"
-	fi
-
-	export NVM_DIR
-	# shellcheck source=/dev/null
-	[[ -s "$NVM_DIR/nvm.sh" ]] && . "$NVM_DIR/nvm.sh"
-
-	log_step "Install Node.js ${NVM_MIN_NODE} via nvm"
-	_run_quiet_command "Node.js install" nvm install "$NVM_MIN_NODE" || return $?
-	_run_quiet_command "Node.js default alias" nvm alias default "$NVM_MIN_NODE" || return $?
-	log_ok "Node.js $(node --version) installed via nvm"
+	dotfiles_catalog_node_install || return $?
+	export PATH="$HOME/.local/bin:$PATH"
+	hash -r
 }
 
 ensure_asdf_installed() {
-	local asdf_dir="$HOME/.asdf"
-	local asdf_bin="$asdf_dir/bin/asdf"
-	local needs_install=0
-	if [[ ! -x "$asdf_bin" ]]; then
-		needs_install=1
-	elif head -n 1 "$asdf_bin" 2>/dev/null | grep -q '^#!/usr/bin/env bash'; then
-		needs_install=1
-	fi
-
-	if [[ "$needs_install" -eq 1 ]]; then
-		command -v curl >/dev/null 2>&1 || {
-			echo "  curl is required to install asdf." >&2
-			return 1
-		}
-		command -v tar >/dev/null 2>&1 || {
-			echo "  tar is required to install asdf." >&2
-			return 1
-		}
-
-		local arch
-		case "$(uname -m)" in
-		x86_64 | amd64) arch="amd64" ;;
-		aarch64 | arm64) arch="arm64" ;;
-		i386 | i686) arch="386" ;;
-		*)
-			echo "  Unsupported architecture for asdf: $(uname -m)" >&2
-			return 1
-			;;
-		esac
-
-		log_step "Install asdf"
-		local tag tmp tarball_url tarball_name expected_sha256 actual_sha256 extracted
-		tag="$(github_latest_release_version asdf-vm/asdf)" || {
-			echo "  Could not determine latest asdf release." >&2
-			return 1
-		}
-
-		tarball_name="asdf-v${tag}-linux-${arch}.tar.gz"
-		tarball_url="https://github.com/asdf-vm/asdf/releases/download/v${tag}/${tarball_name}"
-		command -v sha256sum >/dev/null 2>&1 || {
-			echo "  sha256sum is required to verify the asdf release." >&2
-			return 1
-		}
-		expected_sha256="$(github_release_asset_sha256 asdf-vm/asdf "$tarball_name")" || {
-			echo "  Could not obtain the published SHA-256 digest for ${tarball_name}; refusing unchecked download." >&2
-			return 1
-		}
-		tmp="$(mktemp -d)"
-		trap '[[ -n "${tmp:-}" ]] && rm -rf -- "$tmp"' RETURN
-		if ! github_curl -fsSL -o "$tmp/asdf.tar.gz" "$tarball_url"; then
-			echo "  Failed to download asdf. Check TLS trust in WSL or retry after fixing CA certificates." >&2
-			return 1
-		fi
-		actual_sha256="$(sha256sum "$tmp/asdf.tar.gz" | awk '{print $1}')"
-		if [[ "$actual_sha256" != "$expected_sha256" ]]; then
-			echo "  asdf SHA-256 verification failed; refusing to install the downloaded binary." >&2
-			return 1
-		fi
-
-		mkdir -p "$asdf_dir/bin"
-		rm -f "$asdf_bin"
-		if ! tar -xzf "$tmp/asdf.tar.gz" -C "$asdf_dir/bin" asdf 2>/dev/null; then
-			tar -xzf "$tmp/asdf.tar.gz" -C "$tmp" || return $?
-			extracted="$(find "$tmp" -maxdepth 3 -type f -name asdf | head -n1 || true)"
-			[[ -n "$extracted" ]] || {
-				echo "  Failed to extract asdf binary." >&2
-				return 1
-			}
-			install -m 0755 "$extracted" "$asdf_bin" || return $?
-		fi
-		chmod +x "$asdf_bin"
-		rm -rf "$tmp"
-		trap - RETURN
-	fi
-
-	export PATH="$asdf_dir/bin:$asdf_dir/shims:$PATH"
-
-	command -v asdf >/dev/null 2>&1 || {
-		echo "  asdf install completed but command is still unavailable." >&2
-		return 1
-	}
-
-	log_ok "asdf available"
+	dotfiles_catalog_install "asdf"
 }
 
 install_go_via_asdf() {
-	if ! ensure_asdf_installed; then
-		echo "  Could not set up asdf for Go installation." >&2
-		return 1
+	if ! declare -F dotfiles_catalog_go_install >/dev/null; then
+		# shellcheck source=/dev/null
+		source "$_DOTFILES_CATALOG_LIB/catalog_runtimes.sh"
 	fi
-
-	if ! asdf plugin list 2>/dev/null | grep -qx 'golang'; then
-		log_step "Add asdf golang plugin"
-		_run_quiet_command 'asdf golang plugin' asdf plugin add golang || return $?
-		log_ok "asdf golang plugin added"
-	fi
-
-	log_step "Install Go latest via asdf"
-	_run_quiet_command "Go install" asdf install golang latest || return $?
-	_run_quiet_command "Go version selection" asdf set -u golang latest || return $?
-	asdf reshim golang 2>/dev/null || true
-	log_ok "Go installed and set for user via asdf"
+	dotfiles_catalog_go_install
 }
 
 install_cursor_cli() {
-	# `agent` and `cursor-agent` are what Cursor's installer creates; `cursor`
-	# is the editor launcher, and under WSL that name resolves to the Windows
-	# one, which made this skip on every fresh machine.
-	if tool_resolve 'agent cursor-agent' >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/agent" ]]; then
-		if [[ ! -x "$HOME/bin/agent" && -x "$HOME/.local/bin/agent" ]]; then
-			mkdir -p "$HOME/bin"
-			ln -sf "$HOME/.local/bin/agent" "$HOME/bin/agent"
-		fi
-		if skip_unless_forced "Cursor CLI already installed"; then
-			return 0
-		fi
-	fi
-	log_step "Install Cursor CLI"
-	run_vendor_shell_installer 'https://cursor.com/install' 'Cursor CLI' || return $?
-	if [[ -x "$HOME/.local/bin/agent" ]]; then
-		mkdir -p "$HOME/bin"
-		ln -sf "$HOME/.local/bin/agent" "$HOME/bin/agent"
-	fi
-	log_ok "Cursor CLI installed"
+	dotfiles_catalog_install "cursor_cli"
 }
 
 codex_sync_standalone() {
-	local bin_dir visible helper
-	bin_dir="${CODEX_INSTALL_DIR:-$HOME/.local/bin}"
-	mkdir -p "$bin_dir" || return 1
-
-	# Keep the installer's PATH setup from editing the Stow-managed .bashrc.
-	# The download boundary captures the vendor script's own narration; the step
-	# reports its own result.
-	PATH="$bin_dir:$PATH" run_vendor_shell_installer \
-		'https://chatgpt.com/codex/install.sh' \
-		'Codex CLI' \
-		'CODEX_NON_INTERACTIVE=1' || return $?
-
-	visible="$(codex_visible_install_path)"
-	codex_path_is_standalone_owned "$visible" || {
-		printf '%s\n' '  Codex installer completed without a verified standalone command.' >&2
-		return 1
-	}
-	"$visible" --version >/dev/null 2>&1 || {
-		printf '%s\n' '  The installed standalone Codex command failed its version check.' >&2
-		return 1
-	}
-	helper="${CODEX_HOME:-$HOME/.codex}/packages/standalone/current/bin/codex-code-mode-host"
-	[[ -x "$helper" ]] || {
-		printf '%s\n' '  The installed standalone Codex package is missing codex-code-mode-host.' >&2
-		return 1
-	}
+	dotfiles_catalog_install "codex_cli"
 }
 
 codex_nvm_migration_authorized() {
@@ -206,103 +49,93 @@ codex_nvm_migration_authorized() {
 	return 1
 }
 
-codex_migrate_nvm_installations() {
-	local command_path tree version
-	local -a commands=() leftover_commands=() leftover_packages=()
+codex_migrate_nvm_installations() (
+	local command_path tree directory rc=0 committed=0 keep_directory=0 index
+	local -a commands=() rechecked=() packages=()
 	if ! codex_nvm_migration_inventory commands; then
 		printf '%s\n' '  cannot migrate unverified external Codex installation.' >&2
 		return 1
 	fi
 	printf '  Migrating %d npm-managed Codex installations:\n' "${#commands[@]}"
-	for command_path in "${commands[@]}"; do
-		version="$("$command_path" --version 2>/dev/null | head -n1 || true)"
-		printf '    %s%s\n' "$command_path" "${version:+ ($version)}"
-	done
+	printf '    %s\n' "${commands[@]}"
 	codex_nvm_migration_authorized || {
 		printf '%s\n' '  Codex npm migration was not authorized; nothing was removed.' >&2
 		return 1
 	}
+	[[ "${CODEX_INSTALL_DIR:-$HOME/.local/bin}" == "$HOME/.local/bin" ]] || {
+		printf '%s\n' '  Catalog Codex requires CODEX_INSTALL_DIR to be ~/.local/bin.' >&2
+		return 2
+	}
+	dotfiles_catalog_begin || return $?
+	local version archive binary
+	version="$(dotfiles_catalog_get codex_cli version)" || return 2
+	archive="$(dotfiles_catalog_get codex_cli archive)" || return 2
+	binary="$(dotfiles_catalog_get codex_cli binary)" || return 2
+	[[ "$(dotfiles_catalog_get codex_cli owner)" == dotfiles && "$binary" == bin/codex ]] || return 2
+	case "$archive" in tar | tar.gz | tar.xz | tgz | zip) ;; *) return 2 ;; esac
+	directory="$(mktemp -d "${NVM_DIR:-$HOME/.nvm}/.dotfiles-codex-migration-XXXXXX")" || return 1
+	# shellcheck disable=SC2329  # Invoked by this subshell's EXIT trap.
+	codex_migration_cleanup() {
+		local status=$? rollback_failed=0
+		if [[ "$committed" == 0 ]]; then
+			for ((index = ${#commands[@]} - 1; index >= 0; index--)); do
+				if [[ -e "$directory/package-$index" ]]; then
+					mv -- "$directory/package-$index" "${packages[index]}" || rollback_failed=1
+				fi
+				if [[ -e "$directory/command-$index" || -L "$directory/command-$index" ]]; then
+					mv -- "$directory/command-$index" "${commands[index]}" || rollback_failed=1
+				fi
+			done
+		fi
+		if [[ "$rollback_failed" == 1 ]]; then
+			keep_directory=1
+			printf '  Codex migration rollback needs recovery; originals retained at %s.\n' "$directory" >&2
+		fi
+		[[ "$keep_directory" == 1 ]] || rm -rf -- "$directory"
+		return "$status"
+	}
 	for command_path in "${commands[@]}"; do
 		tree="${command_path%/bin/codex}"
-		log_step "Remove npm Codex from $(basename "$tree")"
-		# npm narrates the removal; the line below says what happened.
-		_run_quiet_command "npm Codex removal from $(basename "$tree")" \
-			env PATH="$tree/bin:$PATH" "$tree/bin/npm" --prefix "$tree" uninstall -g @openai/codex || {
-			printf '  Failed to remove npm Codex from %s; standalone was not installed.\n' "$tree" >&2
-			return 1
-		}
-		log_ok "npm Codex removed from $(basename "$tree")"
+		packages+=("$tree/lib/node_modules/@openai/codex")
+	done
+	trap 'codex_migration_cleanup' EXIT
+	# Verify the complete approved bundle before moving any existing command.
+	dotfiles_catalog_download codex_cli "$directory/archive" || return $?
+	mkdir "$directory/payload" || return 1
+	dotfiles_catalog_extract "$archive" "$directory/archive" "$directory/payload" || return $?
+	dotfiles_catalog_codex_layout "$directory/payload" "$version" "$binary" || return 2
+	dotfiles_catalog_codex_defaults || return 2
+	dotfiles_catalog_version_matches "$directory/payload/$binary" "$version" --version || return 2
+	codex_nvm_migration_inventory rechecked || return 2
+	[[ "${rechecked[*]}" == "${commands[*]}" ]] || return 2
+	# Keep originals until publication succeeds. Moving verified package paths
+	# avoids running npm removal scripts or changing other global packages.
+	for index in "${!commands[@]}"; do
+		mv -- "${commands[index]}" "$directory/command-$index" || return $?
+		mv -- "${packages[index]}" "$directory/package-$index" || return $?
 	done
 	hash -r
-	codex_collect_nvm_commands leftover_commands
-	if ((${#leftover_commands[@]} > 0)); then
-		printf '%s\n' '  npm Codex commands remain after migration; standalone was not installed.' >&2
-		printf '    %s\n' "${leftover_commands[@]}" >&2
-		return 1
+	if dotfiles_catalog_external codex_cli; then
+		printf '%s\n' '  Another external Codex command would remain active; restoring npm installations.' >&2
+		return 2
 	fi
-	codex_collect_nvm_packages leftover_packages
-	if ((${#leftover_packages[@]} > 0)); then
-		printf '%s\n' '  npm Codex artifacts remain after migration; standalone was not installed.' >&2
-		printf '    %s\n' "${leftover_packages[@]}" >&2
-		return 1
-	fi
-}
+	dotfiles_catalog_install codex_cli "${DOTFILES_FORCE_REINSTALL:-0}" "$directory/archive" || rc=$?
+	((rc == 0)) || return "$rc"
+	committed=1
+	log_ok "Codex CLI migrated from npm to the approved standalone bundle"
+)
 
 # PowerShell straight from the upstream release, for releases the Microsoft
 # feed has not caught up with yet.
 install_powershell_from_github() {
-	command -v curl >/dev/null 2>&1 || {
-		echo "  curl required for the PowerShell fallback install." >&2
-		return 1
-	}
-	local ver tmp arch deb
-	ver="$(github_latest_release_version PowerShell/PowerShell)" || {
-		echo "  Could not determine the latest PowerShell release." >&2
-		return 1
-	}
-	case "$(uname -m)" in
-	x86_64) arch=amd64 ;;
-	aarch64 | arm64) arch=arm64 ;;
-	*)
-		echo "  No PowerShell package for architecture $(uname -m)." >&2
-		return 1
-		;;
-	esac
-
-	tmp="$(mktemp -d)"
-	# shellcheck disable=SC2064  # Capture this invocation's temp path for RETURN cleanup.
-	trap "rm -rf -- '$tmp'; trap - RETURN" RETURN
-	deb="powershell_${ver}-1.deb_${arch}.deb"
-	log_step "Install PowerShell ${ver} from the upstream release"
-	github_curl -fsSL -o "$tmp/$deb" \
-		"https://github.com/PowerShell/PowerShell/releases/download/v${ver}/${deb}" || return $?
-	# apt resolves the package's own dependencies; dpkg alone would not.
-	_run_quiet_command 'PowerShell package install' \
-		sudo apt-get -qq -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=600 install -y "$tmp/$deb" || return $?
-	rm -rf -- "$tmp"
-	trap - RETURN
-	log_ok "PowerShell ${ver} installed from the upstream release"
+	dotfiles_catalog_install "powershell"
 }
 
 install_codex_cli() {
 	local state active
 	state="$(codex_cli_install_state)" || return $?
 	case "$state" in
-	absent)
-		log_step "Install Codex CLI standalone"
-		codex_sync_standalone || return $?
-		log_ok "Codex CLI standalone installed"
-		;;
-	standalone)
-		if ! skip_unless_forced "Codex CLI standalone already installed"; then
-			log_step "Reinstall Codex CLI standalone"
-			codex_sync_standalone || return $?
-			log_ok "Codex CLI standalone reinstalled"
-		fi
-		;;
-	standalone-not-on-path)
-		log_warn "Codex CLI is installed but $(dirname -- "$(codex_visible_install_path)") is not on PATH yet"
-		;;
+	absent | standalone | standalone-not-on-path) codex_sync_standalone ;;
 	external | standalone-shadowed)
 		active="$(codex_active_command)"
 		codex_migrate_nvm_installations || {
@@ -310,182 +143,36 @@ install_codex_cli() {
 			printf '%s\n' '  See README.md#codex-cli-migration.' >&2
 			return 1
 		}
-		state="$(codex_cli_install_state)" || return $?
-		case "$state" in
-		absent)
-			log_step "Install Codex CLI standalone"
-			codex_sync_standalone || return $?
-			log_ok "Codex CLI migrated from npm to standalone"
-			;;
-		standalone) log_ok "npm Codex removed; standalone Codex is active" ;;
-		*)
-			printf '  Codex migration left an unexpected ownership state: %s\n' "$state" >&2
-			return 1
-			;;
-		esac
 		;;
 	*)
 		printf '  Unknown Codex installation state: %s\n' "$state" >&2
-		return 1
+		return 2
 		;;
 	esac
 }
 
 install_claude_cli() {
-	if { command -v claude >/dev/null 2>&1 || [[ -x "$HOME/.local/bin/claude" ]]; } &&
-		skip_unless_forced "Claude CLI already installed"; then
-		return 0
-	fi
-	log_step "Install Claude CLI"
-	run_vendor_shell_installer 'https://claude.ai/install.sh' 'Claude CLI' || return $?
-	log_ok "Claude CLI installed"
+	dotfiles_catalog_install "claude_cli"
 }
 
 install_powershell() {
-	if command -v pwsh >/dev/null 2>&1 &&
-		skip_unless_forced "PowerShell already installed ($(pwsh --version 2>/dev/null || echo 'unknown'))"; then
-		return 0
-	fi
-
-	if [[ ! -f /etc/os-release ]]; then
-		echo "  Could not detect OS version (/etc/os-release missing)." >&2
-		return 1
-	fi
-
-	# shellcheck disable=SC1091
-	. /etc/os-release
-
-	local distro="${ID:-}" version_id="${VERSION_ID:-}"
-	case "$distro" in
-	ubuntu | debian) ;;
-	*)
-		echo "  PowerShell install supports Ubuntu/Debian only (detected: ${distro:-unknown})." >&2
-		return 1
-		;;
-	esac
-
-	if [[ -z "$version_id" ]]; then
-		echo "  Could not determine VERSION_ID from /etc/os-release." >&2
-		return 1
-	fi
-
-	log_step "Install PowerShell from Microsoft packages repo"
-	# No refresh here: the install preamble already refreshed the indexes, and
-	# nothing has added a repository yet. The refresh that matters is the one
-	# after the Microsoft repository is added, below.
-	# HTTPS transport is built into supported modern apt releases; the legacy
-	# apt-transport-https package is unnecessary and may not exist on newer systems.
-	_run_quiet_command 'PowerShell prerequisites' \
-		sudo apt-get -qq -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=600 install -y wget software-properties-common || return $?
-
-	if [[ ! -f /etc/apt/sources.list.d/microsoft-prod.list && ! -f /etc/apt/sources.list.d/microsoft-prod.sources ]]; then
-		local deb_file
-		deb_file="$(mktemp /tmp/packages-microsoft-prod.XXXXXX.deb)"
-		wget -q "https://packages.microsoft.com/config/${distro}/${version_id}/packages-microsoft-prod.deb" -O "$deb_file" || return $?
-		# apt rather than dpkg: a fresh Ubuntu boots into unattended-upgrades,
-		# and dpkg fails at once on the lock it holds where apt waits it out.
-		_run_quiet_command 'Microsoft repository package' \
-			sudo apt-get -qq -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=600 install -y "$deb_file" || return $?
-		rm -f "$deb_file"
-		log_ok "Added Microsoft apt repository"
-	else
-		log_skip "Microsoft apt repository already configured"
-	fi
-
-	# Only the feed just added: the preamble refreshed everything else.
-	apt_refresh_source_list \
-		/etc/apt/sources.list.d/microsoft-prod.list \
-		/etc/apt/sources.list.d/microsoft-prod.sources || return $?
-	# Microsoft's per-release feed lags new Ubuntu releases by months. The
-	# upstream .deb works on those releases well before the feed carries them,
-	# so fall back to it rather than leaving the component uninstalled.
-	if declare -F apt_package_is_available >/dev/null 2>&1 &&
-		! apt_package_is_available powershell; then
-		log_warn "PowerShell is not in the Microsoft feed for ${distro} ${version_id} yet"
-		install_powershell_from_github || return $?
-		command -v pwsh >/dev/null 2>&1 && return 0
-		return 1
-	fi
-	_run_quiet_command 'PowerShell install' \
-		sudo apt-get -qq -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=600 install -y powershell || return $?
-
-	if command -v pwsh >/dev/null 2>&1; then
-		log_ok "PowerShell installed ($(pwsh --version 2>/dev/null || echo 'unknown'))"
-	else
-		echo "  PowerShell package installed but 'pwsh' was not found on PATH." >&2
-		return 1
-	fi
+	dotfiles_catalog_install "powershell"
 }
 
-install_direnv() (
-	local arch asset json metadata latest expected installed='' tmp='' actual
-	local bin_path="$HOME/.local/bin/direnv"
-	for prerequisite in curl python3 sha256sum; do
-		command -v "$prerequisite" >/dev/null 2>&1 || {
-			log_warn "$prerequisite required for direnv install"
-			return 1
-		}
-	done
-	case "$(uname -m)" in
-	x86_64 | amd64) arch=amd64 ;;
-	aarch64 | arm64) arch=arm64 ;;
-	i386 | i686) arch=386 ;;
-	armv7l) arch=arm ;;
-	*)
-		log_warn "Unsupported architecture for direnv: $(uname -m)"
-		return 1
-		;;
-	esac
-	asset="direnv.linux-$arch"
-	json="$(github_api_release_json direnv/direnv)" || return 1
-	metadata="$(python3 -c '
-import json, re, sys
-release = json.load(sys.stdin)
-tag = release.get("tag_name", "")
-if not re.fullmatch(r"v?[0-9]+\.[0-9]+\.[0-9]+", tag):
-    raise SystemExit(1)
-for asset in release.get("assets", []):
-    digest = asset.get("digest", "")
-    if asset.get("name") == sys.argv[1] and re.fullmatch(r"sha256:[0-9a-fA-F]{64}", digest):
-        print(tag.removeprefix("v"), digest.removeprefix("sha256:").lower())
-        raise SystemExit(0)
-raise SystemExit(1)
-' "$asset" <<<"$json")" || {
-		log_warn "Could not verify the latest direnv release and digest; preserving the installed binary"
-		return 1
-	}
-	read -r latest expected <<<"$metadata"
-	[[ ! -x "$bin_path" ]] || installed="$("$bin_path" version 2>/dev/null || true)"
-	if [[ "$installed" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] &&
-		[[ "$(printf '%s\n%s\n' "$installed" "$latest" | sort -V | tail -n1)" == "$installed" ]] &&
-		! force_reinstall_requested; then
-		log_skip "direnv already current at $installed"
-	else
-		log_step "Install direnv $latest"
-		mkdir -p "$HOME/.local/bin" || return $?
-		tmp="$(mktemp -d "$HOME/.local/bin/.direnv.XXXXXX")" || return 1
-		trap 'rm -rf -- "$tmp"' EXIT
-		github_curl -fsSL --proto '=https' --tlsv1.2 \
-			--connect-timeout 10 --max-time 180 \
-			--retry 2 --retry-all-errors --retry-delay 1 --retry-max-time 180 \
-			-o "$tmp/direnv" \
-			"https://github.com/direnv/direnv/releases/download/v${latest}/${asset}" || return $?
-		actual="$(sha256sum "$tmp/direnv" | awk '{print $1}')"
-		if [[ "$actual" != "$expected" ]]; then
-			log_warn "direnv SHA-256 verification failed; preserving the installed binary"
-			return 1
+install_direnv() {
+	local shortcut="$HOME/bin/direnv" managed="$HOME/.local/bin/direnv"
+	if [[ -e "$shortcut" || -L "$shortcut" ]]; then
+		if [[ ! -L "$shortcut" || "$(readlink -- "$shortcut")" != "$managed" ]]; then
+			printf 'Preserving external direnv shortcut; activation is blocked.\n' >&2
+			return 2
 		fi
-		chmod 0755 "$tmp/direnv" || return $?
-		if [[ "$("$tmp/direnv" version 2>/dev/null || true)" != "$latest" ]]; then
-			log_warn "Downloaded direnv did not report $latest; preserving the installed binary"
-			return 1
-		fi
-		mv -f -- "$tmp/direnv" "$bin_path" || return $?
-		log_ok "direnv installed: $latest"
 	fi
-	mkdir -p "$HOME/bin" || return $?
-	ln -sf "$bin_path" "$HOME/bin/direnv" || return $?
-)
+	dotfiles_catalog_install "direnv" || return $?
+	if dotfiles_catalog_owned direnv; then
+		mkdir -p -- "$HOME/bin" || return 1
+		ln -sfn -- "$managed" "$shortcut" || return 1
+	fi
+}
 
 ensure_direnv_hook_in_bashrc() {
 	log_skip "direnv hook lives in stowed .bashrc"

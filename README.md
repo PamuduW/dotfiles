@@ -188,6 +188,13 @@ The registry contains 33 components:
 | Desktop apps (WSLg) | Obsidian |
 | Shell and Git | Stow packages, Git identity, Git credentials/submodule defaults |
 
+The software catalog qualification target is Ubuntu 24.04 AMD64. ARM64 and
+WSL2/Windows integration are outside the current catalog qualification claim.
+Cursor CLI is an operator-managed exception: catalog installs (including forced
+installs) and updates skip it, while update status reports its installed version.
+Install and update Cursor manually; its own automatic updater remains outside
+catalog control.
+
 Obsidian installs from its official amd64 `.deb`, verified against the SHA-256
 GitHub publishes for it, and opens on the Windows desktop through WSLg (from the
 Start menu or by running `obsidian`). The install is skipped when the session has

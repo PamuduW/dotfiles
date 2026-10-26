@@ -1,4 +1,6 @@
 # shellcheck shell=bash
+# shellcheck source=scripts/lib/catalog_load.sh
+source "${BASH_SOURCE[0]%/*}/../catalog_load.sh"
 # Obsidian desktop, installed from the official .deb and shown on the Windows
 # desktop through WSLg.
 #
@@ -121,26 +123,7 @@ obsidian_install_release() {
 # Installs or updates to the newest desktop release. Sets OBSIDIAN_SYNC_RESULT
 # to updated or current.
 obsidian_sync_release() {
-	local installed
-	local -a metadata=()
-	OBSIDIAN_SYNC_RESULT=''
-	[[ "$(uname -m)" == x86_64 ]] || {
-		echo '  Obsidian publishes a .deb only for amd64; this installer supports amd64 only.' >&2
-		return 1
-	}
-	mapfile -t metadata < <(obsidian_release_metadata)
-	[[ "${#metadata[@]}" -eq 4 ]] || {
-		echo '  Could not find an Obsidian desktop release with a published SHA-256 digest.' >&2
-		return 1
-	}
-	installed="$(obsidian_deb_version)"
-	if [[ -n "$installed" ]] && [[ "$(printf '%s\n%s\n' "$installed" "${metadata[0]}" | sort -V | tail -n1)" == "$installed" ]]; then
-		log_skip "Obsidian already current at ${installed}"
-		OBSIDIAN_SYNC_RESULT=current
-		return 0
-	fi
-	obsidian_install_release "${metadata[@]}" || return $?
-	OBSIDIAN_SYNC_RESULT=updated
+	dotfiles_catalog_install "obsidian"
 }
 
 install_obsidian() {
@@ -153,47 +136,13 @@ install_obsidian() {
 		log_skip 'No GUI display (WSLg) in this session; Obsidian not installed'
 		return 0
 	fi
-	obsidian_sync_release
+	dotfiles_catalog_install "obsidian"
 }
 
 check_obsidian() {
-	local installed latest='' available='—' action
-	local -a metadata=()
-	installed="$(obsidian_installed_version)"
-	case "$installed" in
-	'not installed') action="$UPDATE_CHECK_SKIP" ;;
-	external) action="$UPDATE_CHECK_EXTERNAL" ;;
-	*)
-		mapfile -t metadata < <(obsidian_release_metadata 2>/dev/null)
-		[[ "${#metadata[@]}" -eq 4 ]] && latest="${metadata[0]}"
-		available="${latest:-—}"
-		if [[ -z "$latest" ]]; then
-			action="$UPDATE_CHECK_UNKNOWN"
-		elif [[ "$(printf '%s\n%s\n' "$installed" "$latest" | sort -V | tail -n1)" != "$installed" ]]; then
-			action="$UPDATE_CHECK_UPGRADE"
-		else
-			action="$UPDATE_CHECK_CURRENT"
-		fi
-		;;
-	esac
-	printf 'Obsidian|%s|%s|%s\n' "$installed" "$available" "$action"
-	[[ "$action" == "$UPDATE_CHECK_UPGRADE" ]]
+	dotfiles_catalog_check "obsidian" "Obsidian"
 }
 
 upgrade_obsidian() {
-	if [[ -z "$(obsidian_deb_version)" ]]; then
-		if obsidian_external_path >/dev/null; then
-			log_skip 'Obsidian is externally managed; preserving it'
-		else
-			log_skip 'Obsidian not installed'
-		fi
-		upgrade_result_set skipped
-		return 0
-	fi
-	obsidian_sync_release || return $?
-	if [[ "$OBSIDIAN_SYNC_RESULT" == updated ]]; then
-		upgrade_result_set updated
-	else
-		upgrade_result_set already-current
-	fi
+	dotfiles_catalog_upgrade "obsidian"
 }

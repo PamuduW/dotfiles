@@ -10,6 +10,10 @@ test_docker_stops_before_restart_on_config_failure() {
 	RESTART_MARKER="$tmp/restarted" bash -c '
 		source "$1/scripts/lib/installers/logging.sh"
 		source "$1/scripts/lib/installers/docker.sh"
+        dotfiles_catalog_begin() { :; }
+        dotfiles_catalog_get() { printf "1.2.3\n"; }
+        dotfiles_catalog_install_debs() { :; }
+        dpkg-query() { return 1; }
 		docker() { printf "Docker version test\n"; }
 		groups() { printf "docker\n"; }
 		configure_docker_daemon() { return 1; }
@@ -25,6 +29,10 @@ test_docker_restarts_only_when_its_config_changed() {
 	RESTART_MARKER="$tmp/unchanged" bash -c '
 		source "$1/scripts/lib/installers/logging.sh"
 		source "$1/scripts/lib/installers/docker.sh"
+        dotfiles_catalog_begin() { :; }
+        dotfiles_catalog_get() { printf "1.2.3\n"; }
+        dotfiles_catalog_install_debs() { :; }
+        dpkg-query() { return 1; }
 		docker() { printf "Docker version test\n"; }
 		groups() { printf "docker\n"; }
 		configure_docker_daemon() { DOCKER_DAEMON_CHANGED=0; }
@@ -35,6 +43,10 @@ test_docker_restarts_only_when_its_config_changed() {
 	RESTART_MARKER="$tmp/changed" bash -c '
 		source "$1/scripts/lib/installers/logging.sh"
 		source "$1/scripts/lib/installers/docker.sh"
+        dotfiles_catalog_begin() { :; }
+        dotfiles_catalog_get() { printf "1.2.3\n"; }
+        dotfiles_catalog_install_debs() { :; }
+        dpkg-query() { return 1; }
 		docker() { printf "Docker version test\n"; }
 		groups() { printf "docker\n"; }
 		configure_docker_daemon() { DOCKER_DAEMON_CHANGED=1; }
@@ -159,27 +171,13 @@ test_graphify_component_probe_is_defined() {
 }
 
 test_lazygit_uses_current_lowercase_linux_release_asset() {
-	local url_log="$1/lazygit-urls"
-	URL_LOG="$url_log" bash -c '
-		set -euo pipefail
-		source "$1/scripts/lib/installers/github_release.sh"
-		github_latest_release_version() { printf "1.2.3\\n"; }
-		_linux_github_arch_suffix() { printf "x86_64\\n"; }
-		log_step() { :; }
-		curl() {
-			local output="" arg
-			while (($#)); do
-				arg="$1"
-				shift
-				[[ "$arg" == "-o" ]] && { output="$1"; shift; }
-			done
-			printf "%s\\n" "$arg" >>"$URL_LOG"
-			: >"$output"
-		}
-		sha256sum() { return 1; }
-		install_lazygit_from_github >/dev/null 2>&1 || :
-	' _ "$ROOT"
-	grep -Fqx 'https://github.com/jesseduffield/lazygit/releases/download/v1.2.3/lazygit_1.2.3_linux_x86_64.tar.gz' "$url_log"
+	bash -c '
+        source "$1/scripts/lib/installers/release_cli.sh"
+        uname() { case "$1" in -s) echo Linux ;; -m) echo x86_64 ;; esac; }
+        [[ "$(release_cli_asset_name lazygit v1.2.3)" == lazygit_1.2.3_linux_x86_64.tar.gz ]] || exit 1
+        uname() { case "$1" in -s) echo Linux ;; -m) echo aarch64 ;; esac; }
+        [[ "$(release_cli_asset_name lazygit v1.2.3)" == lazygit_1.2.3_linux_arm64.tar.gz ]]
+    ' _ "$ROOT"
 }
 
 test_github_token_config_is_private_and_scoped() {

@@ -5,6 +5,7 @@ TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd -- "$TEST_DIR/.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
 source "$TEST_DIR/lib/harness.sh"
+source "$TEST_DIR/lib/catalog_fixture.sh"
 test_harness_init
 test_harness_report_init
 
@@ -63,13 +64,30 @@ with zipfile.ZipFile(sys.argv[1], "w") as z:
 serve() {
 	SERVED_VERSION="$1"
 	SERVED_ARCHIVE="$2"
+	local digest
+	digest="$(sha256sum "$SERVED_ARCHIVE")"
+	printf '%s\n' $'chrome_headless\towner\tany\tdotfiles' $'chrome_headless\tkind\tany\tsoftware' \
+		$'chrome_headless\tversion\tany\t'"$SERVED_VERSION" $'chrome_headless\tarchive\tany\tzip' \
+		$'chrome_headless\tbinary\tany\tchrome-headless-shell-linux64/chrome-headless-shell' \
+		$'chrome_headless\turl\tany\t'"$(fixture_url "$SERVED_VERSION")" \
+		$'chrome_headless\tdigest\tany\tsha256:'"${digest%% *}" | catalog_fixture_seal "$TEST_HARNESS_ROOT/catalog-chrome"
+	catalog_fixture_use "$TEST_HARNESS_ROOT/catalog-chrome"
 	chrome_headless_versions_json() {
 		printf '{"channels":{"Stable":{"version":"%s","downloads":{"chrome-headless-shell":[{"platform":"linux64","url":"%s"}]}}}}\n' \
 			"$SERVED_VERSION" "$(fixture_url "$SERVED_VERSION")"
 	}
 	curl() {
 		printf 'download:%s\n' "${*: -1}" >>"$TEST_URL_LOG"
-		cp -- "$SERVED_ARCHIVE" "$3"
+		local output=''
+		while (($#)); do
+			if [[ "$1" == -o ]]; then
+				output="$2"
+				break
+			fi
+			shift
+		done
+		[[ -n "$output" ]] || return 97
+		cp -- "$SERVED_ARCHIVE" "$output"
 	}
 }
 
@@ -92,7 +110,7 @@ test_fresh_install_unpacks_the_build_links_it_and_stamps_it() (
 	install_chrome_headless >/dev/null || return 1
 
 	[[ -L "$HOME/.local/bin/chrome-headless-shell" ]] || return 1
-	[[ -f "$HOME/.local/share/chrome-headless-shell/resources.pak" ]] || return 1
+	[[ -f "$HOME/.local/share/dotfiles-catalog/chrome_headless/current/payload/chrome-headless-shell-linux64/resources.pak" ]] || return 1
 	[[ "$(chrome_headless_installed_tag)" == 155.0.8059.39 ]] || return 1
 	[[ "$(<"$HOME/.local/share/dotfiles/chrome_headless.version")" == 155.0.8059.39 ]] || return 1
 	grep -Fqx "download:$(fixture_url 155.0.8059.39)" "$TEST_URL_LOG" || return 1
@@ -159,10 +177,10 @@ test_update_replaces_an_owned_build_and_its_stamp() (
 	[[ "$(<"$TEST_HARNESS_ROOT/result")" == already-current ]]
 )
 
-test_update_without_a_version_list_preserves_the_build() (
+test_update_without_an_approved_pin_preserves_the_build() (
 	reset_home
 	own 154.0.7000.1
-	chrome_headless_versions_json() { return 1; }
+	TEST_APPROVED_CATALOG="$TEST_HARNESS_ROOT/missing-chrome-catalog"
 
 	! upgrade_chrome_headless >/dev/null 2>&1 || return 1
 	[[ "$(chrome_headless_installed_tag)" == 154.0.7000.1 ]]
@@ -171,21 +189,23 @@ test_update_without_a_version_list_preserves_the_build() (
 test_update_check_reports_installed_available_and_action() (
 	reset_home
 	local row
+	serve 155.0.8059.39 "$(make_archive 155.0.8059.39)"
 	row="$(check_chrome_headless || true)"
-	[[ "$row" == 'Chrome headless shell|not installed|—|skip' ]] || return 1
+	[[ "$row" == 'Chrome headless shell|not installed|155.0.8059.39|skip' ]] || return 1
 
 	own 154.0.7000.1
 	serve 155.0.8059.39 "$(make_archive 155.0.8059.39)"
 	row="$(check_chrome_headless)" || return 1
 	[[ "$row" == 'Chrome headless shell|154.0.7000.1|155.0.8059.39|upgrade' ]] || return 1
 
-	rm -f -- "$HOME/.local/share/dotfiles/chrome_headless.version"
+	rm -f -- "$HOME/.local/share/dotfiles-catalog/chrome_headless/current/.catalog-receipt"
 	row="$(check_chrome_headless || true)"
-	[[ "$row" == 'Chrome headless shell|154.0.7000.1|—|external' ]]
+	[[ "$row" == 'Chrome headless shell|external installation|155.0.8059.39|external' ]]
 )
 
 test_unsupported_architecture_fails_closed() (
 	reset_home
+	serve 155.0.8059.39 "$(make_archive 155.0.8059.39)"
 	uname() {
 		case "$1" in
 		-s) printf 'Linux\n' ;;
@@ -202,6 +222,8 @@ expect_success 'an archive member outside the build directory is refused' test_a
 expect_success 'version metadata refuses a URL outside the Chrome for Testing bucket' test_metadata_refuses_a_url_outside_the_bucket
 expect_success 'an external shell is preserved, forced or not' test_an_external_shell_is_preserved_even_when_forced
 expect_success 'update replaces an owned build and its stamp' test_update_replaces_an_owned_build_and_its_stamp
-expect_success 'update without a version list preserves the build' test_update_without_a_version_list_preserves_the_build
+expect_success 'update without an approved pin preserves the build' test_update_without_an_approved_pin_preserves_the_build
 expect_success 'update check reports installed, available and action' test_update_check_reports_installed_available_and_action
 expect_success 'an unsupported architecture fails closed' test_unsupported_architecture_fails_closed
+
+finish_tests

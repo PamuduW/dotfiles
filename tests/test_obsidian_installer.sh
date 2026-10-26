@@ -5,6 +5,7 @@ TEST_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd -- "$TEST_DIR/.." && pwd)"
 # shellcheck source=tests/lib/harness.sh
 source "$TEST_DIR/lib/harness.sh"
+source "$TEST_DIR/lib/catalog_fixture.sh"
 test_harness_init
 test_harness_report_init
 
@@ -37,6 +38,12 @@ JSON
 make_fixture_deb() {
 	printf 'fixture deb bytes\n' >"$TEST_HARNESS_ROOT/obsidian.deb"
 	DEB_DIGEST="$(sha256sum "$TEST_HARNESS_ROOT/obsidian.deb" | awk '{print $1}')"
+	printf '%s\n' $'obsidian\towner\tany\tdotfiles' $'obsidian\tkind\tany\tsoftware' \
+		$'obsidian\tversion\tany\t1.13.7' $'obsidian\tarchive\tany\tdeb' \
+		$'obsidian\tpackage\tany\tobsidian' $'obsidian\tbinary\tany\tobsidian' \
+		$'obsidian\turl\tany\thttps://github.com/obsidianmd/obsidian-releases/releases/download/v1.13.7/obsidian_1.13.7_amd64.deb' \
+		$'obsidian\tdigest\tany\tsha256:'"$DEB_DIGEST" | catalog_fixture_seal "$TEST_HARNESS_ROOT/catalog-obsidian"
+	catalog_fixture_use "$TEST_HARNESS_ROOT/catalog-obsidian"
 }
 
 # github_curl serves the release list, or copies the fixture for a download.
@@ -62,11 +69,23 @@ stub_network() {
 
 stub_system() {
 	STUB_INSTALLED="${1:-}"
+	printf '%s' "$STUB_INSTALLED" >"$TEST_HARNESS_ROOT/obsidian-installed"
+	rm -f -- "$HOME/.local/share/dotfiles-catalog/obsidian.apt"
+	if [[ "${2:-}" == owned ]]; then
+		mkdir -p "$HOME/.local/share/dotfiles-catalog"
+		printf '%s\n' obsidian "$STUB_INSTALLED" "$SOFTWARE_CATALOG_DIGEST" >"$HOME/.local/share/dotfiles-catalog/obsidian.apt"
+	fi
 	CALLS="$TEST_HARNESS_ROOT/calls"
 	: >"$CALLS"
 	dpkg-query() {
-		[[ -n "$STUB_INSTALLED" ]] || return 1
-		printf 'install ok installed\t%s\n' "$STUB_INSTALLED"
+		local installed
+		installed="$(cat "$TEST_HARNESS_ROOT/obsidian-installed")"
+		[[ -n "$installed" ]] || return 1
+		if [[ " $* " == *'${Status}'* ]]; then
+			printf 'install ok installed\t%s\n' "$installed"
+		else
+			printf '%s' "$installed"
+		fi
 	}
 	dpkg-deb() {
 		case "$3" in
@@ -74,8 +93,13 @@ stub_system() {
 		Version) printf '1.13.7\n' ;;
 		esac
 	}
-	sudo() { printf 'sudo %s\n' "$*" >>"$CALLS"; }
-	uname() { printf 'x86_64\n'; }
+	sudo() {
+		printf 'sudo %s\n' "$*" >>"$CALLS"
+		if [[ "$1" == apt-get && " $* " == *' install '* && " $* " != *' -s '* ]]; then
+			printf '1.13.7' >"$TEST_HARNESS_ROOT/obsidian-installed"
+		fi
+	}
+	uname() { case "$1" in -s) echo Linux ;; -m) echo x86_64 ;; -r) echo fixture ;; esac }
 	command() {
 		if [[ "$1" == -v && "${2:-}" == obsidian ]]; then return 1; fi
 		builtin command "$@"
@@ -111,8 +135,8 @@ test_fresh_install_verifies_then_installs_the_downloaded_file() (
 	stub_network
 	stub_system
 	DISPLAY=:0
-	install_obsidian >/dev/null
-	grep -q '^sudo apt-get .*install -y .*/obsidian_1.13.7_amd64.deb$' "$CALLS"
+	install_obsidian >/dev/null || return 1
+	grep -q '^sudo apt-get .*install -y .*/obsidian.deb$' "$CALLS"
 )
 
 test_checksum_mismatch_refuses_installation() (
@@ -135,9 +159,9 @@ test_a_package_that_is_not_obsidian_is_refused() (
 test_the_current_version_is_not_reinstalled() (
 	make_fixture_deb
 	stub_network
-	stub_system 1.13.7
+	stub_system 1.13.7 owned
 	DISPLAY=:0
-	install_obsidian >/dev/null
+	install_obsidian >/dev/null || return 1
 	[[ ! -s "$CALLS" ]]
 )
 
@@ -153,7 +177,7 @@ test_an_obsidian_from_elsewhere_is_preserved() (
 		builtin command "$@"
 	}
 	DISPLAY=:0
-	install_obsidian >/dev/null
+	install_obsidian >/dev/null || return 1
 	[[ ! -s "$CALLS" ]]
 )
 
@@ -163,7 +187,7 @@ test_no_gui_display_skips_installation() (
 	stub_system
 	unset DISPLAY WAYLAND_DISPLAY
 	obsidian_gui_available() { return 1; }
-	install_obsidian >/dev/null
+	install_obsidian >/dev/null || return 1
 	[[ ! -s "$CALLS" ]]
 )
 
@@ -171,17 +195,17 @@ test_update_check_reports_each_state() (
 	make_fixture_deb
 	stub_network
 	stub_system
-	[[ "$(check_obsidian || true)" == 'Obsidian|not installed|—|skip' ]] || return 1
-	stub_system 1.12.7
+	[[ "$(check_obsidian || true)" == 'Obsidian|not installed|1.13.7|skip' ]] || return 1
+	stub_system 1.12.7 owned
 	[[ "$(check_obsidian || true)" == 'Obsidian|1.12.7|1.13.7|upgrade' ]] || return 1
-	stub_system 1.13.7
+	stub_system 1.13.7 owned
 	[[ "$(check_obsidian || true)" == 'Obsidian|1.13.7|1.13.7|current' ]]
 )
 
 test_update_upgrades_an_older_deb() (
 	make_fixture_deb
 	stub_network
-	stub_system 1.12.7
+	stub_system 1.12.7 owned
 	upgrade_obsidian >/dev/null
 	[[ "$UPGRADE_STEP_ACTIVE_RESULT" == updated ]] || return 1
 	grep -q 'apt-get .*install -y' "$CALLS"

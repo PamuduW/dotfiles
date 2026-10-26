@@ -12,8 +12,18 @@ source "$TEST_DIR/lib/harness.sh"
 test_harness_init
 test_harness_report_init
 source "$TEST_DIR/lib/dotfiles_env.sh"
+source "$TEST_DIR/lib/runtime_failure_fixture.sh"
+
+portainer_catalog_fixture() {
+	TEST_PORTAINER_IMAGE="portainer/portainer-ce@sha256:$(printf '%064d' 0)"
+	printf '%s\n' $'portainer\towner\tany\tdotfiles' $'portainer\tkind\tany\tsoftware' \
+		$'portainer\tversion\tany\t2.0.0' $'portainer\tpackage\tany\tportainer/portainer-ce' \
+		$'portainer\tdigest\tany\tsha256:'"$(printf '%064d' 0)" | catalog_fixture_seal "$TEST_HARNESS_ROOT/catalog-portainer"
+	catalog_fixture_use "$TEST_HARNESS_ROOT/catalog-portainer"
+}
 
 test_an_unreachable_docker_does_not_accuse_the_container() (
+	portainer_catalog_fixture
 	# Break caught: the layout check returned 1 both when the container was
 	# somebody else's and when Docker could not be queried at all, so a session
 	# that merely predates the docker group was told its Portainer container had
@@ -45,28 +55,53 @@ test_an_unreachable_docker_does_not_accuse_the_container() (
 	! grep -q 'custom layout' "$warnings"
 )
 
-test_force_reinstalls_what_is_already_present() (
-	# Roadmap item 3: installers skip what already looks present, so a corrupted
-	# install could never be repaired from the menu. `x` on the plan screen
-	# bypasses those presence checks.
+test_portainer_recovery_preserves_unowned_resources() (
+	portainer_catalog_fixture
+	local calls="$TEST_HARNESS_ROOT/portainer-recovery.calls" foreign rc
+	log_step() { :; }
+	log_ok() { :; }
+	log_skip() { :; }
+	log_warn() { :; }
+	for foreign in portainer.agentbot-backup portainer; do
+		: >"$calls"
+		run_docker() {
+			printf '%s\n' "$*" >>"$calls"
+			case "$1 $2" in
+			'ps -a') printf 'portainer\nportainer.agentbot-backup\n' ;;
+			'image inspect') printf 'sha256:target\n' ;;
+			'inspect --format')
+				case "$3" in
+				'{{.Image}}') printf 'sha256:legacy\n' ;;
+				'{{.State.Running}}') printf 'false\n' ;;
+				'{{index .Config.Labels "com.pamuduw.dotfiles.catalog"}}')
+					[[ "$4" == "$foreign" ]] || printf '%064d\n' 0
+					;;
+				*) _portainer_managed_layout_reply "$3" || true ;;
+				esac
+				;;
+			esac
+			return 0
+		}
+		rc=0
+		install_portainer >/dev/null 2>&1 || rc=$?
+		[[ "$rc" != 0 ]] || {
+			echo "FAIL: recovery accepted unowned $foreign" >&2
+			return 1
+		}
+		! grep -Eq '^(rm|rename|start|stop|create) ' "$calls" || {
+			echo "FAIL: recovery changed resources around unowned $foreign" >&2
+			return 1
+		}
+	done
+)
+
+test_component_dispatch_preserves_reinstall_flag() (
 	local calls="$TEST_HARNESS_ROOT/force.calls"
 	: >"$calls"
-	log_skip() { printf 'skipped:%s\n' "$1" >>"$calls"; }
-	install_lazygit_from_github() { printf 'installed\n' >>"$calls"; }
-	command() {
-		[[ "$*" == '-v lazygit' ]] && return 0
-		builtin command "$@"
-	}
-
-	# Unforced: present means skip.
-	(DOTFILES_FORCE_REINSTALL=0 _comp_install_lazygit) || return 1
-	grep -q '^skipped:' "$calls" || return 1
-
-	: >"$calls"
-	# Forced: present is reinstalled, and nothing claims it was skipped.
-	(DOTFILES_FORCE_REINSTALL=1 _comp_install_lazygit) || return 1
-	grep -Fqx installed "$calls" || return 1
-	! grep -q '^skipped:' "$calls"
+	install_lazygit_from_github() { printf '%s\n' "${DOTFILES_FORCE_REINSTALL:-0}" >>"$calls"; }
+	DOTFILES_FORCE_REINSTALL=0 _comp_install_lazygit || return 1
+	DOTFILES_FORCE_REINSTALL=1 _comp_install_lazygit || return 1
+	[[ "$(cat "$calls")" == $'0\n1' ]]
 )
 
 test_docker_daemon_config_is_written_one_way_only() (
@@ -338,66 +373,35 @@ test_a_rename_falls_back_to_the_older_name_when_needed() (
 	grep -qw 'dnsutils' "$calls"
 )
 
-test_powershell_skips_a_release_with_no_microsoft_feed() (
-	local warnings="$TEST_HARNESS_ROOT/pwsh.warn" rc=0
-	: >"$warnings"
-	log_step() { :; }
-	log_ok() { :; }
-	log_skip() { :; }
-	log_warn() { printf '%s\n' "$*" >>"$warnings"; }
-	command() {
-		[[ "$*" == '-v pwsh' ]] && return 1
-		builtin command "$@"
+test_powershell_does_not_fall_back_when_approved_target_is_missing() (
+	local calls="$TEST_HARNESS_ROOT/pwsh-fallback.calls"
+	: >"$calls"
+	apt_package_is_available() {
+		printf 'feed-query\n' >>"$calls"
+		return 1
 	}
-	apt_package_is_available() { [[ "$1" != powershell ]]; }
-	sudo() { :; }
-	wget() { :; }
-	# Runs the command, like the real wrapper: this test is about the feed
-	# fallback, not about where apt's output goes.
-	_run_quiet_command() {
-		shift
-		"$@"
-	}
-
-	install_powershell_from_github() {
-		printf 'github-fallback\n' >>"$warnings"
-		return 0
-	}
-	install_powershell >/dev/null 2>&1 || rc=$?
-	# Not in the feed is not the end of the road: fall back to the upstream
-	# release rather than leaving the component uninstalled.
-	grep -q 'not in the Microsoft feed' "$warnings" || return 1
-	grep -q 'github-fallback' "$warnings"
+	install_powershell_from_github() { printf 'floating-fallback\n' >>"$calls"; }
+	sudo() { printf 'sudo\n' >>"$calls"; }
+	wget() { printf 'wget\n' >>"$calls"; }
+	if install_powershell >/dev/null 2>&1; then return 1; fi
+	[[ ! -s "$calls" ]]
 )
 
 test_tool_installers_stop_at_the_first_required_failure() (
-	log_step() { :; }
-	log_ok() { :; }
-	log_skip() { :; }
-	log_warn() { :; }
-	ensure_asdf_installed() { return 0; }
-	asdf() { [[ "$1 $2" == 'plugin list' ]] && printf 'golang\n'; }
-	local call=0 rc
-	_run_quiet_command() {
-		call=$((call + 1))
-		[[ "$call" -ne 1 ]] || return 27
-	}
-	set +e
-	install_go_via_asdf >/dev/null 2>&1
-	rc=$?
-	set -e
-	[[ "$rc" == 27 ]] || return 1
-
+	runtime_failure_fixture go
+	local rc=0
+	install_go_via_asdf >"$HOME/output" 2>&1 || rc=$?
+	[[ "$rc" == 27 && "$(cat "$TEST_RUNTIME_FAILURE_CALLS")" == 'download:https://fixture.invalid/asdf' ]] || return 1
+	[[ "$("$HOME/.local/bin/go" version)" == 'go 1.2.2' ]] || return 1
 	codex_cli_install_state() { printf '%s\n' absent; }
 	codex_sync_standalone() { return 28; }
-	set +e
-	install_codex_cli >/dev/null 2>&1
-	rc=$?
-	set -e
+	rc=0
+	install_codex_cli >/dev/null 2>&1 || rc=$?
 	[[ "$rc" == 28 ]]
 )
 
 test_container_installers_stop_at_the_first_required_failure() (
+	portainer_catalog_fixture
 	log_step() { :; }
 	log_ok() { :; }
 	log_skip() { :; }
@@ -416,7 +420,8 @@ test_container_installers_stop_at_the_first_required_failure() (
 	[[ "$rc" == 29 ]]
 )
 
-test_portainer_fresh_install_uses_lts_without_starting_container() (
+test_portainer_fresh_install_uses_digest_without_starting_container() (
+	portainer_catalog_fixture
 	local calls="$TEST_HARNESS_ROOT/portainer-fresh.calls"
 	: >"$calls"
 	log_step() { :; }
@@ -431,13 +436,14 @@ test_portainer_fresh_install_uses_lts_without_starting_container() (
 
 	install_portainer >/dev/null
 
-	grep -Fxq 'pull -q portainer/portainer-ce:lts' "$calls" || return 1
+	grep -Fxq "pull -q $TEST_PORTAINER_IMAGE" "$calls" || return 1
 	grep -Fxq 'volume create portainer_data' "$calls" || return 1
-	grep -Fq 'create -p 8000:8000 -p 9443:9443 --name portainer --restart unless-stopped -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce:lts' "$calls" || return 1
+	grep -Fq "create -p 8000:8000 -p 9443:9443 --name portainer --label com.pamuduw.dotfiles.catalog=$SOFTWARE_CATALOG_DIGEST --restart unless-stopped -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data $TEST_PORTAINER_IMAGE" "$calls" || return 1
 	! grep -Eq '^(run|start|stop) ' "$calls"
 )
 
-test_portainer_matching_lts_image_is_left_unchanged() (
+test_portainer_matching_digest_image_is_left_unchanged() (
+	portainer_catalog_fixture
 	local calls="$TEST_HARNESS_ROOT/portainer-current.calls"
 	: >"$calls"
 	log_step() { :; }
@@ -455,12 +461,13 @@ test_portainer_matching_lts_image_is_left_unchanged() (
 
 	install_portainer >/dev/null
 
-	grep -Fxq 'pull -q portainer/portainer-ce:lts' "$calls" || return 1
+	grep -Fxq "pull -q $TEST_PORTAINER_IMAGE" "$calls" || return 1
 	! grep -Eq '^(rm|create|stop) ' "$calls"
 )
 
 _portainer_managed_layout_reply() {
 	case "$1" in
+	'{{index .Config.Labels "com.pamuduw.dotfiles.catalog"}}') printf '%064d\n' 0 ;;
 	'{{range .Mounts}}{{if eq .Destination "/data"}}{{.Type}}:{{.Name}}{{end}}{{end}}') printf 'volume:portainer_data\n' ;;
 	'{{range .Mounts}}{{if eq .Destination "/var/run/docker.sock"}}{{.Type}}:{{.Source}}{{end}}{{end}}') printf 'bind:/var/run/docker.sock\n' ;;
 	'{{with index .HostConfig.PortBindings "8000/tcp"}}{{(index . 0).HostPort}}{{end}}') printf '8000\n' ;;
@@ -471,6 +478,7 @@ _portainer_managed_layout_reply() {
 }
 
 test_portainer_managed_legacy_container_is_recreated_with_its_data() (
+	portainer_catalog_fixture
 	local calls="$TEST_HARNESS_ROOT/portainer-migrate.calls"
 	: >"$calls"
 	log_step() { :; }
@@ -495,7 +503,7 @@ test_portainer_managed_legacy_container_is_recreated_with_its_data() (
 	install_portainer >/dev/null
 
 	grep -Fxq 'rename portainer portainer.agentbot-backup' "$calls" || return 1
-	grep -Fq 'create -p 8000:8000 -p 9443:9443 --name portainer --restart unless-stopped -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce:lts' "$calls" || return 1
+	grep -Fq "create -p 8000:8000 -p 9443:9443 --name portainer --label com.pamuduw.dotfiles.catalog=$SOFTWARE_CATALOG_DIGEST --restart unless-stopped -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data $TEST_PORTAINER_IMAGE" "$calls" || return 1
 	grep -Fxq 'rm -f portainer.agentbot-backup' "$calls" || return 1
 	! grep -Fxq 'rm -f portainer' "$calls" || return 1
 	! grep -Eq '^(start|stop) ' "$calls" || return 1
@@ -503,6 +511,7 @@ test_portainer_managed_legacy_container_is_recreated_with_its_data() (
 )
 
 test_portainer_running_container_is_stopped_before_the_replacement_starts() (
+	portainer_catalog_fixture
 	# Break caught: the renamed backup kept holding ports 8000 and 9443, so the
 	# replacement could never start and every update of a running Portainer
 	# rolled back and reported failure.
@@ -552,6 +561,7 @@ test_portainer_running_container_is_stopped_before_the_replacement_starts() (
 )
 
 test_portainer_start_failure_restores_and_restarts_the_original() (
+	portainer_catalog_fixture
 	local calls="$TEST_HARNESS_ROOT/portainer-start-fail.calls" rc
 	: >"$calls"
 	log_step() { :; }
@@ -600,6 +610,7 @@ test_portainer_start_failure_restores_and_restarts_the_original() (
 )
 
 test_portainer_create_failure_restores_the_original_running_container() (
+	portainer_catalog_fixture
 	local calls="$TEST_HARNESS_ROOT/portainer-create-fail.calls" rc
 	: >"$calls"
 	log_step() { :; }
@@ -644,6 +655,7 @@ test_portainer_create_failure_restores_the_original_running_container() (
 )
 
 test_portainer_verify_failure_removes_the_partial_replacement() (
+	portainer_catalog_fixture
 	local calls="$TEST_HARNESS_ROOT/portainer-verify-fail.calls" rc created=0
 	: >"$calls"
 	log_step() { :; }
@@ -691,6 +703,7 @@ test_portainer_verify_failure_removes_the_partial_replacement() (
 )
 
 test_portainer_interrupted_backup_is_restored_before_retry() (
+	portainer_catalog_fixture
 	local calls="$TEST_HARNESS_ROOT/portainer-interrupt.calls"
 	: >"$calls"
 	log_step() { :; }
@@ -726,6 +739,7 @@ test_portainer_interrupted_backup_is_restored_before_retry() (
 )
 
 test_portainer_custom_container_is_not_replaced() (
+	portainer_catalog_fixture
 	local calls="$TEST_HARNESS_ROOT/portainer-custom.calls" rc
 	: >"$calls"
 	log_step() { :; }
@@ -755,8 +769,24 @@ test_portainer_custom_container_is_not_replaced() (
 	! grep -Eq '^(rm|create|stop) ' "$calls"
 )
 
-test_ubuntu_sans_mono_upgrade_requests_a_replacement_install() (
-	[[ "$(declare -f upgrade_ubuntu_sans_mono)" == *'install_ubuntu_sans_mono_fonts --replace'* ]]
+test_ubuntu_sans_mono_upgrade_preserves_external_fonts() (
+	local directory="$HOME/.local/share/fonts/ubuntu-sans-mono" calls="$TEST_HARNESS_ROOT/font-upgrade.calls"
+	mkdir -p "$directory"
+	printf 'user font\n' >"$directory/External.ttf"
+	printf '0.1\n' >"$directory/.version"
+	printf '%s\n' $'ubuntu_sans_mono_fonts\towner\tany\tdotfiles' \
+		$'ubuntu_sans_mono_fonts\tkind\tany\tsoftware' $'ubuntu_sans_mono_fonts\tversion\tany\t1.0' \
+		$'ubuntu_sans_mono_fonts\tarchive\tany\tzip' | catalog_fixture_seal "$TEST_HARNESS_ROOT/catalog-font-update"
+	catalog_fixture_use "$TEST_HARNESS_ROOT/catalog-font-update"
+	: >"$calls"
+	curl() {
+		printf 'download\n' >>"$calls"
+		return 97
+	}
+	upgrade_result_set() { printf '%s\n' "$1" >>"$calls"; }
+	upgrade_ubuntu_sans_mono || return 1
+	[[ "$(cat "$directory/External.ttf")" == 'user font' && "$(cat "$directory/.version")" == 0.1 ]] || return 1
+	[[ "$(cat "$calls")" == skipped && ! -e "$directory/.catalog-receipt" ]]
 )
 
 test_remote_shell_installers_are_downloaded_before_execution() (
@@ -786,45 +816,18 @@ test_remote_shell_installer_fails_closed() (
 	[[ "$(wc -l <"$calls")" -eq 1 ]]
 )
 
-test_release_manifest_must_name_the_selected_archive() (
+test_release_digest_must_name_the_selected_archive() (
 	local calls="$TEST_HARNESS_ROOT/release-installer.calls"
 	: >"$calls"
-	github_latest_release_version() { printf '1.2.3\n'; }
-	_linux_github_arch_suffix() { printf 'x86_64\n'; }
-	log_step() { :; }
+	github_api_release_json() {
+		printf '{"assets":[{"name":"unrelated.tar.gz","digest":"sha256:%064d"}]}\n' 0
+	}
 	github_curl() {
-		local output='' arg
-		while (($#)); do
-			arg="$1"
-			shift
-			if [[ "$arg" == -o ]]; then
-				output="$1"
-				shift
-			fi
-		done
-		if [[ "$output" == *checksums.txt ]]; then
-			printf '%064d  unrelated.tar.gz\n' 0 >"$output"
-		else
-			: >"$output"
-		fi
+		printf 'download\n' >>"$calls"
+		return 97
 	}
-	sha256sum() {
-		printf 'sha256sum\n' >>"$calls"
-		return 0
-	}
-	tar() {
-		printf 'tar\n' >>"$calls"
-		return 0
-	}
-	sudo() {
-		printf 'sudo\n' >>"$calls"
-		return 0
-	}
-	set +e
-	install_lazygit_from_github >/dev/null 2>&1
-	local rc=$?
-	set -e
-	[[ "$rc" -ne 0 && ! -s "$calls" ]]
+	if github_release_asset_sha256 example/tool selected.tar.gz >/dev/null; then return 1; fi
+	[[ ! -s "$calls" ]]
 )
 
 test_wsl_config_renderer_updates_only_the_requested_section() (
@@ -836,8 +839,9 @@ test_wsl_config_renderer_updates_only_the_requested_section() (
 	grep -Fqx 'systemd=true' "$rendered"
 )
 
+check 'Portainer recovery preserves unowned containers and backups' test_portainer_recovery_preserves_unowned_resources
 check 'an unreachable docker does not accuse the container' test_an_unreachable_docker_does_not_accuse_the_container
-check 'force reinstalls what is already present' test_force_reinstalls_what_is_already_present
+check 'component dispatch preserves the explicit reinstall flag' test_component_dispatch_preserves_reinstall_flag
 check 'docker daemon config is written one way only' test_docker_daemon_config_is_written_one_way_only
 check 'a failed daemon config write is not a change' test_a_failed_daemon_config_write_is_not_a_change
 check 'git identity without a name reports instead of crashing' test_git_identity_without_a_name_reports_instead_of_crashing
@@ -852,11 +856,11 @@ check 'a new repository refreshes only its own source list' test_a_new_repositor
 check 'a missing source list still refreshes everything' test_a_missing_source_list_still_refreshes_everything
 check 'renamed packages fall back to the available name' test_renamed_packages_fall_back_to_the_available_name
 check 'a rename falls back to the older name when needed' test_a_rename_falls_back_to_the_older_name_when_needed
-check 'PowerShell falls back to the upstream release' test_powershell_skips_a_release_with_no_microsoft_feed
+check 'PowerShell refuses floating fallback when its approved target is missing' test_powershell_does_not_fall_back_when_approved_target_is_missing
 check 'tool installers stop at the first required command failure' test_tool_installers_stop_at_the_first_required_failure
 check 'container installers stop at the first required command failure' test_container_installers_stop_at_the_first_required_failure
-check 'Portainer fresh installs use LTS and remain stopped' test_portainer_fresh_install_uses_lts_without_starting_container
-check 'Portainer current LTS containers are left unchanged' test_portainer_matching_lts_image_is_left_unchanged
+check 'Portainer fresh installs use the approved digest and remain stopped' test_portainer_fresh_install_uses_digest_without_starting_container
+check 'Portainer current digest containers are left unchanged' test_portainer_matching_digest_image_is_left_unchanged
 check 'Portainer managed legacy containers retain their data' test_portainer_managed_legacy_container_is_recreated_with_its_data
 check 'Portainer create failure restores the original running container' test_portainer_create_failure_restores_the_original_running_container
 check 'Portainer running container is stopped before the replacement starts' test_portainer_running_container_is_stopped_before_the_replacement_starts
@@ -864,10 +868,10 @@ check 'Portainer start failure restores and restarts the original' test_portaine
 check 'Portainer verify failure removes the partial replacement' test_portainer_verify_failure_removes_the_partial_replacement
 check 'Portainer interrupted backup is restored before retry' test_portainer_interrupted_backup_is_restored_before_retry
 check 'Portainer custom containers are not replaced' test_portainer_custom_container_is_not_replaced
-check 'Ubuntu Sans Mono upgrades replace an older installed release' test_ubuntu_sans_mono_upgrade_requests_a_replacement_install
+check 'Ubuntu Sans Mono updates preserve external fonts' test_ubuntu_sans_mono_upgrade_preserves_external_fonts
 check 'remote shell installers are downloaded before execution' test_remote_shell_installers_are_downloaded_before_execution
 check 'remote shell installers reject insecure and empty payloads' test_remote_shell_installer_fails_closed
-check 'release checksums must identify the selected archive' test_release_manifest_must_name_the_selected_archive
+check 'release checksums must identify the selected archive' test_release_digest_must_name_the_selected_archive
 check 'WSL config rendering updates settings only in their required sections' test_wsl_config_renderer_updates_only_the_requested_section
 
 test_harness_cleanup
