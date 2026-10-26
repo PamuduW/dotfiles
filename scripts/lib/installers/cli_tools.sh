@@ -74,7 +74,7 @@ codex_migrate_nvm_installations() (
 	[[ "$(dotfiles_catalog_get codex_cli owner)" == dotfiles && "$binary" == bin/codex ]] || return 2
 	case "$archive" in tar | tar.gz | tar.xz | tgz | zip) ;; *) return 2 ;; esac
 	directory="$(mktemp -d "${NVM_DIR:-$HOME/.nvm}/.dotfiles-codex-migration-XXXXXX")" || return 1
-	# shellcheck disable=SC2329  # Invoked by this subshell's EXIT trap.
+	# shellcheck disable=SC2317,SC2329  # Invoked by this subshell's EXIT trap.
 	codex_migration_cleanup() {
 		local status=$? rollback_failed=0
 		if [[ "$committed" == 0 ]]; then
