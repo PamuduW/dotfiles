@@ -35,7 +35,7 @@ make_agy_archive() {
 	if [[ $# -eq 0 ]]; then
 		set -- antigravity
 	fi
-	tar -czf "$FIXTURE_ARCHIVE" -C "$fixture_dir" "$@"
+	tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -czf "$FIXTURE_ARCHIVE" -C "$fixture_dir" "$@"
 }
 
 fixture_manifest() {

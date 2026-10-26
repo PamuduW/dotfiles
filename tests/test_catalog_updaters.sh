@@ -7,6 +7,12 @@ source "$TEST_DIR/lib/catalog_fixture.sh"
 test_harness_init
 PATH="$HOME/.local/bin:$TEST_FAKE_BIN:/usr/bin:/bin"
 export PATH ASDF_DATA_DIR="$HOME/.asdf"
+# This fresh-install fixture must not discover the runner's preinstalled Go.
+# Keep lookup real once this fixture has published its managed command/shim.
+command() {
+	if [[ "$*" == '-v go' && ! -x "$HOME/.local/bin/go" ]]; then return 1; fi
+	builtin command "$@"
+}
 source "$REPO_DIR/scripts/lib/software_catalog.sh"
 source "$REPO_DIR/scripts/lib/catalog_runtimes.sh"
 source "$REPO_DIR/scripts/lib/installers/cli_tools.sh"
