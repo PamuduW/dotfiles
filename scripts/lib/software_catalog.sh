@@ -507,6 +507,12 @@ dotfiles_catalog_install() (
 	fi
 	binary="$(dotfiles_catalog_get "$key" binary)" || return 2
 	[[ "$binary" =~ ^[A-Za-z0-9_./-]+$ && "$binary" != /* && "$binary" != *'..'* ]] || return 2
+	case "$archive" in
+	npm-lock | python-lock)
+		[[ "$binary" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || return 2
+		if [[ "$archive" == npm-lock ]]; then binary="node_modules/.bin/$binary"; else binary="bin/$binary"; fi
+		;;
+	esac
 	[[ "$key" != npm ]] || dotfiles_catalog_npm_preflight || return 2
 	command_name="$(dotfiles_catalog_command_name "$key")"
 	root="$(dotfiles_catalog_root "$key")"

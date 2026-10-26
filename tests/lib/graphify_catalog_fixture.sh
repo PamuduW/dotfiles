@@ -51,7 +51,7 @@ UV
 		$'uv\turl\tany\thttps://fixture.invalid/uv' $'uv\tdigest\tany\tsha256:'"${digest%% *}" \
 		$'graphify_cli\towner\tany\tdotfiles' $'graphify_cli\tkind\tany\tsoftware' \
 		$'graphify_cli\tversion\tany\t'"$version" $'graphify_cli\tarchive\tany\tpython-lock' \
-		$'graphify_cli\tpackage\tany\tgraphifyy' $'graphify_cli\tbinary\tany\tbin/graphify' \
+		$'graphify_cli\tpackage\tany\tgraphifyy' $'graphify_cli\tbinary\tany\tgraphify' \
 		$'graphify_cli\tlock\tany\tlocks/graphify.txt' $'graphify_cli\tdigest\tany\tsha256:'"${lock_digest%% *}" | catalog_fixture_seal "$fixture"
 	catalog_fixture_use "$fixture"
 	curl() {

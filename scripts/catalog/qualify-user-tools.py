@@ -74,6 +74,7 @@ def smoke(manifest: Path, output: Path) -> dict:
         visit(key)
     script = """
 set -euo pipefail
+trap 'status=$?; printf "User-tools failure: %s/%s (exit %s)\\n" "${phase:-setup}" "${key:-setup}" "$status" >&2' ERR
 source "$1/scripts/lib/installers/load.sh"
 software_catalog_qualification_begin "$2"
 shift 2
@@ -166,6 +167,17 @@ def main() -> int:
         with args.output.open("x") as stream:
             json.dump(result, stream, indent=2)
             stream.write("\n")
+    except subprocess.CalledProcessError as error:
+        print(
+            f"User-tools subprocess failed with exit {error.returncode}; see component diagnostics above",
+            file=sys.stderr,
+        )
+        return 2
+    except subprocess.TimeoutExpired as error:
+        print(
+            f"User-tools subprocess exceeded {error.timeout} seconds", file=sys.stderr
+        )
+        return 2
     except (ValueError, OSError, subprocess.SubprocessError) as error:
         print(str(error), file=sys.stderr)
         return 2

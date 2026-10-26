@@ -25,7 +25,7 @@ chmod +x "$TEST_HARNESS_ROOT/package/cli.js"
 lock_digest="$(sha256sum "$fixture/locks/package-lock.json")"
 printf '%s\n' $'cspell\towner\tany\tdotfiles' $'cspell\tkind\tany\tsoftware' \
 	$'cspell\tversion\tany\t1.2.3' $'cspell\tarchive\tany\tnpm-lock' \
-	$'cspell\tpackage\tany\tcspell' $'cspell\tbinary\tany\tnode_modules/.bin/cspell' \
+	$'cspell\tpackage\tany\tcspell' $'cspell\tbinary\tany\tcspell' \
 	$'cspell\tlock\tany\tlocks/package-lock.json' $'cspell\tdigest\tany\tsha256:'"${lock_digest%% *}" | catalog_fixture_seal "$fixture"
 catalog_fixture_use "$fixture"
 install_npm_cli cspell
