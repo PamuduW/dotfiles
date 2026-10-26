@@ -1,0 +1,14 @@
+FROM ubuntu:24.04
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       ca-certificates curl git python3 python3-venv xz-utils unzip \
+       fontconfig libgtk-3-0t64 libnss3 libasound2t64 libgbm1 \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG TEST_UID=1001
+RUN useradd --non-unique --uid "$TEST_UID" --create-home --shell /bin/bash op \
+    && chmod 700 /home/op
+USER op
+WORKDIR /home/op
+ENV HOME=/home/op USER=op LANG=C.UTF-8
