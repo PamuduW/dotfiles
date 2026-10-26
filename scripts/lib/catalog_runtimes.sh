@@ -97,7 +97,7 @@ dotfiles_catalog_node_install() (
 	paths=("$HOME/.local/bin/node" "$HOME/.local/bin/npm" "$HOME/.local/bin/npx"
 		"$HOME/.local/share/dotfiles-catalog/nodejs.native" "$HOME/.local/share/dotfiles-catalog/npm.native"
 		"$root/alias/default" "$root/nvm.sh")
-	# shellcheck disable=SC2329  # Invoked by this transaction's EXIT trap.
+	# shellcheck disable=SC2317,SC2329  # Invoked by this transaction's EXIT trap.
 	_dotfiles_catalog_node_cleanup() {
 		local status=$? rollback_failed=0
 		if [[ "$committed" == 0 ]]; then
@@ -249,7 +249,7 @@ dotfiles_catalog_go_install() (
 	stage="$(mktemp -d "$root/installs/golang/.catalog-go-XXXXXX")" || return 1
 	paths=("$HOME/.local/bin/go" "$HOME/.local/share/dotfiles-catalog/go.native" "$HOME/.local/share/dotfiles-catalog/go.command"
 		"$root/plugins/golang" "$root/bin/asdf" "$HOME/.tool-versions" "$HOME/.local/share/dotfiles-catalog/go.shims")
-	# shellcheck disable=SC2329  # Invoked by this transaction's EXIT trap.
+	# shellcheck disable=SC2317,SC2329  # Invoked by this transaction's EXIT trap.
 	_dotfiles_catalog_go_cleanup() {
 		local status=$? rollback_failed=0
 		if [[ "$committed" == 0 ]]; then

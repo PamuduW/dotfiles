@@ -557,7 +557,7 @@ dotfiles_catalog_install() (
 		rm -rf -- "$staging"
 		return 2
 	fi
-	# shellcheck disable=SC2329  # Invoked by the EXIT trap in this subshell.
+	# shellcheck disable=SC2317,SC2329  # Invoked by the EXIT trap in this subshell.
 	dotfiles_catalog_publication_cleanup() {
 		local status=$? rollback_ok=1
 		if [[ "$committed" == 0 ]]; then
