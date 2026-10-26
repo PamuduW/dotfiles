@@ -75,5 +75,5 @@ graphify_reset() {
 	rm -rf -- "$HOME/.local" "$TEST_FAKE_BIN/uv"
 	: >"$TEST_COMMAND_LOG"
 	unset TEST_GRAPHIFY_SYNC_FAILS TEST_GRAPHIFY_CERT_RETRY UV_SYSTEM_CERTS
-	graphify_fixture
+	graphify_fixture 1.2.3 0.12.0
 }
