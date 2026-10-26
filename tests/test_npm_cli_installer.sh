@@ -47,7 +47,7 @@ PYLOCK
 		digest="$(sha256sum "$fixture/locks/$key.json")"
 		printf '%s\n' "$key"$'\towner\tany\tdotfiles' "$key"$'\tkind\tany\tsoftware' \
 			"$key"$'\tversion\tany\t'"$SERVED_VERSION" "$key"$'\tarchive\tany\tnpm-lock' \
-			"$key"$'\tpackage\tany\t'"$package" "$key"$'\tbinary\tany\tnode_modules/.bin/'"$binary" \
+			"$key"$'\tpackage\tany\t'"$package" "$key"$'\tbinary\tany\t'"$binary" \
 			"$key"$'\tlock\tany\tlocks/'"$key.json" "$key"$'\tdigest\tany\tsha256:'"${digest%% *}" >>"$fixture/input-rows"
 	done
 	catalog_fixture_seal "$fixture" <"$fixture/input-rows"
