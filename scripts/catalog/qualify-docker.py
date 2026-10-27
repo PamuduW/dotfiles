@@ -84,7 +84,7 @@ mapfile -t installed < <(dpkg-query -W -f='${binary:Package}\t${db:Status-Status
 [[ "${#installed[@]}" -gt 0 ]]
 sudo systemctl stop docker.service docker.socket containerd.service
 sudo apt-mark unhold "${installed[@]}" >&2
-sudo apt-get purge -y "${installed[@]}" >&2
+sudo apt-get -o DPkg::Lock::Timeout=600 purge -y "${installed[@]}" >&2
 for key in "$@"; do
     package="$(dotfiles_catalog_get "$key" package)"
     status=0
