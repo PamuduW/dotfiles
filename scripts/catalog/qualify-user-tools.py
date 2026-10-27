@@ -25,7 +25,7 @@ def select_inventory(snapshot):
         }:
             continue
         artifact = resolve_entry(snapshot, key, "linux-amd64", require_approved=False)
-        if (
+        if entry["kind"] == "git-source" or (
             artifact["archive"] not in {"deb", "oci"}
             and artifact.get("binary") != "fonts"
         ):

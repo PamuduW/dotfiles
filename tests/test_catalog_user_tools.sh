@@ -33,6 +33,9 @@ for key, kind, archive in (
 ):
     entries[key] = {'owner': 'dotfiles', 'kind': kind, 'requires': [], 'blockers': [],
                     'targets': {'linux-amd64': {'archive': archive, 'binary': 'fonts' if key == 'font' else key}}}
+del entries['future-source']['targets']['linux-amd64']['archive']
+del entries['future-source']['targets']['linux-amd64']['binary']
+entries['future-source']['targets']['linux-amd64']['revision'] = 'a' * 40
 snapshot = SimpleNamespace(data={'components': entries}, approved=False)
 assert set(module.select_inventory(snapshot)) == {'runtime', 'future-source'}
 print('User-tools coverage includes future managed Git sources')
