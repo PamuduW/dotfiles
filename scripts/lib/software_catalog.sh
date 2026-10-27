@@ -121,7 +121,7 @@ dotfiles_catalog_component_identity() {
 	archive="$(dotfiles_catalog_get "$key" archive)" || return 2
 	case "$archive" in
 	npm-lock) dotfiles_catalog_identity "$key" nodejs npm nvm ;;
-	python-lock) dotfiles_catalog_identity "$key" uv ;;
+	python-lock) dotfiles_catalog_identity "$key" uv python_runtime ;;
 	*) dotfiles_catalog_identity "$key" ;;
 	esac
 }
@@ -949,8 +949,14 @@ PY
 	}
 }
 
+dotfiles_catalog_python_runtime() {
+	local -a arguments=(--catalog "$SOFTWARE_CATALOG_SNAPSHOT" --digest "$SOFTWARE_CATALOG_DIGEST" --revision "$SOFTWARE_CATALOG_REVISION")
+	[[ -z "${_SOFTWARE_CATALOG_QUALIFICATION_CONTEXT:-}" ]] || arguments+=(--qualification-context "$_SOFTWARE_CATALOG_QUALIFICATION_CONTEXT")
+	python3 -I -B "$DOTFILES_SHARED_ROOT/scripts/catalog/python-runtime.py" "${arguments[@]}"
+}
+
 dotfiles_catalog_stage_python() {
-	local key="$1" staging="$2" payload="$3" lock uv uv_version
+	local key="$1" staging="$2" payload="$3" lock uv uv_version runtime
 	lock="$(dotfiles_catalog_lock "$key")" || return 2
 	# uv is independently approved; it never downloads a floating Python.
 	dotfiles_catalog_install uv || return $?
@@ -960,11 +966,17 @@ dotfiles_catalog_stage_python() {
 		printf 'The approved owned uv dependency is unavailable; preserving installed software.\n' >&2
 		return 2
 	fi
+	runtime="$(dotfiles_catalog_python_runtime)" || return $?
+	[[ "$runtime" == /* && -f "$runtime" && -x "$runtime" ]] || return 2
 	local sync_rc=0
-	UV_PYTHON_DOWNLOADS=never "$uv" venv --python python3 "$payload" >"$staging/python.log" 2>&1 || sync_rc=$?
+	UV_PYTHON_DOWNLOADS=never "$uv" venv --python "$runtime" "$payload" >"$staging/python.log" 2>&1 || sync_rc=$?
 	if ((sync_rc != 0)); then
 		cat -- "$staging/python.log" >&2
 		return "$sync_rc"
+	fi
+	if ! "$payload/bin/python" -I -B -c 'import pathlib,sys; raise SystemExit(pathlib.Path(sys._base_executable).resolve()!=pathlib.Path(sys.argv[1]).resolve())' "$runtime" >"$staging/python-base.log" 2>&1; then
+		printf 'Python environment does not use the selected private runtime; preserving installed software.\n' >&2
+		return 2
 	fi
 	UV_PYTHON_DOWNLOADS=never "$uv" pip sync --python "$payload/bin/python" --require-hashes "$lock" >"$staging/sync.log" 2>&1 || sync_rc=$?
 	if ((sync_rc != 0)); then

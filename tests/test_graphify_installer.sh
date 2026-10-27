@@ -10,7 +10,7 @@ PATH="$HOME/.local/bin:$TEST_FAKE_BIN:/usr/bin:/bin"
 source "$ROOT/scripts/lib/installers/logging.sh"
 source "$ROOT/scripts/lib/installers/graphify.sh"
 
-# Mock only the uv process. Catalog lookup, artifact/lock verification, owned
+# Mock the SDK acquisition boundary and uv process. Catalog lookup, artifact/lock verification, owned
 # staging, version probes and publication remain real; no dependency is fetched.
 source "$TEST_DIR/lib/graphify_catalog_fixture.sh"
 
@@ -159,6 +159,59 @@ PYLOCKCHANGE
 	}
 )
 
+test_graphify_uses_the_selected_private_python() (
+	graphify_reset
+	local selected="$TEST_GRAPHIFY_SELECTED_PYTHON"
+	install_graphify_cli || return 1
+	grep -Fq -- "uv:venv --python $selected " "$TEST_COMMAND_LOG" || {
+		echo 'FAIL: Graphify did not select the private catalog interpreter' >&2
+		return 1
+	}
+)
+
+test_same_graphify_version_new_python_refreshes_the_environment() (
+	graphify_reset
+	install_graphify_cli || return 1
+	local previous selected
+	previous="$(readlink "$(dotfiles_catalog_root graphify_cli)/current")"
+	selected="$TEST_GRAPHIFY_SELECTED_PYTHON"
+	graphify_fixture 1.2.3 0.12.0 3.12.16+20261027
+	: >"$TEST_COMMAND_LOG"
+	install_graphify_cli || return 1
+	[[ "$(readlink "$(dotfiles_catalog_root graphify_cli)/current")" != "$previous" && -x "$selected" ]] || return 1
+	grep -Fq -- "uv:venv --python $TEST_GRAPHIFY_SELECTED_PYTHON " "$TEST_COMMAND_LOG"
+)
+
+test_failed_python_acquisition_preserves_the_environment() (
+	graphify_reset
+	install_graphify_cli || return 1
+	local previous
+	previous="$(readlink "$(dotfiles_catalog_root graphify_cli)/current")"
+	graphify_fixture 1.2.3 0.12.0 3.12.16+20261027
+	export TEST_GRAPHIFY_RUNTIME_FAILS=1
+	: >"$TEST_COMMAND_LOG"
+	if install_graphify_cli; then return 1; fi
+	[[ "$(readlink "$(dotfiles_catalog_root graphify_cli)/current")" == "$previous" && "$("$HOME/.local/bin/graphify" --version)" == 'graphify 1.2.3' ]] || return 1
+	! grep -q '^uv:venv ' "$TEST_COMMAND_LOG"
+)
+
+test_wrong_python_base_cannot_publish() (
+	graphify_reset
+	install_graphify_cli || return 1
+	local previous output
+	previous="$(readlink "$(dotfiles_catalog_root graphify_cli)/current")"
+	export TEST_GRAPHIFY_WRONG_BASE=1
+	: >"$TEST_COMMAND_LOG"
+	if output="$(DOTFILES_FORCE_REINSTALL=1 install_graphify_cli 2>&1)"; then return 1; fi
+	[[ "$output" == *'does not use the selected private runtime'* ]] || return 1
+	[[ "$(readlink "$(dotfiles_catalog_root graphify_cli)/current")" == "$previous" && "$("$HOME/.local/bin/graphify" --version)" == 'graphify 1.2.3' ]] || return 1
+	! grep -q '^uv:pip sync ' "$TEST_COMMAND_LOG"
+)
+
+expect_success 'a changed Python runtime rebuilds unchanged Graphify and retains the old release' test_same_graphify_version_new_python_refreshes_the_environment
+expect_success 'failed Python acquisition preserves the working Graphify environment' test_failed_python_acquisition_preserves_the_environment
+expect_success 'a different Python base is rejected before package installation and publication' test_wrong_python_base_cannot_publish
+expect_success 'Graphify uses the selected private Python instead of the host ABI' test_graphify_uses_the_selected_private_python
 expect_success 'unchanged Graphify refreshes when its approved uv dependency changes' test_same_version_new_uv_refreshes_the_owned_closure
 expect_success 'unchanged Graphify refreshes when its approved lock changes' test_same_version_lock_change_is_not_skipped
 expect_success 'frozen Graphify sync retries system trust without leaking recovered errors' test_frozen_sync_retries_trusted_system_certificates_quietly

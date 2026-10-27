@@ -1,7 +1,16 @@
 # shellcheck shell=bash
 graphify_fixture() {
-	local version="${1:-1.2.3}" uv_version="${2:-0.12.0}" fixture="$TEST_HARNESS_ROOT/catalog-graphify" digest lock_digest
+	local version="${1:-1.2.3}" uv_version="${2:-0.12.0}" python_version="${3:-3.12.16+20261026}" fixture="$TEST_HARNESS_ROOT/catalog-graphify" digest lock_digest
 	mkdir -p "$fixture/locks"
+	TEST_GRAPHIFY_SELECTED_PYTHON="$TEST_HARNESS_ROOT/python-$python_version"
+	export TEST_GRAPHIFY_SELECTED_PYTHON
+	printf '%s\n' '#!/usr/bin/env bash' 'exit 0' >"$TEST_GRAPHIFY_SELECTED_PYTHON"
+	chmod +x "$TEST_GRAPHIFY_SELECTED_PYTHON"
+	# SDK owner/provenance is covered by the shared owner-launcher suite.
+	dotfiles_catalog_python_runtime() {
+		[[ "${TEST_GRAPHIFY_RUNTIME_FAILS:-0}" != 1 ]] || return 86
+		printf '%s\n' "$TEST_GRAPHIFY_SELECTED_PYTHON"
+	}
 	printf 'graphifyy==%s --hash=sha256:%064d\n' "$version" 0 >"$fixture/locks/graphify.txt"
 	cat >"$TEST_HARNESS_ROOT/uv" <<'UV'
 #!/usr/bin/env bash
@@ -13,7 +22,8 @@ case "${1:-}" in
 venv)
 	prefix="${*: -1}"
 	mkdir -p "$prefix/bin"
-	printf '%s\n' '#!/usr/bin/env bash' 'exit 0' >"$prefix/bin/python"
+	[[ "$2" == --python && "$3" == "$TEST_GRAPHIFY_SELECTED_PYTHON" ]] || exit 83
+	printf '%s\n' '#!/usr/bin/env bash' '[[ "${TEST_GRAPHIFY_WRONG_BASE:-0}" != 1 ]] || exit 84' '[[ "$1" == -I && "$2" == -B && "$3" == -c && "${*: -1}" == "$TEST_GRAPHIFY_SELECTED_PYTHON" ]]' >"$prefix/bin/python"
 	chmod +x "$prefix/bin/python"
 	;;
 pip)
@@ -49,6 +59,8 @@ UV
 	printf '%s\n' $'uv\towner\tany\tdotfiles' $'uv\tkind\tany\tsoftware' \
 		$'uv\tversion\tany\t'"$uv_version" $'uv\tarchive\tany\traw' $'uv\tbinary\tany\tuv' \
 		$'uv\turl\tany\thttps://fixture.invalid/uv' $'uv\tdigest\tany\tsha256:'"${digest%% *}" \
+		$'python_runtime\towner\tany\tagentbot' $'python_runtime\tkind\tany\tsoftware' \
+		$'python_runtime\tversion\tany\t'"$python_version" \
 		$'graphify_cli\towner\tany\tdotfiles' $'graphify_cli\tkind\tany\tsoftware' \
 		$'graphify_cli\tversion\tany\t'"$version" $'graphify_cli\tarchive\tany\tpython-lock' \
 		$'graphify_cli\tpackage\tany\tgraphifyy' $'graphify_cli\tbinary\tany\tgraphify' \
@@ -74,6 +86,6 @@ graphify_reset() {
 	export PATH
 	rm -rf -- "$HOME/.local" "$TEST_FAKE_BIN/uv"
 	: >"$TEST_COMMAND_LOG"
-	unset TEST_GRAPHIFY_SYNC_FAILS TEST_GRAPHIFY_CERT_RETRY UV_SYSTEM_CERTS
+	unset TEST_GRAPHIFY_SYNC_FAILS TEST_GRAPHIFY_CERT_RETRY TEST_GRAPHIFY_RUNTIME_FAILS TEST_GRAPHIFY_WRONG_BASE UV_SYSTEM_CERTS
 	graphify_fixture 1.2.3 0.12.0
 }
