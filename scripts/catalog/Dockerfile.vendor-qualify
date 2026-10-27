@@ -1,0 +1,16 @@
+ARG BASE_IMAGE=catalog-user-tools:local
+FROM ${BASE_IMAGE}
+
+USER root
+# Package qualification must not start a daemon inside this disposable image.
+RUN printf '#!/bin/sh\nexit 101\n' >/usr/sbin/policy-rc.d \
+    && chmod 755 /usr/sbin/policy-rc.d \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+       sudo xvfb xauth xdotool dbus-x11 procps \
+    && printf 'op ALL=(ALL) NOPASSWD: ALL\n' >/etc/sudoers.d/catalog-qualification \
+    && chmod 440 /etc/sudoers.d/catalog-qualification \
+    && visudo -cf /etc/sudoers.d/catalog-qualification \
+    && rm -rf /var/lib/apt/lists/*
+USER op
+WORKDIR /home/op
