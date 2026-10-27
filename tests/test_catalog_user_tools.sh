@@ -40,3 +40,25 @@ snapshot = SimpleNamespace(data={'components': entries}, approved=False)
 assert set(module.select_inventory(snapshot)) == {'runtime', 'future-source'}
 print('User-tools coverage includes future managed Git sources')
 PY
+python3 - "$root" <<'PY'
+import ast
+import pathlib
+import subprocess
+import sys
+import tempfile
+
+root = pathlib.Path(sys.argv[1])
+tree = ast.parse((root / 'scripts/catalog/qualify-user-tools.py').read_text())
+scripts = [ast.literal_eval(node.value) for node in ast.walk(tree)
+           if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == 'script' for target in node.targets)]
+assert len(scripts) == 1
+prefix = scripts[0].split('software_catalog_qualification_begin', 1)[0]
+with tempfile.TemporaryDirectory() as home:
+    result = subprocess.run(
+        ['bash', '-c', prefix + '\ndeclare -F dotfiles_catalog_source_install >/dev/null\n', 'bash', str(root)],
+        env={'PATH': '/usr/bin:/bin', 'HOME': home, 'LANG': 'C.UTF-8', 'DOTFILES_SHARED_DIR': str(root.parent / 'dotfiles-shared')},
+        capture_output=True, text=True, check=False,
+    )
+    assert result.returncode == 0, result.stderr or 'driver did not load the managed Git source API'
+print('User-tools driver loads its Git source installation API')
+PY

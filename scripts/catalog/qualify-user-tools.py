@@ -86,6 +86,7 @@ def smoke(manifest: Path, output: Path) -> dict:
 set -euo pipefail
 trap 'status=$?; printf "User-tools failure: %s/%s (exit %s)\\n" "${phase:-setup}" "${key:-setup}" "$status" >&2' ERR
 source "$1/scripts/lib/installers/load.sh"
+source "$1/scripts/lib/catalog_sources.sh"
 software_catalog_qualification_begin "$2"
 dotfiles_catalog_begin
 shift 2
