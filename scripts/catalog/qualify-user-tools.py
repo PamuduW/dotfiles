@@ -14,6 +14,25 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def select_inventory(snapshot):
+    from software_catalog import resolve_entry
+
+    selected = {}
+    for key, entry in snapshot.data["components"].items():
+        if entry["owner"] != "dotfiles" or entry["kind"] not in {
+            "software",
+            "git-source",
+        }:
+            continue
+        artifact = resolve_entry(snapshot, key, "linux-amd64", require_approved=False)
+        if (
+            artifact["archive"] not in {"deb", "oci"}
+            and artifact.get("binary") != "fonts"
+        ):
+            selected[key] = entry
+    return selected
+
+
 def smoke(manifest: Path, output: Path) -> dict:
     shared = subprocess.check_output(
         [
@@ -27,7 +46,7 @@ def smoke(manifest: Path, output: Path) -> dict:
     )
     sys.path.insert(0, str(Path(shared) / "scripts/lib/shared/python"))
     from catalog_context import load_qualification_context
-    from software_catalog import CatalogError, resolve_entry
+    from software_catalog import CatalogError
 
     snapshot, sources, _ = load_qualification_context(manifest)
     system = platform.freedesktop_os_release()
@@ -43,16 +62,7 @@ def smoke(manifest: Path, output: Path) -> dict:
         raise CatalogError(
             "user-tools smoke requires a disposable container and a non-root user"
         )
-    selected = {}
-    for key, entry in snapshot.data["components"].items():
-        if entry["owner"] != "dotfiles" or entry["kind"] != "software":
-            continue
-        artifact = resolve_entry(snapshot, key, "linux-amd64", require_approved=False)
-        if (
-            artifact["archive"] not in {"deb", "oci"}
-            and artifact.get("binary") != "fonts"
-        ):
-            selected[key] = entry
+    selected = select_inventory(snapshot)
     if not selected:
         raise CatalogError("user-tools smoke cannot pass with empty coverage")
     order, active, complete = [], set(), set()
@@ -77,14 +87,23 @@ set -euo pipefail
 trap 'status=$?; printf "User-tools failure: %s/%s (exit %s)\\n" "${phase:-setup}" "${key:-setup}" "$status" >&2' ERR
 source "$1/scripts/lib/installers/load.sh"
 software_catalog_qualification_begin "$2"
+dotfiles_catalog_begin
 shift 2
 for phase in fresh repeat; do
     for key in "$@"; do
         printf 'User tools %s: %s\\n' "$phase" "$key" >&2
-        dotfiles_catalog_install "$key" >&2
-        dotfiles_catalog_owned "$key" || { echo "Missing ownership: $key" >&2; exit 2; }
-        actual="$(dotfiles_catalog_installed "$key")"
-        expected="$(dotfiles_catalog_get "$key" version)"
+        if [[ "$(dotfiles_catalog_get "$key" kind)" == git-source ]]; then
+            checkout="$(dotfiles_catalog_source_install "$key")"
+            dotfiles_catalog_source_owned "$key"
+            dotfiles_catalog_source_checkout_owned "$key" "$checkout"
+            actual="$(_dotfiles_catalog_source_git -C "$checkout" rev-parse --verify HEAD)"
+            expected="$(dotfiles_catalog_get "$key" revision)"
+        else
+            dotfiles_catalog_install "$key" >&2
+            dotfiles_catalog_owned "$key" || { echo "Missing ownership: $key" >&2; exit 2; }
+            actual="$(dotfiles_catalog_installed "$key")"
+            expected="$(dotfiles_catalog_get "$key" version)"
+        fi
         [[ "$actual" == "$expected" ]] || { echo "Version mismatch: $key ($actual)" >&2; exit 2; }
         printf '%s\\t%s\\t%s\\n' "$phase" "$key" "$actual"
     done
