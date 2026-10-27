@@ -15,7 +15,7 @@ dotfiles_catalog_node_install() (
 	local lock_fd
 	dotfiles_catalog_transaction_lock nodejs lock_fd || return $?
 	dotfiles_catalog_begin || return $?
-	local runtime_key node_version npm_version nvm_version binary archive npm_archive identity source_checkout root prefix stage candidate native_archive compression
+	local runtime_key node_version npm_version nvm_version binary archive npm_archive identity source_checkout root prefix stage candidate native_archive compression entrypoint
 	local committed=0 prefix_published=0 prefix_backed_up=0 keep_stage=0 index rc=0 previous_prefix=''
 	local -a paths=() prepared=() changed=() old_proof=()
 	[[ "${SOFTWARE_CATALOG_REVISION:-}" =~ ^[0-9a-f]{40}$ ]] || return 2
@@ -63,10 +63,12 @@ dotfiles_catalog_node_install() (
 	root="${NVM_DIR:-$HOME/.nvm}"
 	prefix="$root/versions/node/v$node_version"
 	[[ "$root" == /* && ! -L "$root" && ! -L "$root/versions" && ! -L "$root/versions/node" ]] || return 2
-	if [[ -e "$root/nvm.sh" || -L "$root/nvm.sh" ]]; then
-		[[ -L "$root/nvm.sh" && "$(readlink -- "$root/nvm.sh")" == "$(dotfiles_catalog_root nvm)/current/nvm.sh" ]] || return 2
-		dotfiles_catalog_source_owned nvm || return 2
-	fi
+	for entrypoint in nvm.sh bash_completion nvm-exec; do
+		if [[ -e "$root/$entrypoint" || -L "$root/$entrypoint" ]]; then
+			[[ -L "$root/$entrypoint" && "$(readlink -- "$root/$entrypoint")" == "$(dotfiles_catalog_root nvm)/current/$entrypoint" ]] || return 2
+			dotfiles_catalog_source_owned nvm || return 2
+		fi
+	done
 	if dotfiles_catalog_native_owned nodejs; then
 		mapfile -t old_proof <"$HOME/.local/share/dotfiles-catalog/nodejs.native"
 		previous_prefix="${old_proof[5]}"
@@ -78,25 +80,29 @@ dotfiles_catalog_node_install() (
 	fi
 	identity="$(dotfiles_catalog_identity nodejs npm nvm)" || return 2
 	source_checkout="$(dotfiles_catalog_source_install nvm)" || return $?
+	for entrypoint in nvm.sh bash_completion nvm-exec; do
+		[[ -f "$source_checkout/$entrypoint" && ! -L "$source_checkout/$entrypoint" ]] || return 2
+	done
+	[[ -x "$source_checkout/nvm-exec" ]] || return 2
 	if [[ "${DOTFILES_FORCE_REINSTALL:-0}" != 1 ]] && dotfiles_catalog_native_owned nodejs && dotfiles_catalog_native_owned npm; then
 		mapfile -t old_proof <"$HOME/.local/share/dotfiles-catalog/nodejs.native"
 		if [[ "${old_proof[6]}" == "$identity" ]] &&
 			dotfiles_catalog_version_matches "$prefix/bin/node" "$node_version" --version &&
 			dotfiles_catalog_version_matches "$prefix/bin/npm" "$npm_version" --version &&
-			dotfiles_catalog_version_matches "$prefix/bin/npx" "$npm_version" --version; then
+			dotfiles_catalog_version_matches "$prefix/bin/npx" "$npm_version" --version &&
+			[[ -L "$root/bash_completion" && -L "$root/nvm-exec" ]]; then
 			if [[ ! -e "$HOME/.local/bin/npx" && ! -L "$HOME/.local/bin/npx" ]]; then
 				ln -s -- "$prefix/bin/npx" "$HOME/.local/bin/npx" || return 1
 			fi
 			return 0
 		fi
 	fi
-	[[ -f "$source_checkout/nvm.sh" && ! -L "$source_checkout/nvm.sh" ]] || return 2
 	mkdir -p -- "$root/versions/node" "$root/alias" "$HOME/.local/bin" "$HOME/.local/share/dotfiles-catalog" || return 1
 	[[ ! -L "$root/alias" && ! -L "$root/alias/default" ]] || return 2
 	stage="$(mktemp -d "$root/versions/node/.catalog-node-XXXXXX")" || return 1
 	paths=("$HOME/.local/bin/node" "$HOME/.local/bin/npm" "$HOME/.local/bin/npx"
 		"$HOME/.local/share/dotfiles-catalog/nodejs.native" "$HOME/.local/share/dotfiles-catalog/npm.native"
-		"$root/alias/default" "$root/nvm.sh")
+		"$root/alias/default" "$root/nvm.sh" "$root/bash_completion" "$root/nvm-exec")
 	# shellcheck disable=SC2317,SC2329  # Invoked by this transaction's EXIT trap.
 	_dotfiles_catalog_node_cleanup() {
 		local status=$? rollback_failed=0
@@ -172,8 +178,10 @@ dotfiles_catalog_node_install() (
 	_dotfiles_catalog_runtime_receipt "$stage/nodejs.native" nvm "$node_version" "$prefix" "$identity" || return 1
 	_dotfiles_catalog_runtime_receipt "$stage/npm.native" nvm "$npm_version" "$prefix" "$identity" || return 1
 	printf 'v%s\n' "$node_version" >"$stage/default"
-	ln -s -- "$(dotfiles_catalog_root nvm)/current/nvm.sh" "$stage/nvm.sh" || return 1
-	prepared=("$stage/public-node" "$stage/public-npm" "$stage/public-npx" "$stage/nodejs.native" "$stage/npm.native" "$stage/default" "$stage/nvm.sh")
+	for entrypoint in nvm.sh bash_completion nvm-exec; do
+		ln -s -- "$(dotfiles_catalog_root nvm)/current/$entrypoint" "$stage/$entrypoint" || return 1
+	done
+	prepared=("$stage/public-node" "$stage/public-npm" "$stage/public-npx" "$stage/nodejs.native" "$stage/npm.native" "$stage/default" "$stage/nvm.sh" "$stage/bash_completion" "$stage/nvm-exec")
 	for index in "${!paths[@]}"; do
 		if [[ -e "${paths[index]}" || -L "${paths[index]}" ]]; then cp -a -- "${paths[index]}" "$stage/backup-$index" || return 1; fi
 	done

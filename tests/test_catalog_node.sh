@@ -62,6 +62,9 @@ nvm_install_binary_extract() {
 	tar -xzf "$4" --strip-components=1 -C "$NVM_DIR/versions/node/$2"
 }
 NVM
+printf '%s\n' '# fixture completion' >"$TEST_NATIVE_SOURCE_CHECKOUT/bash_completion"
+printf '%s\n' '#!/bin/sh' 'exec "$@"' >"$TEST_NATIVE_SOURCE_CHECKOUT/nvm-exec"
+chmod +x "$TEST_NATIVE_SOURCE_CHECKOUT/nvm-exec"
 ln -s "$TEST_NATIVE_SOURCE_CHECKOUT" "$(dotfiles_catalog_root nvm)/current"
 dotfiles_catalog_source_install() { [[ "$1" == nvm ]] && printf '%s\n' "$TEST_NATIVE_SOURCE_CHECKOUT"; }
 dotfiles_catalog_source_owned() { [[ "$1" == nvm ]]; }
@@ -87,8 +90,21 @@ prefix="$NVM_DIR/versions/node/$NODE_VERSION"
 [[ "$(node -p process.execPath)" == "$prefix/bin/node" ]]
 [[ "$(npm config get prefix)" == "$prefix" ]]
 [[ "$(cat "$NVM_DIR/alias/default")" == "$NODE_VERSION" ]]
+for sidecar in bash_completion nvm-exec; do
+	[[ -L "$NVM_DIR/$sidecar" && "$(readlink "$NVM_DIR/$sidecar")" == "$(dotfiles_catalog_root nvm)/current/$sidecar" ]] || {
+		echo "FAIL: selected NVM companion is missing: $sidecar" >&2
+		exit 1
+	}
+done
 dotfiles_catalog_owned nodejs
 dotfiles_catalog_owned npm
+rm "$NVM_DIR/bash_completion"
+printf 'keep external completion\n' >"$NVM_DIR/bash_completion"
+rc=0
+DOTFILES_FORCE_REINSTALL=1 install_node_via_nvm || rc=$?
+[[ "$rc" == 2 && "$(cat "$NVM_DIR/bash_completion")" == 'keep external completion' ]]
+rm "$NVM_DIR/bash_completion"
+ln -s "$(dotfiles_catalog_root nvm)/current/bash_completion" "$NVM_DIR/bash_completion"
 before="$(wc -l <"$TEST_HARNESS_ROOT/downloads")"
 install_node_via_nvm
 [[ "$(wc -l <"$TEST_HARNESS_ROOT/downloads")" == "$before" ]]
@@ -121,6 +137,18 @@ unset -f mv
 [[ "$(cat "$prefix/lib/node_modules/user-package/marker")" == 'keep user package' ]]
 dotfiles_catalog_native_owned nodejs
 dotfiles_catalog_native_owned npm
+rm "$NVM_DIR/bash_completion"
+mv() {
+	if [[ "${*: -1}" == "$HOME/.nvm/nvm-exec" && "${*: -2:1}" == */nvm-exec ]]; then return 33; fi
+	command mv "$@"
+}
+rc=0
+DOTFILES_FORCE_REINSTALL=1 install_node_via_nvm || rc=$?
+unset -f mv
+[[ "$rc" == 33 && ! -e "$NVM_DIR/bash_completion" && ! -L "$NVM_DIR/bash_completion" ]]
+[[ "$(node --version)" == "$NODE_VERSION" && "$(npm --version)" == "$NPM_VERSION" ]]
+[[ "$(readlink "$NVM_DIR/nvm-exec")" == "$(dotfiles_catalog_root nvm)/current/nvm-exec" ]]
+ln -s "$(dotfiles_catalog_root nvm)/current/bash_completion" "$NVM_DIR/bash_completion"
 # A different prior version exercises the real prefix transition; the old Node
 # process is a fixture wrapper, while the destination SDK and npm are real.
 (

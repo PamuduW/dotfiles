@@ -19,6 +19,15 @@ done
 fixture="$(mktemp -d)"
 trap 'rm -rf -- "$fixture"' EXIT
 [[ "$("$HOME/.local/bin/node" -e 'process.stdout.write("catalog-ok")')" == catalog-ok ]] || exit 2
+NVM_DIR="$HOME/.nvm"
+export NVM_DIR
+# shellcheck source=/dev/null
+source "$NVM_DIR/nvm.sh" --no-use
+# shellcheck source=/dev/null
+source "$NVM_DIR/bash_completion"
+complete -p nvm >/dev/null
+[[ "$(nvm --version)" == "$(dotfiles_catalog_get nvm version)" ]] || exit 2
+[[ "$(nvm exec --silent "v$(dotfiles_catalog_get nodejs version)" node -p process.execPath)" == "$NVM_DIR/versions/node/v$(dotfiles_catalog_get nodejs version)/bin/node" ]] || exit 2
 [[ "$(GOTOOLCHAIN=auto "$HOME/.local/bin/go" env GOTOOLCHAIN)" == local ]] || exit 2
 printf '%s\n' 'package main' 'import "fmt"' 'func main() { fmt.Print("catalog-ok") }' >"$fixture/main.go"
 [[ "$(GOTOOLCHAIN=auto GOPROXY=off GOSUMDB=off timeout 120 "$HOME/.local/bin/go" run "$fixture/main.go")" == catalog-ok ]] || exit 2
@@ -45,7 +54,7 @@ snapshot,_,_=load_qualification_context(pathlib.Path(sys.argv[2]))
 result={
     'schema_version':1,'scope':'behavior-smoke-only','approved':False,
     'catalog_digest':snapshot.digest,'sources':dict(snapshot.data['sources']),
-    'checks':dict.fromkeys(['node-execution','go-compilation','chrome-dom','mermaid-svg'],'success'),
+    'checks':dict.fromkeys(['node-execution','nvm-execution','go-compilation','chrome-dom','mermaid-svg'],'success'),
 }
 with pathlib.Path(sys.argv[3]).open('x') as stream:
     json.dump(result,stream,indent=2)
