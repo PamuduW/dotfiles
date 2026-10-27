@@ -228,6 +228,23 @@ in place, but are no longer installed or updated. Ubuntu Sans Mono is the
 original, unpatched family and does not include Nerd Fonts icons. The Windows
 Terminal template uses it; importing that template remains a manual step.
 
+## Existing NVM installations
+
+The catalog preserves an existing NVM installation until you authorize migration.
+The Node component lists its NVM root and active Node/npm prefix, then asks for
+confirmation. For a noninteractive installation, set `DOTFILES_MIGRATE_NVM=1`
+only for the command that installs or updates Node. Force reinstall does not
+grant migration permission.
+
+Migration requires the normal `~/.nvm` layout with verifiable local commands.
+It keeps other Node versions, user aliases, global packages and npm settings.
+Newer or unverifiable installed versions and conflicting external commands stay
+unchanged. On success, the installer prints the private recovery directory holding
+the old manager entrypoints and any replaced prefix. Retain it until you have
+checked your setup; it can contain a full runtime and temporary installation
+files. Failed activation restores the original commands and manager entrypoints.
+Custom NVM roots need manual reconciliation.
+
 ## Codex CLI migration
 
 Dotfiles installs the standalone Codex CLI and preserves external or shadowed

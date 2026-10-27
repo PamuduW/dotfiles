@@ -20,7 +20,7 @@ fi
 export NVM_DIR="$HOME/.nvm"
 tools="$TEST_HARNESS_ROOT/tools"
 mkdir "$tools"
-for tool in bash python3 uname dirname readlink realpath head grep tr chmod mkdir cp rm mv ln stat sha256sum sha512sum mktemp env tar gzip cat awk sort flock xz timeout find sed basename wc id install; do
+for tool in bash python3 uname dirname readlink realpath head grep tr chmod mkdir cp rm mv ln stat sha256sum sha512sum mktemp env tar gzip cat awk sort flock xz timeout find sed basename wc id install touch; do
 	ln -s "$(command -v "$tool")" "$tools/$tool"
 done
 PATH="$HOME/.local/bin:$tools"
@@ -219,3 +219,97 @@ DOTFILES_FORCE_REINSTALL=1 install_node_via_nvm || rc=$?
 }
 [[ "$(wc -l <"$TEST_HARNESS_ROOT/downloads")" == "$before" ]]
 printf 'PASS: native NVM prefix exposes approved Node/npm/npx, preserves globals and survives failed import\n'
+
+legacy_migration_case() (
+	local mode="$1" old_version=0.0.1 old_prefix new_prefix output='' status=0 entrypoint downloads_before
+	export HOME="$TEST_HARNESS_ROOT/legacy-$mode/home" NVM_DIR="$TEST_HARNESS_ROOT/legacy-$mode/home/.nvm"
+	export PATH="$HOME/.local/bin:$NVM_DIR/versions/node/v0.0.1/bin:$tools"
+	export DOTFILES_INTERACTIVE_TTY=false
+	unset DOTFILES_MIGRATE_NVM
+	[[ "$mode" != same-version ]] || old_version="${NODE_VERSION#v}"
+	[[ "$mode" != newer ]] || old_version=999.0.0
+	old_prefix="$NVM_DIR/versions/node/v$old_version"
+	PATH="$HOME/.local/bin:$old_prefix/bin:$tools"
+	new_prefix="$NVM_DIR/versions/node/$NODE_VERSION"
+	mkdir -p "$old_prefix/bin" "$old_prefix/lib/node_modules/npm/bin" "$old_prefix/lib/node_modules/user-global" \
+		"$old_prefix/etc" "$NVM_DIR/alias" "$NVM_DIR/versions/node/v22.0.0" "$(dotfiles_catalog_root nvm)"
+	ln -s "$TEST_NATIVE_SOURCE_CHECKOUT" "$(dotfiles_catalog_root nvm)/current"
+	printf '%s\n' '#!/usr/bin/env bash' 'touch "$HOME/legacy-runtime-executed"' "echo v$old_version" >"$old_prefix/bin/node"
+	for entrypoint in npm npx; do
+		printf '%s\n' '#!/usr/bin/env bash' 'echo 0.0.1' >"$old_prefix/lib/node_modules/npm/bin/$entrypoint-cli.js"
+		chmod +x "$old_prefix/lib/node_modules/npm/bin/$entrypoint-cli.js"
+		ln -s "../lib/node_modules/npm/bin/$entrypoint-cli.js" "$old_prefix/bin/$entrypoint"
+	done
+	chmod +x "$old_prefix/bin/node"
+	for entrypoint in nvm.sh bash_completion nvm-exec; do
+		printf 'touch "$HOME/legacy-manager-executed"\n' >"$NVM_DIR/$entrypoint"
+	done
+	printf 'v%s\n' "$old_version" >"$NVM_DIR/alias/default"
+	printf 'v22.0.0\n' >"$NVM_DIR/alias/user-alias"
+	printf 'keep other version\n' >"$NVM_DIR/versions/node/v22.0.0/marker"
+	printf 'fund=false\n' >"$old_prefix/etc/npmrc"
+	printf 'audit=false\n' >"$HOME/.npmrc"
+	printf '%s\n' '{"name":"user-global","version":"1.0.0"}' >"$old_prefix/lib/node_modules/user-global/package.json"
+	printf '%s\n' '#!/usr/bin/env node' 'console.log("legacy global")' >"$old_prefix/lib/node_modules/user-global/cli.js"
+	chmod +x "$old_prefix/lib/node_modules/user-global/cli.js"
+	ln -s ../lib/node_modules/user-global/cli.js "$old_prefix/bin/user-global"
+	case "$mode" in
+	declined) ;;
+	force) export DOTFILES_FORCE_REINSTALL=1 ;;
+	interactive-yes | interactive-no | changed-after-consent)
+		DOTFILES_INTERACTIVE_TTY=true
+		ui_confirm_yes_no() {
+			[[ "$1" == *'Migrate the listed NVM'* ]] || return 1
+			[[ "$mode" != interactive-no ]] || return 1
+			[[ "$mode" != changed-after-consent ]] || printf changed >>"$NVM_DIR/bash_completion"
+		}
+		;;
+	*) export DOTFILES_MIGRATE_NVM=1 ;;
+	esac
+	if [[ "$mode" == unverifiable ]]; then
+		printf '%s\n' '#!/usr/bin/env bash' 'echo unknown' >"$old_prefix/bin/node"
+	fi
+	if [[ "$mode" == aliases ]]; then
+		mkdir -p "$HOME/.local/bin"
+		for entrypoint in node npm npx; do ln -s "$old_prefix/bin/$entrypoint" "$HOME/.local/bin/$entrypoint"; done
+	fi
+	if [[ "$mode" == publication-failure ]]; then
+		mv() {
+			if [[ "${*: -1}" == "$HOME/.local/bin/npm" && "${*: -2:1}" == */public-npm ]]; then return 29; fi
+			command mv "$@"
+		}
+	fi
+	downloads_before="$(wc -l <"$TEST_HARNESS_ROOT/downloads")"
+	output="$(install_node_via_nvm 2>&1)" || status=$?
+	if [[ "$mode" == success || "$mode" == same-version || "$mode" == interactive-yes || "$mode" == aliases ]]; then
+		[[ "$status" == 0 ]] || {
+			printf '%s\n' "$output" >&2
+			return 1
+		}
+		dotfiles_catalog_native_owned nodejs && dotfiles_catalog_native_owned npm
+		[[ "$("$HOME/.local/bin/node" --version)" == "$NODE_VERSION" ]]
+		[[ -f "$new_prefix/lib/node_modules/user-global/package.json" && -x "$new_prefix/bin/user-global" ]]
+		[[ "$(PATH="$new_prefix/bin:$PATH" "$new_prefix/bin/user-global")" == 'legacy global' ]]
+		[[ "$(cat "$new_prefix/etc/npmrc")" == fund=false ]]
+		[[ -n "$(find "$NVM_DIR/versions/node" -name backup-6 -type f -print -quit)" ]]
+	else
+		[[ "$status" != 0 && ! -L "$NVM_DIR/nvm.sh" && ! -L "$NVM_DIR/nvm-exec" ]]
+		[[ ! -e "$HOME/.local/share/dotfiles-catalog/nodejs.native" && ! -e "$HOME/.local/bin/node" ]]
+		if [[ "$mode" == declined || "$mode" == force || "$mode" == interactive-no || "$mode" == changed-after-consent ]]; then
+			[[ ! -e "$HOME/legacy-runtime-executed" ]]
+		fi
+		if [[ "$mode" != publication-failure ]]; then
+			[[ "$(wc -l <"$TEST_HARNESS_ROOT/downloads")" == "$downloads_before" ]]
+		fi
+		if [[ "$mode" != unverifiable ]]; then [[ "$("$old_prefix/bin/node" --version)" == "v$old_version" ]]; fi
+		[[ -f "$old_prefix/lib/node_modules/user-global/package.json" ]]
+	fi
+	[[ ! -e "$HOME/legacy-manager-executed" ]]
+	[[ "$(cat "$NVM_DIR/versions/node/v22.0.0/marker")" == 'keep other version' ]]
+	[[ "$(cat "$NVM_DIR/alias/user-alias")" == v22.0.0 && "$(cat "$HOME/.npmrc")" == audit=false ]]
+)
+for mode in success same-version aliases declined force interactive-yes interactive-no changed-after-consent newer unverifiable publication-failure; do
+	legacy_migration_case "$mode"
+	printf 'ok - native NVM migration: %s\n' "$mode"
+	rm -rf -- "$TEST_HARNESS_ROOT/legacy-$mode"
+done

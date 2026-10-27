@@ -3,6 +3,8 @@
 source "${BASH_SOURCE[0]%/*}/catalog_load.sh"
 # shellcheck source=scripts/lib/catalog_sources.sh
 source "${BASH_SOURCE[0]%/*}/catalog_sources.sh"
+# shellcheck source=scripts/lib/catalog_legacy.sh
+source "${BASH_SOURCE[0]%/*}/catalog_legacy.sh"
 
 _dotfiles_catalog_runtime_receipt() {
 	local destination="$1" manager="$2" version="$3" prefix="$4" identity="$5"
@@ -17,6 +19,7 @@ dotfiles_catalog_node_install() (
 	dotfiles_catalog_begin || return $?
 	local runtime_key node_version npm_version nvm_version binary archive npm_archive identity source_checkout root prefix stage candidate native_archive compression entrypoint
 	local committed=0 prefix_published=0 prefix_backed_up=0 keep_stage=0 index rc=0 previous_prefix=''
+	local legacy_inventory='' legacy_prefix='' legacy_mode=0
 	local -a paths=() prepared=() changed=() old_proof=()
 	[[ "${SOFTWARE_CATALOG_REVISION:-}" =~ ^[0-9a-f]{40}$ ]] || return 2
 	for runtime_key in nodejs npm; do [[ "$(dotfiles_catalog_get "$runtime_key" owner)" == dotfiles ]] || return 2; done
@@ -31,7 +34,23 @@ dotfiles_catalog_node_install() (
 	case "$npm_archive" in tar.gz | tgz | tar) ;; *) return 2 ;; esac
 	binary="$(dotfiles_catalog_get nodejs binary)" || return 2
 	[[ "$binary" =~ ^[A-Za-z0-9._+-]+/bin/node$ && "$(dotfiles_catalog_get npm binary)" == package/bin/npm-cli.js ]] || return 2
-	if dotfiles_catalog_external nodejs || dotfiles_catalog_external npm; then
+	if ! dotfiles_catalog_native_owned nodejs && [[ -e "${NVM_DIR:-$HOME/.nvm}/nvm.sh" || -L "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]]; then
+		legacy_inventory="$(dotfiles_catalog_nvm_inventory "$node_version")" || return 2
+		legacy_prefix="${legacy_inventory%%$'\t'*}"
+		printf 'Legacy NVM migration: %s\nActive Node/npm prefix: %s\n' "${NVM_DIR:-$HOME/.nvm}" "$legacy_prefix" >&2
+		printf 'Replace manager entrypoints and activate approved Node/npm; retain other versions, globals, configuration and recovery files.\n' >&2
+		dotfiles_catalog_nvm_migration_authorized || return 2
+		[[ "$(dotfiles_catalog_nvm_inventory "$node_version")" == "$legacy_inventory" ]] || return 2
+		for runtime_key in nodejs npm; do
+			if ! dotfiles_catalog_version_matches "$legacy_prefix/bin/$(dotfiles_catalog_command_name "$runtime_key")" "$(dotfiles_catalog_get "$runtime_key" version)" --version &&
+				! dotfiles_catalog_upgrade_allowed "$legacy_prefix/bin/$(dotfiles_catalog_command_name "$runtime_key")" "$(dotfiles_catalog_get "$runtime_key" version)" --version; then
+				printf 'Preserving newer or unverifiable legacy %s; review version drift.\n' "$runtime_key" >&2
+				return 2
+			fi
+		done
+		legacy_mode=1
+	fi
+	if [[ "$legacy_mode" == 0 ]] && { dotfiles_catalog_external nodejs || dotfiles_catalog_external npm; }; then
 		printf 'Preserving externally owned Node/npm; native catalog activation is blocked.\n' >&2
 		return 2
 	fi
@@ -49,7 +68,7 @@ dotfiles_catalog_node_install() (
 		if [[ -n "$active_npx" ]]; then
 			[[ "$(realpath -- "$active_npx")" == "$native_npx_root/lib/node_modules/npm/bin/npx-cli.js" ]] || return 2
 		fi
-	else
+	elif [[ "$legacy_mode" == 0 ]]; then
 		dotfiles_catalog_npm_preflight || return 2
 	fi
 	for runtime_key in nodejs npm; do
@@ -64,19 +83,26 @@ dotfiles_catalog_node_install() (
 	prefix="$root/versions/node/v$node_version"
 	[[ "$root" == /* && ! -L "$root" && ! -L "$root/versions" && ! -L "$root/versions/node" ]] || return 2
 	for entrypoint in nvm.sh bash_completion nvm-exec; do
+		[[ "$legacy_mode" == 0 ]] || continue
 		if [[ -e "$root/$entrypoint" || -L "$root/$entrypoint" ]]; then
 			[[ -L "$root/$entrypoint" && "$(readlink -- "$root/$entrypoint")" == "$(dotfiles_catalog_root nvm)/current/$entrypoint" ]] || return 2
 			dotfiles_catalog_source_owned nvm || return 2
 		fi
 	done
-	if dotfiles_catalog_native_owned nodejs; then
+	if [[ "$legacy_mode" == 1 ]]; then
+		previous_prefix="$legacy_prefix"
+	elif dotfiles_catalog_native_owned nodejs; then
 		mapfile -t old_proof <"$HOME/.local/share/dotfiles-catalog/nodejs.native"
 		previous_prefix="${old_proof[5]}"
 	fi
 	if [[ -e "$prefix" || -L "$prefix" ]]; then
-		dotfiles_catalog_native_owned nodejs || return 2
-		mapfile -t old_proof <"$HOME/.local/share/dotfiles-catalog/nodejs.native"
-		[[ "${old_proof[5]}" == "$prefix" ]] || return 2
+		if [[ "$legacy_mode" == 1 ]]; then
+			[[ "$prefix" == "$legacy_prefix" ]] || return 2
+		else
+			dotfiles_catalog_native_owned nodejs || return 2
+			mapfile -t old_proof <"$HOME/.local/share/dotfiles-catalog/nodejs.native"
+			[[ "${old_proof[5]}" == "$prefix" ]] || return 2
+		fi
 	fi
 	identity="$(dotfiles_catalog_identity nodejs npm nvm)" || return 2
 	source_checkout="$(dotfiles_catalog_source_install nvm)" || return $?
@@ -185,6 +211,9 @@ dotfiles_catalog_node_install() (
 	for index in "${!paths[@]}"; do
 		if [[ -e "${paths[index]}" || -L "${paths[index]}" ]]; then cp -a -- "${paths[index]}" "$stage/backup-$index" || return 1; fi
 	done
+	if [[ "$legacy_mode" == 1 ]]; then
+		[[ "$(NVM_DIR="$root" dotfiles_catalog_nvm_inventory "$node_version")" == "$legacy_inventory" ]] || return 2
+	fi
 	if [[ -e "$prefix" ]]; then
 		mv -- "$prefix" "$stage/previous-prefix" || return $?
 		prefix_backed_up=1
@@ -203,6 +232,10 @@ dotfiles_catalog_node_install() (
 	PATH="$prefix/bin:$PATH" dotfiles_catalog_version_matches "$prefix/bin/npm" "$npm_version" --version || return 2
 	dotfiles_catalog_native_owned nodejs && dotfiles_catalog_native_owned npm || return 2
 	committed=1
+	if [[ "$legacy_mode" == 1 ]]; then
+		keep_stage=1
+		printf 'Legacy NVM recovery files retained privately at %s.\n' "$stage" >&2
+	fi
 )
 
 dotfiles_catalog_go_install() (
