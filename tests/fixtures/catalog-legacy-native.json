@@ -1,0 +1,119 @@
+{
+  "approved": false,
+  "origin_run_id": 40477067865,
+  "schema_version": 1,
+  "tools": {
+    "antigravity_cli": {
+      "archive": "tar.gz",
+      "binary": "antigravity",
+      "digest": "sha512:b23683771438e72bffe0a2231168f65a16a0d73ed2c7a8460b311dc5fe0c3c9d9dfc6cbfb7d8755173340071aa4cc5c7a552fb5d1be3fdd31c2b7559d67e404a",
+      "url": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.4.8-5447777392656384/linux-x64/cli_linux_x64.tar.gz",
+      "version": "1.4.8"
+    },
+    "boost_cli": {
+      "archive": "tar.gz",
+      "binary": "boost",
+      "digest": "sha256:81831386822520a64dd123cc03385dc849bf8cb6a70bdeb6df37de7b4f946b55",
+      "url": "https://github.com/jfrog/boost/releases/download/v0.16.8/boost-linux-amd64.tar.gz",
+      "version": "0.16.8"
+    },
+    "chrome_headless": {
+      "archive": "zip",
+      "binary": "chrome-headless-shell-linux64/chrome-headless-shell",
+      "digest": "sha256:0d5acc62c3e213f8c87d3c298d66ffcf9a236d12ea4b9f85318bf85dbc279daa",
+      "url": "https://storage.googleapis.com/chrome-for-testing-public/156.0.8078.47/linux64/chrome-headless-shell-linux64.zip",
+      "version": "156.0.8078.47"
+    },
+    "claude_cli": {
+      "archive": "raw",
+      "binary": "claude",
+      "digest": "sha256:356733f185fa988e6bf3aa9a555269fdd167982a2e2a80d3c8a78037bb92ad58",
+      "url": "https://downloads.claude.ai/claude-code-releases/2.1.308/linux-x64/claude",
+      "version": "2.1.308"
+    },
+    "codex_cli": {
+      "archive": "tar.gz",
+      "binary": "bin/codex",
+      "digest": "sha256:3ec55053109608d5038f7e50750f7d25f768dfd740fef071aa710e2559b63aac",
+      "url": "https://github.com/openai/codex/releases/download/rust-v0.164.0/codex-package-x86_64-unknown-linux-musl.tar.gz",
+      "version": "0.164.0"
+    },
+    "direnv": {
+      "archive": "raw",
+      "binary": "direnv",
+      "digest": "sha256:148820a187930d36ca6a204504e5cdb30d8396cd1a97e64c3b3f10d793c11247",
+      "url": "https://github.com/direnv/direnv/releases/download/v2.38.2/direnv.linux-amd64",
+      "version": "2.38.2"
+    },
+    "infracost": {
+      "archive": "tar",
+      "binary": "infracost",
+      "digest": "sha256:603afea998088804dd202522de5aa14f1934058457f8986607278430bb5eb867",
+      "url": "https://github.com/infracost/cli/releases/download/v2.18.2/infracost-linux-amd64.tar.gz",
+      "version": "2.18.2"
+    },
+    "kubeconform": {
+      "archive": "tar",
+      "binary": "kubeconform",
+      "digest": "sha256:9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883",
+      "url": "https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz",
+      "version": "0.8.0"
+    },
+    "lazydocker": {
+      "archive": "tar.gz",
+      "binary": "lazydocker",
+      "digest": "sha256:0d9dbfc26068b218e7ed84b104748cadc6e3cf733c0afd35465306fb39b9523c",
+      "url": "https://github.com/jesseduffield/lazydocker/releases/download/v0.25.2/lazydocker_0.25.2_Linux_x86_64.tar.gz",
+      "version": "0.25.2"
+    },
+    "lazygit": {
+      "archive": "tar",
+      "binary": "lazygit",
+      "digest": "sha256:158efc9ddfa1241fab5fb3526bb442c8dc6c4b1904d73213b9e4e93e03c52034",
+      "url": "https://github.com/jesseduffield/lazygit/releases/download/v0.66.2/lazygit_0.66.2_linux_x86_64.tar.gz",
+      "version": "0.66.2"
+    },
+    "tflint": {
+      "archive": "zip",
+      "binary": "tflint",
+      "digest": "sha256:d4c545ed2e29d6338604b586f34f544f380f70f243aa72f7b484713835eaec61",
+      "url": "https://github.com/terraform-linters/tflint/releases/download/v0.65.0/tflint_linux_amd64.zip",
+      "version": "0.65.0"
+    },
+    "trivy": {
+      "archive": "tar",
+      "binary": "trivy",
+      "digest": "sha256:c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0",
+      "url": "https://github.com/aquasecurity/trivy/releases/download/v0.76.1/trivy_0.76.1_Linux-64bit.tar.gz",
+      "version": "0.76.1"
+    },
+    "uv": {
+      "archive": "tar.gz",
+      "binary": "uv-x86_64-unknown-linux-gnu/uv",
+      "digest": "sha256:f29c3e94ffabd7e6f3ba521dba169a9b7ec12100bf3257087f0f24f6123f3645",
+      "url": "https://github.com/astral-sh/uv/releases/download/0.13.6/uv-x86_64-unknown-linux-gnu.tar.gz",
+      "version": "0.13.6"
+    },
+    "vale": {
+      "archive": "tar",
+      "binary": "vale",
+      "digest": "sha256:4bf5c5176b682b1da0830f471584d3494f1c2e27ee3029e1ad6f6661d4962182",
+      "url": "https://github.com/vale-cli/vale/releases/download/v3.25.1/vale_3.25.1_Linux_64-bit.tar.gz",
+      "version": "3.25.1"
+    },
+    "yt_dlp": {
+      "archive": "raw",
+      "binary": "yt-dlp",
+      "digest": "sha256:767ba9dce7052aa196f8b12652f433d76de128ba168966fa84b6394d5e6c6795",
+      "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.26/yt-dlp_linux",
+      "version": "2026.10.26"
+    },
+    "zizmor": {
+      "archive": "tar",
+      "binary": "zizmor",
+      "digest": "sha256:d185f726bdaf92df78273217dfdd24ebcd6b0ef48cf3ce776ff5762b6e138c99",
+      "url": "https://github.com/zizmorcore/zizmor/releases/download/v1.31.1/zizmor-x86_64-unknown-linux-gnu.tar.gz",
+      "version": "1.31.1"
+    }
+  }
+}

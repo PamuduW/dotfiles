@@ -115,7 +115,8 @@ dotfiles_catalog_local_migration_authorized() {
 }
 
 dotfiles_catalog_local_version_allowed() {
-	local executable="$1" expected="$2" version_arg="$3" env_name="${4:-}" env_value="${5:-}" parsed
+	local executable="$1" expected="$2" version_arg="$3" env_name="${4:-}" env_value="${5:-}" comparison="${6:-allow-older}" parsed
+	[[ "$comparison" == allow-older || "$comparison" == exact ]] || return 2
 	local -a argv=()
 	read -r -a argv <<<"$version_arg"
 	# A separate process group keeps descendant output inside the probe deadline.
@@ -160,6 +161,10 @@ finally:
         process.stdout.close()
 PY
 	)" || return 2
+	if [[ "$comparison" == exact ]]; then
+		[[ "${parsed#v}" == "${expected#v}" ]]
+		return $?
+	fi
 	[[ "${parsed#v}" == "${expected#v}" ]] || dotfiles_catalog_version_is_older "$parsed" "$expected"
 }
 

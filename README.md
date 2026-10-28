@@ -199,8 +199,10 @@ The hosted catalog workflow also tests real legacy NVM/Node and asdf/Go layouts
 in a separate disposable Ubuntu home. Its frozen vendor inputs exercise refused
 migration, unavailable downloads, explicit migration, repeat runs, preserved
 global npm commands and configuration, and real Node execution and Go compilation.
-Another disposable home tests frozen uv, lazygit and direnv binaries in both
-`~/.local/bin` and `~/bin`, including consent, failed downloads and recovery copies.
+Another disposable home tests frozen releases for the applicable native binary
+inventory, currently 16 tools. Each uses `~/.local/bin`; uv, lazygit and direnv
+also exercise `~/bin`. The driver checks consent, failed downloads and recovery
+copies, and preserves full payload directories for tools with supporting assets.
 The vendor migration stage starts from seven checksum-pinned package releases
 without catalog receipts, then checks preservation, failed downloads, explicit
 migration, version holds and repeat runs in a separate disposable container.

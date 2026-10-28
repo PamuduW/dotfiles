@@ -25,8 +25,10 @@ base_home="$HOME"
 # receipts. These fixtures are independent of candidate version selection.
 fetch_fixture() {
 	local key="$1" url="$2" digest="$3" archive="$4" binary="$5"
-	github_curl -fsSL --proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 180 \
-		--retry 2 --retry-all-errors -o "$fixture/$key.archive" "$url"
+	case "$url" in
+	https://github.com/*) github_curl -fsSL --proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 180 --retry 2 --retry-all-errors -o "$fixture/$key.archive" "$url" ;;
+	*) curl -fsSL --proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 180 --retry 2 --retry-all-errors -o "$fixture/$key.archive" "$url" ;;
+	esac
 	dotfiles_catalog_verify "$fixture/$key.archive" "$digest"
 	mkdir "$fixture/$key"
 	if [[ "$archive" == raw ]]; then
@@ -34,25 +36,31 @@ fetch_fixture() {
 	else
 		dotfiles_catalog_extract "$archive" "$fixture/$key.archive" "$fixture/$key"
 	fi
-	install -m 755 "$fixture/$key/$binary" "$fixture/$key.command"
+	chmod u+x "$fixture/$key/$binary"
 }
 
-fetch_fixture uv 'https://github.com/astral-sh/uv/releases/download/0.13.6/uv-x86_64-unknown-linux-gnu.tar.gz' \
-	sha256:f29c3e94ffabd7e6f3ba521dba169a9b7ec12100bf3257087f0f24f6123f3645 tar.gz uv-x86_64-unknown-linux-gnu/uv
-fetch_fixture lazygit 'https://github.com/jesseduffield/lazygit/releases/download/v0.66.2/lazygit_0.66.2_linux_x86_64.tar.gz' \
-	sha256:158efc9ddfa1241fab5fb3526bb442c8dc6c4b1904d73213b9e4e93e03c52034 tar lazygit
-fetch_fixture direnv 'https://github.com/direnv/direnv/releases/download/v2.38.2/direnv.linux-amd64' \
-	sha256:148820a187930d36ca6a204504e5cdb30d8396cd1a97e64c3b3f10d793c11247 raw direnv
+/usr/bin/python3 -I -B "$root/scripts/catalog/legacy_native.py" "$DOTFILES_SHARED_ROOT" "$context" \
+	"$root/tests/fixtures/catalog-legacy-native.json" >"$fixture/tools.tsv"
+declare -a keys=()
+while IFS=$'\t' read -r key url digest archive binary; do
+	fetch_fixture "$key" "$url" "$digest" "$archive" "$binary"
+	keys+=("$key")
+done <"$fixture/tools.tsv"
 
 migrate_fixture() (
-	local key="$1" layout="$2" old_path before status=0 marker="$fixture/$1-$2.download"
+	local key="$1" layout="$2" old_path before status=0 marker="$fixture/$1-$2.download" command_name binary version_arg baseline_version auto_env='' auto_value=''
+	command_name="$(dotfiles_catalog_command_name "$key")"
+	binary="$(/usr/bin/python3 -I -B -c 'import json,sys;print(json.load(open(sys.argv[1]))["tools"][sys.argv[2]]["binary"])' "$root/tests/fixtures/catalog-legacy-native.json" "$key")"
+	version_arg="$(dotfiles_catalog_version_arg "$key")"
+	baseline_version="$(/usr/bin/python3 -I -B -c 'import json,sys;print(json.load(open(sys.argv[1]))["tools"][sys.argv[2]]["version"])' "$root/tests/fixtures/catalog-legacy-native.json" "$key")"
 	export HOME="$base_home/$key-$layout"
 	mkdir -p "$HOME/.local/bin" "$HOME/bin"
 	export PATH="$HOME/bin:$HOME/.local/bin:/usr/bin:/bin"
 	unset DOTFILES_MIGRATE_LOCAL_TOOLS DOTFILES_FORCE_REINSTALL DOTFILES_INTERACTIVE_TTY
-	old_path="$HOME/.local/bin/$key"
-	[[ "$layout" != home-bin ]] || old_path="$HOME/bin/$key"
-	install -m 755 "$fixture/$key.command" "$old_path"
+	old_path="$HOME/.local/bin/$command_name"
+	[[ "$layout" != home-bin ]] || old_path="$HOME/bin/$command_name"
+	cp -a -- "$fixture/$key" "$HOME/legacy-payload"
+	ln -s "$HOME/legacy-payload/$binary" "$old_path"
 	printf 'preserve\n' >"$HOME/user-configuration"
 	before="$(sha256sum "$old_path" "$HOME/user-configuration")"
 	for force in 0 1; do
@@ -61,6 +69,15 @@ migrate_fixture() (
 		if dotfiles_catalog_owned "$key"; then exit 1; fi
 	done
 	export DOTFILES_MIGRATE_LOCAL_TOOLS=1
+	# Probe old vendor code only after consent, with the normal bounded process.
+	# shellcheck source=/dev/null
+	source "$root/scripts/lib/catalog_legacy.sh"
+	case "$key" in
+	claude_cli) auto_env=DISABLE_UPDATES auto_value=1 ;;
+	antigravity_cli) auto_env=AGY_CLI_DISABLE_AUTO_UPDATE auto_value=true ;;
+	esac
+	[[ "$key" != codex_cli ]] || dotfiles_catalog_codex_defaults
+	dotfiles_catalog_local_version_allowed "$old_path" "$baseline_version" "$version_arg" "$auto_env" "$auto_value" exact
 	(
 		# shellcheck disable=SC2317,SC2329  # The installer invokes this callback.
 		dotfiles_catalog_download() {
@@ -77,30 +94,32 @@ migrate_fixture() (
 		dotfiles_catalog_owned "$key"
 		[[ "$(dotfiles_catalog_installed "$key")" == "$(dotfiles_catalog_get "$key" version)" ]]
 		[[ "$(cat "$HOME/user-configuration")" == preserve ]]
-		[[ "$(command -v "$key")" == "$old_path" ]]
-		dotfiles_catalog_version_matches "$old_path" "$(dotfiles_catalog_get "$key" version)" --version
+		[[ "$(command -v "$command_name")" == "$old_path" ]]
+		dotfiles_catalog_version_matches "$old_path" "$(dotfiles_catalog_get "$key" version)" "$version_arg"
 	done
 	local recovery
 	recovery="$(dotfiles_catalog_root "$key")/current"
 	[[ -f "$recovery/.catalog-legacy-recovery" ]]
 	if [[ "$layout" == home-bin ]]; then recovery+='/previous-alias-0'; else recovery+='/previous-command'; fi
-	[[ "$(sha256sum "$recovery" | cut -d ' ' -f1)" == "$(sha256sum "$fixture/$key.command" | cut -d ' ' -f1)" ]]
+	[[ "$(sha256sum "$recovery" | cut -d ' ' -f1)" == "$(sha256sum "$fixture/$key/$binary" | cut -d ' ' -f1)" ]]
 )
-for key in uv lazygit direnv; do
-	for layout in local-bin home-bin; do migrate_fixture "$key" "$layout"; done
+for key in "${keys[@]}"; do
+	migrate_fixture "$key" local-bin
+	case "$key" in uv | lazygit | direnv) migrate_fixture "$key" home-bin ;; esac
 done
-/usr/bin/python3 -I -B - "$DOTFILES_SHARED_ROOT" "$context" "$output" <<'PY'
+/usr/bin/python3 -I -B - "$DOTFILES_SHARED_ROOT" "$context" "$output" "$root/tests/fixtures/catalog-legacy-native.json" <<'PY'
 import json,pathlib,sys
 sys.path.insert(0,str(pathlib.Path(sys.argv[1])/'scripts/lib/shared/python'))
 from catalog_context import load_qualification_context
 snapshot,_,_=load_qualification_context(pathlib.Path(sys.argv[2]))
+legacy=json.loads(pathlib.Path(sys.argv[4]).read_text())['tools']
 result={
     'schema_version':1,'scope':'legacy-local-migration-smoke-only','approved':False,
     'catalog_digest':snapshot.digest,'sources':dict(snapshot.data['sources']),
-    'legacy':{'uv':'0.13.6','lazygit':'0.66.2','direnv':'2.38.2'},
-    'layouts':['local-bin','home-bin'],
+    'legacy':{key:item['version'] for key,item in legacy.items()},
+    'layouts':{key:['local-bin','home-bin'] if key in {'uv','lazygit','direnv'} else ['local-bin'] for key in legacy},
     'checks':dict.fromkeys(('default-preserved','force-preserved','failed-download','migration','repeat','recovery-copy','preservation'),'success'),
-    'limits':['Three native binaries only; not a complete legacy setup or qualification receipt'],
+    'limits':['Native binaries only; not a complete legacy setup or qualification receipt'],
 }
 with pathlib.Path(sys.argv[3]).open('x') as stream:
     json.dump(result,stream,indent=2)

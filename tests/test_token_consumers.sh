@@ -352,7 +352,6 @@ test_complete_consumer_inventory() {
 		"$DOTFILES_SHARED_LIB/github_token.sh"
 		"$REPO_DIR/scripts/lib/software_catalog.sh"
 		"$REPO_DIR/scripts/catalog/qualify-legacy-runtimes.sh"
-		"$REPO_DIR/scripts/catalog/qualify-legacy-local.sh"
 		"$REPO_DIR/scripts/lib/installers/boost.sh"
 		"$REPO_DIR/scripts/lib/installers/release_cli.sh"
 		"$REPO_DIR/scripts/lib/installers/obsidian.sh"
