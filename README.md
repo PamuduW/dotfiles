@@ -256,6 +256,8 @@ verifies the resolved installed checkouts, runs `agentbot full` (Agentbot's one
 update pass once installed), and finishes with both Doctors. It closes on a
 timing block naming each of its sections. A component that needs attention
 at any step, install included, turns the final line into "needs attention".
+"Dotfiles checks passed" covers Dotfiles components; Agentbot reports its own
+health separately.
 
 Only `dotfiles full-update` (and the bootstrap) reach this end state. The
 narrower menu entries do only their part: Dotfiles **Install** installs the

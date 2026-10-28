@@ -555,6 +555,33 @@ test_upgrade_step_omits_failure_marker_after_success() (
 	! grep -Fq '>> FAILED' <<<"$output"
 )
 
+test_node_upgrade_reports_observed_version_changes() (
+	local fixture_before fixture_after expected result
+	_load_nvm() { :; }
+	_run_quiet_command() {
+		shift
+		"$@"
+	}
+	upgrade_result_set() { result="$1"; }
+	for scenario in changed same; do
+		fixture_before=24.22.1
+		fixture_after=26.13.0
+		expected=updated
+		if [[ "$scenario" == same ]]; then
+			fixture_before="$fixture_after"
+			expected=checked-no-change
+		fi
+		printf '%s\n' "$fixture_before" >"$TEST_HARNESS_ROOT/node-version"
+		node_installed_version() { cat "$TEST_HARNESS_ROOT/node-version"; }
+		nvm() {
+			if [[ "$1" == install ]]; then printf '%s\n' "$fixture_after" >"$TEST_HARNESS_ROOT/node-version"; fi
+		}
+		result=''
+		upgrade_node >/dev/null || return 1
+		[[ "$result" == "$expected" ]] || return 1
+	done
+)
+
 test_node_upgrade_stops_when_nvm_install_fails() (
 	local calls="$TEST_HARNESS_ROOT/node-upgrade.calls"
 	: >"$calls"
@@ -888,6 +915,7 @@ expect_success 'upgrade step marks failures in red with retry command' test_upgr
 expect_success 'upgrade step respects NO_COLOR and retains retry command' test_upgrade_step_respects_no_color_with_retry_command
 expect_success 'upgrade step omits failure marker after success' test_upgrade_step_omits_failure_marker_after_success
 expect_success 'Node.js upgrade stops when nvm install fails' test_node_upgrade_stops_when_nvm_install_fails
+expect_success 'Node.js upgrade reports the observed version change' test_node_upgrade_reports_observed_version_changes
 expect_success 'Go upgrade stops when asdf install fails' test_go_upgrade_stops_when_asdf_install_fails
 expect_success 'Go reads asdf from where the installer put it' test_go_reads_asdf_from_where_the_installer_put_it
 expect_success 'Cursor update falls back to the official installer after agent update failure' test_cursor_update_falls_back_to_official_installer

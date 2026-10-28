@@ -235,7 +235,7 @@ cmd_doctor() {
 	local -a rows=()
 	collect_component_status_rows rows
 	if status_print_suggestions rows; then
-		printf '  %sNothing needs attention.%s\n' "${C_GREEN:-}" "${C_RESET:-}"
+		printf '  %sDotfiles checks passed.%s\n' "${C_GREEN:-}" "${C_RESET:-}"
 		return 0
 	fi
 	return 1

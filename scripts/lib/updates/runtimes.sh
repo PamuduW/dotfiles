@@ -43,16 +43,23 @@ check_node() {
 }
 
 upgrade_node() {
+	local before after
 	_load_nvm
 	if ! command -v nvm >/dev/null 2>&1; then
 		log_skip "nvm is not installed; skipping the Node.js upgrade"
 		upgrade_result_set skipped
 		return 0
 	fi
+	before="$(node_installed_version)" || before="$NOT_INSTALLED"
 	_run_quiet_command 'nvm install --lts' nvm install --lts || return $?
 	_run_quiet_command 'nvm alias default' nvm alias --no-colors default 'lts/*' || return $?
-	log_ok "Node.js on the LTS default ($(node_installed_version))"
-	upgrade_result_set checked-no-change
+	after="$(node_installed_version)" || return $?
+	log_ok "Node.js on the LTS default ($after)"
+	if [[ "$before" != "$after" ]]; then
+		upgrade_result_set updated
+	else
+		upgrade_result_set checked-no-change
+	fi
 }
 
 # --- npm (nvm) — opt-in ---

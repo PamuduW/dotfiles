@@ -39,7 +39,7 @@ test_doctor_succeeds_when_everything_is_healthy() (
 	local output rc=0
 	output="$(NO_COLOR=1 cmd_doctor 2>&1)" || rc=$?
 	[[ "$rc" -eq 0 ]] || return 1
-	[[ "$output" == *'Nothing needs attention.'* ]]
+	[[ "$output" == *'Dotfiles checks passed.'* ]]
 )
 
 test_update_dry_run_reports_then_stops() (
