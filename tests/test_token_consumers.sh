@@ -352,6 +352,7 @@ test_complete_consumer_inventory() {
 		"$DOTFILES_SHARED_LIB/github_token.sh"
 		"$REPO_DIR/scripts/lib/software_catalog.sh"
 		"$REPO_DIR/scripts/catalog/qualify-legacy-runtimes.sh"
+		"$REPO_DIR/scripts/catalog/qualify-legacy-local.sh"
 		"$REPO_DIR/scripts/lib/installers/boost.sh"
 		"$REPO_DIR/scripts/lib/installers/release_cli.sh"
 		"$REPO_DIR/scripts/lib/installers/obsidian.sh"
@@ -362,7 +363,7 @@ test_complete_consumer_inventory() {
 	# talks to the GitHub API, and dropping it from the roots would let a
 	# direct-curl bypass land there unnoticed.
 	found="$(rg -l 'https://(api\.github\.com/|github\.com/.*/releases/download/)' "$REPO_DIR/scripts" "$REPO_DIR/bin" "$DOTFILES_SHARED_LIB" | sort)"
-	[[ "$found" == "$(printf '%s\n' "${files[@]}" "$DOTFILES_SHARED_LIB/python/catalog_discovery.py" | sort)" ]]
+	[[ "$found" == "$(printf '%s\n' "${files[@]}" "$DOTFILES_SHARED_LIB/python/catalog_discovery.py" "$DOTFILES_SHARED_LIB/python/catalog_writer_transport.py" | sort)" ]]
 }
 
 test_software_installers_do_not_fall_back_to_vendor_scripts() (

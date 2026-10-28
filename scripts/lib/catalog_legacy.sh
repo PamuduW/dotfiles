@@ -1,6 +1,143 @@
 # shellcheck shell=bash
 
 # Inspect legacy paths without executing their runtime or manager code.
+dotfiles_catalog_local_inventory() {
+	local key="$1" command_name="$2" extra="${3:-}" active
+	active="$(command -v "$command_name" 2>/dev/null)" || return 2
+	/usr/bin/python3 -I -B - "$key" "$command_name" "$HOME" "$active" "$extra" <<'PY'
+import errno,hashlib,json,os,pathlib,re,stat,sys
+key,name,home,active,extra=sys.argv[1:]
+home,active=map(pathlib.Path,(home,active)); records={}
+def require(value):
+    if not value: raise ValueError('unverifiable local command')
+def directory(path):
+    require(path.is_absolute() and path.is_dir() and not path.is_symlink())
+    require(path.resolve()==path and path.stat().st_uid==os.geteuid())
+def parents(path):
+    relative=path.parent.relative_to(home)
+    current=home
+    for part in relative.parts:
+        current=current/part; directory(current)
+def inspect(path):
+    for _ in range(8):
+        require(path.is_absolute() and path.is_relative_to(home))
+        require(not path.is_relative_to(home/'.local/share/dotfiles-catalog'))
+        parents(path); metadata=path.lstat()
+        require(metadata.st_uid==os.geteuid())
+        identity=[metadata.st_mode,metadata.st_uid,metadata.st_dev,metadata.st_ino]
+        if stat.S_ISLNK(metadata.st_mode):
+            target=os.readlink(path); records[str(path)]=[*identity,target]
+            path=pathlib.Path(os.path.normpath(str(path.parent/target)))
+            continue
+        require(stat.S_ISREG(metadata.st_mode) and os.access(path,os.X_OK))
+        if path in allowed: require(metadata.st_nlink==1)
+        require(not metadata.st_mode&(stat.S_ISUID|stat.S_ISGID))
+        try: require(not os.getxattr(path,'security.capability'))
+        except OSError as error: require(error.errno in {errno.ENODATA,errno.ENOTSUP})
+        require(metadata.st_size<=536870912)
+        digest=hashlib.sha256(); size=0
+        with path.open('rb') as stream:
+            for block in iter(lambda:stream.read(1048576),b''):
+                size+=len(block); require(size<=536870912); digest.update(block)
+            after=os.fstat(stream.fileno())
+        require((metadata.st_ino,metadata.st_size,metadata.st_mtime_ns)==(after.st_ino,after.st_size,after.st_mtime_ns))
+        records[str(path)]=[*identity,digest.hexdigest()]
+        return path
+    raise ValueError('local command has too many symbolic links')
+try:
+    require(re.fullmatch(r'[a-z][a-z0-9_.-]*',key))
+    require(key not in {'nodejs','npm','go','asdf','nvm','asdf-golang'})
+    require(re.fullmatch(r'[A-Za-z0-9_+.-]+',name) and name not in {'.','..'})
+    require(not any(ord(c)<32 or ord(c)==127 for c in str(home)+str(active)+extra))
+    directory(home)
+    canonical=home/'.local/bin'/name; bridge=home/'bin'/name
+    allowed={canonical,bridge}
+    if extra:
+        require(re.fullmatch(re.escape(str(home))+r'/\.nvm/versions/node/v[0-9]+\.[0-9]+\.[0-9]+/bin/'+re.escape(name),extra))
+        allowed.add(pathlib.Path(extra))
+    require(active in allowed)
+    current=home/'.local/share/dotfiles-catalog'/key/'current'
+    require(not current.exists() and not current.is_symlink())
+    for path in (home/'.local',home/'.local/bin'):
+        if path.exists() or path.is_symlink(): directory(path)
+    executable=inspect(active); aliases=[]
+    for path in sorted(allowed,key=str):
+        if not path.exists() and not path.is_symlink(): continue
+        require(inspect(path)==executable)
+        if path!=canonical: aliases.append(str(path))
+    digest=hashlib.sha256(json.dumps(records,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+    print('\t'.join([digest,str(active),*aliases]))
+except (OSError,ValueError,RuntimeError):
+    print('Unreceipted local command paths are foreign, changed or unverifiable; preserving them.',file=sys.stderr)
+    raise SystemExit(2)
+PY
+}
+
+dotfiles_catalog_local_migration_authorized() {
+	case "${DOTFILES_MIGRATE_LOCAL_TOOLS:-}" in
+	1) return 0 ;;
+	'') ;;
+	*)
+		printf 'DOTFILES_MIGRATE_LOCAL_TOOLS must be 1 when set.\n' >&2
+		return 2
+		;;
+	esac
+	if [[ "${DOTFILES_INTERACTIVE_TTY:-false}" == true ]] && declare -F ui_confirm_yes_no >/dev/null; then
+		ui_confirm_yes_no "  Replace the listed unreceipted $1 command with catalog version $2 and keep a recovery copy?"
+		return $?
+	fi
+	return 1
+}
+
+dotfiles_catalog_local_version_allowed() {
+	local executable="$1" expected="$2" version_arg="$3" env_name="${4:-}" env_value="${5:-}" parsed
+	local -a argv=()
+	read -r -a argv <<<"$version_arg"
+	# A separate process group keeps descendant output inside the probe deadline.
+	parsed="$(
+		/usr/bin/python3 -I -B - "$executable" "$env_name" "$env_value" "${argv[@]}" <<'PY'
+import os,re,selectors,signal,subprocess,sys,time
+process=None; finished=False
+def interrupted(_signal,_frame): raise InterruptedError('version probe interrupted')
+for event in (signal.SIGINT,signal.SIGTERM,signal.SIGHUP): signal.signal(event,interrupted)
+try:
+    environment={key:os.environ[key] for key in ('HOME','PATH','NVM_DIR','ASDF_DATA_DIR','XDG_CONFIG_HOME','XDG_DATA_HOME','XDG_CACHE_HOME') if key in os.environ}
+    environment['LANG']='C.UTF-8'
+    if sys.argv[2]:
+        if not re.fullmatch(r'[A-Z][A-Z0-9_]*',sys.argv[2]) or not re.fullmatch(r'[A-Za-z0-9_-]+',sys.argv[3]): raise ValueError('invalid updater control')
+        environment[sys.argv[2]]=sys.argv[3]
+    deadline=time.monotonic()+5
+    process=subprocess.Popen([sys.argv[1],*sys.argv[4:]],stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,env=environment,start_new_session=True)
+    raw=bytearray()
+    with selectors.DefaultSelector() as selector:
+        selector.register(process.stdout,selectors.EVENT_READ)
+        while True:
+            remaining=deadline-time.monotonic()
+            if remaining<=0 or not selector.select(remaining): raise TimeoutError('version probe timed out')
+            block=os.read(process.stdout.fileno(),min(8193-len(raw),8193))
+            if not block: break
+            raw.extend(block)
+            if len(raw)>8192: raise ValueError('version output exceeds its bound')
+    status=process.wait(timeout=max(.01,deadline-time.monotonic())); finished=True
+    if status: raise ValueError('version probe failed')
+    match=re.search(rb'(?<![0-9A-Za-z])(?:go|v)?([0-9]+(?:\.[0-9]+)+(?:[-+][0-9A-Za-z.-]+)?)',raw)
+    if not match: raise ValueError('unverifiable version')
+    print(match[1].decode('ascii'))
+except (OSError,ValueError,TimeoutError,subprocess.SubprocessError):
+    raise SystemExit(2)
+finally:
+    if process is not None:
+        if not finished:
+            try: os.killpg(process.pid,signal.SIGKILL)
+            except ProcessLookupError: pass
+            try: process.wait(timeout=1)
+            except (OSError,subprocess.TimeoutExpired): pass
+        process.stdout.close()
+PY
+	)" || return 2
+	[[ "${parsed#v}" == "${expected#v}" ]] || dotfiles_catalog_version_is_older "$parsed" "$expected"
+}
+
 dotfiles_catalog_nvm_inventory() {
 	local node_path npm_path npx_path
 	node_path="$(command -v node 2>/dev/null)" || return 2

@@ -291,7 +291,7 @@ dotfiles_catalog_version_matches() {
 	else
 		raw="$("$command_path" "${argv[@]}" 2>/dev/null)" || return 1
 	fi
-	python3 - "$version" "$raw" <<'PY'
+	/usr/bin/python3 -I -B - "$version" "$raw" <<'PY'
 import re,sys
 version=sys.argv[1].removeprefix('v')
 raise SystemExit(not bool(re.search(r'(?<![0-9A-Za-z.+-])(?:go|v)?'+re.escape(version)+r'(?![0-9A-Za-z.+-])',sys.argv[2])))
@@ -313,7 +313,7 @@ dotfiles_catalog_upgrade_allowed() {
 }
 
 dotfiles_catalog_version_is_older() {
-	python3 - "$2" "$1" <<'PY'
+	/usr/bin/python3 -I -B - "$2" "$1" <<'PY'
 import re,sys
 expected=sys.argv[1].removeprefix('v')
 pattern=r'(?<![0-9A-Za-z])(?:go|v)?([0-9]+(?:\.[0-9]+)+(?:[-+][0-9A-Za-z.-]+)?)'
@@ -470,6 +470,8 @@ PYNPM
 # No caller gets to specify a version: the approved snapshot selects it.
 dotfiles_catalog_install() (
 	local key="$1" force="${2:-${DOTFILES_FORCE_REINSTALL:-0}}" prepared_archive="${3:-}" identity root version archive binary staging payload candidate command_name version_arg auto_env auto_value
+	local legacy_mode=0 legacy_inventory='' legacy_extra='' legacy_active='' migration_status=0
+	local -a legacy_fields=() legacy_aliases=() legacy_alias_links=()
 	dotfiles_catalog_begin || return $?
 	if [[ "$(dotfiles_catalog_get "$key" kind)" == external ]]; then
 		printf '%s is outside automatic catalog management; install and update it manually.\n' "$key"
@@ -517,8 +519,27 @@ dotfiles_catalog_install() (
 	command_name="$(dotfiles_catalog_command_name "$key")"
 	root="$(dotfiles_catalog_root "$key")"
 	if dotfiles_catalog_external "$key"; then
-		printf 'Preserving external %s installation; catalog ownership is not established.\n' "$key" >&2
-		return 0
+		if [[ -z "${DOTFILES_MIGRATE_LOCAL_TOOLS:-}" && "${DOTFILES_INTERACTIVE_TTY:-false}" != true ]]; then
+			printf 'Preserving external %s installation; catalog ownership is not established.\n' "$key" >&2
+			return 0
+		fi
+		# shellcheck source=/dev/null
+		source "$_DOTFILES_CATALOG_LIB/catalog_legacy.sh"
+		legacy_active="$(command -v "$command_name" 2>/dev/null || true)"
+		case "$legacy_active" in "$HOME"/.nvm/versions/node/v*/bin/"$command_name") legacy_extra="$legacy_active" ;; esac
+		if ! legacy_inventory="$(dotfiles_catalog_local_inventory "$key" "$command_name" "$legacy_extra")"; then
+			[[ -z "${DOTFILES_MIGRATE_LOCAL_TOOLS:-}" ]] || return 2
+			return 0
+		fi
+		IFS=$'\t' read -r -a legacy_fields <<<"$legacy_inventory"
+		[[ "${#legacy_fields[@]}" -ge 2 && "${legacy_fields[0]}" =~ ^[0-9a-f]{64}$ ]] || return 2
+		legacy_active="${legacy_fields[1]}"
+		legacy_aliases=("${legacy_fields[@]:2}")
+		printf 'Unreceipted local %s command: %s\n' "$key" "$legacy_active" >&2
+		dotfiles_catalog_local_migration_authorized "$key" "$version" || migration_status=$?
+		case "$migration_status" in 0) ;; 1) return 0 ;; *) return "$migration_status" ;; esac
+		[[ "$(dotfiles_catalog_local_inventory "$key" "$command_name" "$legacy_extra")" == "$legacy_inventory" ]] || return 2
+		legacy_mode=1
 	fi
 	identity="$(dotfiles_catalog_component_identity "$key")" || return 2
 	version_arg="$(dotfiles_catalog_version_arg "$key")"
@@ -538,6 +559,10 @@ dotfiles_catalog_install() (
 		[[ "$auto_env" =~ ^[A-Z][A-Z0-9_]*$ && "$auto_value" =~ ^[A-Za-z0-9_-]+$ ]] || return 2
 	fi
 	[[ "$key" != codex_cli ]] || dotfiles_catalog_codex_defaults || return 2
+	if [[ "$legacy_mode" == 1 ]] && ! dotfiles_catalog_local_version_allowed "$legacy_active" "$version" "$version_arg" "$auto_env" "$auto_value"; then
+		printf 'Preserving newer or unverifiable unreceipted %s; review version drift.\n' "$key" >&2
+		return 2
+	fi
 	if dotfiles_catalog_managed "$key"; then
 		if dotfiles_catalog_version_matches "$HOME/.local/bin/$command_name" "$version" "$version_arg" "$auto_env" "$auto_value"; then
 			if [[ "$force" != 1 ]] && dotfiles_catalog_owned "$key" &&
@@ -555,6 +580,7 @@ dotfiles_catalog_install() (
 	mkdir -p -- "$root/releases" "$HOME/.local/bin" || return 1
 	staging="$(mktemp -d "$root/releases/.staging-XXXXXX")" || return 1
 	local previous_current='' current_published=0 command_published=0 npx_published=0 committed=0
+	local legacy_alias_published=0 legacy_index legacy_link
 	local current_link="$root/.current.$$" command_link="$HOME/.local/bin/.${command_name}.$$"
 	local npx_link="$HOME/.local/bin/.npx.$$"
 	if [[ -L "$root/current" ]]; then
@@ -567,6 +593,9 @@ dotfiles_catalog_install() (
 	dotfiles_catalog_publication_cleanup() {
 		local status=$? rollback_ok=1
 		if [[ "$committed" == 0 ]]; then
+			for ((legacy_index = legacy_alias_published - 1; legacy_index >= 0; legacy_index--)); do
+				mv -Tf -- "$staging/previous-alias-$legacy_index" "${legacy_aliases[$legacy_index]}" || rollback_ok=0
+			done
 			if [[ "$current_published" == 1 ]]; then
 				if [[ -n "$previous_current" ]]; then
 					rm -f -- "$current_link"
@@ -591,6 +620,7 @@ dotfiles_catalog_install() (
 			fi
 		fi
 		rm -f -- "$current_link" "$command_link"
+		rm -f -- "${legacy_alias_links[@]}"
 		[[ "$key" != npm ]] || rm -f -- "$npx_link"
 		if [[ "$committed" == 0 && "$rollback_ok" == 1 ]]; then
 			rm -rf -- "$staging"
@@ -670,6 +700,17 @@ dotfiles_catalog_install() (
 	if [[ -e "$HOME/.local/bin/$command_name" || -L "$HOME/.local/bin/$command_name" ]]; then
 		cp -a -- "$HOME/.local/bin/$command_name" "$staging/previous-command" || return 1
 	fi
+	if [[ "$legacy_mode" == 1 ]]; then
+		for legacy_index in "${!legacy_aliases[@]}"; do
+			cp -a -- "${legacy_aliases[$legacy_index]}" "$staging/previous-alias-$legacy_index" || return 1
+			legacy_link="${legacy_aliases[$legacy_index]%/*}/.$command_name.catalog.$$.$legacy_index"
+			[[ ! -e "$legacy_link" && ! -L "$legacy_link" ]] || return 2
+			ln -s -- "$HOME/.local/bin/$command_name" "$legacy_link" || return 1
+			legacy_alias_links+=("$legacy_link")
+		done
+		[[ "$(dotfiles_catalog_local_inventory "$key" "$command_name" "$legacy_extra")" == "$legacy_inventory" ]] || return 2
+		printf '%s\n' "$legacy_inventory" >"$staging/.catalog-legacy-recovery" || return 1
+	fi
 	# Completed releases stay immutable; one symlink rename publishes all files.
 	ln -s -- "$release" "$current_link" || return 1
 	mv -Tf -- "$current_link" "$root/current" || return 1
@@ -677,6 +718,10 @@ dotfiles_catalog_install() (
 	ln -s -- "$root/current/command" "$command_link" || return 1
 	mv -Tf -- "$command_link" "$HOME/.local/bin/$command_name" || return 1
 	command_published=1
+	for legacy_index in "${!legacy_aliases[@]}"; do
+		mv -Tf -- "${legacy_alias_links[$legacy_index]}" "${legacy_aliases[$legacy_index]}" || return 1
+		legacy_alias_published=$((legacy_alias_published + 1))
+	done
 	if [[ "$key" == npm ]]; then
 		ln -s -- "$root/current/command-npx" "$npx_link" || return 1
 		mv -Tf -- "$npx_link" "$HOME/.local/bin/npx" || return 1
@@ -684,7 +729,11 @@ dotfiles_catalog_install() (
 	fi
 	dotfiles_catalog_legacy_stamp "$key" "$version" || return 1
 	committed=1
-	rm -f -- "$staging/previous-command" "$staging/previous-npx"
+	if [[ "$legacy_mode" == 1 ]]; then
+		printf 'Retained the previous local command and aliases at %s for recovery.\n' "$staging" >&2
+	else
+		rm -f -- "$staging/previous-command" "$staging/previous-npx"
+	fi
 )
 
 dotfiles_catalog_manual_status() {

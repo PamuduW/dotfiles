@@ -199,7 +199,9 @@ The hosted catalog workflow also tests real legacy NVM/Node and asdf/Go layouts
 in a separate disposable Ubuntu home. Its frozen vendor inputs exercise refused
 migration, unavailable downloads, explicit migration, repeat runs, preserved
 global npm commands and configuration, and real Node execution and Go compilation.
-This runtime test produces unapproved smoke evidence. A complete legacy setup,
+Another disposable home tests frozen uv, lazygit and direnv binaries in both
+`~/.local/bin` and `~/bin`, including consent, failed downloads and recovery copies.
+These tests produce unapproved smoke evidence. A complete legacy setup,
 the remaining component migrations and the full qualification controller are
 still required before the first catalog can be approved.
 
@@ -235,6 +237,22 @@ This replaces the former Monaspace component. Existing Monaspace files are left
 in place, but are no longer installed or updated. Ubuntu Sans Mono is the
 original, unpatched family and does not include Nerd Fonts icons. The Windows
 Terminal template uses it; importing that template remains a manual step.
+
+## Existing local tools
+
+Catalog installs preserve commands that have no catalog ownership receipt.
+For supported tools in `~/.local/bin`, `~/bin`, or a standard NVM global-bin
+directory, the installer can list the affected paths and ask before migration.
+For a noninteractive run, set `DOTFILES_MIGRATE_LOCAL_TOOLS=1` only for the
+install or update command. Force reinstall does not grant migration permission.
+
+Migration checks the existing command after consent and refuses newer or
+unverifiable versions, conflicting aliases, and paths outside the supported
+home-directory layouts. It verifies the replacement before activating it and
+keeps the previous commands in the private recovery directory printed on success.
+Keep that directory until you have checked the migrated tools. If restoration
+fails, the installer reports the retained recovery files for manual recovery.
+This option does not authorize migration of NVM, Go/asdf, or system packages.
 
 ## Existing NVM installations
 
