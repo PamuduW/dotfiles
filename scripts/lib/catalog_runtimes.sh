@@ -245,36 +245,71 @@ dotfiles_catalog_go_install() (
 	dotfiles_catalog_begin || return $?
 	local version archive identity root install_root prefix source_checkout stage asdf_binary program name index
 	local committed=0 prefix_published=0 prefix_backed_up=0 keep_stage=0
+	local legacy_inventory='' legacy_mode=0 previous_install_root=''
 	local -a paths=() prepared=() changed=() old_proof=()
 	[[ "$(dotfiles_catalog_get go owner)" == dotfiles && "$(dotfiles_catalog_get asdf-golang kind)" == git-source ]] || return 2
 	version="$(dotfiles_catalog_get go version)" || return 2
 	archive="$(dotfiles_catalog_get go archive)" || return 2
 	[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$(dotfiles_catalog_get go binary)" == go/bin/go ]] || return 2
 	case "$archive" in tar.gz | tgz) ;; *) return 2 ;; esac
-	if dotfiles_catalog_external go; then
+	root="${ASDF_DATA_DIR:-$HOME/.asdf}"
+	if ! dotfiles_catalog_native_owned go && [[ -e "$root/bin/asdf" || -L "$root/bin/asdf" || -e "$root/plugins/golang" ]]; then
+		[[ "$(dotfiles_catalog_get asdf owner)" == dotfiles && "$(dotfiles_catalog_get asdf kind)" == software ]] || return 2
+		legacy_inventory="$(dotfiles_catalog_asdf_go_inventory "$version")" || return 2
+		previous_install_root="${legacy_inventory%%$'\t'*}"
+		printf 'Legacy Go/asdf migration: %s\nActive Go SDK: %s\n' "$root" "$previous_install_root" >&2
+		printf 'Replace the manager entrypoint and Go plugin/shims; retain other languages, SDKs, user tools and private recovery files.\n' >&2
+		dotfiles_catalog_asdf_go_migration_authorized || return 2
+		[[ "$(dotfiles_catalog_asdf_go_inventory "$version")" == "$legacy_inventory" ]] || return 2
+		if ! dotfiles_catalog_version_matches "$previous_install_root/go/bin/go" "$version" version GOTOOLCHAIN local &&
+			! dotfiles_catalog_upgrade_allowed "$previous_install_root/go/bin/go" "$version" version GOTOOLCHAIN local; then
+			printf 'Preserving newer or unverifiable legacy Go; review version drift.\n' >&2
+			return 2
+		fi
+		if ! dotfiles_catalog_version_matches "$root/bin/asdf" "$(dotfiles_catalog_get asdf version)" --version &&
+			! dotfiles_catalog_upgrade_allowed "$root/bin/asdf" "$(dotfiles_catalog_get asdf version)" --version; then
+			printf 'Preserving newer or unverifiable legacy asdf; review version drift.\n' >&2
+			return 2
+		fi
+		legacy_mode=1
+	fi
+	if [[ "$legacy_mode" == 0 ]] && dotfiles_catalog_external go; then
 		printf 'Preserving external Go; native catalog activation is blocked.\n' >&2
 		return 2
 	fi
 	if dotfiles_catalog_managed go && ! dotfiles_catalog_version_matches "$HOME/.local/bin/go" "$version" version GOTOOLCHAIN local &&
 		! dotfiles_catalog_upgrade_allowed "$HOME/.local/bin/go" "$version" version GOTOOLCHAIN local; then return 2; fi
-	root="${ASDF_DATA_DIR:-$HOME/.asdf}"
 	install_root="$root/installs/golang/$version"
 	prefix="$install_root/go"
 	[[ "$root" == /* && ! -L "$root" && ! -L "$root/installs" && ! -L "$root/installs/golang" && ! -L "$root/plugins" && ! -L "$root/shims" && ! -L "$HOME/.tool-versions" ]] || return 2
 	if [[ -e "$root/bin/asdf" || -L "$root/bin/asdf" ]]; then
-		[[ -L "$root/bin/asdf" && "$(readlink -- "$root/bin/asdf")" == "$HOME/.local/bin/asdf" ]] || return 2
-		dotfiles_catalog_owned asdf || return 2
+		if [[ "$legacy_mode" == 0 ]]; then
+			[[ -L "$root/bin/asdf" && "$(readlink -- "$root/bin/asdf")" == "$HOME/.local/bin/asdf" ]] || return 2
+			dotfiles_catalog_owned asdf || return 2
+		fi
 	fi
 	if [[ -e "$root/plugins/golang" || -L "$root/plugins/golang" ]]; then
 		[[ -d "$root/plugins/golang" && ! -L "$root/plugins/golang" ]] || return 2
-		dotfiles_catalog_source_checkout_owned asdf-golang "$root/plugins/golang" || return 2
+		if [[ "$legacy_mode" == 0 ]]; then dotfiles_catalog_source_checkout_owned asdf-golang "$root/plugins/golang" || return 2; fi
 	fi
 	if [[ -e "$install_root" || -L "$install_root" ]]; then
-		dotfiles_catalog_native_owned go || return 2
-		mapfile -t old_proof <"$HOME/.local/share/dotfiles-catalog/go.native"
-		[[ "${old_proof[5]}" == "$prefix" ]] || return 2
+		if [[ "$legacy_mode" == 1 ]]; then
+			[[ "$install_root" == "$previous_install_root" ]] || return 2
+		else
+			dotfiles_catalog_native_owned go || return 2
+			mapfile -t old_proof <"$HOME/.local/share/dotfiles-catalog/go.native"
+			[[ "${old_proof[5]}" == "$prefix" ]] || return 2
+		fi
 	fi
-	dotfiles_catalog_install asdf || return $?
+	if [[ "$legacy_mode" == 1 ]]; then
+		PATH="$HOME/.local/bin:/usr/bin:/bin" dotfiles_catalog_install asdf || return $?
+	else
+		dotfiles_catalog_install asdf || return $?
+		if dotfiles_catalog_native_owned go; then
+			mapfile -t old_proof <"$HOME/.local/share/dotfiles-catalog/go.native"
+			previous_install_root="${old_proof[5]%/go}"
+		fi
+	fi
 	dotfiles_catalog_owned asdf || return 2
 	asdf_binary="$HOME/.local/bin/asdf"
 	source_checkout="$(dotfiles_catalog_source_install asdf-golang)" || return $?
@@ -322,8 +357,8 @@ dotfiles_catalog_go_install() (
 		"$source_checkout/bin/install" >"$stage/import.log" 2>&1 || return $?
 	dotfiles_catalog_go_defaults "$stage/install/go/bin/go" "$stage/install" || return 2
 	dotfiles_catalog_version_matches "$stage/install/go/bin/go" "$version" version GOTOOLCHAIN local || return 2
-	if [[ -d "$install_root" ]]; then
-		for program in "$install_root/"* "$install_root/".[!.]* "$install_root/"..?*; do
+	if [[ -n "$previous_install_root" && -d "$previous_install_root" ]]; then
+		for program in "$previous_install_root/"* "$previous_install_root/".[!.]* "$previous_install_root/"..?*; do
 			[[ -e "$program" || -L "$program" ]] || continue
 			[[ "${program##*/}" != go ]] || continue
 			cp -a -- "$program" "$stage/install/" || return 1
@@ -348,6 +383,9 @@ dotfiles_catalog_go_install() (
 	for index in "${!paths[@]}"; do
 		if [[ -e "${paths[index]}" || -L "${paths[index]}" ]]; then cp -a -- "${paths[index]}" "$stage/backup-$index" || return 1; fi
 	done
+	if [[ "$legacy_mode" == 1 ]]; then
+		[[ "$(dotfiles_catalog_asdf_go_inventory "$version")" == "$legacy_inventory" ]] || return 2
+	fi
 	if [[ -e "$install_root" ]]; then
 		mv -- "$install_root" "$stage/previous-prefix" || return $?
 		prefix_backed_up=1
@@ -381,6 +419,10 @@ dotfiles_catalog_go_install() (
 	dotfiles_catalog_native_owned go || return 2
 	dotfiles_catalog_version_matches "$HOME/.local/bin/go" "$version" version GOTOOLCHAIN local || return 2
 	committed=1
+	if [[ "$legacy_mode" == 1 ]]; then
+		keep_stage=1
+		printf 'Legacy Go/asdf recovery files retained privately at %s.\n' "$stage" >&2
+	fi
 )
 
 _dotfiles_catalog_go_control_shim() {

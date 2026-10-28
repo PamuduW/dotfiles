@@ -30,6 +30,10 @@ inventory_case() (
 	export PATH
 	case "$mode" in
 	valid) ;;
+	python-shim)
+		printf '%s\n' '#!/bin/sh' 'touch "$HOME/legacy-code-executed"' 'exec /usr/bin/python3 "$@"' >"$prefix/bin/python3"
+		chmod +x "$prefix/bin/python3"
+		;;
 	foreign-npx)
 		mkdir "$HOME/foreign"
 		cp "$prefix/bin/node" "$HOME/foreign/npx"
@@ -57,7 +61,7 @@ inventory_case() (
 	foreign-alias) cp "$prefix/bin/node" "$HOME/.local/bin/node" ;;
 	esac
 	result="$(dotfiles_catalog_nvm_inventory 24.2.0 2>/dev/null)" || rc=$?
-	if [[ "$mode" == valid ]]; then
+	if [[ "$mode" == valid || "$mode" == python-shim ]]; then
 		[[ "$rc" == 0 && "$result" == "$prefix"$'\t'* && "${result##*$'\t'}" =~ ^[0-9a-f]{64}$ ]]
 		printf changed >>"$NVM_DIR/bash_completion"
 		[[ "$(dotfiles_catalog_nvm_inventory 24.2.0)" != "$result" ]]
@@ -66,7 +70,7 @@ inventory_case() (
 	fi
 	[[ ! -e "$HOME/legacy-code-executed" ]]
 )
-for mode in valid foreign-npx foreign-node-alias escaped-npm manager-symlink conflicting-receipt inactive-target foreign-alias; do
+for mode in valid python-shim foreign-npx foreign-node-alias escaped-npm manager-symlink conflicting-receipt inactive-target foreign-alias; do
 	inventory_case "$mode"
 	printf 'ok - legacy NVM inventory: %s\n' "$mode"
 done

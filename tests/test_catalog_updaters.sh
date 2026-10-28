@@ -68,12 +68,23 @@ PY
 reshim)
 	[[ "$*" == 'reshim golang 1.2.3' ]] || exit 84
 	mkdir -p "$ASDF_DATA_DIR/shims"
-	printf '%s\n' '#!/usr/bin/env bash' '# asdf-plugin: golang 1.2.3' 'exec "$HOME/.local/bin/asdf" exec go "$@"' >"$ASDF_DATA_DIR/shims/go"
-	chmod +x "$ASDF_DATA_DIR/shims/go"
+	for program in "$ASDF_DATA_DIR/installs/golang/1.2.3/go/bin/"* "$ASDF_DATA_DIR/installs/golang/1.2.3/bin/"*; do
+		[[ -f "$program" && -x "$program" ]] || continue
+		name="${program##*/}"
+		printf '%s\n' '#!/usr/bin/env bash' '# asdf-plugin: golang 1.2.3' "exec \"\$HOME/.local/bin/asdf\" exec $name \"\$@\"" >"$ASDF_DATA_DIR/shims/$name"
+		chmod +x "$ASDF_DATA_DIR/shims/$name"
+	done
 	[[ "${TEST_ASDF_RESHIM_FAIL:-0}" != 1 ]] || exit 30
 	;;
 which) printf '%s\n' "$ASDF_DATA_DIR/installs/golang/1.2.3/go/bin/go" ;;
-exec) shift 2; exec "$ASDF_DATA_DIR/installs/golang/1.2.3/go/bin/go" "$@" ;;
+exec)
+	name="$2"; shift 2
+	for directory in go/bin bin; do
+		program="$ASDF_DATA_DIR/installs/golang/1.2.3/$directory/$name"
+		if [[ -x "$program" ]]; then exec "$program" "$@"; fi
+	done
+	exit 98
+	;;
 *) exit 97 ;;
 esac
 ASDF
@@ -100,7 +111,10 @@ curl() {
 		shift
 	done
 	case "$url" in
-	https://fixture.invalid/go.tgz) cp "$TEST_HARNESS_ROOT/go.tgz" "$output" ;;
+	https://fixture.invalid/go.tgz)
+		cp "$TEST_HARNESS_ROOT/go.tgz" "$output"
+		if [[ "${TEST_GO_CHANGE_AFTER_DOWNLOAD:-0}" == 1 ]]; then printf 'python 3.12.0\n' >>"$HOME/.tool-versions"; fi
+		;;
 	https://fixture.invalid/asdf) cp "$TEST_HARNESS_ROOT/asdf" "$output" ;;
 	*) return 97 ;;
 	esac
@@ -191,3 +205,121 @@ DOTFILES_FORCE_REINSTALL=1 install_go_via_asdf || rc=$?
 }
 [[ "$("$HOME/.local/bin/go" version)" == 'go version go1.2.3 linux/amd64' ]]
 printf 'PASS: native asdf Go uses pinned SDK/plugin, preserves config and rolls back failed import/selection/reshim\n'
+
+legacy_migration_case() (
+	local mode="$1" old_install output='' status=0 downloads_before
+	unset -f command mv
+	unset TEST_GO_IMPORT_FAIL TEST_ASDF_SELECT_FAIL TEST_ASDF_RESHIM_FAIL TEST_GO_CHANGE_AFTER_DOWNLOAD DOTFILES_MIGRATE_ASDF_GO
+	unset ASDF_DIR ASDF_GOLANG_VERSION ASDF_TOOL_VERSIONS_FILENAME
+	export HOME="$TEST_HARNESS_ROOT/legacy-$mode/home" ASDF_DATA_DIR="$TEST_HARNESS_ROOT/legacy-$mode/home/.asdf"
+	export DOTFILES_INTERACTIVE_TTY=false TEST_LEGACY_GO_VERSION=1.2.2 TEST_LEGACY_ASDF_VERSION=0.19.0
+	if [[ "$mode" == same-version || "$mode" == same-version-reshim-failure ]]; then TEST_LEGACY_GO_VERSION=1.2.3; fi
+	[[ "$mode" != newer-go ]] || TEST_LEGACY_GO_VERSION=999.0.0
+	[[ "$mode" != newer-asdf ]] || TEST_LEGACY_ASDF_VERSION=999.0.0
+	[[ "$mode" != unverifiable-asdf ]] || TEST_LEGACY_ASDF_VERSION=unknown
+	old_install="$ASDF_DATA_DIR/installs/golang/$TEST_LEGACY_GO_VERSION"
+	mkdir -p "$old_install/go/bin" "$old_install/bin" "$old_install/packages" "$ASDF_DATA_DIR/bin" \
+		"$ASDF_DATA_DIR/plugins/ruby" "$ASDF_DATA_DIR/shims" "$ASDF_DATA_DIR/installs/golang/0.0.1"
+	cp -a "$TEST_NATIVE_PLUGIN" "$ASDF_DATA_DIR/plugins/golang"
+	rm "$ASDF_DATA_DIR/plugins/golang/.catalog-receipt" "$ASDF_DATA_DIR/plugins/golang/.catalog-source-revision"
+	cat >"$old_install/go/bin/go" <<'LEGACY_GO'
+#!/usr/bin/env bash
+touch "$HOME/legacy-code-executed"
+[[ "$GOTOOLCHAIN" == local ]] || exit 82
+echo "go version go$TEST_LEGACY_GO_VERSION linux/amd64"
+LEGACY_GO
+	cat >"$ASDF_DATA_DIR/bin/asdf" <<'LEGACY_ASDF'
+#!/usr/bin/env bash
+touch "$HOME/legacy-code-executed"
+case "$1" in
+--version) echo "v$TEST_LEGACY_ASDF_VERSION" ;;
+exec) shift 2; exec "$ASDF_DATA_DIR/installs/golang/$TEST_LEGACY_GO_VERSION/go/bin/go" "$@" ;;
+*) exit 97 ;;
+esac
+LEGACY_ASDF
+	printf '%s\n' '#!/usr/bin/env bash' 'exec "$ASDF_DATA_DIR/bin/asdf" exec go "$@"' >"$ASDF_DATA_DIR/shims/go"
+	chmod +x "$old_install/go/bin/go" "$ASDF_DATA_DIR/bin/asdf" "$ASDF_DATA_DIR/shims/go"
+	cp "$ASDF_DATA_DIR/bin/asdf" "$HOME/manager.before"
+	printf '%s\n' '#!/usr/bin/env bash' 'echo retained-user-tool' >"$old_install/bin/user-tool"
+	chmod +x "$old_install/bin/user-tool"
+	printf keep >"$old_install/packages/marker"
+	printf 'ruby 3.3.0\ngolang %s\n' "$TEST_LEGACY_GO_VERSION" >"$HOME/.tool-versions"
+	printf 'keep-plugin\n' >"$ASDF_DATA_DIR/plugins/ruby/marker"
+	printf 'keep-shim\n' >"$ASDF_DATA_DIR/shims/ruby"
+	printf 'keep-sdk\n' >"$ASDF_DATA_DIR/installs/golang/0.0.1/marker"
+	PATH="$HOME/.local/bin:$ASDF_DATA_DIR/bin:$ASDF_DATA_DIR/shims:$TEST_FAKE_BIN:/usr/bin:/bin"
+	export PATH
+	cd "$HOME"
+	case "$mode" in
+	declined) ;;
+	force) export DOTFILES_FORCE_REINSTALL=1 ;;
+	interactive-yes | interactive-no | changed-after-consent)
+		DOTFILES_INTERACTIVE_TTY=true
+		ui_confirm_yes_no() {
+			[[ "$1" == *'Migrate the listed Go/asdf'* && "$mode" != interactive-no ]] || return 1
+			[[ "$mode" != changed-after-consent ]] || printf 'python 3.12.0\n' >>"$HOME/.tool-versions"
+		}
+		;;
+	*) export DOTFILES_MIGRATE_ASDF_GO=1 ;;
+	esac
+	case "$mode" in
+	import-failure | retry) export TEST_GO_IMPORT_FAIL=1 ;;
+	selection-failure) export TEST_ASDF_SELECT_FAIL=1 ;;
+	reshim-failure | same-version-reshim-failure) export TEST_ASDF_RESHIM_FAIL=1 ;;
+	unverifiable-go) printf '%s\n' '#!/usr/bin/env bash' 'echo unknown' >"$old_install/go/bin/go" ;;
+	dirty-plugin) printf '\n# local edit\n' >>"$ASDF_DATA_DIR/plugins/golang/bin/install" ;;
+	changed-before-publication) export TEST_GO_CHANGE_AFTER_DOWNLOAD=1 ;;
+	plugin-publication-failure)
+		mv() {
+			if [[ "${*: -1}" == "$ASDF_DATA_DIR/plugins/golang" && "${*: -2:1}" == */plugin ]]; then return 46; fi
+			command mv "$@"
+		}
+		;;
+	manager-publication-failure)
+		mv() {
+			if [[ "${*: -1}" == "$ASDF_DATA_DIR/bin/asdf" && "${*: -2:1}" == */asdf ]]; then return 45; fi
+			command mv "$@"
+		}
+		;;
+	esac
+	downloads_before="$(wc -l <"$TEST_HARNESS_ROOT/downloads")"
+	output="$(install_go_via_asdf 2>&1)" || status=$?
+	if [[ "$mode" == success || "$mode" == same-version || "$mode" == interactive-yes ]]; then
+		[[ "$status" == 0 ]] || {
+			printf '%s\n' "$output" >&2
+			return 1
+		}
+		dotfiles_catalog_native_owned go
+		[[ "$("$HOME/.local/bin/go" version)" == 'go version go1.2.3 linux/amd64' ]]
+		[[ "$("$ASDF_DATA_DIR/shims/user-tool")" == retained-user-tool ]]
+		[[ "$(cat "$ASDF_DATA_DIR/installs/golang/1.2.3/packages/marker")" == keep ]]
+		[[ -n "$(find "$ASDF_DATA_DIR/installs/golang" -name backup-4 -type f -print -quit)" ]]
+	else
+		[[ "$status" != 0 && ! -L "$ASDF_DATA_DIR/bin/asdf" && ! -e "$HOME/.local/bin/go" && ! -e "$HOME/.local/share/dotfiles-catalog/go.native" ]]
+		cmp "$ASDF_DATA_DIR/bin/asdf" "$HOME/manager.before"
+		if [[ "$mode" == declined || "$mode" == force || "$mode" == interactive-no || "$mode" == changed-after-consent || "$mode" == newer-go || "$mode" == newer-asdf || "$mode" == unverifiable-go || "$mode" == unverifiable-asdf || "$mode" == dirty-plugin ]]; then
+			[[ "$(wc -l <"$TEST_HARNESS_ROOT/downloads")" == "$downloads_before" ]]
+		fi
+		if [[ "$mode" == declined || "$mode" == force || "$mode" == interactive-no || "$mode" == changed-after-consent ]]; then [[ ! -e "$HOME/legacy-code-executed" ]]; fi
+		if [[ "$mode" == unverifiable-go ]]; then
+			[[ "$(GOTOOLCHAIN=local "$ASDF_DATA_DIR/shims/go" version)" == unknown ]]
+		else
+			[[ "$(GOTOOLCHAIN=local "$ASDF_DATA_DIR/shims/go" version)" == "go version go$TEST_LEGACY_GO_VERSION linux/amd64" ]]
+		fi
+		grep -Fxq "golang $TEST_LEGACY_GO_VERSION" "$HOME/.tool-versions"
+		if [[ "$mode" == retry ]]; then
+			unset TEST_GO_IMPORT_FAIL
+			install_go_via_asdf >/dev/null
+			dotfiles_catalog_native_owned go
+			[[ "$("$ASDF_DATA_DIR/shims/user-tool")" == retained-user-tool ]]
+		fi
+	fi
+	grep -Fxq 'ruby 3.3.0' "$HOME/.tool-versions"
+	[[ "$(cat "$ASDF_DATA_DIR/plugins/ruby/marker")" == keep-plugin && "$(cat "$ASDF_DATA_DIR/shims/ruby")" == keep-shim ]]
+	[[ "$(cat "$ASDF_DATA_DIR/installs/golang/0.0.1/marker")" == keep-sdk ]]
+)
+for mode in success same-version declined force interactive-yes interactive-no changed-after-consent changed-before-publication newer-go newer-asdf unverifiable-go unverifiable-asdf dirty-plugin import-failure selection-failure reshim-failure same-version-reshim-failure plugin-publication-failure manager-publication-failure retry; do
+	legacy_migration_case "$mode"
+	printf 'ok - native Go/asdf migration: %s\n' "$mode"
+	rm -rf -- "$TEST_HARNESS_ROOT/legacy-$mode"
+done

@@ -245,6 +245,22 @@ checked your setup; it can contain a full runtime and temporary installation
 files. Failed activation restores the original commands and manager entrypoints.
 Custom NVM roots need manual reconciliation.
 
+## Existing Go/asdf installations
+
+The Go component asks before migrating the normal `~/.asdf` installation.
+For a noninteractive run, set `DOTFILES_MIGRATE_ASDF_GO=1` only for the command
+that installs or updates Go. Force reinstall does not authorize migration.
+
+Migration requires one global Go version and a clean Go plugin. Modified plugins,
+project or environment version overrides, custom roots and external commands need
+manual reconciliation. Newer or unverifiable Go/asdf versions remain unchanged.
+Other plugins, language selections, shims, SDK versions and version-local user
+tools are retained. On success, the installer prints a private recovery directory.
+
+Failed activation restores the original Go paths, manager file, plugin and shims.
+The approved asdf dependency installed before Go preparation can remain available;
+the original manager and working legacy Go shim are preserved on failure.
+
 ## Codex CLI migration
 
 Dotfiles installs the standalone Codex CLI and preserves external or shadowed
