@@ -1066,8 +1066,8 @@ dotfiles_catalog_apt_holds() {
 }
 
 dotfiles_catalog_install_debs() (
-	local key package version installed root tmp index=0 observed plan name comparison needs_change=0
-	local -a files=() packages=() versions=() keys=("$@")
+	local key package version installed root tmp index=0 observed plan name comparison needs_change=0 migration_state migration_status
+	local -a files=() packages=() versions=() migration_states=() keys=("$@")
 	(($# > 0)) || return 2
 	# shellcheck disable=SC2034  # Serializes all vendor package/receipt changes.
 	local catalog_transaction_fd
@@ -1086,9 +1086,22 @@ dotfiles_catalog_install_debs() (
 			return 2
 		fi
 		installed="$(dpkg-query -W -f='${Version}' "$package" 2>/dev/null || true)"
+		migration_state=''
 		if [[ -n "$installed" && ! -f "$root/$key.apt" ]]; then
-			printf 'Preserving external apt package %s.\n' "$package" >&2
-			return 0
+			if [[ -z "${DOTFILES_MIGRATE_APT_PACKAGES:-}" && "${DOTFILES_INTERACTIVE_TTY:-false}" != true ]]; then
+				printf 'Preserving external apt package %s.\n' "$package" >&2
+				return 0
+			fi
+			# shellcheck source=/dev/null
+			source "$_DOTFILES_CATALOG_LIB/catalog_legacy.sh"
+			migration_state="$(dotfiles_catalog_apt_migration_state "$package")" || return 2
+			[[ "$migration_state" == $'installed\t'"$installed"$'\t'* ]] || return 2
+			printf 'External apt package %s: installed %s, catalog %s.\n' "$package" "$installed" "$version" >&2
+			migration_status=0
+			dotfiles_catalog_apt_migration_authorized "$package" || migration_status=$?
+			case "$migration_status" in 0) ;; 1) return 0 ;; *) return "$migration_status" ;; esac
+			[[ "$(dotfiles_catalog_apt_migration_state "$package")" == "$migration_state" ]] || return 2
+			needs_change=1
 		fi
 		if [[ -n "$installed" ]]; then
 			comparison=0
@@ -1106,6 +1119,7 @@ dotfiles_catalog_install_debs() (
 		if [[ "$installed" != "$version" || "${DOTFILES_FORCE_REINSTALL:-0}" == 1 ]]; then needs_change=1; fi
 		packages+=("$package")
 		versions+=("$version")
+		migration_states+=("$migration_state")
 	done
 	if [[ "$needs_change" == 0 ]]; then return 0; fi
 	tmp="$(mktemp -d)" || return 1
@@ -1121,8 +1135,12 @@ dotfiles_catalog_install_debs() (
 	done
 	# Hold previously proven packages during dependency resolution. No vendor
 	# package outside this exact batch may advance as an implicit dependency.
+	for index in "${!packages[@]}"; do
+		[[ -z "${migration_states[$index]}" ]] ||
+			[[ "$(dotfiles_catalog_apt_migration_state "${packages[$index]}")" == "${migration_states[$index]}" ]] || return 2
+	done
 	dotfiles_catalog_apt_holds || return $?
-	plan="$(sudo apt-get -s -o DPkg::Lock::Timeout=600 install --allow-downgrades --allow-change-held-packages "${files[@]}")" || return $?
+	plan="$(sudo apt-get -s -o DPkg::Lock::Timeout=600 install --reinstall --allow-downgrades --allow-change-held-packages "${files[@]}")" || return $?
 	while IFS= read -r name; do
 		case "$name" in
 		powershell | obsidian | docker-ce | docker-ce-cli | containerd.io | docker-buildx-plugin | docker-compose-plugin)
@@ -1133,17 +1151,28 @@ dotfiles_catalog_install_debs() (
 			;;
 		esac
 	done < <(awk '$1=="Inst" {print $2}' <<<"$plan")
-	sudo apt-get -qq -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=600 install -y --allow-downgrades --allow-change-held-packages "${files[@]}" || return $?
+	for index in "${!packages[@]}"; do
+		[[ -z "${migration_states[$index]}" ]] ||
+			[[ "$(dotfiles_catalog_apt_migration_state "${packages[$index]}")" == "${migration_states[$index]}" ]] || return 2
+	done
+	local apt_status=0
+	sudo apt-get -qq -o Dpkg::Use-Pty=0 -o DPkg::Lock::Timeout=600 install -y --reinstall --allow-downgrades --allow-change-held-packages "${files[@]}" || apt_status=$?
+	if ((apt_status != 0)); then
+		printf 'Vendor installation failed; package-manager recovery may be needed. No new ownership receipts were written. Retry the same catalog after repairing apt.\n' >&2
+		return "$apt_status"
+	fi
+	for index in "${!packages[@]}"; do
+		observed="$(dpkg-query -W -f='${Version}' "${packages[$index]}")" || return 1
+		[[ "$observed" == "${versions[$index]}" ]] || return 2
+	done
+	for package in "${packages[@]}"; do sudo apt-mark hold "$package" >/dev/null || return $?; done
 	mkdir -p -- "$root" || return 1
 	index=0
 	for key in "${keys[@]}"; do
 		package="${packages[$index]}"
 		version="${versions[$index]}"
-		observed="$(dpkg-query -W -f='${Version}' "$package")" || return 1
-		[[ "$observed" == "$version" ]] || return 2
 		printf '%s\n%s\n%s\n' "$package" "$version" "$SOFTWARE_CATALOG_DIGEST" >"$root/$key.apt.$$" || return 1
 		mv -f -- "$root/$key.apt.$$" "$root/$key.apt" || return 1
-		sudo apt-mark hold "$package" >/dev/null || return $?
 		index=$((index + 1))
 	done
 )

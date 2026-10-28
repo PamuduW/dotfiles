@@ -1,0 +1,49 @@
+{
+  "approved": false,
+  "origin_run_id": 40477067865,
+  "packages": {
+    "docker.containerd.io": {
+      "digest": "sha256:f811ab57d1f4bb0cce19df7d526da8c711d8ebea0447cc83da1999188e664122",
+      "package": "containerd.io",
+      "url": "https://download.docker.com/linux/ubuntu/dists/noble/pool/stable/amd64/containerd.io_2.4.2-3~ubuntu.24.04~noble_amd64.deb",
+      "version": "2.4.2-3~ubuntu.24.04~noble"
+    },
+    "docker.docker-buildx-plugin": {
+      "digest": "sha256:642e9a8a0d115a8a57ad7045a4c7c2561522331197f0c087a762de1b72591672",
+      "package": "docker-buildx-plugin",
+      "url": "https://download.docker.com/linux/ubuntu/dists/noble/pool/stable/amd64/docker-buildx-plugin_0.38.1-1~ubuntu.24.04~noble_amd64.deb",
+      "version": "0.38.1-1~ubuntu.24.04~noble"
+    },
+    "docker.docker-ce": {
+      "digest": "sha256:95ddf7a2d8b8c0eb82d8597d4d604e294dcf741081f2e228524d5ab9bfd7c8ae",
+      "package": "docker-ce",
+      "url": "https://download.docker.com/linux/ubuntu/dists/noble/pool/stable/amd64/docker-ce_29.9.2-1~ubuntu.24.04~noble_amd64.deb",
+      "version": "5:29.9.2-1~ubuntu.24.04~noble"
+    },
+    "docker.docker-ce-cli": {
+      "digest": "sha256:74747b5c99000279b9b2c7eb82543b4121d8436a58aa3be7e78ac6681d74794f",
+      "package": "docker-ce-cli",
+      "url": "https://download.docker.com/linux/ubuntu/dists/noble/pool/stable/amd64/docker-ce-cli_29.9.2-1~ubuntu.24.04~noble_amd64.deb",
+      "version": "5:29.9.2-1~ubuntu.24.04~noble"
+    },
+    "docker.docker-compose-plugin": {
+      "digest": "sha256:9725be1df7fd5ccc6b21ac24112885896c8d134345e3f4aa20b3c2064ef4620e",
+      "package": "docker-compose-plugin",
+      "url": "https://download.docker.com/linux/ubuntu/dists/noble/pool/stable/amd64/docker-compose-plugin_5.6.1-1~ubuntu.24.04~noble_amd64.deb",
+      "version": "5.6.1-1~ubuntu.24.04~noble"
+    },
+    "obsidian": {
+      "digest": "sha256:c37fb46a966f604823337fb36ab23bd1baf8ce912ec35af59d62358a93357bee",
+      "package": "obsidian",
+      "url": "https://github.com/obsidianmd/obsidian-releases/releases/download/v1.14.5/obsidian_1.14.5_amd64.deb",
+      "version": "1.14.5"
+    },
+    "powershell": {
+      "digest": "sha256:491b1a51e257e2ac86af33e3a4dc9aa91adb1b3926a57967af39d9a1ca38dc79",
+      "package": "powershell",
+      "url": "https://github.com/PowerShell/PowerShell/releases/download/v7.6.9/powershell_7.6.9-1.deb_amd64.deb",
+      "version": "7.6.9-1.deb"
+    }
+  },
+  "schema_version": 1
+}

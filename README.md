@@ -201,6 +201,9 @@ migration, unavailable downloads, explicit migration, repeat runs, preserved
 global npm commands and configuration, and real Node execution and Go compilation.
 Another disposable home tests frozen uv, lazygit and direnv binaries in both
 `~/.local/bin` and `~/bin`, including consent, failed downloads and recovery copies.
+The vendor migration stage starts from seven checksum-pinned package releases
+without catalog receipts, then checks preservation, failed downloads, explicit
+migration, version holds and repeat runs in a separate disposable container.
 These tests produce unapproved smoke evidence. A complete legacy setup,
 the remaining component migrations and the full qualification controller are
 still required before the first catalog can be approved.
@@ -253,6 +256,21 @@ keeps the previous commands in the private recovery directory printed on success
 Keep that directory until you have checked the migrated tools. If restoration
 fails, the installer reports the retained recovery files for manual recovery.
 This option does not authorize migration of NVM, Go/asdf, or system packages.
+
+## Existing vendor packages
+
+Vendor packages installed through apt remain external until you authorize
+migration. The installer lists the package and its installed and catalog versions.
+Confirm the prompt, or set `DOTFILES_MIGRATE_APT_PACKAGES=1` for that install or
+update command. Force reinstall alone preserves external packages.
+
+Migration verifies the installed package state and architecture, refuses newer
+versions, then reinstalls the exact checksum-verified catalog package and holds
+its version. Ownership is recorded after the complete batch is verified and held.
+If apt fails, the installer reports that package-manager recovery may be needed;
+repair apt and retry the same catalog with migration authorization. It does not
+roll back the apt database or package maintainer scripts. Ordinary distro packages
+remain distro-managed.
 
 ## Existing NVM installations
 

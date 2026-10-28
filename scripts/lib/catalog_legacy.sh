@@ -1,5 +1,30 @@
 # shellcheck shell=bash
 
+dotfiles_catalog_apt_migration_state() {
+	local state status version architecture
+	state="$(dpkg-query -W -f='${db:Status-Status}\t${Version}\t${Architecture}\n' "$1" 2>/dev/null)" || return 2
+	IFS=$'\t' read -r status version architecture <<<"$state"
+	[[ "$status" == installed && "$version" =~ ^[0-9][A-Za-z0-9.+:~_-]+$ &&
+		("$architecture" == amd64 || "$architecture" == all) && "$state" != *$'\n'* ]] || return 2
+	printf '%s\n' "$state"
+}
+
+dotfiles_catalog_apt_migration_authorized() {
+	case "${DOTFILES_MIGRATE_APT_PACKAGES:-}" in
+	1) return 0 ;;
+	'') ;;
+	*)
+		printf 'DOTFILES_MIGRATE_APT_PACKAGES must be 1 when set.\n' >&2
+		return 2
+		;;
+	esac
+	if [[ "${DOTFILES_INTERACTIVE_TTY:-false}" == true ]] && declare -F ui_confirm_yes_no >/dev/null; then
+		ui_confirm_yes_no "  Reinstall the listed external package $1 from the catalog and hold its version?"
+		return $?
+	fi
+	return 1
+}
+
 # Inspect legacy paths without executing their runtime or manager code.
 dotfiles_catalog_local_inventory() {
 	local key="$1" command_name="$2" extra="${3:-}" active
