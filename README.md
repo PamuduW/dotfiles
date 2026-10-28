@@ -195,6 +195,14 @@ installs) and updates skip it, while update status reports its installed version
 Install and update Cursor manually; its own automatic updater remains outside
 catalog control.
 
+The hosted catalog workflow also tests real legacy NVM/Node and asdf/Go layouts
+in a separate disposable Ubuntu home. Its frozen vendor inputs exercise refused
+migration, unavailable downloads, explicit migration, repeat runs, preserved
+global npm commands and configuration, and real Node execution and Go compilation.
+This runtime test produces unapproved smoke evidence. A complete legacy setup,
+the remaining component migrations and the full qualification controller are
+still required before the first catalog can be approved.
+
 Obsidian installs from its official amd64 `.deb`, verified against the SHA-256
 GitHub publishes for it, and opens on the Windows desktop through WSLg (from the
 Start menu or by running `obsidian`). The install is skipped when the session has
