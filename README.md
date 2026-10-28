@@ -254,8 +254,9 @@ The command re-applies the components the probes report as already applied
 (leaving version upkeep to the update steps), updates every managed component,
 verifies the resolved installed checkouts, runs `agentbot full` (Agentbot's one
 update pass once installed), and finishes with both Doctors. It closes on a
-timing block naming each of its sections. A component that needs attention
-at any step, install included, turns the final line into "needs attention".
+timing block naming each of its sections. Install/update failures or failed
+health checks turn the final line into "needs attention". Agentbot Doctor
+warnings end with "completed with warnings" and keep a successful exit status.
 "Dotfiles checks passed" covers Dotfiles components; Agentbot reports its own
 health separately.
 

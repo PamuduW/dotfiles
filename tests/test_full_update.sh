@@ -459,13 +459,36 @@ test_postflight_distinguishes_warnings_errors_and_health() (
 )
 
 test_agentbot_doctor_warning_output_maps_to_warning_state() (
+	local fixture_output expected_rc actual_rc output scenario
 	agentbot() {
 		[[ "$*" == doctor ]] || return 64
-		printf '0 error(s), 5 warning(s).\n'
+		printf '%s\n' "$fixture_output"
 	}
-	local output rc=0
-	output="$(full_update_agentbot_doctor)" || rc=$?
-	[[ "$rc" -eq 10 && "$output" == *'5 warning(s)'* ]]
+	cmd_doctor() { return 0; }
+	FULL_UPDATE_DOTFILES_DEGRADED=false
+	for scenario in current colored legacy healthy; do
+		expected_rc=10
+		case "$scenario" in
+		current) fixture_output='0 ok, 2 need attention.' ;;
+		colored) fixture_output=$'0 ok, \033[33m12 need attention\033[0m.' ;;
+		legacy) fixture_output='0 error(s), 5 warning(s).' ;;
+		healthy)
+			fixture_output='0 ok, 0 need attention.'
+			expected_rc=0
+			;;
+		esac
+		actual_rc=0
+		output="$(full_update_agentbot_doctor)" || actual_rc=$?
+		[[ "$actual_rc" == "$expected_rc" && "$output" == "$fixture_output" ]] || return 1
+		actual_rc=0
+		output="$(full_update_postflight)" || actual_rc=$?
+		[[ "$actual_rc" == 0 ]] || return 1
+		if [[ "$scenario" == healthy ]]; then
+			[[ "$output" == *'Full system update completed.'* && "$output" != *'completed with warnings'* ]] || return 1
+		else
+			[[ "$output" == *'Full system update completed with warnings.'* ]] || return 1
+		fi
+	done
 )
 
 expect_success 'the force flag reaches the installers and survives a restart' test_force_flag_reaches_the_installers_and_survives_a_restart

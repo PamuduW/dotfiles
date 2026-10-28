@@ -293,7 +293,7 @@ full_update_agentbot_doctor() {
 	output="$(agentbot doctor 2>&1)" || rc=$?
 	printf '%s\n' "$output"
 	[[ $rc -eq 0 ]] || return 1
-	grep -Eq '(^|[^0-9])[1-9][0-9]* warning\(s\)' <<<"$output" && return 10
+	grep -Eq '(^|[^0-9])[1-9][0-9]* (warning\(s\)|need attention)' <<<"$output" && return 10
 	return 0
 }
 
