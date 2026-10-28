@@ -73,7 +73,7 @@ expect_failed_download() {
 	local installer="$1" marker="$2" status=0
 	# Exercise the normal transaction with an unavailable archive boundary.
 	(
-		# shellcheck disable=SC2329  # Called by the normal installer transaction.
+		# shellcheck disable=SC2317,SC2329  # Called by the normal installer transaction.
 		dotfiles_catalog_download() {
 			printf '%s\n' "$1" >"$marker"
 			return 71
