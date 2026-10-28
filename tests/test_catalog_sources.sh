@@ -36,6 +36,13 @@ for index in "${!args[@]}"; do
 		done
 	fi
 done
+if [[ "${TEST_SOURCE_MODIFIES_CHECKOUT:-0}" == 1 && " ${args[*]} " == *' checkout '* ]]; then
+	/usr/bin/git "${args[@]}"
+	for index in "${!args[@]}"; do
+		if [[ "${args[index]}" == -C ]]; then printf 'changed checkout bytes\n' >>"${args[index+1]}/nvm.sh"; break; fi
+	done
+	exit 0
+fi
 exec /usr/bin/git "${args[@]}"
 GIT
 chmod +x "$TEST_FAKE_BIN/git"
@@ -85,6 +92,13 @@ if dotfiles_catalog_source_install nvm; then
 fi
 [[ "$(tail -n1 "$installed/nvm.sh")" == 'local edit' && ! -s "$TEST_COMMAND_LOG" ]]
 source_target 1.1.0 "$revision_two" asdf-golang asdf-community/asdf-golang
+export TEST_SOURCE_MODIFIES_CHECKOUT=1
+if dotfiles_catalog_source_install asdf-golang >/dev/null 2>&1; then
+	echo 'FAIL: a new source checkout published bytes different from its Git objects' >&2
+	exit 1
+fi
+[[ ! -e "$(dotfiles_catalog_root asdf-golang)/current" ]]
+unset TEST_SOURCE_MODIFIES_CHECKOUT
 plugin="$(dotfiles_catalog_source_install asdf-golang)"
 [[ "$(/usr/bin/git -C "$plugin" rev-parse HEAD)" == "$revision_two" ]]
 [[ "$(/usr/bin/git -C "$plugin" config --get remote.origin.url)" == https://github.com/asdf-community/asdf-golang.git ]]
@@ -101,4 +115,10 @@ if dotfiles_catalog_source_install asdf-golang; then
 	exit 1
 fi
 [[ ! -s "$TEST_COMMAND_LOG" ]]
+/usr/bin/git -C "$plugin" update-index --assume-unchanged nvm.sh
+printf 'hidden local edit\n' >>"$plugin/nvm.sh"
+if dotfiles_catalog_source_checkout_owned asdf-golang "$plugin"; then
+	echo 'FAIL: source ownership accepted tracked edits hidden by the index' >&2
+	exit 1
+fi
 printf 'PASS: manager/plugin source pins preserve modified sources and reject rollback/fetch failure\n'

@@ -36,9 +36,15 @@ dotfiles_catalog_source_checkout_owned() {
 	[[ "$revision" =~ ^[0-9a-f]{40}$ ]] || return 1
 	[[ "$(_dotfiles_catalog_source_git -C "$release" rev-parse --verify HEAD)" == "$revision" ]] || return 1
 	[[ "$(_dotfiles_catalog_source_git -C "$release" config --get remote.origin.url)" == "https://github.com/$repository.git" ]] || return 1
-	local changes
-	changes="$(_dotfiles_catalog_source_git -C "$release" status --porcelain --untracked-files=all --ignore-submodules=all)" || return 1
-	[[ -z "$changes" ]]
+	/usr/bin/python3 -I -B - "$DOTFILES_SHARED_ROOT" "$release" "$revision" <<'PY'
+import pathlib,sys
+sys.path.insert(0,str(pathlib.Path(sys.argv[1])/"scripts/lib/shared/python"))
+from catalog_git_source import verify_checkout
+try:
+    verify_checkout(pathlib.Path(sys.argv[2]),sys.argv[3])
+except (OSError,ValueError):
+    raise SystemExit(1)
+PY
 }
 
 # Prints the verified checkout path. Native runtime adapters own activation.
@@ -95,6 +101,7 @@ dotfiles_catalog_source_install() (
 	printf '\n/.catalog-receipt\n/.catalog-source-revision\n' >>"$staging/.git/info/exclude" || return 1
 	printf '%s\n%s\n%s\n' "$version" "$SOFTWARE_CATALOG_DIGEST" "$SOFTWARE_CATALOG_REVISION" >"$staging/.catalog-receipt"
 	printf '%s\n' "$revision" >"$staging/.catalog-source-revision"
+	dotfiles_catalog_source_checkout_owned "$key" "$staging" || return 2
 	ln -s -- "$staging" "$temporary_link" || return 1
 	mv -Tf -- "$temporary_link" "$root/current" || return 1
 	committed=1
