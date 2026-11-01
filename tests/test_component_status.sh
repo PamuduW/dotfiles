@@ -128,7 +128,7 @@ test_doctor_routes_codex_remediation_by_ownership() (
 
 	fixture_row='Codex CLI|codex-cli 0.150.0 (standalone)|installed'
 	output="$(NO_COLOR=1 cmd_doctor)" || return 1
-	[[ "$output" == *'Nothing needs attention.'* && "$output" != *'Codex migration'* ]]
+	[[ "$output" == *'Dotfiles checks passed.'* && "$output" != *'Codex migration'* ]]
 )
 
 test_stalled_version_probe_returns_one_neutral_row() (

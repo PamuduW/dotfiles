@@ -9,8 +9,6 @@ REPO_DIR="$(cd -- "$TEST_DIR/.." && pwd)"
 source "$TEST_DIR/lib/harness.sh"
 test_harness_init
 test_harness_report_init
-source "$TEST_DIR/lib/catalog_fixture.sh"
-catalog_fixture_load
 DOTFILES_SOURCE_ONLY=1 source "$REPO_DIR/bin/bin/dotfiles" >/dev/null
 dotfiles_load_command full-update
 
@@ -41,7 +39,7 @@ test_doctor_succeeds_when_everything_is_healthy() (
 	local output rc=0
 	output="$(NO_COLOR=1 cmd_doctor 2>&1)" || rc=$?
 	[[ "$rc" -eq 0 ]] || return 1
-	[[ "$output" == *'Nothing needs attention.'* ]]
+	[[ "$output" == *'Dotfiles checks passed.'* ]]
 )
 
 test_update_dry_run_reports_then_stops() (

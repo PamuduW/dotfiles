@@ -1,6 +1,4 @@
 # shellcheck shell=bash
-# shellcheck source=scripts/lib/catalog_load.sh
-source "${BASH_SOURCE[0]%/*}/../catalog_load.sh"
 # shellcheck disable=SC2034  # INSTALL_COMPONENT_RESULT is read by the install orchestrator.
 # Per-component install dispatch (_comp_install_<id>) and run_install orchestration.
 
@@ -85,10 +83,16 @@ _comp_install_go() {
 }
 
 _comp_install_lazygit() {
+	if command -v lazygit >/dev/null 2>&1 && skip_unless_forced "lazygit already installed"; then
+		return 0
+	fi
 	install_lazygit_from_github
 }
 
 _comp_install_lazydocker() {
+	if command -v lazydocker >/dev/null 2>&1 && skip_unless_forced "lazydocker already installed"; then
+		return 0
+	fi
 	install_lazydocker_from_github
 }
 
@@ -205,7 +209,6 @@ _install_shell_notice() {
 }
 
 run_install() {
-	dotfiles_catalog_begin || return $?
 	apt_check_sudo_compatibility || return $?
 
 	local key failures=0
@@ -225,7 +228,6 @@ run_install() {
 	if declare -F sudo_prime >/dev/null 2>&1; then
 		sudo_prime || true
 	fi
-	# shellcheck disable=SC2034  # Read by full_update.sh for its password-wait timing.
 	declare -g DOTFILES_PASSWORD_WAIT_SECONDS=$(($(_install_now_seconds) - prompt_started))
 
 	# Per-component wall-clock, so where a long install actually spends its time
@@ -277,7 +279,6 @@ run_install() {
 			failures=$((failures + 1))
 			log_warn "Component install failed: $key"
 		fi
-		# shellcheck disable=SC2034  # Read through print_timing_summary's nameref.
 		INSTALL_COMPONENT_SECONDS["$key"]=$(($(_install_now_seconds) - started))
 	done
 

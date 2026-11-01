@@ -188,28 +188,6 @@ The registry contains 33 components:
 | Desktop apps (WSLg) | Obsidian |
 | Shell and Git | Stow packages, Git identity, Git credentials/submodule defaults |
 
-The software catalog qualification target is Ubuntu 24.04 AMD64. ARM64 and
-WSL2/Windows integration are outside the current catalog qualification claim.
-Cursor CLI is an operator-managed exception: catalog installs (including forced
-installs) and updates skip it, while update status reports its installed version.
-Install and update Cursor manually; its own automatic updater remains outside
-catalog control.
-
-The hosted catalog workflow also tests real legacy NVM/Node and asdf/Go layouts
-in a separate disposable Ubuntu home. Its frozen vendor inputs exercise refused
-migration, unavailable downloads, explicit migration, repeat runs, preserved
-global npm commands and configuration, and real Node execution and Go compilation.
-Another disposable home tests frozen releases for the applicable native binary
-inventory, currently 16 tools. Each uses `~/.local/bin`; uv, lazygit and direnv
-also exercise `~/bin`. The driver checks consent, failed downloads and recovery
-copies, and preserves full payload directories for tools with supporting assets.
-The vendor migration stage starts from seven checksum-pinned package releases
-without catalog receipts, then checks preservation, failed downloads, explicit
-migration, version holds and repeat runs in a separate disposable container.
-These tests produce unapproved smoke evidence. A complete legacy setup,
-the remaining component migrations and the full qualification controller are
-still required before the first catalog can be approved.
-
 Obsidian installs from its official amd64 `.deb`, verified against the SHA-256
 GitHub publishes for it, and opens on the Windows desktop through WSLg (from the
 Start menu or by running `obsidian`). The install is skipped when the session has
@@ -242,70 +220,6 @@ This replaces the former Monaspace component. Existing Monaspace files are left
 in place, but are no longer installed or updated. Ubuntu Sans Mono is the
 original, unpatched family and does not include Nerd Fonts icons. The Windows
 Terminal template uses it; importing that template remains a manual step.
-
-## Existing local tools
-
-Catalog installs preserve commands that have no catalog ownership receipt.
-For supported tools in `~/.local/bin`, `~/bin`, or a standard NVM global-bin
-directory, the installer can list the affected paths and ask before migration.
-For a noninteractive run, set `DOTFILES_MIGRATE_LOCAL_TOOLS=1` only for the
-install or update command. Force reinstall does not grant migration permission.
-
-Migration checks the existing command after consent and refuses newer or
-unverifiable versions, conflicting aliases, and paths outside the supported
-home-directory layouts. It verifies the replacement before activating it and
-keeps the previous commands in the private recovery directory printed on success.
-Keep that directory until you have checked the migrated tools. If restoration
-fails, the installer reports the retained recovery files for manual recovery.
-This option does not authorize migration of NVM, Go/asdf, or system packages.
-
-## Existing vendor packages
-
-Vendor packages installed through apt remain external until you authorize
-migration. The installer lists the package and its installed and catalog versions.
-Confirm the prompt, or set `DOTFILES_MIGRATE_APT_PACKAGES=1` for that install or
-update command. Force reinstall alone preserves external packages.
-
-Migration verifies the installed package state and architecture, refuses newer
-versions, then reinstalls the exact checksum-verified catalog package and holds
-its version. Ownership is recorded after the complete batch is verified and held.
-If apt fails, the installer reports that package-manager recovery may be needed;
-repair apt and retry the same catalog with migration authorization. It does not
-roll back the apt database or package maintainer scripts. Ordinary distro packages
-remain distro-managed.
-
-## Existing NVM installations
-
-The catalog preserves an existing NVM installation until you authorize migration.
-The Node component lists its NVM root and active Node/npm prefix, then asks for
-confirmation. For a noninteractive installation, set `DOTFILES_MIGRATE_NVM=1`
-only for the command that installs or updates Node. Force reinstall does not
-grant migration permission.
-
-Migration requires the normal `~/.nvm` layout with verifiable local commands.
-It keeps other Node versions, user aliases, global packages and npm settings.
-Newer or unverifiable installed versions and conflicting external commands stay
-unchanged. On success, the installer prints the private recovery directory holding
-the old manager entrypoints and any replaced prefix. Retain it until you have
-checked your setup; it can contain a full runtime and temporary installation
-files. Failed activation restores the original commands and manager entrypoints.
-Custom NVM roots need manual reconciliation.
-
-## Existing Go/asdf installations
-
-The Go component asks before migrating the normal `~/.asdf` installation.
-For a noninteractive run, set `DOTFILES_MIGRATE_ASDF_GO=1` only for the command
-that installs or updates Go. Force reinstall does not authorize migration.
-
-Migration requires one global Go version and a clean Go plugin. Modified plugins,
-project or environment version overrides, custom roots and external commands need
-manual reconciliation. Newer or unverifiable Go/asdf versions remain unchanged.
-Other plugins, language selections, shims, SDK versions and version-local user
-tools are retained. On success, the installer prints a private recovery directory.
-
-Failed activation restores the original Go paths, manager file, plugin and shims.
-The approved asdf dependency installed before Go preparation can remain available;
-the original manager and working legacy Go shim are preserved on failure.
 
 ## Codex CLI migration
 
@@ -340,8 +254,11 @@ The command re-applies the components the probes report as already applied
 (leaving version upkeep to the update steps), updates every managed component,
 verifies the resolved installed checkouts, runs `agentbot full` (Agentbot's one
 update pass once installed), and finishes with both Doctors. It closes on a
-timing block naming each of its sections. A component that needs attention
-at any step, install included, turns the final line into "needs attention".
+timing block naming each of its sections. Install/update failures or failed
+health checks turn the final line into "needs attention". Agentbot Doctor
+warnings end with "completed with warnings" and keep a successful exit status.
+"Dotfiles checks passed" covers Dotfiles components; Agentbot reports its own
+health separately.
 
 Only `dotfiles full-update` (and the bootstrap) reach this end state. The
 narrower menu entries do only their part: Dotfiles **Install** installs the
