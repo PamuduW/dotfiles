@@ -58,6 +58,10 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    defaults:
+      run:
+        # The fresh user cannot traverse the runner's private workspace.
+        working-directory: /tmp
     steps:
       - name: Run bootstrap as a fresh user
         run: |

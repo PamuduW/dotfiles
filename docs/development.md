@@ -20,6 +20,9 @@ whitespace, and every discovered shell test. A missing optional tool is
 skipped with a note. CI runs the gate on every push to `main` and
 `development`, and daily with the fresh-machine bootstrap job.
 
+The fresh-machine job runs its commands from `/tmp`. Its test user must be
+able to access the working directory when Git starts a clone helper.
+
 To apply repository formatting and then run the gate:
 
 ```bash
