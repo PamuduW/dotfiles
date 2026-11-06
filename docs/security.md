@@ -12,6 +12,12 @@
   CLI binary. Trivy also publishes Sigstore signatures; they are not checked
   (the operator's decision, 2026-10-14), so a release built by a compromised
   pipeline would still install.
+- Markdownlint's private npm prefix overrides KaTeX to `^0.18.2` and RE2JS to
+  `^2.8.7` because its upstream dependencies still select affected versions.
+  These floors address [GHSA-238p-pmpm-9mq7](https://github.com/advisories/GHSA-238p-pmpm-9mq7)
+  (updated 2026-10-05) and [GHSA-gg6h-894w-4m9c](https://github.com/advisories/GHSA-gg6h-894w-4m9c)
+  (updated 2026-10-28). Installation still skips package scripts; review these
+  overrides when upstream changes its dependency constraints.
 - markdownlint-cli2, CSpell and Mermaid CLI install from npm, which checks each
   tarball against the registry's integrity hash. Their dependencies follow the
   package's version ranges rather than a lockfile, and package install scripts
@@ -30,12 +36,18 @@
   not the trustworthiness of the publisher's release pipeline.
 - Portainer follows the stable LTS tag and preserves custom container layouts.
 
-Before activation, the release CLI, Boost, Antigravity, Chrome and asdf
-installers require their version command to exit successfully and report the
-complete expected version. Printing a matching version before failing is
+Before activation, the release CLI, Boost, Antigravity, Chrome, asdf, direnv
+and npm installers require their version command to exit successfully and
+report the complete expected version. Printing a matching version before failing is
 refused. asdf migration extracts and validates beside the installed binary,
 then replaces it with a rename; extraction, probe and activation failures
 preserve the previous executable and plugins.
+
+Release files and managed npm/Chrome directories retain a private backup through
+command-link and version-stamp publication. A publication failure restores the
+previous install and metadata; if restoration fails, the backup is retained and
+its path is reported for manual recovery. Directory command destinations are
+refused, and downloaded font-copy failures stop before activation.
 
 Release-version metadata is cached under a user-owned directory with mode
 0700, with the same checks on its per-process subdirectory. Symlinked,

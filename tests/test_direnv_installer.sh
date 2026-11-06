@@ -88,7 +88,7 @@ test_forced_and_fresh_direnv_install() (
 
 test_failed_direnv_refresh_preserves_working_binary() (
 	local failure rc before
-	for failure in metadata download checksum version missing-digest invalid-tag; do
+	for failure in metadata download checksum version probe-exit missing-digest invalid-tag; do
 		setup_direnv_fixture 2.37.1
 		before="$(sha256sum "$HOME/.local/bin/direnv")"
 		fixture_mode="$failure"
@@ -96,6 +96,10 @@ test_failed_direnv_refresh_preserves_working_binary() (
 		checksum) printf 'broken download\n' >"$fixture_payload" ;;
 		version)
 			printf '#!/usr/bin/env bash\nprintf "2.37.1\\n"\n' >"$fixture_payload"
+			fixture_digest="$(sha256sum "$fixture_payload" | awk '{print $1}')"
+			;;
+		probe-exit)
+			printf '#!/usr/bin/env bash\nprintf "2.38.2\\n"\nexit 9\n' >"$fixture_payload"
 			fixture_digest="$(sha256sum "$fixture_payload" | awk '{print $1}')"
 			;;
 		missing-digest) fixture_digest='' ;;
@@ -107,6 +111,15 @@ test_failed_direnv_refresh_preserves_working_binary() (
 		[[ -z "$(find "$HOME/.local/bin" -maxdepth 1 -name '.direnv.*' -print -quit)" ]] || return 1
 	done
 )
+
+test_failed_shortcut_publication_preserves_direnv() (
+	setup_direnv_fixture 2.37.1
+	ln() { return 9; }
+	! install_direnv >/dev/null 2>&1 || return 1
+	[[ "$("$HOME/.local/bin/direnv" version)" == 2.37.1 ]]
+)
+
+expect_success 'failed direnv shortcut publication preserves the old executable' test_failed_shortcut_publication_preserves_direnv
 
 expect_success 'current or newer direnv skips downloads and maintains its shortcut' test_current_direnv_skips_download_and_repairs_shortcut
 expect_success 'direnv upgrades verify the binary and bound retry downloads' test_direnv_upgrade_is_verified_and_download_is_bounded

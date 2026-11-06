@@ -40,7 +40,9 @@ check | '') ;;
 esac
 
 printf 'Checking Bash syntax...\n'
-bash -n "${shell_files[@]}"
+for shell_file in "${shell_files[@]}"; do
+	bash -n "$shell_file"
+done
 
 if command -v shellcheck >/dev/null 2>&1; then
 	printf 'Running ShellCheck on production code...\n'

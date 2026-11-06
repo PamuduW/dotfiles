@@ -205,6 +205,25 @@ test_failed_probe_preserves_installed_browser() (
 	[[ "$(<"$HOME/.local/share/dotfiles/chrome_headless.version")" == 155.0.8059.38 ]]
 )
 
+test_publication_failure_restores_installed_browser() (
+	reset_home
+	own 155.0.8059.38
+	serve 155.0.8059.39 "$(make_archive 155.0.8059.39)"
+	mv() {
+		[[ "${*: -1}" != "$HOME/.local/share/dotfiles/chrome_headless.version" ]] || return 9
+		command mv "$@"
+	}
+	install() {
+		[[ "${*: -1}" != "$HOME/.local/share/dotfiles/chrome_headless.version" ]] || return 9
+		command install "$@"
+	}
+	! chrome_headless_sync_latest >/dev/null 2>&1 || return 1
+	[[ "$("$HOME/.local/bin/chrome-headless-shell" --version)" == 'Google Chrome for Testing 155.0.8059.38' ]] || return 1
+	[[ "$(<"$HOME/.local/share/dotfiles/chrome_headless.version")" == 155.0.8059.38 ]]
+)
+
+expect_success 'Chrome stamp publication failure restores the installed build' test_publication_failure_restores_installed_browser
+
 expect_success 'failed Chrome version probe preserves the installed build and stamp' test_failed_probe_preserves_installed_browser
 
 expect_success 'a fresh install unpacks the build, links it and stamps it' test_fresh_install_unpacks_the_build_links_it_and_stamps_it

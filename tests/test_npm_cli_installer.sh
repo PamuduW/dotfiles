@@ -41,7 +41,7 @@ serve() {
 				mkdir -p "$prefix/node_modules/.bin"
 				printf '%s\n' '#!/usr/bin/env bash' \
 					'if [[ "${1:-}" == --env ]]; then echo "${PUPPETEER_EXECUTABLE_PATH:-unset}"; exit; fi' \
-					"echo '$SERVED_REPORTED'" >"$prefix/node_modules/.bin/$binary"
+					"echo '$SERVED_REPORTED'" "exit ${NPM_PROBE_EXIT:-0}" >"$prefix/node_modules/.bin/$binary"
 				chmod +x "$prefix/node_modules/.bin/$binary"
 			done
 			;;
@@ -54,7 +54,8 @@ reset_home() {
 	rm -rf -- "$HOME/.local" "$TEST_URL_LOG"
 	mkdir -p "$(dirname -- "$TEST_URL_LOG")"
 	: >"$TEST_URL_LOG"
-	unset NPM_INSTALL_FAILS
+	unset NPM_INSTALL_FAILS NPM_PROBE_EXIT
+	unset -f ln mv
 }
 
 own() {
@@ -188,6 +189,71 @@ test_wrappers_route_to_each_tool() (
 	done
 )
 
+test_failed_or_inexact_probe_preserves_owned_prefix() (
+	local reported rc
+	for reported in 1.2.4 1.2.40; do
+		reset_home
+		own cspell 1.2.3
+		serve 1.2.4 "$reported"
+		rc=0
+		[[ "$reported" != 1.2.4 ]] || rc=9
+		NPM_PROBE_EXIT=$rc
+		! npm_cli_sync_latest cspell >/dev/null 2>&1 || return 1
+		[[ "$("$HOME/.local/bin/cspell" --version)" == 1.2.3 ]] || return 1
+		[[ "$(<"$HOME/.local/share/dotfiles/cspell.version")" == 1.2.3 ]] || return 1
+	done
+)
+
+test_directory_destination_is_preserved() (
+	reset_home
+	mkdir -p "$HOME/.local/bin/cspell"
+	echo sentinel >"$HOME/.local/bin/cspell/sentinel"
+	serve 1.2.3
+	! npm_cli_install_release cspell 1.2.3 >/dev/null 2>&1 || return 1
+	[[ "$(<"$HOME/.local/bin/cspell/sentinel")" == sentinel ]] || return 1
+	[[ ! -e "$HOME/.local/bin/cspell/cspell" ]]
+)
+
+test_publication_failure_restores_owned_prefix() (
+	local failure
+	for failure in link-prepare link-publish stamp; do
+		reset_home
+		own cspell 1.2.3
+		serve 1.2.4
+		ln() {
+			[[ "$failure" != link-prepare ]] || return 9
+			command ln "$@"
+		}
+		mv() {
+			[[ "$failure" != link-publish || "${*: -1}" != "$HOME/.local/bin/cspell" ]] || return 9
+			[[ "$failure" != stamp || "${*: -1}" != "$HOME/.local/share/dotfiles/cspell.version" ]] || return 9
+			command mv "$@"
+		}
+		! npm_cli_install_release cspell 1.2.4 >/dev/null 2>&1 || return 1
+		[[ "$("$HOME/.local/bin/cspell" --version)" == 1.2.3 ]] || return 1
+		[[ "$(<"$HOME/.local/share/dotfiles/cspell.version")" == 1.2.3 ]] || return 1
+	done
+)
+
+test_markdownlint_install_declares_security_overrides() (
+	reset_home
+	serve 0.24.0
+	install_npm_cli markdownlint_cli2 >/dev/null || return 1
+	python3 - "$HOME/.local/share/dotfiles-npm/markdownlint_cli2/package.json" <<'PYOVERRIDES'
+import json,sys
+with open(sys.argv[1]) as source:
+    data=json.load(source)
+assert data['private'] is True
+assert data['overrides']=={'katex':'^0.18.2','re2js':'^2.8.7'}
+PYOVERRIDES
+)
+
+expect_success 'Markdownlint install retains the reviewed patched dependency floors' test_markdownlint_install_declares_security_overrides
+
+expect_success 'failed or inexact npm probe preserves the working prefix' test_failed_or_inexact_probe_preserves_owned_prefix
+expect_success 'directory command destinations are preserved' test_directory_destination_is_preserved
+expect_success 'npm link and stamp publication failures restore the working prefix' test_publication_failure_restores_owned_prefix
+
 expect_success 'each npm CLI installs into its own prefix behind a linked wrapper' test_fresh_install_links_a_wrapper_into_its_own_prefix
 expect_success 'the Mermaid CLI wrapper uses the Chrome headless shell unless told otherwise' test_mermaid_wrapper_uses_the_chrome_headless_shell
 expect_success 'a failed npm install leaves nothing behind' test_a_failed_npm_install_leaves_nothing
@@ -198,3 +264,5 @@ expect_success 'update replaces an owned prefix and its stamp' test_update_repla
 expect_success 'update without an npm registry answer preserves the command' test_update_without_registry_answer_preserves_the_command
 expect_success 'update check reports installed, available and action' test_update_check_reports_installed_available_and_action
 expect_success 'per-tool wrappers exist for the update registry' test_wrappers_route_to_each_tool
+
+finish_tests

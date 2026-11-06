@@ -187,6 +187,20 @@ test_update_upgrades_an_older_deb() (
 	grep -q 'apt-get .*install -y' "$CALLS"
 )
 
+test_failed_package_metadata_probe_refuses_installation() (
+	make_fixture_deb
+	stub_network
+	stub_system
+	dpkg-deb() {
+		if [[ "$3" == Package ]]; then printf 'obsidian\n'; else printf '1.13.7\n'; fi
+		return 9
+	}
+	! obsidian_install_release 1.13.7 obsidian_1.13.7_amd64.deb https://github.com/x "$DEB_DIGEST" >/dev/null 2>&1 || return 1
+	[[ ! -s "$CALLS" ]]
+)
+
+expect_success 'failed Obsidian metadata probes cannot authorize apt installation' test_failed_package_metadata_probe_refuses_installation
+
 expect_success 'Obsidian release lookup picks the newest desktop release with a digest' test_metadata_picks_the_newest_desktop_release_with_a_digest
 expect_success 'Obsidian .deb without a published digest fails closed' test_a_deb_without_a_published_digest_fails_closed
 expect_success 'fresh Obsidian install verifies then installs the downloaded file' test_fresh_install_verifies_then_installs_the_downloaded_file

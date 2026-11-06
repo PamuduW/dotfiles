@@ -1,4 +1,10 @@
 # shellcheck shell=bash
+
+# shellcheck source=scripts/lib/tool_resolve.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/tool_resolve.sh"
+
+# shellcheck source=scripts/lib/installers/activation.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/activation.sh"
 # markdownlint-cli2, CSpell and Mermaid CLI: the latest npm release of each,
 # installed with its dependencies into its own prefix under
 # ~/.local/share/dotfiles-npm. The rows are in NPM_CLI_TOOLS
@@ -46,13 +52,14 @@ _npm_cli_write_wrapper() {
 
 npm_cli_install_release() {
 	local key="$1" version="$2"
-	local label package binary root link stamp staging previous reported
+	local label package binary root link stamp staging
 	label="$(npm_cli_field "$key" label)" || return 1
 	package="$(npm_cli_field "$key" package)"
 	binary="$(npm_cli_field "$key" binary)"
 	root="$(npm_cli_root "$key")"
 	link="$(npm_cli_install_path "$key")"
 	stamp="$(npm_cli_management_stamp "$key")"
+	[[ ! -d "$link" ]] || return 1
 
 	command -v npm >/dev/null 2>&1 || {
 		echo "  npm is required to install ${label}; install Node.js first." >&2
@@ -65,6 +72,10 @@ npm_cli_install_release() {
 	install -d -m 0755 "$(dirname -- "$root")" "$(dirname -- "$link")" "$(dirname -- "$stamp")"
 	staging="$(mktemp -d "${root}.staging.XXXXXX")" || return 1
 	trap '[[ -n "${staging:-}" ]] && rm -rf -- "$staging"' RETURN
+	if [[ "$key" == markdownlint_cli2 ]]; then
+		# Upstream markdownlint 0.42 pins the affected transitive versions.
+		printf '%s\n' '{"private":true,"overrides":{"katex":"^0.18.2","re2js":"^2.8.7"}}' >"$staging/package.json" || return $?
+	fi
 	log_step "Install ${label} ${version}"
 	if ! PUPPETEER_SKIP_DOWNLOAD=1 npm install --prefix "$staging" --no-fund --no-audit \
 		--ignore-scripts --omit=dev "${package}@${version}" >/dev/null 2>&1; then
@@ -75,25 +86,12 @@ npm_cli_install_release() {
 		echo "  ${package}@${version} did not provide a ${binary} command." >&2
 		return 1
 	}
-	reported="$("$staging/node_modules/.bin/$binary" --version 2>/dev/null | head -n1 || true)"
-	if [[ "$reported" != *"$version"* ]]; then
+	if ! tool_reports_version "$version" "$staging/node_modules/.bin/$binary" --version; then
 		echo "  Installed ${label} did not report ${version}." >&2
 		return 1
 	fi
-	_npm_cli_write_wrapper "$key" "$staging"
-
-	previous="${root}.previous.$$"
-	if [[ -e "$root" ]]; then
-		mv -- "$root" "$previous" || return $?
-	fi
-	if ! mv -- "$staging" "$root"; then
-		[[ -e "$previous" ]] && mv -- "$previous" "$root"
-		return 1
-	fi
-	ln -sfn -- "$root/bin/$binary" "$link" || return $?
-	printf '%s\n' "$version" >"${stamp}.$$" || return $?
-	mv -f -- "${stamp}.$$" "$stamp" || return $?
-	[[ -e "$previous" ]] && rm -rf -- "$previous"
+	_npm_cli_write_wrapper "$key" "$staging" || return $?
+	activate_managed_install "$staging" "$root" "$link" "$stamp" "bin/$binary" "$version" || return $?
 	trap - RETURN
 	log_ok "${label} ${version} installed at ${link}"
 }

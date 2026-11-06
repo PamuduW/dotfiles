@@ -54,12 +54,16 @@ PY
 		if [[ "$kind" == rollback && ("$1" == *'.ubuntu_sans_mono.new.'* || "$1" == *'.ubuntu_sans_mono.old.'*) ]]; then return 1; fi
 		command mv "$@"
 	}
+	cp() {
+		if [[ "$kind" == copy-failure && "$1" == *UbuntuSansMono-*.ttf ]]; then return 9; fi
+		command cp "$@"
+	}
 	output="$(install_ubuntu_sans_mono_fonts --replace 2>&1)" || rc=$?
 	if [[ "$kind" == good ]]; then
 		[[ $rc -eq 0 && -f "$HOME/.local/share/fonts/ubuntu-sans-mono/UbuntuSansMono-Regular.ttf" ]] || return 1
 		[[ ! -e "$HOME/.local/share/fonts/ubuntu-sans-mono/UbuntuSansMono[wght].ttf" ]] || return 1
 		[[ -f "$HOME/.local/share/fonts/ubuntu-sans-mono/old.ttf" ]] || return 1
-	elif [[ "$kind" == variable-only ]]; then
+	elif [[ "$kind" == variable-only || "$kind" == copy-failure ]]; then
 		[[ $rc -ne 0 && -f "$HOME/.local/share/fonts/ubuntu-sans-mono/old.ttf" ]] || return 1
 	elif [[ "$kind" == rollback ]]; then
 		[[ $rc -ne 0 ]] || return 1
@@ -82,7 +86,7 @@ cursor_editor_is_not_cli() (
 	tool_resolve() { [[ "$1" == 'agent cursor' ]] && printf '/fake/cursor\n'; }
 	! cursor_is_installed && [[ "$(cursor_installed_version)" == "$NOT_INSTALLED" ]]
 )
-for kind in good variable-only missing mismatch traversal absolute backslash drive symlink fifo rollback; do
+for kind in good copy-failure variable-only missing mismatch traversal absolute backslash drive symlink fifo rollback; do
 	check "Ubuntu Sans Mono safety: $kind" font_case "$kind"
 done
 check 'Cursor preview finds cursor-agent' cursor_names

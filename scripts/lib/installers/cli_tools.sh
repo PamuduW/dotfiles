@@ -1,5 +1,8 @@
 # shellcheck shell=bash
 
+# shellcheck source=scripts/lib/installers/activation.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/activation.sh"
+
 # shellcheck source=scripts/lib/tool_resolve.sh
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/tool_resolve.sh"
 
@@ -463,7 +466,8 @@ raise SystemExit(1)
 		return 1
 	}
 	read -r latest expected <<<"$metadata"
-	[[ ! -x "$bin_path" ]] || installed="$("$bin_path" version 2>/dev/null || true)"
+	[[ ! -d "$bin_path" && ! -d "$HOME/bin/direnv" ]] || return 1
+	[[ ! -x "$bin_path" ]] || installed="$(tool_version_raw "$bin_path" version)" || installed=''
 	if [[ "$installed" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] &&
 		[[ "$(printf '%s\n%s\n' "$installed" "$latest" | sort -V | tail -n1)" == "$installed" ]] &&
 		! force_reinstall_requested; then
@@ -484,15 +488,17 @@ raise SystemExit(1)
 			return 1
 		fi
 		chmod 0755 "$tmp/direnv" || return $?
-		if [[ "$("$tmp/direnv" version 2>/dev/null || true)" != "$latest" ]]; then
+		if ! tool_reports_version "$latest" "$tmp/direnv" version; then
 			log_warn "Downloaded direnv did not report $latest; preserving the installed binary"
 			return 1
 		fi
-		mv -f -- "$tmp/direnv" "$bin_path" || return $?
+		mkdir -p "$HOME/bin" || return $?
+		activate_managed_install "$tmp/direnv" "$bin_path" "$HOME/bin/direnv" "" "" "$latest" || return $?
 		log_ok "direnv installed: $latest"
+		return 0
 	fi
 	mkdir -p "$HOME/bin" || return $?
-	ln -sf "$bin_path" "$HOME/bin/direnv" || return $?
+	ln -sfT "$bin_path" "$HOME/bin/direnv" || return $?
 )
 
 ensure_direnv_hook_in_bashrc() {

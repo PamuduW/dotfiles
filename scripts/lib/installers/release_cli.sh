@@ -1,5 +1,8 @@
 # shellcheck shell=bash
 
+# shellcheck source=scripts/lib/installers/activation.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/activation.sh"
+
 # shellcheck source=scripts/lib/tool_resolve.sh
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/tool_resolve.sh"
 # Kubeconform, TFLint, zizmor, Vale, yt-dlp, Trivy and Infracost: the latest
@@ -100,6 +103,7 @@ release_cli_install_release() {
 	binary="$(release_cli_field "$key" binary)"
 	read -r -a version_argv <<<"$(release_cli_field "$key" version-args)"
 	install_path="$(release_cli_install_path "$key")"
+	[[ ! -d "$install_path" ]] || return 1
 	stamp="$(release_cli_management_stamp "$key")"
 	asset="$(release_cli_asset_name "$key" "$release_tag")" || {
 		echo "  ${label} supports only Linux amd64/arm64 in this installer." >&2
@@ -168,10 +172,8 @@ release_cli_install_release() {
 		echo "  Downloaded ${label} binary did not report ${release_tag}." >&2
 		return 1
 	fi
-	mv -f -- "$candidate" "$install_path" || return $?
-	install -d -m 0755 "$(dirname -- "$stamp")"
-	printf 'v%s\n' "${release_tag#v}" >"$tmp/stamp"
-	install -m 0644 "$tmp/stamp" "$stamp" || return $?
+	activate_managed_install "$candidate" "$install_path" "" "$stamp" "" "v${release_tag#v}" || return $?
+
 	rm -rf -- "$tmp"
 	trap - RETURN
 	log_ok "${label} ${release_tag} installed at ${install_path}"

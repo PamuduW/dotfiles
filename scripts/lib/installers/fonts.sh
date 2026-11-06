@@ -111,13 +111,13 @@ PYZIP
 		return 1
 	fi
 
-	mkdir -p "$font_parent"
-	stage_dir="$(mktemp -d "$font_parent/.ubuntu_sans_mono.new.XXXXXX")"
+	mkdir -p "$font_parent" || return $?
+	stage_dir="$(mktemp -d "$font_parent/.ubuntu_sans_mono.new.XXXXXX")" || return 1
 	if [[ -d "$font_dir" ]]; then
 		cp -a "$font_dir/." "$stage_dir/" || return 1
 	fi
 	while IFS= read -r -d '' font; do
-		cp "$font" "$stage_dir/"
+		cp "$font" "$stage_dir/" || return $?
 		font_count=$((font_count + 1))
 	done < <(find "$tmp/ubuntu_sans_mono" -path '*/fonts/ttf/UbuntuSansMono-*.ttf' -name '*.ttf' -print0)
 	if [[ $font_count -eq 0 ]]; then
@@ -125,7 +125,7 @@ PYZIP
 		return 1
 	fi
 
-	printf '%s\n' "$ver" >"${stage_dir}/.version"
+	printf '%s\n' "$ver" >"${stage_dir}/.version" || return $?
 	if [[ -e "$font_dir" ]]; then
 		backup_dir="$(mktemp -d "$font_parent/.ubuntu_sans_mono.old.XXXXXX")"
 		rmdir "$backup_dir"

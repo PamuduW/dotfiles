@@ -1,5 +1,8 @@
 # shellcheck shell=bash
 
+# shellcheck source=scripts/lib/installers/activation.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/activation.sh"
+
 # shellcheck source=scripts/lib/tool_resolve.sh
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/tool_resolve.sh"
 
@@ -36,6 +39,7 @@ boost_install_release() {
 	local release_tag="$1" expected="$2"
 	local arch asset archive_url tmp archive actual install_path stamp candidate
 	install_path="$(boost_install_path)"
+	[[ ! -d "$install_path" ]] || return 1
 	stamp="$(boost_management_stamp)"
 
 	arch="$(boost_platform_arch)" || {
@@ -105,10 +109,8 @@ boost_install_release() {
 		echo "  Downloaded Boost binary did not report ${release_tag}." >&2
 		return 1
 	fi
-	mv -f -- "$candidate" "$install_path" || return $?
-	install -d -m 0755 "$(dirname -- "$stamp")"
-	printf '%s\n' "$release_tag" >"$tmp/boost-cli.version"
-	install -m 0644 "$tmp/boost-cli.version" "$stamp" || return $?
+	activate_managed_install "$candidate" "$install_path" "" "$stamp" "" "$release_tag" || return $?
+
 	rm -rf -- "$tmp"
 	trap - RETURN
 	log_ok "Boost CLI ${release_tag} installed at ${install_path}"

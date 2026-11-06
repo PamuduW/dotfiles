@@ -1,5 +1,8 @@
 # shellcheck shell=bash
 
+# shellcheck source=scripts/lib/installers/activation.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/activation.sh"
+
 # shellcheck source=scripts/lib/tool_resolve.sh
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/tool_resolve.sh"
 # Chrome for Testing's headless shell, the latest Stable build: the browser
@@ -65,7 +68,7 @@ raise SystemExit(1)
 
 chrome_headless_install_release() {
 	local version="$1" url="$2"
-	local platform top tmp archive member build root link stamp previous command_name
+	local platform top tmp archive member build root link stamp command_name
 	local -a members=()
 	platform="$(chrome_headless_platform)" || {
 		echo "  ${CHROME_HEADLESS_LABEL} supports only Linux amd64/arm64 in this installer." >&2
@@ -75,6 +78,7 @@ chrome_headless_install_release() {
 	root="$(chrome_headless_root)"
 	link="$(chrome_headless_install_path)"
 	stamp="$(chrome_headless_management_stamp)"
+	[[ ! -d "$link" ]] || return 1
 
 	for command_name in curl unzip install; do
 		command -v "$command_name" >/dev/null 2>&1 || {
@@ -83,7 +87,8 @@ chrome_headless_install_release() {
 		}
 	done
 
-	tmp="$(mktemp -d)" || return 1
+	install -d -m 0755 "$(dirname -- "$root")" || return $?
+	tmp="$(mktemp -d "$(dirname -- "$root")/.chrome-headless.XXXXXX")" || return 1
 	trap '[[ -n "${tmp:-}" ]] && rm -rf -- "$tmp"' RETURN
 	archive="$tmp/${top}.zip"
 	log_step "Install ${CHROME_HEADLESS_LABEL} ${version}"
@@ -126,18 +131,7 @@ chrome_headless_install_release() {
 	fi
 
 	install -d -m 0755 "$(dirname -- "$root")" "$(dirname -- "$link")" "$(dirname -- "$stamp")"
-	previous="${root}.previous.$$"
-	if [[ -e "$root" ]]; then
-		mv -- "$root" "$previous" || return $?
-	fi
-	if ! mv -- "$build" "$root"; then
-		[[ -e "$previous" ]] && mv -- "$previous" "$root"
-		return 1
-	fi
-	ln -sfn -- "$root/chrome-headless-shell" "$link" || return $?
-	printf '%s\n' "$version" >"$tmp/stamp"
-	install -m 0644 "$tmp/stamp" "$stamp" || return $?
-	[[ -e "$previous" ]] && rm -rf -- "$previous"
+	activate_managed_install "$build" "$root" "$link" "$stamp" "chrome-headless-shell" "$version" || return $?
 	rm -rf -- "$tmp"
 	trap - RETURN
 	log_ok "${CHROME_HEADLESS_LABEL} ${version} installed at ${link}"

@@ -1,5 +1,8 @@
 # shellcheck shell=bash
 
+# shellcheck source=scripts/lib/installers/activation.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/activation.sh"
+
 # shellcheck source=scripts/lib/tool_resolve.sh
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/tool_resolve.sh"
 
@@ -90,6 +93,7 @@ antigravity_install_release() {
 	local version="$1" url="$2" expected="$3"
 	local tmp archive actual install_path candidate command_name
 	install_path="$(antigravity_install_path)"
+	[[ ! -d "$install_path" ]] || return 1
 
 	for command_name in curl tar sha512sum install; do
 		command -v "$command_name" >/dev/null 2>&1 || {
@@ -148,7 +152,7 @@ antigravity_install_release() {
 		echo "  Downloaded Antigravity CLI did not report ${version}." >&2
 		return 1
 	fi
-	mv -f -- "$candidate" "$install_path" || return $?
+	activate_managed_install "$candidate" "$install_path" "" "" "" "$version" || return $?
 	rm -rf -- "$tmp"
 	trap - RETURN
 	log_ok "Antigravity CLI ${version} installed at ${install_path}"

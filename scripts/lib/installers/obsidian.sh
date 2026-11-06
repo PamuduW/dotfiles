@@ -106,8 +106,11 @@ obsidian_install_release() {
 		echo "  Obsidian SHA-256 verification failed; refusing to install the downloaded package." >&2
 		return 1
 	fi
-	package="$(dpkg-deb -f "$deb" Package 2>/dev/null || true)"
-	package_version="$(dpkg-deb -f "$deb" Version 2>/dev/null || true)"
+	if ! package="$(dpkg-deb -f "$deb" Package 2>/dev/null)" ||
+		! package_version="$(dpkg-deb -f "$deb" Version 2>/dev/null)"; then
+		echo "  Could not inspect the downloaded Obsidian package; refusing installation." >&2
+		return 1
+	fi
 	if [[ "$package" != "$OBSIDIAN_DEB_PACKAGE" || "$package_version" != "$version" ]]; then
 		echo "  ${asset} is package '${package}' ${package_version}, not ${OBSIDIAN_DEB_PACKAGE} ${version}; refusing to install." >&2
 		return 1
