@@ -1,4 +1,7 @@
 # shellcheck shell=bash
+
+# shellcheck source=scripts/lib/tool_resolve.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/tool_resolve.sh"
 # Chrome for Testing's headless shell, the latest Stable build: the browser
 # Archify's browser gate drives (Agentbot installs the Archify skill; the
 # stowed .bashrc points ARCHIFY_CHROME here when the shell exists).
@@ -114,7 +117,7 @@ chrome_headless_install_release() {
 		return 1
 	}
 	chmod 0755 "$build/chrome-headless-shell"
-	if [[ "$("$build/chrome-headless-shell" --version 2>/dev/null | head -n1 || true)" != *"$version"* ]]; then
+	if ! tool_reports_version "$version" "$build/chrome-headless-shell" --version; then
 		echo "  Downloaded ${CHROME_HEADLESS_LABEL} did not report ${version}." >&2
 		if command -v ldd >/dev/null 2>&1; then
 			ldd "$build/chrome-headless-shell" 2>/dev/null | awk '/not found/ {print "  missing library: " $1}' >&2

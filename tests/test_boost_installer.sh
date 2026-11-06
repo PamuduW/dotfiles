@@ -20,7 +20,7 @@ make_boost_archive() {
 	mkdir -p "$fixture_dir"
 	printf '%s\n' \
 		'#!/usr/bin/env bash' \
-		"if [[ \"\${1:-}\" == version ]]; then printf \"boost v${version}\\\\n\"; exit 0; fi" \
+		"if [[ \"\${1:-}\" == version ]]; then printf \"boost v${version}\\\\n\"; exit ${FIXTURE_PROBE_EXIT:-0}; fi" \
 		'printf "unexpected boost invocation: %s\\n" "$*" >&2' \
 		'exit 97' >"$fixture_dir/boost"
 	chmod +x "$fixture_dir/boost"
@@ -232,6 +232,23 @@ test_unsupported_architecture_fails_closed() (
 
 	! install_boost_cli >/dev/null 2>&1
 )
+
+test_failed_version_probe_preserves_installed_boost() (
+	mkdir -p "$HOME/.local/bin" "$HOME/.local/share/dotfiles"
+	printf '%s\n' '#!/bin/sh' 'echo old-boost' >"$HOME/.local/bin/boost"
+	chmod +x "$HOME/.local/bin/boost"
+	printf 'v0.12.5\n' >"$HOME/.local/share/dotfiles/boost-cli.version"
+	FIXTURE_PROBE_EXIT=9 make_boost_archive 0.12.6
+	local digest
+	digest="$(sha256sum "$TEST_HARNESS_ROOT/boost-linux-amd64.tar.gz" | awk '{print $1}')"
+	github_curl() { cp "$TEST_HARNESS_ROOT/boost-linux-amd64.tar.gz" "$3"; }
+	boost_platform_arch() { printf 'amd64\n'; }
+	! boost_install_release v0.12.6 "$digest" >/dev/null 2>&1 || return 1
+	[[ "$("$HOME/.local/bin/boost" version)" == old-boost ]] || return 1
+	[[ "$(<"$HOME/.local/share/dotfiles/boost-cli.version")" == v0.12.5 ]]
+)
+
+expect_success 'failed Boost version probe preserves the installed binary and stamp' test_failed_version_probe_preserves_installed_boost
 
 expect_success 'fresh Boost install uses the latest verified release and only installs the CLI binary' test_fresh_install_uses_latest_verified_release_and_only_installs_boost_binary
 expect_success 'Boost checksum mismatch refuses installation' test_checksum_mismatch_refuses_installation

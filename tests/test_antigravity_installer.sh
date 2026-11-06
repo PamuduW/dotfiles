@@ -27,7 +27,7 @@ make_agy_archive() {
 	mkdir -p "$fixture_dir"
 	printf '%s\n' \
 		'#!/usr/bin/env bash' \
-		"if [[ \"\${1:-}\" == --version ]]; then printf '${version}\\n'; exit 0; fi" \
+		"if [[ \"\${1:-}\" == --version ]]; then printf '${version}\\n'; exit ${FIXTURE_PROBE_EXIT:-0}; fi" \
 		"printf '%s\\n' \"\$*\" >>'${AGY_CALLS}'" >"$fixture_dir/antigravity"
 	chmod +x "$fixture_dir/antigravity"
 	printf 'license\n' >"$fixture_dir/LICENSE"
@@ -232,6 +232,21 @@ test_upgrade_skips_when_not_installed() (
 	upgrade_antigravity_cli >/dev/null || return 1
 	[[ "$UPGRADE_STEP_ACTIVE_RESULT" == skipped ]]
 )
+
+test_failed_version_probe_preserves_installed_agy() (
+	reset_home
+	mkdir -p "$HOME/.local/bin"
+	printf '%s\n' '#!/bin/sh' 'echo old-agy' >"$HOME/.local/bin/agy"
+	chmod +x "$HOME/.local/bin/agy"
+	FIXTURE_PROBE_EXIT=9 make_agy_archive 1.3.4
+	stub_release_host 1.3.4
+	local digest
+	digest="$(sha512sum "$FIXTURE_ARCHIVE" | awk '{print $1}')"
+	! antigravity_install_release 1.3.4 "$FIXTURE_URL" "$digest" >/dev/null 2>&1 || return 1
+	[[ "$("$HOME/.local/bin/agy" --version)" == old-agy ]]
+)
+
+expect_success 'failed Antigravity version probe preserves the installed binary' test_failed_version_probe_preserves_installed_agy
 
 expect_success 'fresh Antigravity install places the verified binary and leaves shell profiles alone' test_fresh_install_places_verified_binary_and_leaves_profiles_alone
 expect_success 'Antigravity checksum mismatch refuses installation' test_checksum_mismatch_refuses_installation

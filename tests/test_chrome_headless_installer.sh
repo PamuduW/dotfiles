@@ -36,7 +36,7 @@ make_archive() {
 	dir="$TEST_HARNESS_ROOT/fixture/chrome-headless-shell-linux64"
 	rm -rf -- "$TEST_HARNESS_ROOT/fixture"
 	mkdir -p "$dir"
-	printf '%s\n' '#!/usr/bin/env bash' "echo 'Google Chrome for Testing $reported'" >"$dir/chrome-headless-shell"
+	printf '%s\n' '#!/usr/bin/env bash' "echo 'Google Chrome for Testing $reported'" "exit ${FIXTURE_PROBE_EXIT:-0}" >"$dir/chrome-headless-shell"
 	chmod +x "$dir/chrome-headless-shell"
 	printf 'resources\n' >"$dir/resources.pak"
 	archive="$TEST_HARNESS_ROOT/chrome-headless-shell-linux64.zip"
@@ -196,6 +196,17 @@ test_unsupported_architecture_fails_closed() (
 	! install_chrome_headless >/dev/null 2>&1
 )
 
+test_failed_probe_preserves_installed_browser() (
+	reset_home
+	own 155.0.8059.38
+	serve 155.0.8059.39 "$(FIXTURE_PROBE_EXIT=9 make_archive 155.0.8059.39)"
+	! chrome_headless_sync_latest >/dev/null 2>&1 || return 1
+	[[ "$("$HOME/.local/bin/chrome-headless-shell" --version)" == 'Google Chrome for Testing 155.0.8059.38' ]] || return 1
+	[[ "$(<"$HOME/.local/share/dotfiles/chrome_headless.version")" == 155.0.8059.38 ]]
+)
+
+expect_success 'failed Chrome version probe preserves the installed build and stamp' test_failed_probe_preserves_installed_browser
+
 expect_success 'a fresh install unpacks the build, links it and stamps it' test_fresh_install_unpacks_the_build_links_it_and_stamps_it
 expect_success 'a build reporting another version is refused' test_a_build_reporting_another_version_is_refused
 expect_success 'an archive member outside the build directory is refused' test_an_archive_member_escaping_the_directory_is_refused
@@ -205,3 +216,5 @@ expect_success 'update replaces an owned build and its stamp' test_update_replac
 expect_success 'update without a version list preserves the build' test_update_without_a_version_list_preserves_the_build
 expect_success 'update check reports installed, available and action' test_update_check_reports_installed_available_and_action
 expect_success 'an unsupported architecture fails closed' test_unsupported_architecture_fails_closed
+
+finish_tests

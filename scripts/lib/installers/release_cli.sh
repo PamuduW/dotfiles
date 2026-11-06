@@ -1,4 +1,7 @@
 # shellcheck shell=bash
+
+# shellcheck source=scripts/lib/tool_resolve.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/tool_resolve.sh"
 # Kubeconform, TFLint, zizmor, Vale, yt-dlp, Trivy and Infracost: the latest
 # GitHub release of each, verified
 # against the SHA-256 digest GitHub publishes for the asset, installed to
@@ -160,7 +163,7 @@ release_cli_install_release() {
 	install -d -m 0755 "$(dirname -- "$install_path")"
 	candidate="$(dirname -- "$install_path")/.${binary}.candidate.$$"
 	install -m 0755 "$tmp/$binary" "$candidate" || return $?
-	if [[ "$("$candidate" "${version_argv[@]}" 2>/dev/null | head -n1 || true)" != *"${release_tag#v}"* ]]; then
+	if ! tool_reports_version "$release_tag" "$candidate" "${version_argv[@]}"; then
 		rm -f -- "$candidate"
 		echo "  Downloaded ${label} binary did not report ${release_tag}." >&2
 		return 1

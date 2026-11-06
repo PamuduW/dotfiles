@@ -30,6 +30,19 @@
   not the trustworthiness of the publisher's release pipeline.
 - Portainer follows the stable LTS tag and preserves custom container layouts.
 
+Before activation, the release CLI, Boost, Antigravity, Chrome and asdf
+installers require their version command to exit successfully and report the
+complete expected version. Printing a matching version before failing is
+refused. asdf migration extracts and validates beside the installed binary,
+then replaces it with a rename; extraction, probe and activation failures
+preserve the previous executable and plugins.
+
+Release-version metadata is cached under a user-owned directory with mode
+0700, with the same checks on its per-process subdirectory. Symlinked,
+foreign-owned or non-private cache directories are refused; cache failure
+falls back to the API. Cache entry symlinks are ignored and writes use an
+atomic rename within the private directory.
+
 Remote metadata failures fail closed where ownership or integrity cannot be
 proven. Optional GitHub authentication is loaded through a private curl-config
 boundary so token values do not appear in process arguments or reports.

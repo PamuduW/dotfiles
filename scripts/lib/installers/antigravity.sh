@@ -1,5 +1,8 @@
 # shellcheck shell=bash
 
+# shellcheck source=scripts/lib/tool_resolve.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/tool_resolve.sh"
+
 # The vendor one-liner (antigravity.google/cli/install.sh) reads this manifest,
 # then runs `agy install`, which appends a PATH export to ~/.bashrc and
 # ~/.profile. ~/.bashrc is a Stow link into this repository, so that write
@@ -140,7 +143,7 @@ antigravity_install_release() {
 	install -d -m 0755 "$(dirname -- "$install_path")"
 	candidate="$(dirname -- "$install_path")/.agy.candidate.$$"
 	install -m 0755 "$tmp/antigravity" "$candidate" || return $?
-	if [[ "$("$candidate" --version 2>/dev/null | head -n1 || true)" != *"$version"* ]]; then
+	if ! tool_reports_version "$version" "$candidate" --version; then
 		rm -f -- "$candidate"
 		echo "  Downloaded Antigravity CLI did not report ${version}." >&2
 		return 1

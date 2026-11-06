@@ -1,5 +1,8 @@
 # shellcheck shell=bash
 
+# shellcheck source=scripts/lib/tool_resolve.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/tool_resolve.sh"
+
 install_node_via_nvm() {
 	local NVM_DIR="${HOME}/.nvm"
 	local NVM_MIN_NODE="24"
@@ -81,7 +84,8 @@ ensure_asdf_installed() {
 			echo "  Could not obtain the published SHA-256 digest for ${tarball_name}; refusing unchecked download." >&2
 			return 1
 		}
-		tmp="$(mktemp -d)"
+		mkdir -p "$asdf_dir/bin" || return $?
+		tmp="$(mktemp -d "$asdf_dir/bin/.asdf.XXXXXX")" || return 1
 		trap '[[ -n "${tmp:-}" ]] && rm -rf -- "$tmp"' RETURN
 		if ! github_curl -fsSL -o "$tmp/asdf.tar.gz" "$tarball_url"; then
 			echo "  Failed to download asdf. Check TLS trust in WSL or retry after fixing CA certificates." >&2
@@ -93,18 +97,22 @@ ensure_asdf_installed() {
 			return 1
 		fi
 
-		mkdir -p "$asdf_dir/bin"
-		rm -f "$asdf_bin"
-		if ! tar -xzf "$tmp/asdf.tar.gz" -C "$asdf_dir/bin" asdf 2>/dev/null; then
+		extracted="$tmp/asdf"
+		if ! tar -xzf "$tmp/asdf.tar.gz" -C "$tmp" asdf 2>/dev/null; then
 			tar -xzf "$tmp/asdf.tar.gz" -C "$tmp" || return $?
 			extracted="$(find "$tmp" -maxdepth 3 -type f -name asdf | head -n1 || true)"
 			[[ -n "$extracted" ]] || {
 				echo "  Failed to extract asdf binary." >&2
 				return 1
 			}
-			install -m 0755 "$extracted" "$asdf_bin" || return $?
 		fi
-		chmod +x "$asdf_bin"
+		[[ -f "$extracted" && ! -L "$extracted" ]] || return 1
+		chmod 0755 "$extracted" || return $?
+		if ! tool_reports_version "$tag" "$extracted" version; then
+			echo "  Downloaded asdf did not report ${tag}; preserving the installed binary." >&2
+			return 1
+		fi
+		mv -fT -- "$extracted" "$asdf_bin" || return $?
 		rm -rf "$tmp"
 		trap - RETURN
 	fi

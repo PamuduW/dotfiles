@@ -47,7 +47,7 @@ make_archive() {
 	mkdir -p "$dir"
 	# shellcheck disable=SC2059  # The table holds the format.
 	line="$(printf "${FIXTURE_VERSION_LINE[$key]}" "$version")"
-	printf '%s\n' '#!/usr/bin/env bash' "printf '%s\\n' '$line'" >"$dir/$binary"
+	printf '%s\n' '#!/usr/bin/env bash' "printf '%s\\n' '$line'" "exit ${FIXTURE_PROBE_EXIT:-0}" >"$dir/$binary"
 	chmod +x "$dir/$binary"
 	printf 'license\n' >"$dir/LICENSE"
 	archive="$TEST_HARNESS_ROOT/${FIXTURE_ASSET[$key]}"
@@ -338,6 +338,22 @@ test_wrappers_route_to_each_tool() (
 		declare -F "$name" >/dev/null || return 1
 	done
 )
+
+test_invalid_probe_preserves_installed_release() (
+	local reported rc
+	for reported in 1.2.3 1.2.30; do
+		reset_home
+		own kubeconform 1.0.0
+		rc=0
+		[[ "$reported" != 1.2.3 ]] || rc=9
+		serve kubeconform 1.2.3 "$(FIXTURE_PROBE_EXIT=$rc make_archive kubeconform "$reported")"
+		! release_cli_sync_latest_release kubeconform >/dev/null 2>&1 || return 1
+		[[ "$(release_cli_installed_tag kubeconform)" == v1.0.0 ]] || return 1
+		[[ "$(<"$HOME/.local/share/dotfiles/kubeconform.version")" == v1.0.0 ]] || return 1
+	done
+)
+
+expect_success 'failed or inexact release version probe preserves the binary and stamp' test_invalid_probe_preserves_installed_release
 
 expect_success 'each release CLI installs only its verified binary on a fresh machine' test_fresh_install_of_each_tool_installs_only_its_verified_binary
 expect_success 'a checksum mismatch installs nothing' test_checksum_mismatch_installs_nothing

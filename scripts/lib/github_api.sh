@@ -90,11 +90,17 @@ raise SystemExit(1)
 # The directory is named for the shell that owns it; entries for shells that
 # are gone are swept on the way in, because nothing here runs a trap.
 _github_release_cache_dir() {
-	local base="${TMPDIR:-/tmp}/dotfiles-release-cache" dir peer pid
+	local base="${TMPDIR:-/tmp}/dotfiles-release-cache-$UID" dir peer pid
+	# Never adopt a shared, foreign-owned or symlinked cache hierarchy.
+	mkdir -m 0700 -- "$base" 2>/dev/null || true
+	[[ -d "$base" && ! -L "$base" && -O "$base" ]] || return 1
+	[[ "$(stat -c '%a' -- "$base")" == 700 ]] || return 1
 	dir="$base/$$"
-	mkdir -p -- "$dir" 2>/dev/null || return 1
+	mkdir -m 0700 -- "$dir" 2>/dev/null || true
+	[[ -d "$dir" && ! -L "$dir" && -O "$dir" ]] || return 1
+	[[ "$(stat -c '%a' -- "$dir")" == 700 ]] || return 1
 	for peer in "$base"/*; do
-		[[ -d "$peer" ]] || continue
+		[[ -d "$peer" && ! -L "$peer" && -O "$peer" ]] || continue
 		pid="${peer##*/}"
 		[[ "$pid" == "$$" ]] && continue
 		[[ "$pid" =~ ^[0-9]+$ ]] || continue
@@ -105,14 +111,16 @@ _github_release_cache_dir() {
 
 github_latest_release_version() {
 	local repo="$1"
-	local json tag dir entry
+	local json tag dir entry cache_file
 
 	# One path segment: the repo slug carries a slash.
 	if dir="$(_github_release_cache_dir)"; then
 		entry="$dir/${repo//\//__}"
-		if [[ -s "$entry" ]]; then
+		if [[ -L "$entry" || (-e "$entry" && (! -f "$entry" || ! -O "$entry")) ]]; then
+			entry=''
+		elif [[ -s "$entry" ]]; then
 			cat -- "$entry"
-			return 0
+			return
 		fi
 	else
 		entry=''
@@ -123,6 +131,11 @@ github_latest_release_version() {
 	[[ -n "$tag" ]] || return 1
 	# Only successes are cached: a transient failure must not persuade the rest
 	# of the run that the version is unknowable.
-	[[ -z "$entry" ]] || printf '%s\n' "${tag#v}" >"$entry" 2>/dev/null || true
+	if [[ -n "$entry" ]] && cache_file="$(mktemp "$dir/.release.XXXXXX")"; then
+		if printf '%s\n' "${tag#v}" >"$cache_file"; then
+			mv -fT -- "$cache_file" "$entry" 2>/dev/null || true
+		fi
+		rm -f -- "$cache_file"
+	fi
 	printf '%s\n' "${tag#v}"
 }

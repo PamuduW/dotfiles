@@ -56,3 +56,12 @@ tool_version_raw() {
 	[[ -n "$raw" ]] || return 1
 	printf '%s' "$raw"
 }
+
+# Require a successful probe and a complete version token on its first line.
+tool_reports_version() {
+	local expected="${1#v}" raw
+	shift
+	raw="$(tool_version_raw "$@")" || return 1
+	raw="${raw%%$'\n'*}"
+	[[ "$raw" =~ (^|[^[:alnum:]_.+-])v?"$expected"([^[:alnum:]_.+-]|$) ]]
+}

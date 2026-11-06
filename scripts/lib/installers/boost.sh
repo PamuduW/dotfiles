@@ -1,5 +1,8 @@
 # shellcheck shell=bash
 
+# shellcheck source=scripts/lib/tool_resolve.sh
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/tool_resolve.sh"
+
 BOOST_RELEASE_REPOSITORY="jfrog/boost"
 
 if ! declare -F boost_command >/dev/null 2>&1; then
@@ -97,7 +100,7 @@ boost_install_release() {
 	install -d -m 0755 "$(dirname -- "$install_path")"
 	candidate="$(dirname -- "$install_path")/.boost.candidate.$$"
 	install -m 0755 "$tmp/boost" "$candidate" || return $?
-	if [[ "$("$candidate" version 2>/dev/null | head -n1 || true)" != *"${release_tag#v}"* ]]; then
+	if ! tool_reports_version "$release_tag" "$candidate" version; then
 		rm -f -- "$candidate"
 		echo "  Downloaded Boost binary did not report ${release_tag}." >&2
 		return 1
