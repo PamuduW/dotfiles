@@ -725,6 +725,55 @@ test_portainer_interrupted_backup_is_restored_before_retry() (
 	! grep -Eq 'volume (rm|create) portainer_data' "$calls" || return 1
 )
 
+test_portainer_interrupted_recovery() (
+	local kind="$1" calls="$TEST_HARNESS_ROOT/portainer-recovery-$1.calls" rc=0
+	local current_present=1 backup_present=1 current_image=new current_running=false backup_running=true
+	[[ "$kind" != both-stopped ]] || backup_running=false
+	[[ "$kind" != running-replacement ]] || current_running=true
+	: >"$calls"
+	log_warn() { :; }
+	run_docker() {
+		printf '%s\n' "$*" >>"$calls"
+		case "$1 $2" in
+		'ps -a')
+			((current_present == 0)) || printf 'portainer\n'
+			((backup_present == 0)) || printf 'portainer.agentbot-backup\n'
+			;;
+		'inspect --format')
+			if [[ "$3" == '{{.State.Running}}' ]]; then
+				[[ "$kind" != running-inspect-failure ]] || return 51
+				if [[ "$4" == portainer ]]; then printf '%s\n' "$current_running"; else printf '%s\n' "$backup_running"; fi
+			else
+				[[ "$kind" != layout-inspect-failure ]] || return 51
+				if [[ "$kind" == custom-layout ]]; then printf 'custom\n'; else _portainer_managed_layout_reply "$3"; fi
+			fi
+			;;
+		'rm -f')
+			if [[ "$3" == portainer ]]; then current_present=0; else backup_present=0; fi
+			;;
+		'rename portainer.agentbot-backup')
+			current_present=1 backup_present=0 current_image=original current_running="$backup_running"
+			;;
+		'start portainer') current_running=true ;;
+		*) return 99 ;;
+		esac
+		return 0
+	}
+	_portainer_recover_interrupted >/dev/null 2>&1 || rc=$?
+	case "$kind" in
+	layout-inspect-failure | running-inspect-failure | custom-layout)
+		[[ $rc -ne 0 && $current_present == 1 && $backup_present == 1 && $current_image == new ]] || return 1
+		! grep -Eq '^(rm|rename|start|stop) ' "$calls"
+		;;
+	running-replacement)
+		[[ $rc == 0 && $current_image == new && $current_running == true && $backup_present == 0 ]]
+		;;
+	*)
+		[[ $rc == 0 && $current_image == original && $current_running == "$backup_running" && $backup_present == 0 ]]
+		;;
+	esac
+)
+
 test_portainer_custom_container_is_not_replaced() (
 	local calls="$TEST_HARNESS_ROOT/portainer-custom.calls" rc
 	: >"$calls"
@@ -863,6 +912,9 @@ check 'Portainer running container is stopped before the replacement starts' tes
 check 'Portainer start failure restores and restarts the original' test_portainer_start_failure_restores_and_restarts_the_original
 check 'Portainer verify failure removes the partial replacement' test_portainer_verify_failure_removes_the_partial_replacement
 check 'Portainer interrupted backup is restored before retry' test_portainer_interrupted_backup_is_restored_before_retry
+for recovery in layout-inspect-failure running-inspect-failure custom-layout stopped-replacement both-stopped running-replacement; do
+	check "Portainer interrupted recovery: $recovery" test_portainer_interrupted_recovery "$recovery"
+done
 check 'Portainer custom containers are not replaced' test_portainer_custom_container_is_not_replaced
 check 'Ubuntu Sans Mono upgrades replace an older installed release' test_ubuntu_sans_mono_upgrade_requests_a_replacement_install
 check 'remote shell installers are downloaded before execution' test_remote_shell_installers_are_downloaded_before_execution

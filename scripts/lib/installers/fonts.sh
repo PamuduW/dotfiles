@@ -38,6 +38,10 @@ install_ubuntu_sans_mono_fonts() {
 		echo "  Unknown Ubuntu Sans Mono install option: $mode" >&2
 		return 1
 	fi
+	if [[ -L "$font_dir" ]]; then
+		log_warn "Ubuntu Sans Mono font directory is a symlink; leaving it unchanged"
+		return 1
+	fi
 	if [[ "$mode" != --replace && -d "$font_dir" ]] && compgen -G "$font_dir/*.ttf" >/dev/null 2>&1 &&
 		skip_unless_forced "Ubuntu Sans Mono fonts already installed in $font_dir"; then
 		install_ubuntu_sans_mono_windows "$font_dir"
@@ -117,7 +121,7 @@ PYZIP
 		cp -a "$font_dir/." "$stage_dir/" || return 1
 	fi
 	while IFS= read -r -d '' font; do
-		cp "$font" "$stage_dir/" || return $?
+		cp --remove-destination "$font" "$stage_dir/" || return $?
 		font_count=$((font_count + 1))
 	done < <(find "$tmp/ubuntu_sans_mono" -path '*/fonts/ttf/UbuntuSansMono-*.ttf' -name '*.ttf' -print0)
 	if [[ $font_count -eq 0 ]]; then
@@ -125,6 +129,7 @@ PYZIP
 		return 1
 	fi
 
+	rm -f -- "${stage_dir}/.version" || return $?
 	printf '%s\n' "$ver" >"${stage_dir}/.version" || return $?
 	if [[ -e "$font_dir" ]]; then
 		backup_dir="$(mktemp -d "$font_parent/.ubuntu_sans_mono.old.XXXXXX")"

@@ -253,6 +253,24 @@ test_a_matching_clean_checkout_is_adopted() (
 	[[ "$output" == *'adopted  Dotfiles'* ]]
 )
 
+test_a_failed_status_check_is_not_adopted() (
+	local checkout="$TEST_HARNESS_ROOT/status-failed" output rc=0
+	mkdir -p "$checkout/.git"
+	printf 'preserve\n' >"$checkout/manual.txt"
+	# shellcheck source=bootstrap.sh
+	BOOTSTRAP_SOURCE_ONLY=1 source "$BOOTSTRAP"
+	git() {
+		case "$*" in
+		*'remote get-url origin') printf '%s\n' 'https://github.com/PamuduW/dotfiles' ;;
+		*'status --porcelain') return 9 ;;
+		*) return 99 ;;
+		esac
+	}
+	output="$(obtain_repo https://github.com/PamuduW/dotfiles "$checkout" Dotfiles 2>&1)" || rc=$?
+	[[ "$rc" -ne 0 && "$output" != *'Reusing the existing'* ]] || return 1
+	[[ "$(<"$checkout/manual.txt")" == preserve ]]
+)
+
 test_a_dirty_checkout_stops_without_touching_it() (
 	setup_machine dirty
 	run_bootstrap 2 >/dev/null 2>&1 || return 1
@@ -728,6 +746,7 @@ expect_success 'full-update is never invoked' test_full_update_is_never_invoked
 expect_success 'sudo is only used to install git' test_sudo_is_only_used_to_install_git
 expect_success 'the run reports a summary and the next command' test_declining_agentbot_exits_cleanly_and_reports_the_command
 expect_success 'a matching clean checkout is adopted' test_a_matching_clean_checkout_is_adopted
+expect_success 'a failed status check is not adopted' test_a_failed_status_check_is_not_adopted
 expect_success 'a dirty checkout stops without touching it' test_a_dirty_checkout_stops_without_touching_it
 expect_success 'a foreign remote stops without touching it' test_a_foreign_remote_stops_without_touching_it
 expect_success 'a non-repository destination stops without deleting it' test_a_non_repository_destination_stops_without_deleting_it

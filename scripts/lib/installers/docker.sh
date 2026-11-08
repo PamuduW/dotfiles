@@ -236,15 +236,33 @@ _portainer_is_running() {
 }
 
 _portainer_recover_interrupted() {
-	local backup
+	local backup layout_rc=0 running
 	backup="$(_portainer_backup_name)"
 	_portainer_name_exists "$backup" || return 0
 	if _portainer_name_exists portainer; then
-		if _portainer_has_managed_layout; then
+		_portainer_has_managed_layout || layout_rc=$?
+		if ((layout_rc == 2)); then
+			log_warn "Cannot inspect the Portainer container; preserving both containers"
+			return 1
+		fi
+		if ((layout_rc != 0)); then
+			log_warn "Portainer container has a custom layout; refusing interrupted recovery"
+			return 1
+		fi
+		running="$(run_docker inspect --format '{{.State.Running}}' portainer)" || return $?
+		case "$running" in
+		true)
 			_run_quiet_command "remove $backup" run_docker rm -f "$backup" || return $?
 			return 0
-		fi
-		_run_quiet_command "remove portainer" run_docker rm -f portainer || return $?
+			;;
+		false)
+			# A stopped replacement has not completed the swap. Renaming the
+			# original back preserves whether it is still running or stopped.
+			_portainer_restore_from_backup 0
+			return $?
+			;;
+		*) return 1 ;;
+		esac
 	fi
 	run_docker rename "$backup" portainer || return $?
 }

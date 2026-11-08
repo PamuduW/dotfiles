@@ -1,17 +1,19 @@
 name: Validate
 
+# Automatic triggers paused on 2026-11-08 while GitHub Actions billing is locked.
+# To resume, uncomment the triggers below and re-enable the hosted workflow.
 on:
   # Every push to the two working branches, so a commit that breaks the gate is
   # caught when it lands. The operator also commits outside an agent's local
   # gate, and public repositories run CI free.
-  push:
-    branches: [main, development]
+  # push:
+  #   branches: [main, development]
   workflow_dispatch:
   # Daily as well, at 10:00 Asia/Colombo (04:30 UTC, which is what cron takes),
   # for what breaks this suite without a commit: the runner image, apt, tool
   # versions, and the release downloads the installers pull.
-  schedule:
-    - cron: "30 4 * * *"
+  # schedule:
+  #   - cron: "30 4 * * *"
 
 permissions:
   contents: read

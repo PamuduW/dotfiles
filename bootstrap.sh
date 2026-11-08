@@ -177,7 +177,7 @@ remote_matches() {
 # Never deletes, moves, or renames anything: an unexpected destination stops the
 # run and is reported, so a rerun after a fix always makes progress.
 obtain_repo() {
-	local url="$1" dest="$2" label="$3" remote
+	local url="$1" dest="$2" label="$3" remote status
 	if [[ ! -e "$dest" ]]; then
 		step "Clone $label into $dest"
 		GIT_TERMINAL_PROMPT=0 git clone "$url" "$dest" || {
@@ -199,7 +199,11 @@ obtain_repo() {
 		err "$dest points at $remote, not $url. Inspect it, then rerun."
 		return 1
 	fi
-	if [[ -n "$(git -C "$dest" status --porcelain)" ]]; then
+	if ! status="$(git -C "$dest" status --porcelain)"; then
+		err "could not inspect local changes in $dest. Inspect it, then rerun."
+		return 1
+	fi
+	if [[ -n "$status" ]]; then
 		err "$dest has uncommitted changes. Commit or stash them, then rerun."
 		git -C "$dest" status --short >&2
 		return 1

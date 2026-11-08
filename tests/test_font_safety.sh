@@ -16,6 +16,15 @@ font_case() (
 	mkdir -p "$root/home/.local/share/fonts/ubuntu-sans-mono" "$root/tmp"
 	export HOME="$root/home" TMPDIR="$root/tmp"
 	printf old >"$HOME/.local/share/fonts/ubuntu-sans-mono/old.ttf"
+	printf sentinel >"$root/sentinel"
+	case "$kind" in
+	existing-font-link) ln -s "$root/sentinel" "$HOME/.local/share/fonts/ubuntu-sans-mono/UbuntuSansMono-Regular.ttf" ;;
+	existing-version-link) ln -s "$root/sentinel" "$HOME/.local/share/fonts/ubuntu-sans-mono/.version" ;;
+	root-link)
+		mv "$HOME/.local/share/fonts/ubuntu-sans-mono" "$root/external-fonts"
+		ln -s "$root/external-fonts" "$HOME/.local/share/fonts/ubuntu-sans-mono"
+		;;
+	esac
 	python3 - "$root/archive.zip" "$kind" <<'PY'
 import stat, sys, zipfile
 with zipfile.ZipFile(sys.argv[1], 'w') as z:
@@ -55,11 +64,24 @@ PY
 		command mv "$@"
 	}
 	cp() {
-		if [[ "$kind" == copy-failure && "$1" == *UbuntuSansMono-*.ttf ]]; then return 9; fi
+		local argument
+		for argument in "$@"; do
+			if [[ "$kind" == copy-failure && "$argument" == *UbuntuSansMono-*.ttf ]]; then return 9; fi
+		done
 		command cp "$@"
 	}
 	output="$(install_ubuntu_sans_mono_fonts --replace 2>&1)" || rc=$?
-	if [[ "$kind" == good ]]; then
+	if [[ "$kind" == existing-font-link || "$kind" == existing-version-link ]]; then
+		[[ $rc -eq 0 && "$(<"$root/sentinel")" == sentinel ]] || return 1
+		[[ ! -L "$HOME/.local/share/fonts/ubuntu-sans-mono/UbuntuSansMono-Regular.ttf" ]] || return 1
+		[[ ! -L "$HOME/.local/share/fonts/ubuntu-sans-mono/.version" ]] || return 1
+		[[ "$(<"$HOME/.local/share/fonts/ubuntu-sans-mono/UbuntuSansMono-Regular.ttf")" == new ]] || return 1
+		[[ "$(<"$HOME/.local/share/fonts/ubuntu-sans-mono/.version")" == 1.0 ]]
+	elif [[ "$kind" == root-link ]]; then
+		[[ $rc -ne 0 && -L "$HOME/.local/share/fonts/ubuntu-sans-mono" ]] || return 1
+		[[ "$(<"$root/external-fonts/old.ttf")" == old ]] || return 1
+		[[ ! -e "$root/external-fonts/UbuntuSansMono-Regular.ttf" ]]
+	elif [[ "$kind" == good ]]; then
 		[[ $rc -eq 0 && -f "$HOME/.local/share/fonts/ubuntu-sans-mono/UbuntuSansMono-Regular.ttf" ]] || return 1
 		[[ ! -e "$HOME/.local/share/fonts/ubuntu-sans-mono/UbuntuSansMono[wght].ttf" ]] || return 1
 		[[ -f "$HOME/.local/share/fonts/ubuntu-sans-mono/old.ttf" ]] || return 1
@@ -86,7 +108,7 @@ cursor_editor_is_not_cli() (
 	tool_resolve() { [[ "$1" == 'agent cursor' ]] && printf '/fake/cursor\n'; }
 	! cursor_is_installed && [[ "$(cursor_installed_version)" == "$NOT_INSTALLED" ]]
 )
-for kind in good copy-failure variable-only missing mismatch traversal absolute backslash drive symlink fifo rollback; do
+for kind in good copy-failure variable-only missing mismatch traversal absolute backslash drive symlink fifo rollback existing-font-link existing-version-link root-link; do
 	check "Ubuntu Sans Mono safety: $kind" font_case "$kind"
 done
 check 'Cursor preview finds cursor-agent' cursor_names

@@ -23,7 +23,9 @@ updates:
       day: saturday
       time: "04:30"
       timezone: Asia/Colombo
-    open-pull-requests-limit: 5
+    # Version updates paused on 2026-11-08 while Actions billing is locked.
+    # Restore the previous limit of 5 to resume.
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "ci"
     labels:

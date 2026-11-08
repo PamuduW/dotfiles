@@ -68,5 +68,93 @@ expect 'no upstream is a check, not a skip' \
 	'no upstream branch configured|check' \
 	"$(py "upstream='', fetched=True, ahead=0, behind=0")"
 
+if python3 - "$DOTFILES_SHARED_LIB/python" <<'PY'; then
+import os
+from pathlib import Path
+import sys
+import tempfile
+import unittest
+from unittest.mock import patch
+
+sys.path.insert(0, sys.argv.pop())
+import repo_status as rs
+
+
+class LocalHistoryTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.repo = self.root / "repo"
+        (self.repo / ".git").mkdir(parents=True)
+        binary = self.root / "bin"
+        binary.mkdir()
+        git = binary / "git"
+        git.write_text('''#!/bin/sh
+case "$3" in
+rev-parse) printf 'origin/main\\n' ;;
+fetch) printf 'fetch\\n' >>"$GIT_CALLS"; exit "${GIT_FETCH_STATUS:-0}" ;;
+rev-list)
+    case "$GIT_COUNT_CASE" in
+    failed) exit 9 ;;
+    timeout) /bin/sleep 1 ;;
+    *) printf '%s\\n' "$GIT_COUNTS" ;;
+    esac ;;
+*) exit 99 ;;
+esac
+''')
+        git.chmod(0o755)
+        self.calls = self.root / "calls"
+        environment = {
+            "PATH": str(binary), "HOME": str(self.root), "GIT_CALLS": str(self.calls),
+            "GIT_COUNT_CASE": "counts", "GIT_COUNTS": "0 0", "GIT_FETCH_STATUS": "0",
+        }
+        patcher = patch.dict(os.environ, environment)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_unavailable_history_is_never_reported_current(self):
+        for kind, counts in (
+            ("failed", ""), ("timeout", ""), ("counts", ""), ("counts", "0"),
+            ("counts", "0 0 extra"), ("counts", "zero 0"), ("counts", "-1 0"),
+            ("counts", "0 1.5"), ("counts", "+1 0"), ("counts", "١ 0"),
+        ):
+            for fetch in (False, True):
+                with self.subTest(kind=kind, counts=counts, fetch=fetch):
+                    self.calls.unlink(missing_ok=True)
+                    with patch.dict(os.environ, {"GIT_COUNT_CASE": kind, "GIT_COUNTS": counts}):
+                        try:
+                            actual = rs.check(self.repo, timeout=0.05, fetch=fetch)
+                        except ValueError as error:
+                            actual = f"raised {type(error).__name__}"
+                    self.assertEqual("origin/main: unchecked (local history unavailable)|check", actual)
+                    self.assertEqual("fetch\n" if fetch else "",
+                                     self.calls.read_text() if self.calls.exists() else "")
+
+    def test_successful_local_counts_remain_network_quiet(self):
+        for counts, expected in (
+            ("0 0", "origin/main: up to date as of last fetch|ok"),
+            ("0 3", "origin/main: 3 commit(s) behind as of last fetch — run update|check"),
+            ("2 0", "origin/main: 2 commit(s) ahead, nothing to pull|ok"),
+            ("2 3", "origin/main: diverged, 2 ahead and 3 behind as of last fetch|check"),
+        ):
+            with self.subTest(counts=counts), patch.dict(os.environ, {"GIT_COUNTS": counts}):
+                self.assertEqual(expected, rs.check(self.repo))
+                self.assertFalse(self.calls.exists())
+
+    def test_failed_fetch_stays_unchecked_with_valid_local_counts(self):
+        with patch.dict(os.environ, {"GIT_FETCH_STATUS": "9"}):
+            self.assertEqual("origin/main: unchecked (fetch failed or timed out)|skipped",
+                             rs.check(self.repo, fetch=True))
+        self.assertEqual("fetch\n", self.calls.read_text())
+
+
+unittest.main()
+PY
+	passed=$((passed + 1))
+else
+	failed=$((failed + 1))
+fi
+
 printf '\nRan %d repo-status test(s); %d failure(s).\n' "$((passed + failed))" "$failed"
 ((failed == 0))
