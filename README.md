@@ -260,6 +260,10 @@ warnings end with "completed with warnings" and keep a successful exit status.
 "Dotfiles checks passed" covers Dotfiles components; Agentbot reports its own
 health separately.
 
+The Agentbot phase reapplies its declared CLI settings, including Cursor's
+`approvalMode: "unrestricted"` for automatic command approval. Agentbot owns
+these settings; Dotfiles installs and updates the Cursor executable.
+
 Only `dotfiles full-update` (and the bootstrap) reach this end state. The
 narrower menu entries do only their part: Dotfiles **Install** installs the
 components you pick, Dotfiles **Update** runs the update steps, Agentbot
